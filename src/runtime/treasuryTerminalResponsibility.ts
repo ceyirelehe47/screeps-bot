@@ -82,7 +82,8 @@ export function isKnownEmptyLegacyTreasuryRoot(raw: unknown): boolean {
 /** 只读识别责任；不初始化服务、不迁移预约，不把损坏记录当作空表。 */
 export function readTreasuryLaneResponsibility(lane: TreasuryTerminalLane,
   coreHealth?: ReturnType<typeof readTreasuryCoreStoreHealth>, fenceProjection = false,
-  continuousProjection?: TreasuryContinuousOHFenceProjection): TreasuryT1Responsibility {
+  continuousProjection?: TreasuryContinuousOHFenceProjection,
+  queryQuotaReader?: typeof readTreasuryLaneQuota): TreasuryT1Responsibility {
   try {
     const runtime = Memory.runtime as unknown;
     const data = Memory.data as unknown;
@@ -93,8 +94,9 @@ export function readTreasuryLaneResponsibility(lane: TreasuryTerminalLane,
     if (!isKnownEmptyLegacyTreasuryRoot(legacy) || detectLegacyTreasuryStores().length > 0) {
       return { status: "invalid", reason: "legacy_store_unreadable" };
     }
-    const quotaReader = fenceProjection ? (known: TreasuryTerminalLane) => known.continuous && continuousProjection
-      ? continuousProjection.quota : readTreasuryLaneFenceQuota(known) : readTreasuryLaneQuota;
+    // 仅cargo fence显式注入当次query快照；default/native权威不接纳此reader。
+    const quotaReader = fenceProjection ? queryQuotaReader ?? ((known: TreasuryTerminalLane) => known.continuous && continuousProjection
+      ? continuousProjection.quota : readTreasuryLaneFenceQuota(known)) : readTreasuryLaneQuota;
     const quota = quotaReader(lane);
     if (TREASURY_TERMINAL_LANES.some((other) => quotaReader(other).status === "invalid")) {
       return { status: "invalid", reason: "quota_invalid" };

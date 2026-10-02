@@ -338,7 +338,7 @@ function readStatePair(): { read: TreasuryContinuousOHStateRead; token?: string 
     const first = treasuryContinuousOHDataToken(primary);
     const second = treasuryContinuousOHDataToken(mirror);
     if (first === null || second === null || first !== second || !validToken(primary, first) ||
-        !freezeTreasuryContinuousOHBook(primary as object, first) || !freezeTreasuryContinuousOHBook(mirror as object, second)) return { read: { status: "invalid" } };
+        !freezeTreasuryContinuousOHBook(primary as object, first) || !freezeTreasuryContinuousOHBook(mirror as object, first)) return { read: { status: "invalid" } };
     return { read: { status: "valid", value: primary as TreasuryContinuousOHState }, token: first };
   } catch { return { read: { status: "invalid" } }; }
 }

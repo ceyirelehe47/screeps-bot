@@ -47,54 +47,91 @@ function sameFenceSnapshot(cached: Omit<FenceCache, "value"> | null | undefined,
     cached.revision === revision && cached.worldSequence === worldSequence && cached.quotaToken === quotaToken &&
     cached.pointers.length === pointers.length && cached.pointers.every((pointer,index) => pointer === pointers[index]);
 }
-function hasLaneFence(lane: TreasuryTerminalLane, continuousProjection = readTreasuryContinuousOHFenceProjection()): boolean {
-  // 投影已拒绝未知root/accessor时先持住责任；不能为缓存pointer/token再读取未知getter。
-  if (continuousProjection.control.status === "invalid" || continuousProjection.quota.status === "invalid") return true;
-  const runtime = Memory.runtime as unknown as Record<string, unknown> | undefined;
-  const data = Memory.data as unknown as Record<string, unknown> | undefined;
-  const resource = data?.resourceControl as Record<string,unknown> | undefined;
-  const core = runtime?.treasuryCore as Record<string,unknown> | undefined;
-  const pointers = [runtime,data,resource,resource?.tasks,runtime?.treasury,core,core?.active,core?.ring,
-    ...TREASURY_TERMINAL_LANES.flatMap((known) => [runtime?.[known.controlKey],runtime?.[known.controlMirrorKey],runtime?.[known.quotaKey]])];
-  const quotaToken = TREASURY_TERMINAL_LANES.map((known) => {
-    const q = runtime?.[known.quotaKey] as Record<string,unknown> | undefined;
-    const c = runtime?.[known.controlKey] as Record<string,unknown> | undefined;
-    return [q?.schemaVersion,q?.runId,q?.status,q?.taskId,q?.workKey,q?.attemptId,q?.amount,q?.taskCreatedAt,q?.taskAmount,q?.reservedAtTick,
-      c?.hash,c?.status].join("|");
-  }).join(";");
-  // Fixed-size control/quota validation is cheap and catches in-place corruption, including the mirror.
-  // Only the empire-wide kernel/task responsibility inspection is cached.
-  const control = lane.continuous ? continuousProjection.control : readTreasuryTerminalFenceControl(lane);
-  if (!isKnownEmptyLegacyTreasuryRoot(runtime?.treasury)) return true;
-  if (control.status === "invalid" || TREASURY_TERMINAL_LANES.some((known) =>
-      (known.continuous ? continuousProjection.quota : readTreasuryLaneFenceQuota(known)).status === "invalid")) return true;
+type FenceControlRead = ReturnType<typeof readTreasuryTerminalFenceControl>;
+type FenceQuotaRead = ReturnType<typeof readTreasuryLaneFenceQuota>;
+interface FenceQuerySnapshot {
+  continuous: TreasuryContinuousOHFenceProjection;
+  controls: ReadonlyMap<TreasuryTerminalLane, FenceControlRead>;
+  quotas: ReadonlyMap<TreasuryTerminalLane, FenceQuotaRead>;
+  pointers: readonly unknown[];
+  quotaToken: string;
+  revision: number;
+  worldSequence: number;
+}
+
+function unknownRootSlot(root: Record<string, unknown> | undefined, key: string): boolean {
+  if (!root) return false;
+  const slot = Object.getOwnPropertyDescriptor(root, key);
+  return slot ? !("value" in slot) || !slot.enumerable : key in root;
+}
+
+/** 每个PUBLIC查询新建；不跨query持有可变旧control/quota的valid证明。 */
+function readFenceQuery(lanes: readonly TreasuryTerminalLane[]): FenceQuerySnapshot | null {
+  try {
+    const continuous = readTreasuryContinuousOHFenceProjection();
+    if (continuous.control.status === "invalid" || continuous.quota.status === "invalid") return null;
+    const runtime = Memory.runtime as unknown as Record<string, unknown> | undefined;
+    const controls = new Map<TreasuryTerminalLane, FenceControlRead>();
+    const quotas = new Map<TreasuryTerminalLane, FenceQuotaRead>();
+    for (const known of TREASURY_TERMINAL_LANES) {
+      if (known.continuous) { controls.set(known, continuous.control); quotas.set(known, continuous.quota); continue; }
+      const control = unknownRootSlot(runtime, known.controlKey) || unknownRootSlot(runtime, known.controlMirrorKey)
+        ? { status: "invalid" as const } : readTreasuryTerminalFenceControl(known);
+      const quota = unknownRootSlot(runtime, known.quotaKey) ? { status: "invalid" as const } : readTreasuryLaneFenceQuota(known);
+      controls.set(known, control.status === "valid" ? { status: "valid", value: { ...control.value } } : control);
+      quotas.set(known, quota.status === "valid" ? { status: "valid", value: { ...quota.value } } : quota);
+    }
+    // own control invalid只影响请求lane；任何quota invalid仍持住全部lane，保原范围。
+    if (lanes.some((lane) => controls.get(lane)?.status === "invalid") ||
+        [...quotas.values()].some((quota) => quota.status === "invalid") || !isKnownEmptyLegacyTreasuryRoot(runtime?.treasury)) return null;
+    const data = Memory.data as unknown as Record<string, unknown> | undefined;
+    const resource = data?.resourceControl as Record<string, unknown> | undefined;
+    const core = runtime?.treasuryCore as Record<string, unknown> | undefined;
+    // 未知foreign控制slot也不调用getter，且不扩大own control拒绝范围。
+    const pointer = (key: string) => runtime && Object.getOwnPropertyDescriptor(runtime, key)?.value;
+    const pointers = [runtime, data, resource, resource?.tasks, runtime?.treasury, core, core?.active, core?.ring,
+      ...TREASURY_TERMINAL_LANES.flatMap((known) => [pointer(known.controlKey), pointer(known.controlMirrorKey), pointer(known.quotaKey)])];
+    const quotaToken = TREASURY_TERMINAL_LANES.map((known) => {
+      const quota = quotas.get(known)!; const control = controls.get(known)!;
+      const q = quota.status === "valid" ? quota.value : undefined;
+      const c = control.status === "valid" ? control.value : undefined;
+      return [quota.status, q?.schemaVersion, q?.runId, q?.status, q?.taskId, q?.workKey, q?.attemptId, q?.amount,
+        q?.taskCreatedAt, q?.taskAmount, q?.reservedAtTick, control.status, c?.hash, c?.status].join("|");
+    }).join(";");
+    return { continuous, controls, quotas, pointers, quotaToken,
+      revision: readTreasuryCommitmentRevision(), worldSequence: readTreasuryWorldSequence() };
+  } catch { return null; }
+}
+
+function hasLaneFence(lane: TreasuryTerminalLane, query: FenceQuerySnapshot): boolean {
+  const control = query.controls.get(lane)!;
+  if (control.status === "invalid") return true;
   if (lane.requiredProduct !== undefined && control.status === "valid" && control.value.status === "active" &&
       (!lane.continuous || control.value.taskId !== "")) return true;
-  const revision = readTreasuryCommitmentRevision(); const worldSequence = readTreasuryWorldSequence();
+  const { revision, worldSequence, quotaToken, pointers } = query;
   const cached = fenceCache.get(lane.name);
   if (sameFenceSnapshot(cached, revision, worldSequence, quotaToken, pointers)) return cached!.value;
-  // 两个 lane 共用端点时只复用同一 core 的验证快照；各 lane 的额度、
-  // task lease、actionKind 与历史仍各自检查，绝不把另一个 lane 的 clear 当作本 lane clear。
   if (!sameFenceSnapshot(coreFenceSnapshot, revision, worldSequence, quotaToken, pointers)) {
     try {
       coreFenceSnapshot = {game:Game,memory:Memory,tick:Game.time,revision,worldSequence,pointers,quotaToken,
         health:readTreasuryCoreStoreHealth()};
     } catch { return true; }
   }
-  const value = readTreasuryLaneResponsibility(lane, coreFenceSnapshot!.health, true, continuousProjection).status !== "clear";
-  // Core publication replaces its root; leases bump revision, controls/quotas replace their signed object.
-  // Thus same-tick new responsibility is visible without re-scanning the empire on every carrier action.
+  const quotaReader = (known: TreasuryTerminalLane): FenceQuotaRead => query.quotas.get(known) ?? { status: "invalid" };
+  const value = readTreasuryLaneResponsibility(lane, coreFenceSnapshot!.health, true, query.continuous, quotaReader).status !== "clear";
   fenceCache.set(lane.name,{game:Game,memory:Memory,tick:Game.time,revision,worldSequence,pointers,quotaToken,value});
   return value;
 }
-export function hasTreasuryT1TerminalFence(): boolean { return hasLaneFence(TREASURY_T1_LANE); }
-export function hasTreasuryT2TerminalFence(): boolean { return hasLaneFence(TREASURY_T2_LANE); }
-export function hasTreasuryT3TerminalFence(): boolean { return hasLaneFence(TREASURY_T3_LANE); }
-export function hasTreasuryTerminalFence(roomName: string): boolean {
-  const lanes = TREASURY_TERMINAL_LANES.filter((lane) => roomName === lane.sourceRoom || roomName === lane.targetRoom);
+function queryLaneFence(lanes: readonly TreasuryTerminalLane[]): boolean {
   if (lanes.length === 0) return false;
-  const snapshot: TreasuryContinuousOHFenceProjection = readTreasuryContinuousOHFenceProjection();
-  return lanes.some((lane) => hasLaneFence(lane, snapshot));
+  const query = readFenceQuery(lanes);
+  return query === null || lanes.some((lane) => hasLaneFence(lane, query));
+}
+export function hasTreasuryT1TerminalFence(): boolean { return queryLaneFence([TREASURY_T1_LANE]); }
+export function hasTreasuryT2TerminalFence(): boolean { return queryLaneFence([TREASURY_T2_LANE]); }
+export function hasTreasuryT3TerminalFence(): boolean { return queryLaneFence([TREASURY_T3_LANE]); }
+export function hasTreasuryTerminalFence(roomName: string): boolean {
+  return queryLaneFence(TREASURY_TERMINAL_LANES.filter((lane) => roomName === lane.sourceRoom || roomName === lane.targetRoom));
 }
 /** Exact canonical rows survive cancellation/cleanup while their native responsibility remains. */
 export function hasTreasuryT1TaskRetention(task: ResourceTransferTask): boolean {

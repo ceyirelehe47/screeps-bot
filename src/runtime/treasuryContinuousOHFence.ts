@@ -10,7 +10,7 @@ type QuotaRead = {readonly status:"absent"} | {readonly status:"invalid"} |
 export interface TreasuryContinuousOHFenceProjection { readonly control: Read; readonly quota: QuotaRead; readonly closed: ReadonlySet<string>; }
 type Projection = TreasuryContinuousOHFenceProjection;
 interface Cache { game:Game; memory:Memory; tick:number; revision:number; worldSequence:number;
-  primary:unknown; mirror:unknown; token:string; projection:Projection; }
+  primary:unknown; mirror:unknown; firstToken:string; secondToken:string; projection:Projection; }
 let cached: Cache | null = null;
 
 /** 只供 cargo fence；永不用于 intake、预算发布或 native 的授权判断。 */
@@ -30,11 +30,10 @@ function projection(): Projection {
     const primary = primarySlot?.value; const mirror = mirrorSlot?.value;
     const first = token(primary); const second = token(mirror);
     if (first === null || second === null) return {control:{status:"invalid"},quota:{status:"invalid"},closed:new Set()};
-    const signature = `${first}\n${second}`;
     const revision = readTreasuryCommitmentRevision(); const worldSequence = readTreasuryWorldSequence();
     if (cached?.game === Game && cached.memory === Memory && cached.tick === Game.time &&
         cached.revision === revision && cached.worldSequence === worldSequence && cached.primary === primary &&
-        cached.mirror === mirror && cached.token === signature) return cached.projection;
+        cached.mirror === mirror && cached.firstToken === first && cached.secondToken === second) return cached.projection;
     const read = readTreasuryContinuousOHState();
     let result: Projection;
     if (read.status !== "valid") result = {control:read,quota:read,closed:new Set()};
@@ -57,7 +56,7 @@ function projection(): Projection {
         closed:new Set(state.closedCycles.flatMap((cert) => cert.ring && cert.cycle.quota?.status === "drained"
           ? [`${cert.ring.workKey}\n${cert.ring.attemptId}`] : []))};
     }
-    cached = {game:Game,memory:Memory,tick:Game.time,revision,worldSequence,primary,mirror,token:signature,projection:result};
+    cached = {game:Game,memory:Memory,tick:Game.time,revision,worldSequence,primary,mirror,firstToken:first,secondToken:second,projection:result};
     return result;
   } catch { return {control:{status:"invalid"},quota:{status:"invalid"},closed:new Set()}; }
 }
