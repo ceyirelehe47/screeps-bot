@@ -165,7 +165,7 @@ for p in sorted(r.glob('production-preflight*.json')):
  assert s['memory']['utf8Bytes']<1_900_000
  for key in ['treasuryT1FirstLiveControl','treasuryT1FirstLiveControlMirror','treasuryProductionT1Quota','treasuryCore']:assert key not in s['memory']['runtime']
  prod.append({'file':p.name,'capture':s['capturedAtUtc'],'taskCount':t['count'],'matching':0,'memoryBytes':s['memory']['utf8Bytes']})
-result={'schema':'screeps-t1-exit-r1-evidence-verification/v1','passed':True,'inputSnapshotCount':len(snapshots),
+result={'schema':'screeps-t1-exit-r1-evidence-verification/v1','scope':'冻结工程与发布前原件；后续默认OFF发布另见production-off-deploy记录','passed':True,'inputSnapshotCount':len(snapshots),
  'mainSha256':sha(main),'A':{'ordinaryTransaction':Atx[0]['_id'],'nativeT1':0},
  'B':{'attemptId':Bq['attemptId'],'transactionId':Btx['_id'],'nativeT1':1,'amount':100,'actualEnergyFee':4,'committed':True,'unknownRestartHeld':True,'systemdRestart':B_restart,'carrierSyntheticCargoRestored':True},
  'C':{'attemptId':Cq['attemptId'],'transactionId':Ctx1['_id'],'ordinaryBeforeT1':[t['_id'] for t in Ctx],'nativeT1':1,'committed':True,'offRestartNoResend':True,'systemdRestart':C_restart},'production':prod,'productionWrites':0}

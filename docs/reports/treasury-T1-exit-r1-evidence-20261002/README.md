@@ -46,3 +46,7 @@ SCREEPS_T1_EXIT_CANDIDATE_DIR=/绝对路径/候选目录 node --test \
 - `production-preflight*.json`：只读API代码身份、完整任务、Memory相关投影、两房对象。`production-business-derived.json`对应初次原Memory摘要，保留真实需求与R2关闭分析。
 - `input/`：附包明确生产授权边界的原始文档；模板不是直接授权。
 - `independent-*-review.*`：独立reviewer的精确范围与发现处理；评审者不操作生产/lab。
+
+## 直接批准后的默认OFF发布
+
+用户后续明确批准后，已发布原冻结字节并独立核对新tick，详细上线记录见相邻 `treasury-T1-exit-r1-off-deploy-20261002.md`；原件与专用校验器在 `production-off-deploy/`。本目录原工程verification.json及最初交付ZIP属于批准前时点，生产写入计数0只适用于当时；后续实际单次代码发布以publication-summary.json为准，T1业务仍未启用。

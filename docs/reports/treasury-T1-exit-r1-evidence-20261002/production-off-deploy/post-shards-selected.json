@@ -1,0 +1,432 @@
+{
+  "schema": "screeps-t1-exit-r1-post-shards-selected/v1",
+  "sourceFullMemoryAudit": "private after-shards.json",
+  "records": [
+    {
+      "shard": "shard0",
+      "fullMemorySha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "fullMemoryBytes": 2,
+      "cfg": {},
+      "runtime": {},
+      "data": {
+        "resourceControl": {
+          "tasks": {}
+        }
+      },
+      "canonicalTasksComplete": true
+    },
+    {
+      "shard": "shard1",
+      "fullMemorySha256": "b8fa7d156987ea8b841f117404cc42259b5bdaf6f572777d3617a744291d0903",
+      "fullMemoryBytes": 1532938,
+      "cfg": {},
+      "runtime": {
+        "lastDeployTag": "2026.10.2-1+447ab5c@2026-10-02T06:10:35.260Z",
+        "lastDeployBundleHash": "31d7862330a31f620544e07482933253e658806373f42def32ab51f27665c955",
+        "marketBaseResourceEgressTrialR2": {
+          "schemaVersion": 1,
+          "runId": "market-base-egress-r2-2026-09-26",
+          "status": "closed",
+          "startedAtTick": 73958367,
+          "endTick": 73961367,
+          "startedAtMs": 1790427990658,
+          "endMs": 1790431590658,
+          "controlUntilMs": 1790430420502,
+          "originalNotBefore": 73958767,
+          "permitId": "mbr-permit-v3:17:csh1:eed4ece99b5b6668b20a61c210ec050b",
+          "permitEpoch": 17,
+          "startAttemptSeq": 16,
+          "lastAttemptSeq": 15,
+          "callsReserved": 0,
+          "amountReserved": 0,
+          "lastReservedAtTick": 0,
+          "closeReason": "capacity_recovered",
+          "hash": "csh1:c89adc1cb159a7bc0066af1590248760"
+        },
+        "marketBaseResourceEgressTrialR2Mirror": {
+          "schemaVersion": 1,
+          "runId": "market-base-egress-r2-2026-09-26",
+          "status": "closed",
+          "startedAtTick": 73958367,
+          "endTick": 73961367,
+          "startedAtMs": 1790427990658,
+          "endMs": 1790431590658,
+          "controlUntilMs": 1790430420502,
+          "originalNotBefore": 73958767,
+          "permitId": "mbr-permit-v3:17:csh1:eed4ece99b5b6668b20a61c210ec050b",
+          "permitEpoch": 17,
+          "startAttemptSeq": 16,
+          "lastAttemptSeq": 15,
+          "callsReserved": 0,
+          "amountReserved": 0,
+          "lastReservedAtTick": 0,
+          "closeReason": "capacity_recovered",
+          "hash": "csh1:c89adc1cb159a7bc0066af1590248760"
+        }
+      },
+      "data": {
+        "resourceControl": {
+          "tasks": {
+            "74070938:1:XUH2O:E5N59->E4N58": {
+              "id": "74070938:1:XUH2O:E5N59->E4N58",
+              "resource": "XUH2O",
+              "fromRoomName": "E5N59",
+              "toRoomName": "E4N58",
+              "amount": 2220,
+              "remainingAmount": 1819,
+              "status": "pending",
+              "createdAt": 74070938,
+              "updatedAt": 74074050,
+              "origin": "automatic",
+              "lastProgressAt": 74074040,
+              "reason": "hub:reclaim:XUH2O",
+              "blockedReason": "insufficient_terminal_resource_or_fee",
+              "blockedSince": 74074050
+            },
+            "74072000:1:UH2O:E4N58->E7N58": {
+              "id": "74072000:1:UH2O:E4N58->E7N58",
+              "resource": "UH2O",
+              "fromRoomName": "E4N58",
+              "toRoomName": "E7N58",
+              "amount": 585,
+              "remainingAmount": 585,
+              "status": "pending",
+              "createdAt": 74072000,
+              "updatedAt": 74075630,
+              "origin": "automatic",
+              "lastProgressAt": 74072000,
+              "reason": "synthesis:direct:UH2O"
+            },
+            "74072000:2:GHO2:E4N58->E6N59": {
+              "id": "74072000:2:GHO2:E4N58->E6N59",
+              "resource": "GHO2",
+              "fromRoomName": "E4N58",
+              "toRoomName": "E6N59",
+              "amount": 93,
+              "remainingAmount": 93,
+              "status": "pending",
+              "createdAt": 74072000,
+              "updatedAt": 74073220,
+              "origin": "automatic",
+              "lastProgressAt": 74072000,
+              "reason": "synthesis:direct:GHO2",
+              "blockedReason": "insufficient_terminal_resource_or_fee",
+              "blockedSince": 74073220
+            },
+            "74072200:1:XGHO2:E4N58->E5N59": {
+              "id": "74072200:1:XGHO2:E4N58->E5N59",
+              "resource": "XGHO2",
+              "fromRoomName": "E4N58",
+              "toRoomName": "E5N59",
+              "amount": 680,
+              "remainingAmount": 680,
+              "status": "pending",
+              "createdAt": 74072200,
+              "updatedAt": 74073900,
+              "origin": "automatic",
+              "lastProgressAt": 74072200,
+              "reason": "hub:export:XGHO2"
+            },
+            "74073300:1:XUH2O:E4N58->E6N59": {
+              "id": "74073300:1:XUH2O:E4N58->E6N59",
+              "resource": "XUH2O",
+              "fromRoomName": "E4N58",
+              "toRoomName": "E6N59",
+              "amount": 795,
+              "remainingAmount": 795,
+              "status": "pending",
+              "createdAt": 74073300,
+              "updatedAt": 74073300,
+              "origin": "automatic",
+              "lastProgressAt": 74073300,
+              "reason": "hub:export:XUH2O"
+            },
+            "74073300:2:XGHO2:E4N58->E6N59": {
+              "id": "74073300:2:XGHO2:E4N58->E6N59",
+              "resource": "XGHO2",
+              "fromRoomName": "E4N58",
+              "toRoomName": "E6N59",
+              "amount": 255,
+              "remainingAmount": 255,
+              "status": "pending",
+              "createdAt": 74073300,
+              "updatedAt": 74073400,
+              "origin": "automatic",
+              "lastProgressAt": 74073300,
+              "reason": "hub:export:XGHO2"
+            },
+            "74073400:1:XUH2O:E4N58->E5N59": {
+              "id": "74073400:1:XUH2O:E4N58->E5N59",
+              "resource": "XUH2O",
+              "fromRoomName": "E4N58",
+              "toRoomName": "E5N59",
+              "amount": 1676,
+              "remainingAmount": 1676,
+              "status": "pending",
+              "createdAt": 74073400,
+              "updatedAt": 74074300,
+              "origin": "automatic",
+              "lastProgressAt": 74073400,
+              "reason": "hub:export:XUH2O"
+            },
+            "74073650:1:UH:E4N58->E1N57": {
+              "id": "74073650:1:UH:E4N58->E1N57",
+              "resource": "UH",
+              "fromRoomName": "E4N58",
+              "toRoomName": "E1N57",
+              "amount": 1715,
+              "remainingAmount": 1715,
+              "status": "pending",
+              "createdAt": 74073650,
+              "updatedAt": 74073680,
+              "origin": "automatic",
+              "lastProgressAt": 74073650,
+              "reason": "synthesis:E1N57:UH2O"
+            },
+            "74074950:1:XUH2O:E4N58->E7N58": {
+              "id": "74074950:1:XUH2O:E4N58->E7N58",
+              "resource": "XUH2O",
+              "fromRoomName": "E4N58",
+              "toRoomName": "E7N58",
+              "amount": 1004,
+              "remainingAmount": 1004,
+              "status": "pending",
+              "createdAt": 74074950,
+              "updatedAt": 74074950,
+              "origin": "automatic",
+              "lastProgressAt": 74074950,
+              "reason": "hub:export:XUH2O"
+            },
+            "74075630:1:UH2O:E4N58->E7N58": {
+              "id": "74075630:1:UH2O:E4N58->E7N58",
+              "resource": "UH2O",
+              "fromRoomName": "E4N58",
+              "toRoomName": "E7N58",
+              "amount": 135,
+              "remainingAmount": 135,
+              "status": "pending",
+              "createdAt": 74075630,
+              "updatedAt": 74075630,
+              "origin": "automatic",
+              "lastProgressAt": 74075630,
+              "reason": "synthesis:E7N58:XUH2O"
+            },
+            "74075640:1:OH:E4N58->E1N57": {
+              "id": "74075640:1:OH:E4N58->E1N57",
+              "resource": "OH",
+              "fromRoomName": "E4N58",
+              "toRoomName": "E1N57",
+              "amount": 1384,
+              "remainingAmount": 1384,
+              "status": "pending",
+              "createdAt": 74075640,
+              "updatedAt": 74075660,
+              "origin": "automatic",
+              "lastProgressAt": 74075640,
+              "reason": "synthesis:E1N57:UH2O"
+            },
+            "74075800:1:XUH2O:E4N58->E7N57": {
+              "id": "74075800:1:XUH2O:E4N58->E7N57",
+              "resource": "XUH2O",
+              "fromRoomName": "E4N58",
+              "toRoomName": "E7N57",
+              "amount": 435,
+              "remainingAmount": 435,
+              "status": "pending",
+              "createdAt": 74075800,
+              "updatedAt": 74075800,
+              "origin": "automatic",
+              "lastProgressAt": 74075800,
+              "reason": "hub:export:XUH2O"
+            },
+            "74076630:1:energy:E3N59->E4N58": {
+              "id": "74076630:1:energy:E3N59->E4N58",
+              "resource": "energy",
+              "fromRoomName": "E3N59",
+              "toRoomName": "E4N58",
+              "amount": 15785,
+              "remainingAmount": 0,
+              "status": "done",
+              "createdAt": 74076630,
+              "updatedAt": 74076640,
+              "origin": "automatic",
+              "lastProgressAt": 74076640,
+              "reason": "capacity:relief:energy"
+            },
+            "74076650:1:energy:E3N59->E4N58": {
+              "id": "74076650:1:energy:E3N59->E4N58",
+              "resource": "energy",
+              "fromRoomName": "E3N59",
+              "toRoomName": "E4N58",
+              "amount": 16173,
+              "remainingAmount": 0,
+              "status": "done",
+              "createdAt": 74076650,
+              "updatedAt": 74076660,
+              "origin": "automatic",
+              "lastProgressAt": 74076660,
+              "reason": "capacity:relief:energy"
+            },
+            "74076670:1:energy:E3N59->E4N58": {
+              "id": "74076670:1:energy:E3N59->E4N58",
+              "resource": "energy",
+              "fromRoomName": "E3N59",
+              "toRoomName": "E4N58",
+              "amount": 16561,
+              "remainingAmount": 0,
+              "status": "done",
+              "createdAt": 74076670,
+              "updatedAt": 74076680,
+              "origin": "automatic",
+              "lastProgressAt": 74076680,
+              "reason": "capacity:relief:energy"
+            },
+            "74076690:1:energy:E3N59->E4N58": {
+              "id": "74076690:1:energy:E3N59->E4N58",
+              "resource": "energy",
+              "fromRoomName": "E3N59",
+              "toRoomName": "E4N58",
+              "amount": 16790,
+              "remainingAmount": 0,
+              "status": "done",
+              "createdAt": 74076690,
+              "updatedAt": 74076700,
+              "origin": "automatic",
+              "lastProgressAt": 74076700,
+              "reason": "capacity:relief:energy"
+            },
+            "74076710:1:energy:E3N59->E4N58": {
+              "id": "74076710:1:energy:E3N59->E4N58",
+              "resource": "energy",
+              "fromRoomName": "E3N59",
+              "toRoomName": "E4N58",
+              "amount": 15937,
+              "remainingAmount": 0,
+              "status": "done",
+              "createdAt": 74076710,
+              "updatedAt": 74076720,
+              "origin": "automatic",
+              "lastProgressAt": 74076720,
+              "reason": "capacity:relief:energy"
+            },
+            "74076730:1:energy:E3N59->E4N58": {
+              "id": "74076730:1:energy:E3N59->E4N58",
+              "resource": "energy",
+              "fromRoomName": "E3N59",
+              "toRoomName": "E4N58",
+              "amount": 16325,
+              "remainingAmount": 0,
+              "status": "done",
+              "createdAt": 74076730,
+              "updatedAt": 74076740,
+              "origin": "automatic",
+              "lastProgressAt": 74076740,
+              "reason": "capacity:relief:energy"
+            },
+            "74076750:1:energy:E3N59->E4N58": {
+              "id": "74076750:1:energy:E3N59->E4N58",
+              "resource": "energy",
+              "fromRoomName": "E3N59",
+              "toRoomName": "E4N58",
+              "amount": 16713,
+              "remainingAmount": 0,
+              "status": "done",
+              "createdAt": 74076750,
+              "updatedAt": 74076760,
+              "origin": "automatic",
+              "lastProgressAt": 74076760,
+              "reason": "capacity:relief:energy"
+            },
+            "74076770:1:energy:E3N59->E4N58": {
+              "id": "74076770:1:energy:E3N59->E4N58",
+              "resource": "energy",
+              "fromRoomName": "E3N59",
+              "toRoomName": "E4N58",
+              "amount": 16481,
+              "remainingAmount": 0,
+              "status": "done",
+              "createdAt": 74076770,
+              "updatedAt": 74076780,
+              "origin": "automatic",
+              "lastProgressAt": 74076780,
+              "reason": "capacity:relief:energy"
+            },
+            "74076790:1:energy:E3N59->E4N58": {
+              "id": "74076790:1:energy:E3N59->E4N58",
+              "resource": "energy",
+              "fromRoomName": "E3N59",
+              "toRoomName": "E4N58",
+              "amount": 16481,
+              "remainingAmount": 0,
+              "status": "done",
+              "createdAt": 74076790,
+              "updatedAt": 74076800,
+              "origin": "automatic",
+              "lastProgressAt": 74076800,
+              "reason": "capacity:relief:energy"
+            },
+            "74076810:1:energy:E3N59->E4N58": {
+              "id": "74076810:1:energy:E3N59->E4N58",
+              "resource": "energy",
+              "fromRoomName": "E3N59",
+              "toRoomName": "E4N58",
+              "amount": 16019,
+              "remainingAmount": 0,
+              "status": "done",
+              "createdAt": 74076810,
+              "updatedAt": 74076820,
+              "origin": "automatic",
+              "lastProgressAt": 74076820,
+              "reason": "capacity:relief:energy"
+            },
+            "74076830:1:energy:E3N59->E4N58": {
+              "id": "74076830:1:energy:E3N59->E4N58",
+              "resource": "energy",
+              "fromRoomName": "E3N59",
+              "toRoomName": "E4N58",
+              "amount": 16019,
+              "remainingAmount": 0,
+              "status": "done",
+              "createdAt": 74076830,
+              "updatedAt": 74076840,
+              "origin": "automatic",
+              "lastProgressAt": 74076840,
+              "reason": "capacity:relief:energy"
+            }
+          }
+        }
+      },
+      "canonicalTasksComplete": true
+    },
+    {
+      "shard": "shard2",
+      "fullMemorySha256": "86567c14fc2c5eb2616b0e6f0f7cb45bc8a42d92ac2323bbab39af8d458b8733",
+      "fullMemoryBytes": 14042,
+      "cfg": {},
+      "runtime": {
+        "lastDeployTag": "2026.3.9-1+dd66515@2026-04-17T04:58:06.288Z"
+      },
+      "data": {
+        "resourceControl": {
+          "tasks": {}
+        }
+      },
+      "canonicalTasksComplete": true
+    },
+    {
+      "shard": "shard3",
+      "fullMemorySha256": "dd05cf0e6a91678ac03b70040a06f078ef74f04876393e006d529fbe8a0b9b60",
+      "fullMemoryBytes": 1305,
+      "cfg": {},
+      "runtime": {
+        "lastDeployTag": "2026.3.9-1+46010db@2026-03-17T11:03:46.000Z"
+      },
+      "data": {
+        "resourceControl": {
+          "tasks": {}
+        }
+      },
+      "canonicalTasksComplete": true
+    }
+  ]
+}

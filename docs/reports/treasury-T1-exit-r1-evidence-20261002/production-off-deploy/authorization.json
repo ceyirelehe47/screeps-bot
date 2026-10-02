@@ -1,0 +1,11 @@
+{
+  "schema": "screeps-t1-exit-r1-direct-authorization/v1",
+  "recordedAtUtc": "2026-10-02 08:49:17 UTC",
+  "userMessage": "批准",
+  "approvedQuestion": "是否批准发布这份默认 OFF 修复？",
+  "scope": "一次发布已独立审核及隔离验证的冻结默认OFF修复；不arm、不发送Treasury业务、不改Memory任务或额度",
+  "target": "screeps.com/default/shard1/forster",
+  "accountId": "634fe406347a7b69b28aeccb",
+  "releaseHead": "f0b606fedffe12e0bcd0bd1d05ffb6b03ef60ff7",
+  "mainSha256": "1bf02d8415f552239dd034865c4e62d5c6a00a978af36f78b64640ea05f6f061"
+}

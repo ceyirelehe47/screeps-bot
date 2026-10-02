@@ -1,0 +1,16 @@
+{
+  "schema": "screeps-t1-exit-r1-publication-integrity/v1",
+  "files": {
+    "apply.log": "92536bd2498a80065fce335985affe26e515b08eebb0549279414038b04d9af3",
+    "authorization.json": "8b0ce16bd0a3de3414d20bf75417de724158c91e99fe325ade8bdba17fbc5b75",
+    "before-check.log": "89a7540377a20ce57bfe238712b46e703fcbbc78209f4cbe404cc1d0e9178b68",
+    "capture-after-shards.mjs": "c357f8654399b783bfa3760a992cd33f7ffeefe8115bd49832838e80ea956cce",
+    "market-cfg-before-after.json": "0ae809e438519c17612788bca101d4a2734c849ef6b133fca6df7ef5bf324e02",
+    "post-production-selected.json": "ea208f9d4c638544fd0ea18d3f36e27f4574e5a5cef4e2025324373ab83ee086",
+    "post-shards-selected.json": "98f35bcd1ad61521a133dcd3f960f88c4d5d912203e7f3667f7758a92bf233ed",
+    "post-shards-summary.json": "e3e4c86269b9ab15816e9bd0507819cdb76c7df20ea5574fd43d7c70e3f255f2",
+    "publication-summary.json": "f2e49e1be41955ad5c4b23e1f73c8d8ba6fe28dedce19ff4aaabb98ff3617deb",
+    "verification.log": "1b77083706a128ff5ae53985c1975fdd781715735f6dbc8102a8defde300973c",
+    "verify-off-deploy.py": "98cfd9346febe1383d117adb337b2544f9dd1a411f41316dc662ab3634c72c7d"
+  }
+}

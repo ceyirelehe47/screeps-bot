@@ -1,0 +1,52 @@
+{
+  "schema": "screeps-t1-exit-r1-off-publication/v1",
+  "sourceCommit": "447ab5c45717ea73af026f60a5c4287080af703f",
+  "authorizedDeploymentHead": "f0b606fedffe12e0bcd0bd1d05ffb6b03ef60ff7",
+  "mainSha256": "1bf02d8415f552239dd034865c4e62d5c6a00a978af36f78b64640ea05f6f061",
+  "mainBytes": 3285061,
+  "buildTag": "2026.10.2-1+447ab5c@2026-10-02T06:10:35.260Z",
+  "deployBundleHash": "31d7862330a31f620544e07482933253e658806373f42def32ab51f27665c955",
+  "toolSha256": "a3882af6232c8d7a3cb37f7ea0fce06ca9912bb8850abadaf4dd545f97c4f091",
+  "account": {
+    "_id": "634fe406347a7b69b28aeccb",
+    "username": "forster"
+  },
+  "target": "screeps.com/default/shard1",
+  "codePosts": 1,
+  "postStatus": "accepted",
+  "codeReadbackExact": true,
+  "newRuntimeObserved": true,
+  "runtimeTick": 74076808,
+  "beforeMonitorTick": 74076755,
+  "capturedAtUtc": "2026-10-02T08:52:51.022Z",
+  "applyLogFileMtimeUtc": "2026-10-02T08:51:05.261237+00:00",
+  "effectiveT1Mode": "off",
+  "armCalls": 0,
+  "treasuryNativeCalls": 0,
+  "taskCountAtFirstPostRead": 22,
+  "matchingOriginalHTasks": [],
+  "memoryUtf8Bytes": 1532193,
+  "cpuSnapshot": {
+    "tick": 74076807,
+    "totalUsed": 56.71160349999991,
+    "bucket": 10000,
+    "limit": 120,
+    "tickLimit": 500
+  },
+  "marketCfgKeys": [
+    "marketSaleAutomation",
+    "marketSaleDiagnostics"
+  ],
+  "marketCfgBeforeSha256": "76f06db1a7c3fda5313f97e57aecf9d812029a6040950e67500ec82bdc810451",
+  "marketCfgAfterSha256": "76f06db1a7c3fda5313f97e57aecf9d812029a6040950e67500ec82bdc810451",
+  "marketCfgUnchanged": true,
+  "r2PrimaryStatus": "closed",
+  "r2MirrorStatus": "closed",
+  "ordinaryResourceControlLastActions": [
+    "send:E4N58->E3N59:energy=9403:cost=309",
+    "task-send:74076790:1:energy:E3N59->E4N58:energy=6481:cost=213",
+    "capacity-relief-send:E3N59->E4N58:energy=6481:cost=213"
+  ],
+  "fullCodeAndMemoryBackups": "private audit directory outside repository",
+  "frozenManifestStatus": "productionWritesPerformed=false is the pre-publication freeze record; this publication record is the later authoritative status"
+}

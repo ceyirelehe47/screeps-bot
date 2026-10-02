@@ -1,0 +1,9 @@
+{
+  "passed": true,
+  "scope": "仅默认OFF代码发布及读回，首次Treasury业务未执行",
+  "mainSha256": "1bf02d8415f552239dd034865c4e62d5c6a00a978af36f78b64640ea05f6f061",
+  "runtimeTick": 74076808,
+  "fourShardsOffAndClear": true,
+  "codePosts": 1,
+  "treasuryNativeCalls": 0
+}

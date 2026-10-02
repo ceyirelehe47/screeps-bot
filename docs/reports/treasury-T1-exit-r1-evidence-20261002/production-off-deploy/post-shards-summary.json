@@ -1,0 +1,79 @@
+{
+  "schema": "screeps-t1-exit-r1-post-deploy-shards/v1",
+  "capturedAtUtc": "2026-10-02T08:55:34.146Z",
+  "allShardsT1OffAndClear": true,
+  "records": [
+    {
+      "shard": "shard0",
+      "memoryBytes": 2,
+      "memorySha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "beforeSha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "unchangedFromBefore": true,
+      "deployTag": null,
+      "mode": "off",
+      "responsibilityClear": true,
+      "t1StatePresent": {
+        "treasuryT1FirstLiveControl": false,
+        "treasuryT1FirstLiveControlMirror": false,
+        "treasuryProductionT1Quota": false,
+        "treasuryCore": false
+      },
+      "canonicalTaskCount": 0,
+      "taskLeaseCount": 0
+    },
+    {
+      "shard": "shard1",
+      "memoryBytes": 1532938,
+      "memorySha256": "b8fa7d156987ea8b841f117404cc42259b5bdaf6f572777d3617a744291d0903",
+      "beforeSha256": "b956881549f520e9e4e5596fec92202c33d4fe1547e426da7a454ad537dfcc0e",
+      "unchangedFromBefore": false,
+      "deployTag": "2026.10.2-1+447ab5c@2026-10-02T06:10:35.260Z",
+      "mode": "off",
+      "responsibilityClear": true,
+      "t1StatePresent": {
+        "treasuryT1FirstLiveControl": false,
+        "treasuryT1FirstLiveControlMirror": false,
+        "treasuryProductionT1Quota": false,
+        "treasuryCore": false
+      },
+      "canonicalTaskCount": 23,
+      "taskLeaseCount": 0
+    },
+    {
+      "shard": "shard2",
+      "memoryBytes": 14042,
+      "memorySha256": "86567c14fc2c5eb2616b0e6f0f7cb45bc8a42d92ac2323bbab39af8d458b8733",
+      "beforeSha256": "86567c14fc2c5eb2616b0e6f0f7cb45bc8a42d92ac2323bbab39af8d458b8733",
+      "unchangedFromBefore": true,
+      "deployTag": "2026.3.9-1+dd66515@2026-04-17T04:58:06.288Z",
+      "mode": "off",
+      "responsibilityClear": true,
+      "t1StatePresent": {
+        "treasuryT1FirstLiveControl": false,
+        "treasuryT1FirstLiveControlMirror": false,
+        "treasuryProductionT1Quota": false,
+        "treasuryCore": false
+      },
+      "canonicalTaskCount": 0,
+      "taskLeaseCount": 0
+    },
+    {
+      "shard": "shard3",
+      "memoryBytes": 1305,
+      "memorySha256": "dd05cf0e6a91678ac03b70040a06f078ef74f04876393e006d529fbe8a0b9b60",
+      "beforeSha256": "dd05cf0e6a91678ac03b70040a06f078ef74f04876393e006d529fbe8a0b9b60",
+      "unchangedFromBefore": true,
+      "deployTag": "2026.3.9-1+46010db@2026-03-17T11:03:46.000Z",
+      "mode": "off",
+      "responsibilityClear": true,
+      "t1StatePresent": {
+        "treasuryT1FirstLiveControl": false,
+        "treasuryT1FirstLiveControlMirror": false,
+        "treasuryProductionT1Quota": false,
+        "treasuryCore": false
+      },
+      "canonicalTaskCount": 0,
+      "taskLeaseCount": 0
+    }
+  ]
+}
