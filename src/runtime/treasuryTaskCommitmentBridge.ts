@@ -48,6 +48,8 @@ function sameFenceSnapshot(cached: Omit<FenceCache, "value"> | null | undefined,
     cached.pointers.length === pointers.length && cached.pointers.every((pointer,index) => pointer === pointers[index]);
 }
 function hasLaneFence(lane: TreasuryTerminalLane, continuousProjection = readTreasuryContinuousOHFenceProjection()): boolean {
+  // 投影已拒绝未知root/accessor时先持住责任；不能为缓存pointer/token再读取未知getter。
+  if (continuousProjection.control.status === "invalid" || continuousProjection.quota.status === "invalid") return true;
   const runtime = Memory.runtime as unknown as Record<string, unknown> | undefined;
   const data = Memory.data as unknown as Record<string, unknown> | undefined;
   const resource = data?.resourceControl as Record<string,unknown> | undefined;

@@ -565,12 +565,28 @@ describe("T4 合法公共quota预扣入口的持久与失败closed", () => {
 
   it("mirror暂时半写失败返回false，已知合法baseline恢复后没有native收费", () => {
     const quota = reserve();
-    const runtime = Memory.runtime as unknown as Record<string, unknown>;
-    let mirror = runtime[MIRROR]; let writes = 0;
-    Object.defineProperty(runtime, MIRROR, { enumerable: true, configurable: true,
-      get: () => mirror, set(value: unknown) { writes += 1; if (writes === 1) throw Error("注入mirror写失败"); mirror = value; } });
+    const actualRuntime = Memory.runtime as unknown as Record<string, unknown>;
+    const baseline = JSON.stringify(actualRuntime[PRIMARY]);
+    let writes = 0; let partial: unknown;
+    const runtime = new Proxy(actualRuntime, { set(target, key, value) {
+      const stored = Reflect.set(target, key, value);
+      if (key === MIRROR) {
+        writes += 1;
+        if (writes === 1) { partial = value; throw Error("注入mirror写后失败"); }
+      }
+      return stored;
+    } });
+    (Memory as unknown as { runtime: Record<string, unknown> }).runtime = runtime;
     expect(writeTreasuryContinuousOHQuota({ ...quota, status: "dispatching" }, 2)).toBe(false);
+    expect(writes).toBe(2);
+    expect(partial).toMatchObject({ consumption: [{ attemptId: quota.attemptId, amount: 10, fee: 2 }],
+      currentCycle: { quota: { status: "dispatching" } } });
+    const mirrorSlot = Object.getOwnPropertyDescriptor(actualRuntime, MIRROR);
+    expect(mirrorSlot?.enumerable).toBe(true);
+    expect(mirrorSlot && "value" in mirrorSlot).toBe(true);
     expect(readTreasuryContinuousOHState().status).toBe("valid");
+    expect(JSON.stringify(actualRuntime[PRIMARY])).toBe(baseline);
+    expect(JSON.stringify(actualRuntime[MIRROR])).toBe(baseline);
     expect(state().consumption).toHaveLength(0);
     expect(state().currentCycle?.quota?.status).toBe("reserved");
     expect(context.source.terminal!.send).not.toHaveBeenCalled();
@@ -578,15 +594,36 @@ describe("T4 合法公共quota预扣入口的持久与失败closed", () => {
 
   it("mirror坏值使partial write不能安全回滚时，保留invalid并阻断后续收费/release", () => {
     const quota = reserve();
-    const runtime = Memory.runtime as unknown as Record<string, unknown>;
-    let mirror = runtime[MIRROR];
-    Object.defineProperty(runtime, MIRROR, { enumerable: true, configurable: true,
-      get: () => mirror, set() { mirror = { damaged: true }; throw Error("不可恢复mirror故障"); } });
+    const actualRuntime = Memory.runtime as unknown as Record<string, unknown>;
+    let writes = 0; let unknownMirror: unknown;
+    const runtime = new Proxy(actualRuntime, { set(target, key, value) {
+      if (key === MIRROR) {
+        writes += 1;
+        if (writes === 1) {
+          unknownMirror = { ...JSON.parse(JSON.stringify(value)), foreignBudgetState: true };
+          Reflect.set(target, key, unknownMirror);
+          throw Error("不可恢复mirror写后故障");
+        }
+      }
+      return Reflect.set(target, key, value);
+    } });
+    (Memory as unknown as { runtime: Record<string, unknown> }).runtime = runtime;
     expect(writeTreasuryContinuousOHQuota({ ...quota, status: "dispatching" }, 2)).toBe(false);
+    expect(writes).toBe(1);
+    const unknownBytes = JSON.stringify(unknownMirror);
+    expect(actualRuntime[MIRROR]).toBe(unknownMirror);
+    expect(unknownMirror).toMatchObject({ foreignBudgetState: true,
+      consumption: [{ attemptId: quota.attemptId, amount: 10, fee: 2 }] });
+    const mirrorSlot = Object.getOwnPropertyDescriptor(actualRuntime, MIRROR);
+    expect(mirrorSlot?.enumerable).toBe(true);
+    expect(mirrorSlot && "value" in mirrorSlot).toBe(true);
     expect(readTreasuryContinuousOHState().status).toBe("invalid");
     expect(writeTreasuryContinuousOHQuota({ ...quota, status: "dispatching" }, 2)).toBe(false);
     expect(acceptTreasuryContinuousOHPilot().ok).toBe(false);
     expect(normalizeTreasuryContinuousOHControl().ok).toBe(false);
+    expect(writes).toBe(1);
+    expect(actualRuntime[MIRROR]).toBe(unknownMirror);
+    expect(JSON.stringify(actualRuntime[MIRROR])).toBe(unknownBytes);
     expect(context.source.terminal!.send).not.toHaveBeenCalled();
   });
 
