@@ -12,5 +12,5 @@ export function createTreasuryTerminalControl(lane: TreasuryTerminalLane) {
   return lane.continuous ? createTreasuryContinuousOHControl() : createTreasuryFirstLiveControl(lane);
 }
 export function readTreasuryTerminalFenceControl(lane: TreasuryTerminalLane): Read {
-  return lane.continuous ? readTreasuryContinuousOHFenceControl() : readTreasuryTerminalControl(lane);
+  return lane.continuous ? readTreasuryContinuousOHFenceControl() : createTreasuryFirstLiveState(lane).readControlForFence();
 }

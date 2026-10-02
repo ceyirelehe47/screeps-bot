@@ -42,6 +42,47 @@ export function finiteNonNegative(value: unknown): value is number {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 }
 
+const FENCE_CONTROL_FIELDS = ["schemaVersion", "runId", "status", "startedAtTick", "deadlineTick",
+  "startedAtMs", "deadlineMs", "lastHeartbeatAtMs", "controlUntilMs", "taskId", "taskCreatedAt",
+  "taskAmount", "taskRemainingAtArm", "sourceTerminalId", "targetTerminalId", "deployTag",
+  "deployBundleHash", "closeReason", "hash"] as const;
+const FENCE_CONTROL_KEYS = new Set<string>(FENCE_CONTROL_FIELDS);
+const FENCE_SLICE_CONTROL_KEYS = new Set<string>([...FENCE_CONTROL_FIELDS, "maxSliceAmount"]);
+const FENCE_IDENTITY_FIELDS = new Set(["taskId", "sourceTerminalId", "targetTerminalId", "deployTag", "deployBundleHash"]);
+const validFenceControls = new WeakMap<TreasuryTerminalLane, Set<string>>();
+
+function plainFenceObject(raw: unknown): raw is Record<string, unknown> {
+  return raw !== null && typeof raw === "object" && !Array.isArray(raw) &&
+    [Object.prototype, null].includes(Object.getPrototypeOf(raw));
+}
+
+function boundedFenceScalar(name: string, value: unknown, hasSlice: boolean, runId: string): boolean {
+  if (name === "schemaVersion") return value === 1;
+  if (name === "runId") return value === runId;
+  if (name === "status") return value === "active" || value === "closed" || hasSlice && value === "preparing";
+  if (name === "hash") return typeof value === "string" && value.length === 37 && /^csh1:[0-9a-f]{32}$/.test(value);
+  if (name === "closeReason") return typeof value === "string" && value.length <= 80;
+  if (FENCE_IDENTITY_FIELDS.has(name)) return typeof value === "string" && value.length > 0 && value.length <= 160;
+  return finiteNonNegative(value);
+}
+
+/** 每次读全部 own descriptor 和有界 scalar；不冻结旧本，也不执行 getter/toJSON。 */
+function fenceControlSnapshot(raw: unknown, hasSlice: boolean, runId: string): Control | null {
+  if (!plainFenceObject(raw) || Object.getOwnPropertySymbols(raw).length !== 0 || "toJSON" in raw) return null;
+  const expected = hasSlice ? FENCE_SLICE_CONTROL_KEYS : FENCE_CONTROL_KEYS;
+  const names = Object.getOwnPropertyNames(raw);
+  if (names.length !== expected.size) return null;
+  const snapshot = Object.create(null) as Record<string, string | number>;
+  for (const name of names) {
+    const descriptor = Object.getOwnPropertyDescriptor(raw, name);
+    if (!expected.has(name) || !descriptor || !Object.prototype.hasOwnProperty.call(descriptor, "value") || !descriptor.enumerable ||
+        !boundedFenceScalar(name, descriptor.value, hasSlice, runId)) return null;
+    // 保留原字段顺序：旧主镜像协议的 JSON 字节相等要求不被 canonical 化放宽。
+    snapshot[name] = descriptor.value as string | number;
+  }
+  return snapshot as unknown as Control;
+}
+
 export function createTreasuryFirstLiveState(lane: TreasuryTerminalLane) {
 const PRIMARY = lane.controlKey;
 const MIRROR = lane.controlMirrorKey;
@@ -103,7 +144,48 @@ function readControl(): Read {
   }
 }
 
-return { seal, readControl };
+/** 仅 cargo fence 复用纯签名/数学成功；Native 权威继续调用原 readControl。 */
+function readControlForFence(): Read {
+  try {
+    const runtimeSlot = Object.getOwnPropertyDescriptor(Memory, "runtime");
+    if (runtimeSlot ? !Object.prototype.hasOwnProperty.call(runtimeSlot, "value") || !runtimeSlot.enumerable : "runtime" in Memory) return { status: "invalid" };
+    const state = runtimeSlot?.value;
+    if (state === undefined) return { status: "absent" };
+    if (!plainFenceObject(state)) return { status: "invalid" };
+    const primarySlot = Object.getOwnPropertyDescriptor(state, PRIMARY);
+    const mirrorSlot = Object.getOwnPropertyDescriptor(state, MIRROR);
+    if ([primarySlot, mirrorSlot].some((slot) => slot && (!Object.prototype.hasOwnProperty.call(slot, "value") || !slot.enumerable)) ||
+        !primarySlot && PRIMARY in state || !mirrorSlot && MIRROR in state) return { status: "invalid" };
+    const primaryRaw = primarySlot?.value;
+    const mirrorRaw = mirrorSlot?.value;
+    if (primaryRaw === undefined && mirrorRaw === undefined) return { status: "absent" };
+    if ("toJSON" in Object.prototype || "toJSON" in Array.prototype) return { status: "invalid" };
+    const hasSlice = Boolean(lane.demandBoundedSlice);
+    const primary = fenceControlSnapshot(primaryRaw, hasSlice, CONTROL_RUN_ID);
+    const mirror = fenceControlSnapshot(mirrorRaw, hasSlice, CONTROL_RUN_ID);
+    if (!primary || !mirror) return { status: "invalid" };
+    const bytes = JSON.stringify(primary);
+    if (bytes !== JSON.stringify(mirror)) return { status: "invalid" };
+    const identityFields = Object.create(null) as Record<string, string | boolean>;
+    identityFields.domain = `treasury-${lane.name.toLowerCase()}:first-live-control-v1`;
+    identityFields.runId = CONTROL_RUN_ID;
+    identityFields.hasSlice = hasSlice;
+    const identity = JSON.stringify(identityFields) + "\n" + bytes;
+    const cached = validFenceControls.get(lane);
+    if (cached?.has(identity)) {
+      cached.delete(identity); cached.add(identity);
+    } else {
+      if (!valid(primary)) return { status: "invalid" };
+      const identities = cached ?? new Set<string>();
+      identities.add(identity);
+      while (identities.size > 4) identities.delete(identities.values().next().value!);
+      validFenceControls.set(lane, identities);
+    }
+    return { status: "valid", value: Object.freeze(primary) };
+  } catch { return { status: "invalid" }; }
+}
+
+return { seal, readControl, readControlForFence };
 }
 
 /** Screeps 不依赖 Node Buffer/TextEncoder；JSON 的 UTF-8 保守字节口径。 */
