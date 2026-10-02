@@ -27,6 +27,7 @@ import {
   readTreasuryContinuousOHState, writeTreasuryContinuousOHState, treasuryContinuousOHStatePayload,
   treasuryContinuousOHWorkKey,
   sealTreasuryContinuousOHState,
+  observeTreasuryContinuousOHClock,
   type TreasuryContinuousOHState, type TreasuryContinuousOHCycle, type TreasuryContinuousOHClosedCertificate,
 } from "@/runtime/treasuryContinuousOHState";
 
@@ -171,7 +172,7 @@ function kernelIdleAndCertified(state: TreasuryContinuousOHState): boolean {
 function fixedGateReason(state: TreasuryContinuousOHState): string | null {
   const clock = now();
   if (!clock) return "clock_invalid";
-  if (clock.tick < state.lastObservedAtTick || clock.ms < state.lastObservedAtMs ||
+  if (!observeTreasuryContinuousOHClock(state, clock.tick, clock.ms) ||
       state.consumption.some((entry) => entry.atTick > clock.tick || entry.atMs > clock.ms)) return "clock_regressed";
   if (clock.tick >= state.deadlineTick) return "fixed_tick_deadline";
   if (clock.ms >= state.deadlineMs) return "fixed_wall_deadline";
@@ -699,6 +700,9 @@ function prepareNextCycle(state: TreasuryContinuousOHState): TreasuryContinuousO
   }) && setMode("canary") ? ok("preparing") : fail("cycle_prepare_write_failed");
 }
 
+let heartbeatMemory: Memory | undefined;
+const heartbeatTicks = new Map<string, number>();
+
 function maintainCycle(state: TreasuryContinuousOHState): TreasuryContinuousOHResult {
   const cycle = state.currentCycle!;
   if (cycle.quota !== null) {
@@ -734,13 +738,30 @@ function maintainCycle(state: TreasuryContinuousOHState): TreasuryContinuousOHRe
         (ids.source.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0) >= fee &&
         (ids.target.store.getFreeCapacity() ?? 0) >= cycle.amount && ready.ok) status = "active";
   }
-  if (clock.ms === cycle.lastHeartbeatAtMs && status === cycle.status) return ok(status);
-  return writeTreasuryContinuousOHState({ ...treasuryContinuousOHStatePayload(state), currentCycle: {
+  if (heartbeatMemory !== Memory) { heartbeatMemory = Memory; heartbeatTicks.clear(); }
+  const heartbeatKey = `${state.sessionId}:${cycle.sequence}`;
+  // 不跳任何fresh门；仅同tick状态不变且lease尚充足时避免毫秒漂移的重复发布。
+  if (status === cycle.status && (clock.ms === cycle.lastHeartbeatAtMs && Game.time === state.lastObservedAtTick ||
+      heartbeatTicks.get(heartbeatKey) === Game.time && clock.ms - cycle.lastHeartbeatAtMs < 30_000)) return ok(status);
+  const published = writeTreasuryContinuousOHState({ ...treasuryContinuousOHStatePayload(state), currentCycle: {
     ...cycle, status, lastHeartbeatAtMs: clock.ms, controlUntilMs: Math.min(cycle.deadlineMs, clock.ms + 60_000),
-  } }) ? ok(status) : fail("cycle_maintenance_write_failed");
+  } });
+  if (!published) return fail("cycle_maintenance_write_failed");
+  heartbeatTicks.set(heartbeatKey, Game.time);
+  while (heartbeatTicks.size > 4) heartbeatTicks.delete(heartbeatTicks.keys().next().value!);
+  return ok(status);
 }
 
-export function normalizeTreasuryContinuousOHControl(): TreasuryContinuousOHResult {
+function finishControlMaintenance(result: TreasuryContinuousOHResult): TreasuryContinuousOHResult {
+  const read = readTreasuryContinuousOHState();
+  if (read.status !== "valid") return result;
+  const state = read.value;
+  // 真实业务发布已带最新clock；纯idle一tick最多一次，不因Date.now微变再扫整Memory。
+  if (state.sessionStatus === "stopped" || Game.time === state.lastObservedAtTick || fixedGateReason(state)) return result;
+  return writeTreasuryContinuousOHState(treasuryContinuousOHStatePayload(state)) ? result : fail("observation_high_water_write_failed");
+}
+
+function normalizeControlWork(): TreasuryContinuousOHResult {
   try {
     let read = readTreasuryContinuousOHState();
     if (read.status === "absent") return rawMode() === undefined || rawMode() === "off" ? ok("absent") : fail("control_absent");
@@ -759,12 +780,6 @@ export function normalizeTreasuryContinuousOHControl(): TreasuryContinuousOHResu
       if (!setMode("canary") || !writeTreasuryContinuousOHState({ ...treasuryContinuousOHStatePayload(state), modeTransition: null })) {
         return fail("closure_mode_handoff_failed");
       }
-      read = readTreasuryContinuousOHState();
-      if (read.status !== "valid") return fail("state_invalid");
-      state = read.value;
-    }
-    if (!fixed && (Game.time !== state.lastObservedAtTick || Date.now() !== state.lastObservedAtMs)) {
-      if (!writeTreasuryContinuousOHState(treasuryContinuousOHStatePayload(state))) return fail("observation_high_water_write_failed");
       read = readTreasuryContinuousOHState();
       if (read.status !== "valid") return fail("state_invalid");
       state = read.value;
@@ -817,6 +832,12 @@ export function normalizeTreasuryContinuousOHControl(): TreasuryContinuousOHResu
     if (!setMode("canary")) return fail("mode_write_failed");
     return prepareNextCycle(state);
   } catch { setMode("drain"); return fail("control_normalization_failed"); }
+}
+
+/** 包住所有成功/失败held返回：OwnBook有效且fixed gate通过时，新tick耐久clock只发布一次。 */
+export function normalizeTreasuryContinuousOHControl(): TreasuryContinuousOHResult {
+  try { return finishControlMaintenance(normalizeControlWork()); }
+  catch { setMode("drain"); return fail("control_normalization_failed"); }
 }
 
 function treasuryContinuousOHAllows(task: ResourceTransferTask, amount: number): boolean {

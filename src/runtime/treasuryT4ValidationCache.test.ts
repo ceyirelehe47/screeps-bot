@@ -1,6 +1,6 @@
 import * as canonicalHash from "@/runtime/marketDirectContinuousPolicy";
 import { getTreasuryService } from "@/runtime/runtimeServices";
-import { enableTreasuryContinuousOH } from "@/runtime/treasuryContinuousOHControl";
+import { enableTreasuryContinuousOH, normalizeTreasuryContinuousOHControl } from "@/runtime/treasuryContinuousOHControl";
 import { readTreasuryContinuousOHState, treasuryContinuousOHStatePayload, writeTreasuryContinuousOHState } from "@/runtime/treasuryContinuousOHState";
 import { treasuryContinuousOHDataToken, treasuryContinuousOHJSONBytes } from "@/runtime/treasuryContinuousOHDataTree";
 import { treasuryT1SerializedBytes } from "@/runtime/treasuryFirstLiveState";
@@ -45,7 +45,11 @@ describe("T4完整数据指纹只复用纯valid结论", () => {
     expect(state().closedCycles.every((row) => row.ring?.generation === 1)).toBe(true);
   }
   function rawBook(mirror = false): Record<string, any> {
-    return (Memory.runtime as unknown as Record<string, any>)[mirror ? "treasuryContinuousOHMirror" : "treasuryContinuousOH"];
+    // 正常book已deepimmutable；坏态必须作为新的mutable root真实替换，不能掩去破坏。
+    const runtime = Memory.runtime as unknown as Record<string, any>;
+    const key = mirror ? "treasuryContinuousOHMirror" : "treasuryContinuousOH";
+    const replacement = JSON.parse(JSON.stringify(runtime[key])); runtime[key] = replacement;
+    return replacement;
   }
 
   it("一次完整校验供同字节主镜像与重复读取复用，换Game/Memory归属必须重验", () => {
@@ -63,7 +67,7 @@ describe("T4完整数据指纹只复用纯valid结论", () => {
     expect(readTreasuryContinuousOHState().status).toBe("valid"); expect(hash).toHaveBeenCalledTimes(3);
   });
 
-  it.each([false, true])("同tick暖缓存后%s侧历史原地改值立刻invalid，不能凭旧proof发布", (mirror) => {
+  it.each([false, true])("同tick暖缓存后%s侧新root历史改值立刻invalid，不能凭旧proof发布", (mirror) => {
     completePilot(); const before = state();
     expect(hasTreasuryTerminalFence(T4_SOURCE)).toBe(false);
     rawBook(mirror).consumption[0].amount += 1;
@@ -128,15 +132,14 @@ describe("T4完整数据指纹只复用纯valid结论", () => {
   it("mirror半写加入隐藏未知责任后抛错，回滚不得删除未知字段或恢复成valid", () => {
     enable(); const before = state();
     const runtime = Memory.runtime as unknown as Record<string, any>;
-    let mirror = rawBook(true); let writes = 0;
-    Object.defineProperty(runtime, "treasuryContinuousOHMirror", {
-      enumerable: true, configurable: true, get: () => mirror,
-      set(value) {
-        writes += 1; mirror = value;
-        if (writes === 1) {
-          Object.defineProperty(mirror, "hiddenUnknownResponsibility", { value: { unknown: true }, configurable: true });
-          throw Error("mirror半写并出现未知责任");
-        }
+    let mirror = runtime.treasuryContinuousOHMirror; let writes = 0;
+    // 出版根键仍是正常数据descriptor；仅写入时模拟宿主半写为新的unknown tree。
+    (Memory as any).runtime = new Proxy(runtime, {
+      set(target, key, value) {
+        if (key !== "treasuryContinuousOHMirror") return Reflect.set(target, key, value);
+        writes += 1; mirror = JSON.parse(JSON.stringify(value));
+        Object.defineProperty(mirror, "hiddenUnknownResponsibility", { value: { unknown: true }, configurable: true });
+        Reflect.set(target, key, mirror); throw Error("mirror半写并出现未知责任");
       },
     });
     Game.time += 1; clock.mockReturnValue(startMs + 1000);
@@ -146,5 +149,88 @@ describe("T4完整数据指纹只复用纯valid结论", () => {
     expect(readTreasuryContinuousOHState().status).toBe("invalid");
     expect(hasTreasuryTerminalFence(T4_SOURCE)).toBe(true);
     expect(context.source.terminal!.send).not.toHaveBeenCalled();
+  });
+
+  it("两独立root可发布同一deepimmutable值，原地赋值被拒且JSON事实不变", () => {
+    completePilot(); const runtime = Memory.runtime as unknown as Record<string, any>;
+    const primary = runtime.treasuryContinuousOH;
+    expect(primary).toBe(runtime.treasuryContinuousOHMirror);
+    expect(Object.isFrozen(primary)).toBe(true); expect(Object.isFrozen(primary.consumption[0])).toBe(true);
+    const before = JSON.stringify(Memory);
+    expect(Reflect.set(primary.consumption[0], "amount", 11)).toBe(false);
+    expect(Reflect.set(primary.closedCycles[0].cycle.quota, "amount", 11)).toBe(false);
+    expect(JSON.stringify(Memory)).toBe(before); expect(readTreasuryContinuousOHState().status).toBe("valid");
+  });
+
+  it("未证mutable/仅shallowFrozen的新root不能memo token，后代变更仍即时invalid", () => {
+    completePilot(); const replacement = rawBook(true); Object.freeze(replacement);
+    const first = treasuryContinuousOHDataToken(replacement);
+    replacement.consumption[0].amount += 1;
+    expect(treasuryContinuousOHDataToken(replacement)).not.toBe(first);
+    expect(readTreasuryContinuousOHState().status).toBe("invalid"); expect(hasTreasuryTerminalFence(T4_SOURCE)).toBe(true);
+  });
+
+  it.each([Object.prototype, Array.prototype])("cached深冻结树仍拒绝prototype新增toJSON且getter零调用", (prototype) => {
+    completePilot(); const callback = jest.fn(() => ({}));
+    Object.defineProperty(prototype, "toJSON", { get: callback, configurable: true });
+    try {
+      expect(readTreasuryContinuousOHState().status).toBe("invalid");
+      expect(hasTreasuryTerminalFence(T4_SOURCE)).toBe(true); expect(callback).not.toHaveBeenCalled();
+    } finally { delete (prototype as Record<string, unknown>).toJSON; }
+  });
+
+  it("同tick多次正常维护只pub一次，wall先升后回退仍停止且durable保峰值", () => {
+    completePilot(); Game.time = 213; clock.mockReturnValue(startMs + 113_000);
+    expect(normalizeTreasuryContinuousOHControl().ok).toBe(true);
+    const afterFirst = state(); const primary = (Memory.runtime as any).treasuryContinuousOH;
+    for (let n = 1; n <= 5; n += 1) {
+      clock.mockReturnValue(startMs + 113_000 + n);
+      expect(normalizeTreasuryContinuousOHControl().ok).toBe(true);
+      expect((Memory.runtime as any).treasuryContinuousOH).toBe(primary);
+    }
+    expect(state().lastObservedAtMs).toBe(afterFirst.lastObservedAtMs);
+    clock.mockReturnValue(startMs + 113_001);
+    normalizeTreasuryContinuousOHControl();
+    expect(state().stopReason).toBe("clock_regressed");
+    expect(state().lastObservedAtMs).toBeGreaterThanOrEqual(startMs + 113_005);
+    expect(state().deadlineMs).toBe(afterFirst.deadlineMs); expect(state().consumption).toEqual(afterFirst.consumption);
+  });
+
+  it("warm immutable书的root accessor也属于bad形状，不能调用getter或复用clear", () => {
+    completePilot(); expect(hasTreasuryTerminalFence(T4_SOURCE)).toBe(false);
+    const runtime = Memory.runtime as unknown as Record<string, any>;
+    const good = runtime.treasuryContinuousOHMirror; const getter = jest.fn(() => good);
+    Object.defineProperty(runtime, "treasuryContinuousOHMirror", { get: getter, enumerable: true, configurable: true });
+    expect(readTreasuryContinuousOHState().status).toBe("invalid");
+    expect(hasTreasuryTerminalFence(T4_SOURCE)).toBe(true); expect(getter).not.toHaveBeenCalled();
+  });
+
+  it("真实unknown原责任在wall不变的新tick仍发布tick高水位，cold reset回退tick被拒", () => {
+    enable(); tick(100); expect(context.source.terminal!.send).toHaveBeenCalledTimes(1);
+    // native未应用receipt，保持真实unknown原attempt，不能补发。
+    Game.time = 101; clock.mockReturnValue(startMs);
+    normalizeTreasuryContinuousOHControl();
+    expect(state().lastObservedAtTick).toBe(101);
+    const history = state().consumption;
+    (global as any).Memory = JSON.parse(JSON.stringify(Memory));
+    Game.time = 100; normalizeTreasuryContinuousOHControl();
+    expect(state().stopReason).toBe("clock_regressed"); expect(state().lastObservedAtTick).toBe(101);
+    expect(state().consumption).toEqual(history); expect(context.source.terminal!.send).toHaveBeenCalledTimes(1);
+  });
+
+  it("ownBook有效但kernel坏态的失败held也耐久新tick高水位，失败结论不变", () => {
+    completePilot(); Game.time = 213; clock.mockReturnValue(startMs + 113_000);
+    const runtime = Memory.runtime as unknown as Record<string, any>; runtime.treasuryCore = { schemaVersion: -1 };
+    const result = normalizeTreasuryContinuousOHControl(); expect(result.ok).toBe(false);
+    expect(result.reason).toBe("kernel_or_uncertified_history_held");
+    expect(state().lastObservedAtTick).toBe(213); expect(context.source.terminal!.send).toHaveBeenCalledTimes(3);
+  });
+
+  it("正常work后的finalizer时钟抛错仍闭成failed+drain，不向main逃异常", () => {
+    completePilot(); Game.time = 213;
+    clock.mockImplementationOnce(() => startMs + 113_000).mockImplementationOnce(() => { throw Error("finalizer clock unavailable"); });
+    expect(normalizeTreasuryContinuousOHControl()).toEqual({ ok: false, reason: "control_normalization_failed" });
+    expect((Memory.cfg as any).treasuryTerminalTransferT4.mode).toBe("drain");
+    expect(context.source.terminal!.send).toHaveBeenCalledTimes(3);
   });
 });

@@ -51,6 +51,67 @@ function charge(
   return entry;
 }
 
+function debitHistory(rows: readonly { msOffset: number; amount?: number; fee?: number;
+  sequence?: number; tick?: number }[]): TreasuryContinuousOHConsumption[] {
+  return rows.map((row, index) => ({
+    sequence: row.sequence ?? index + 1,
+    attemptId: `prefix-oracle-${row.sequence ?? index + 1}`,
+    amount: row.amount ?? 1,
+    fee: row.fee ?? 0,
+    atTick: row.tick ?? ENABLED_TICK + index * 50,
+    atMs: ENABLED_MS + row.msOffset,
+    epoch: Math.floor(row.msOffset / DAY),
+  }));
+}
+
+function fullDebitHistory(): TreasuryContinuousOHConsumption[] {
+  return debitHistory(Array.from({ length: 90 }, (_, index) => {
+    const slot = index % 30;
+    return { sequence: index + 1 + Math.floor(index * 38 / 89),
+      msOffset: Math.floor(index / 30) * DAY + slot * 50_000,
+      amount: slot < 20 ? 10 : 6, fee: slot < 10 ? 4 : 3 };
+  }));
+}
+
+/** 保留旧逐前缀重扫作为数学 oracle；输入结构合法性由下面的独立失败 closed 测试覆盖。 */
+function legacyPrefixBudgetGate(
+  bounds: TreasuryContinuousOHPolicy,
+  history: readonly TreasuryContinuousOHConsumption[],
+  nowMs: number,
+  nowTick: number,
+  amount: number,
+  fee: number,
+): { ok: boolean; reason: string } {
+  function budgetReason(prefix: readonly TreasuryContinuousOHConsumption[], atMs: number,
+    nextAmount: number, nextFee: number): string | null {
+    const summary = summarizeTreasuryContinuousOHBudget(bounds, prefix, ENABLED_MS, atMs);
+    if (summary.rolling24h.oh + nextAmount > bounds.rolling24hOH) return "rolling24h_oh_exceeded";
+    if (summary.rolling24h.energy + nextFee > bounds.rolling24hEnergy) return "rolling24h_energy_exceeded";
+    if (summary.rolling24h.nativeCalls + 1 > bounds.rolling24hNativeCalls) return "rolling24h_native_calls_exceeded";
+    if (summary.epoch24h.oh + nextAmount > bounds.rolling24hOH) return "epoch24h_oh_exceeded";
+    if (summary.epoch24h.energy + nextFee > bounds.rolling24hEnergy) return "epoch24h_energy_exceeded";
+    if (summary.epoch24h.nativeCalls + 1 > bounds.rolling24hNativeCalls) return "epoch24h_native_calls_exceeded";
+    if (summary.lifetime.oh + nextAmount > bounds.lifetimeOH) return "lifetime_oh_exceeded";
+    if (summary.lifetime.energy + nextFee > bounds.lifetimeEnergy) return "lifetime_energy_exceeded";
+    if (summary.lifetime.nativeCalls + 1 > bounds.lifetimeNativeCalls) return "lifetime_native_calls_exceeded";
+    return null;
+  }
+  for (let index = 0; index < history.length; index += 1) {
+    const entry = history[index];
+    if (index > 0 && entry.atTick - history[index - 1].atTick < bounds.minNativeIntervalTicks) {
+      return { ok: false, reason: "native_interval_not_elapsed" };
+    }
+    const reason = budgetReason(history.slice(0, index), entry.atMs, entry.amount, entry.fee);
+    if (reason) return { ok: false, reason };
+  }
+  const last = history[history.length - 1];
+  if (last && nowTick - last.atTick < bounds.minNativeIntervalTicks) {
+    return { ok: false, reason: "native_interval_not_elapsed" };
+  }
+  const reason = budgetReason(history, nowMs, amount, fee);
+  return reason ? { ok: false, reason } : { ok: true, reason: "ok" };
+}
+
 describe("T4 公开预算 gate 的固定边界", () => {
   it("hard policy固定26/260/100/30与780/300/90/128/50，默认计划slice10", () => {
     expect(HARD_BOUNDS).toEqual({ sliceAmount: 26, rolling24hOH: 260, rolling24hEnergy: 100,
@@ -256,6 +317,106 @@ describe("T4 公开预算 gate 的固定边界", () => {
     expect(validateTreasuryContinuousOHBudget(policy(), impossibleHistory, ENABLED_MS, ENABLED_TICK, 2)).toBe(false);
     expect(checkTreasuryContinuousOHBudget(policy(), impossibleHistory, ENABLED_MS, ENABLED_MS + 2 * DAY, 200, 1, 0).ok).toBe(false);
   });
+
+  it("90笔保留完整历史与128 prepare高水位，三窗口精确耗尽780OH/300fee/90native", () => {
+    const history = Object.freeze(fullDebitHistory().map((entry) => Object.freeze(entry)));
+    const before = JSON.stringify(history);
+    expect(history[89].sequence).toBe(128);
+    expect(validateTreasuryContinuousOHBudget(policy(), history, ENABLED_MS, ENABLED_TICK, 128)).toBe(true);
+    expect(summarizeTreasuryContinuousOHBudget(policy(), history, ENABLED_MS, ENABLED_MS + 3 * DAY).lifetime)
+      .toEqual({ oh: 780, energy: 300, nativeCalls: 90 });
+    expect(checkTreasuryContinuousOHBudget(policy(), history, ENABLED_MS, ENABLED_MS + 3 * DAY, 4_600, 1, 0))
+      .toEqual({ ok: false, reason: "lifetime_oh_exceeded" });
+    expect(JSON.stringify(history)).toBe(before);
+  });
+
+  it("线性历史校验与旧逐前缀oracle等价，保留最早失败的预算维度", () => {
+    const rows = (count: number, msOffset = 0, amount = 1, fee = 0) =>
+      Array.from({ length: count }, (_, index) => ({ msOffset: msOffset + index * 50_000, amount, fee }));
+    const full = fullDebitHistory();
+    const cases = [
+      { name: "空历史", bounds: policy(), history: [] },
+      ...[1, 29, 30, 31, 59, 60, 61, 89, 90].map((length) => ({
+        name: `完整90笔的前${length}笔`, bounds: policy(), history: full.slice(0, length),
+      })),
+      { name: "旧窗OH超额", bounds: policy(), history: debitHistory([
+        ...rows(10, 0, 26), { msOffset: 500_000 }, { msOffset: 2 * DAY },
+      ]) },
+      { name: "旧窗fee超额", bounds: policy(), history: debitHistory([
+        { msOffset: 0, fee: 100 }, { msOffset: 1_000, fee: 1 }, { msOffset: 2 * DAY },
+      ]) },
+      { name: "旧窗native超额", bounds: policy(), history: debitHistory([
+        ...rows(31), { msOffset: 2 * DAY },
+      ]) },
+      { name: "lifetime OH优先于fee与native", bounds: policy({ lifetimeOH: 1, lifetimeEnergy: 1,
+        lifetimeNativeCalls: 1 }), history: debitHistory([
+        { msOffset: 0, fee: 1 }, { msOffset: DAY, fee: 1 },
+      ]) },
+      { name: "lifetime fee优先于native", bounds: policy({ lifetimeEnergy: 1, lifetimeNativeCalls: 1 }),
+        history: debitHistory([{ msOffset: 0, fee: 1 }, { msOffset: DAY, fee: 1 }]) },
+      { name: "lifetime native", bounds: policy({ lifetimeNativeCalls: 2 }),
+        history: debitHistory([{ msOffset: 0 }, { msOffset: DAY }, { msOffset: 2 * DAY }]) },
+      { name: "rolling OH优先于fee与native", bounds: policy({ rolling24hOH: 1, rolling24hEnergy: 1,
+        rolling24hNativeCalls: 1 }), history: debitHistory([
+        { msOffset: 0, fee: 1 }, { msOffset: 1_000, fee: 1 },
+      ]) },
+      { name: "rolling fee优先于native", bounds: policy({ rolling24hEnergy: 1, rolling24hNativeCalls: 1 }),
+        history: debitHistory([{ msOffset: 0, fee: 1 }, { msOffset: 1_000, fee: 1 }]) },
+      { name: "native间隔先于预算", bounds: policy({ rolling24hOH: 1 }),
+        history: debitHistory([{ msOffset: 0 }, { msOffset: 1_000, tick: 149 }]) },
+      { name: "同毫秒不同tick", bounds: policy(), history: debitHistory(rows(4).map((row) => ({ ...row, msOffset: 0 }))) },
+    ];
+    for (const { name, bounds, history } of cases) {
+      const last = history[history.length - 1];
+      const nowTick = last ? last.atTick + 50 : ENABLED_TICK;
+      for (const elapsed of [0, DAY - 1, DAY, 2 * DAY]) {
+        const nowMs = (last?.atMs ?? ENABLED_MS) + elapsed;
+        expect({ name, elapsed, result: checkTreasuryContinuousOHBudget(bounds, history, ENABLED_MS, nowMs, nowTick, 1, 0) })
+          .toEqual({ name, elapsed, result: legacyPrefixBudgetGate(bounds, history, nowMs, nowTick, 1, 0) });
+      }
+    }
+  });
+
+  it("出窗严格排除24h恰边界，epoch跳跃不能清除仍在rolling中的旧消费", () => {
+    const bounds = policy({ rolling24hOH: 26, rolling24hEnergy: 1, rolling24hNativeCalls: 1 });
+    const exact = debitHistory([{ msOffset: 123, amount: 26, fee: 1 },
+      { msOffset: DAY + 123, amount: 26, fee: 1 }, { msOffset: 4 * DAY + 123, amount: 26, fee: 1 }]);
+    expect(exact.map((entry) => entry.epoch)).toEqual([0, 1, 4]);
+    expect(validateTreasuryContinuousOHBudget(bounds, exact, ENABLED_MS, ENABLED_TICK, 3)).toBe(true);
+    const early = exact.map((entry) => ({ ...entry }));
+    early[1].atMs -= 1;
+    expect(checkTreasuryContinuousOHBudget(bounds, early, ENABLED_MS, ENABLED_MS + 5 * DAY + 123, 250, 1, 0))
+      .toEqual({ ok: false, reason: "rolling24h_oh_exceeded" });
+    // 最终窗口已经空，失败必须来自第二笔发生时的完整前缀。
+    expect(summarizeTreasuryContinuousOHBudget(bounds, early, ENABLED_MS, ENABLED_MS + 5 * DAY + 123).rolling24h)
+      .toEqual({ oh: 0, energy: 0, nativeCalls: 0 });
+  });
+
+  it("history脏数组/稀疏项/index accessor/symbol/prototype均失败closed，getter不执行", () => {
+    const [entry] = debitHistory([{ msOffset: 0 }]);
+    const getter = jest.fn(() => entry);
+    const accessor = Object.defineProperty([entry], "0", { enumerable: true, get: getter });
+    const sparse = [entry]; delete sparse[0];
+    const extra = Object.assign([entry], { refund: true });
+    const symbol = Object.assign([entry], { [Symbol("bad")]: true });
+    const inherited = Object.setPrototypeOf([entry], Object.create(Array.prototype));
+    const proxy = new Proxy([entry], { ownKeys() { throw Error("坏history keys"); } });
+    for (const history of [accessor, sparse, extra, symbol, inherited, proxy]) {
+      expect(validateTreasuryContinuousOHBudget(policy(), history, ENABLED_MS, ENABLED_TICK, 1)).toBe(false);
+      expect(checkTreasuryContinuousOHBudget(policy(), history, ENABLED_MS, ENABLED_MS + DAY, 150, 1, 0).ok).toBe(false);
+    }
+    expect(getter).not.toHaveBeenCalled();
+  });
+
+  it.each(["sequence", "amount", "fee", "atTick", "atMs", "epoch"] as const)(
+    "history %s必须是安全整数，线性累计不接纳超范围字段", (field) => {
+      const history = debitHistory([{ msOffset: 0 }]);
+      Object.assign(history[0], { [field]: Number.MAX_SAFE_INTEGER + 1 });
+      expect(validateTreasuryContinuousOHBudget(policy(), history, ENABLED_MS, ENABLED_TICK, 1)).toBe(false);
+      expect(checkTreasuryContinuousOHBudget(policy(), history, ENABLED_MS, ENABLED_MS + DAY, 150, 1, 0))
+        .toEqual({ ok: false, reason: "invalid_budget_history" });
+    },
+  );
 });
 
 describe("T4 合法公共quota预扣入口的持久与失败closed", () => {
@@ -291,8 +452,8 @@ describe("T4 合法公共quota预扣入口的持久与失败closed", () => {
       amount: cycle.amount, reservedAtTick: Game.time };
   }
 
-  function reserve(): TreasuryT1Quota {
-    const quota = startCycle();
+  function reserve(overrides: Partial<TreasuryContinuousOHPolicy> = {}): TreasuryT1Quota {
+    const quota = startCycle(overrides);
     expect(writeTreasuryContinuousOHQuota(quota, 2)).toBe(true);
     expect(state().consumption).toHaveLength(0);
     return quota;
@@ -352,6 +513,27 @@ describe("T4 合法公共quota预扣入口的持久与失败closed", () => {
     expect(state().sequenceHighWater).toBe(1);
     expect(JSON.stringify(state().consumption)).toBe(charged);
     expect([state().enabledAtMs, state().enabledAtTick, state().deadlineMs, state().deadlineTick]).toEqual(deadlines);
+    expect(acceptTreasuryContinuousOHPilot().ok).toBe(false);
+    expect(context.source.terminal!.send).not.toHaveBeenCalled();
+  });
+
+  it("unknown责任的dispatching预扣跨24h后仍耗尽lifetime，不因stop或重新解码退款", () => {
+    const quota = reserve({ lifetimeOH: 10, lifetimeEnergy: 2, lifetimeNativeCalls: 1 });
+    expect(writeTreasuryContinuousOHQuota({ ...quota, status: "dispatching" }, 2)).toBe(true);
+    const charged = JSON.stringify(state().consumption);
+    stopTreasuryContinuousOH();
+    (global as unknown as { Memory: Memory }).Memory = JSON.parse(JSON.stringify(Memory));
+    clock.mockReturnValue(ENABLED_MS + 2 * DAY); Game.time = 200;
+    const retained = state();
+    const summary = summarizeTreasuryContinuousOHBudget(retained.policy, retained.consumption,
+      retained.enabledAtMs, Date.now());
+    expect(summary.rolling24h).toEqual({ oh: 0, energy: 0, nativeCalls: 0 });
+    expect(summary.lifetime).toEqual({ oh: 10, energy: 2, nativeCalls: 1 });
+    expect(checkTreasuryContinuousOHBudget(retained.policy, retained.consumption,
+      retained.enabledAtMs, Date.now(), Game.time, 1, 0))
+      .toEqual({ ok: false, reason: "lifetime_oh_exceeded" });
+    expect(retained.currentCycle?.quota).toMatchObject({ attemptId: quota.attemptId, status: "dispatching" });
+    expect(JSON.stringify(retained.consumption)).toBe(charged);
     expect(acceptTreasuryContinuousOHPilot().ok).toBe(false);
     expect(context.source.terminal!.send).not.toHaveBeenCalled();
   });
@@ -419,7 +601,10 @@ describe("T4 合法公共quota预扣入口的持久与失败closed", () => {
     expect(writeTreasuryContinuousOHQuota({ ...quota, status: "dispatching" }, 2)).toBe(false);
     runtime[key] = charged;
     expect(readTreasuryContinuousOHState().status).toBe("valid");
-    (runtime[key] as { consumption: unknown[] }).consumption = [];
+    // 已完整验证的 book 会冻结；新 root 才能注入真正删除历史的坏账本。
+    const damaged = JSON.parse(JSON.stringify(runtime[key])) as { consumption: unknown[] };
+    damaged.consumption = [];
+    runtime[key] = damaged;
     expect(readTreasuryContinuousOHState().status).toBe("invalid");
     expect(acceptTreasuryContinuousOHPilot().ok).toBe(false);
   });

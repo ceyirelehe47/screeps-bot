@@ -1,9 +1,17 @@
 /** 完整数据树证明：JSON 忽略的隐藏字段不能参与账本等价缓存。 */
-function jsonDataTree(raw: unknown, seen = new WeakSet<object>(), depth = 0): boolean {
+const frozenData = new WeakSet<object>();
+const frozenTokens = new WeakMap<object, string>();
+function prototypeHooksSafe(): boolean {
+  return !("toJSON" in Object.prototype) && !("toJSON" in Array.prototype);
+}
+
+function jsonDataTree(raw: unknown, seen = new WeakSet<object>(), depth = 0, freeze = false): boolean {
   if (raw === null || typeof raw === "string" || typeof raw === "boolean") return true;
   if (typeof raw === "number") return Number.isFinite(raw);
   if (typeof raw !== "object" || depth > 12 || seen.has(raw) ||
       Object.getOwnPropertySymbols(raw).length !== 0 || "toJSON" in raw) return false;
+  // 浅冻结不构成证明；只有本模块完整证明并冻结的全后代可省略递归。
+  if (frozenData.has(raw) && Object.isFrozen(raw)) return true;
   const array = Array.isArray(raw);
   if (array ? Object.getPrototypeOf(raw) !== Array.prototype || raw.length > 512 :
       ![Object.prototype, null].includes(Object.getPrototypeOf(raw))) return false;
@@ -15,18 +23,33 @@ function jsonDataTree(raw: unknown, seen = new WeakSet<object>(), depth = 0): bo
     if (!descriptor || !("value" in descriptor)) return false;
     if (array && key === "length") continue;
     if (!descriptor.enumerable || array && (!/^(0|[1-9][0-9]*)$/.test(key) || Number(key) >= raw.length)) return false;
-    if (!jsonDataTree(descriptor.value, seen, depth + 1)) return false;
+    if (!jsonDataTree(descriptor.value, seen, depth + 1, freeze)) return false;
   }
   seen.delete(raw);
+  if (freeze) { Object.freeze(raw); frozenData.add(raw); }
   return true;
 }
 
 export function treasuryContinuousOHDataToken(raw: unknown): string | null {
   try {
     if (raw === undefined) return "absent";
+    if (!prototypeHooksSafe()) return null;
+    if (raw !== null && typeof raw === "object" && frozenData.has(raw) && Object.isFrozen(raw)) {
+      const cached = frozenTokens.get(raw);
+      if (cached !== undefined) return cached;
+    }
     if (raw === null || typeof raw !== "object" || Array.isArray(raw) || !jsonDataTree(raw)) return null;
     return JSON.stringify(raw);
   } catch { return null; }
+}
+
+/** 由数学valid owner成功后调用；只确立heap只读合同，不改变JSON字节。 */
+export function freezeTreasuryContinuousOHBook(raw: object, expectedToken: string): boolean {
+  try {
+    if (!prototypeHooksSafe() || treasuryContinuousOHDataToken(raw) !== expectedToken ||
+        !jsonDataTree(raw, new WeakSet<object>(), 0, true)) return false;
+    frozenTokens.set(raw, expectedToken); return true;
+  } catch { return false; }
 }
 
 /** 与 Memory 硬字节门共用 UTF-8 口径；复用已经完整校验的 JSON 字节。 */

@@ -1,7 +1,7 @@
 import { canonicalStableHashV1 } from "@/runtime/marketDirectContinuousPolicy";
 import { runtime, finiteNonNegative, treasuryT1SerializedBytes } from "@/runtime/treasuryFirstLiveState";
 import { hashTreasuryCanonicalString, formatTreasuryStableTransactionId } from "@/runtime/treasury/transactionId";
-import { treasuryContinuousOHDataToken, treasuryContinuousOHJSONBytes } from "@/runtime/treasuryContinuousOHDataTree";
+import { treasuryContinuousOHDataToken, treasuryContinuousOHJSONBytes, freezeTreasuryContinuousOHBook } from "@/runtime/treasuryContinuousOHDataTree";
 import type { TreasuryT1Quota } from "@/runtime/treasuryTerminalResponsibility";
 import type { TreasuryCoreRingEntry } from "@/runtime/treasury/kernel/types";
 import {
@@ -286,8 +286,10 @@ export function validTreasuryContinuousOHState(raw: unknown): raw is TreasuryCon
           debit.atTick >= state.deadlineTick || debit.atMs >= state.deadlineMs) return false;
       if (pilot.releasedAtTick === null || cycle.startedAtTick <= pilot.releasedAtTick) pilotDebited += debit.amount;
     }
+    // Budget已经证明sequence严格递增/唯一，绝不以Map覆盖duplicate来修复坏态。
+    const debitBySequence = new Map(state.consumption.map((entry) => [entry.sequence, entry] as const));
     for (const cycle of cycles) {
-      const debit = state.consumption.find((entry) => entry.sequence === cycle.sequence);
+      const debit = debitBySequence.get(cycle.sequence);
       if (cycle.quota?.status === "dispatching" && !debit) return false;
       const cert = state.closedCycles[cycle.sequence - 1];
       if (cert?.outcome === "committed" && !debit) return false;
@@ -325,12 +327,18 @@ function validToken(raw: unknown, token: string): boolean {
 function readStatePair(): { read: TreasuryContinuousOHStateRead; token?: string } {
   try {
     const memory = runtime();
-    const primary = memory?.[PRIMARY];
-    const mirror = memory?.[MIRROR];
+    if (memory !== undefined && !object(memory)) return { read: { status: "invalid" } };
+    const primarySlot = memory && Object.getOwnPropertyDescriptor(memory, PRIMARY);
+    const mirrorSlot = memory && Object.getOwnPropertyDescriptor(memory, MIRROR);
+    if ([primarySlot, mirrorSlot].some((slot) => slot && (!("value" in slot) || !slot.enumerable)) ||
+        memory && (!primarySlot && PRIMARY in memory || !mirrorSlot && MIRROR in memory)) return { read: { status: "invalid" } };
+    const primary = primarySlot?.value;
+    const mirror = mirrorSlot?.value;
     if (primary === undefined && mirror === undefined) return { read: { status: "absent" } };
     const first = treasuryContinuousOHDataToken(primary);
     const second = treasuryContinuousOHDataToken(mirror);
-    if (first === null || second === null || first !== second || !validToken(primary, first)) return { read: { status: "invalid" } };
+    if (first === null || second === null || first !== second || !validToken(primary, first) ||
+        !freezeTreasuryContinuousOHBook(primary as object, first) || !freezeTreasuryContinuousOHBook(mirror as object, second)) return { read: { status: "invalid" } };
     return { read: { status: "valid", value: primary as TreasuryContinuousOHState }, token: first };
   } catch { return { read: { status: "invalid" } }; }
 }
@@ -353,7 +361,7 @@ export function writeTreasuryContinuousOHState(payload: TreasuryContinuousOHStat
           payload.pilot.taskCreatedAt !== baseline.value.pilot.taskCreatedAt || payload.pilot.taskAmount !== baseline.value.pilot.taskAmount))) return false;
     sealed = sealTreasuryContinuousOHState(payload);
     serialized = treasuryContinuousOHDataToken(sealed);
-    if (serialized === null || !validToken(sealed, serialized)) return false;
+    if (serialized === null || !validToken(sealed, serialized) || !freezeTreasuryContinuousOHBook(sealed, serialized)) return false;
     // 已验证自己的两份book是替换，不是新增；坏/未知原值绝不据此减去字节。
     const removedBytes = baselinePair.token === undefined ? 0 : treasuryContinuousOHJSONBytes(baselinePair.token) * 2;
     const projectedBytes = treasuryT1SerializedBytes(Memory) - removedBytes + treasuryContinuousOHJSONBytes(serialized) * 2 + 512;
@@ -362,8 +370,9 @@ export function writeTreasuryContinuousOHState(payload: TreasuryContinuousOHStat
     if (memory.runtime !== undefined && !object(memory.runtime)) return false;
     memory.runtime ??= {};
     destination = memory.runtime;
-    destination[PRIMARY] = JSON.parse(serialized);
-    destination[MIRROR] = JSON.parse(serialized);
+    // 两次独立root发布同一深不可变值，RawMemory仍展开完整两本JSON。
+    destination[PRIMARY] = sealed;
+    destination[MIRROR] = sealed;
     const readback = readStatePair();
     if (readback.read.status === "valid" && readback.token === serialized) return true;
   } catch { /* 只恢复已知baseline，绝不将无效历史当成新session。 */ }
@@ -376,7 +385,10 @@ export function writeTreasuryContinuousOHState(payload: TreasuryContinuousOHStat
         const token = treasuryContinuousOHDataToken(raw);
         return token !== null && (token === before || token === after);
       };
-      if (known(destination[PRIMARY]) && known(destination[MIRROR])) {
+      const primarySlot = Object.getOwnPropertyDescriptor(destination, PRIMARY);
+      const mirrorSlot = Object.getOwnPropertyDescriptor(destination, MIRROR);
+      if (primarySlot && mirrorSlot && primarySlot.enumerable && mirrorSlot.enumerable &&
+          "value" in primarySlot && "value" in mirrorSlot && known(primarySlot.value) && known(mirrorSlot.value)) {
         destination[PRIMARY] = JSON.parse(before);
         destination[MIRROR] = JSON.parse(before);
       }
@@ -385,13 +397,31 @@ export function writeTreasuryContinuousOHState(payload: TreasuryContinuousOHStat
   return false;
 }
 
+let clockMemory: Memory | undefined;
+const observedClocks = new Map<string, { tick: number; ms: number }>();
+function observedClock(state: TreasuryContinuousOHState): { tick: number; ms: number } {
+  if (clockMemory !== Memory) { clockMemory = Memory; observedClocks.clear(); }
+  return observedClocks.get(state.sessionId) ?? { tick: state.lastObservedAtTick, ms: state.lastObservedAtMs };
+}
+
+/** 普通Game对象换tick不抹峰值；reset从durable恢复，不续任何固定截止。 */
+export function observeTreasuryContinuousOHClock(state: TreasuryContinuousOHState, tick: number, ms: number): boolean {
+  const before = observedClock(state);
+  if (!finiteNonNegative(tick) || !finiteNonNegative(ms) || tick < before.tick || ms < before.ms ||
+      tick < state.lastObservedAtTick || ms < state.lastObservedAtMs) return false;
+  observedClocks.set(state.sessionId, { tick, ms });
+  while (observedClocks.size > 4) observedClocks.delete(observedClocks.keys().next().value!);
+  return true;
+}
+
 export function treasuryContinuousOHStatePayload(state: TreasuryContinuousOHState): TreasuryContinuousOHStatePayload {
   const { hash: _hash, ...payload } = state;
   // 所有产品写均带观察高水位；时钟倒退的停止写保留原高水位，不回退签名历史。
   const ms = Date.now();
   const tick = Game.time;
+  const observed = observedClock(state);
   return { ...payload,
-    lastObservedAtTick: finiteNonNegative(tick) ? Math.max(tick, state.lastObservedAtTick) : state.lastObservedAtTick,
-    lastObservedAtMs: finiteNonNegative(ms) ? Math.max(ms, state.lastObservedAtMs) : state.lastObservedAtMs,
+    lastObservedAtTick: finiteNonNegative(tick) ? Math.max(tick, state.lastObservedAtTick, observed.tick) : Math.max(state.lastObservedAtTick, observed.tick),
+    lastObservedAtMs: finiteNonNegative(ms) ? Math.max(ms, state.lastObservedAtMs, observed.ms) : Math.max(state.lastObservedAtMs, observed.ms),
   };
 }

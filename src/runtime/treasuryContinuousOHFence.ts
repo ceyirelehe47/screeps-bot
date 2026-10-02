@@ -17,7 +17,17 @@ let cached: Cache | null = null;
 function projection(): Projection {
   try {
     const runtime = Memory.runtime as unknown as Record<string,unknown> | undefined;
-    const primary = runtime?.treasuryContinuousOH; const mirror = runtime?.treasuryContinuousOHMirror;
+    if (runtime !== undefined && (runtime === null || typeof runtime !== "object" || Array.isArray(runtime) ||
+        ![Object.prototype, null].includes(Object.getPrototypeOf(runtime)))) {
+      return {control:{status:"invalid"},quota:{status:"invalid"},closed:new Set()};
+    }
+    const primarySlot = runtime && Object.getOwnPropertyDescriptor(runtime, "treasuryContinuousOH");
+    const mirrorSlot = runtime && Object.getOwnPropertyDescriptor(runtime, "treasuryContinuousOHMirror");
+    if ([primarySlot, mirrorSlot].some((slot) => slot && (!("value" in slot) || !slot.enumerable)) ||
+        runtime && (!primarySlot && "treasuryContinuousOH" in runtime || !mirrorSlot && "treasuryContinuousOHMirror" in runtime)) {
+      return {control:{status:"invalid"},quota:{status:"invalid"},closed:new Set()};
+    }
+    const primary = primarySlot?.value; const mirror = mirrorSlot?.value;
     const first = token(primary); const second = token(mirror);
     if (first === null || second === null) return {control:{status:"invalid"},quota:{status:"invalid"},closed:new Set()};
     const signature = `${first}\n${second}`;

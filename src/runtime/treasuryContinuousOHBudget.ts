@@ -272,11 +272,18 @@ function validateHistory(
     return failure("invalid_budget_history");
   }
   const attemptIds = new Set<string>();
-  const prefix: TreasuryContinuousOHConsumption[] = [];
+  const summary: TreasuryContinuousOHBudgetSummary = {
+    rolling24h: { oh: 0, energy: 0, nativeCalls: 0 },
+    epoch24h: { index: 0, oh: 0, energy: 0, nativeCalls: 0 },
+    lifetime: { oh: 0, energy: 0, nativeCalls: 0 },
+    lastNativeTick: null,
+  };
+  let rollingStart = 0;
   let previousSequence = 0;
   let previousTick = enabledAtTick;
   let previousMs = enabledAtMs;
-  for (const entry of history) {
+  for (let index = 0; index < history.length; index += 1) {
+    const entry = history[index];
     if (
       !hasDataFields(entry, CONSUMPTION_KEYS) ||
       !isPositiveSafeInteger(entry.sequence) ||
@@ -298,19 +305,43 @@ function validateHistory(
       return failure("invalid_budget_history");
     }
     if (
-      prefix.length > 0 &&
+      index > 0 &&
       entry.atTick - previousTick < policy.minNativeIntervalTicks
     ) {
       return failure("native_interval_not_elapsed");
     }
+    // 时钟已验证单调：每条旧消费最多出窗一次，仍在每个历史时点验完整前缀。
+    // 下界严格排除恰好 24h 前的消费，不能只聚合最终当前窗口。
+    while (rollingStart < index && history[rollingStart].atMs <= entry.atMs - DAY_MS) {
+      const expired = history[rollingStart];
+      summary.rolling24h.oh -= expired.amount;
+      summary.rolling24h.energy -= expired.fee;
+      summary.rolling24h.nativeCalls -= 1;
+      rollingStart += 1;
+    }
+    if (summary.epoch24h.index !== entry.epoch) {
+      summary.epoch24h.index = entry.epoch;
+      summary.epoch24h.oh = 0;
+      summary.epoch24h.energy = 0;
+      summary.epoch24h.nativeCalls = 0;
+    }
     const budget = exceededBudget(
       policy,
-      summarizeTreasuryContinuousOHBudget(policy, prefix, enabledAtMs, entry.atMs),
+      summary,
       entry.amount,
       entry.fee,
     );
     if (!budget.ok) return budget;
-    prefix.push(entry);
+    summary.rolling24h.oh += entry.amount;
+    summary.rolling24h.energy += entry.fee;
+    summary.rolling24h.nativeCalls += 1;
+    summary.epoch24h.oh += entry.amount;
+    summary.epoch24h.energy += entry.fee;
+    summary.epoch24h.nativeCalls += 1;
+    summary.lifetime.oh += entry.amount;
+    summary.lifetime.energy += entry.fee;
+    summary.lifetime.nativeCalls += 1;
+    summary.lastNativeTick = entry.atTick;
     attemptIds.add(entry.attemptId);
     previousSequence = entry.sequence;
     previousTick = entry.atTick;
