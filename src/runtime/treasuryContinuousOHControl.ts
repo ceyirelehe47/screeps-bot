@@ -12,6 +12,7 @@ import { getLocalCarrierDestinationCommittedAmount } from "@/runtime/localCarrie
 import { getCreepAssignmentState } from "@/runtime/creepAssignmentState";
 import { formatTreasuryTransactionId, formatTreasuryStableTransactionId } from "@/runtime/treasury/transactionId";
 import { hasTerminalActionClaim, hasTerminalSendEffectThisTick, hasTerminalCargoEffectThisTick } from "@/runtime/marketActionArbiter";
+import { hasTreasuryTerminalFence } from "@/runtime/treasuryTaskCommitmentBridge";
 import {
   checkTreasuryContinuousOHBudget, normalizeTreasuryContinuousOHPolicy, summarizeTreasuryContinuousOHBudget,
   type TreasuryContinuousOHPolicy,
@@ -648,12 +649,48 @@ function treasuryContinuousOHAllows(task: ResourceTransferTask, amount: number):
   } catch { return false; }
 }
 
-export function treasuryContinuousOHStatus(): unknown {
+export interface TreasuryContinuousOHStatusOptions { readonly fenceBenchmarkQueries?: number; }
+
+/** 固定两端的有界只读测量，不调用生命周期或业务写入口。 */
+function fenceBenchmark(requestedQueries: number): unknown {
+  const tick = Game.time; const buildHash = BUILD_INFO.bundleHash;
+  let queries = 0; let start: number | null = null;
+  try {
+    start = Game.cpu.getUsed();
+    if (!Number.isFinite(start) || !Number.isFinite(Game.cpu.tickLimit)) throw Error("cpu_unreadable");
+    while (queries < requestedQueries) {
+      const used = Game.cpu.getUsed();
+      if (!Number.isFinite(used) || used < start) throw Error("cpu_unreadable");
+      if (Game.cpu.tickLimit - used < 10) break;
+      hasTreasuryTerminalFence(queries % 2 === 0 ? TREASURY_T4_LANE.sourceRoom : TREASURY_T4_LANE.targetRoom);
+      queries += 1;
+    }
+    const end = Game.cpu.getUsed();
+    if (!Number.isFinite(end) || end < start) throw Error("cpu_unreadable");
+    return { requestedQueries, queries, used: end - start, completed: queries === requestedQueries, tick, buildHash };
+  } catch {
+    return { requestedQueries, queries, used: null, completed: false, tick, buildHash, reason: "cpu_or_fence_unreadable" };
+  }
+}
+
+export function treasuryContinuousOHStatus(options?: TreasuryContinuousOHStatusOptions): unknown {
   const read = readTreasuryContinuousOHState();
-  return read.status === "valid" ? { ...read.value, mode: rawMode(),
+  const status = read.status === "valid" ? { ...read.value, mode: rawMode(),
     budget: summarizeTreasuryContinuousOHBudget(read.value.policy, read.value.consumption, read.value.enabledAtMs, Date.now()),
     pilotCommitted: pilotCommitted(read.value), pilotConsumed: pilotConsumed(read.value),
   } : { status: read.status, mode: rawMode() };
+  if (options === undefined) return status;
+  if (!object(options) || Object.getOwnPropertySymbols(options).length > 0 ||
+      Object.getOwnPropertyNames(options).some((key) => key !== "fenceBenchmarkQueries")) {
+    return { ...status, fenceBenchmark: { completed:false,queries:0,used:null,reason:"invalid_benchmark_options" } };
+  }
+  const descriptor = Object.getOwnPropertyDescriptor(options, "fenceBenchmarkQueries");
+  if (descriptor === undefined) return status;
+  const count = "value" in descriptor ? descriptor.value : undefined;
+  if (!Number.isSafeInteger(count) || count < 1 || count > 100) {
+    return { ...status, fenceBenchmark: { completed:false,queries:0,used:null,reason:"invalid_benchmark_count" } };
+  }
+  return { ...status, fenceBenchmark: fenceBenchmark(count) };
 }
 
 /** 工厂无顶层初始化；lane 常量只在实际调用时读取，避免与 shared recovery 的循环加载相互触发。 */

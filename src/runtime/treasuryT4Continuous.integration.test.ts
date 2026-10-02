@@ -1,6 +1,8 @@
 import * as runtimeServices from "@/runtime/runtimeServices";
 import * as continuousControl from "@/runtime/treasuryContinuousOHControl";
 import * as continuousState from "@/runtime/treasuryContinuousOHState";
+import * as taskBridge from "@/runtime/treasuryTaskCommitmentBridge";
+import { BUILD_INFO } from "@/buildMeta";
 import { enableTreasuryContinuousOH, acceptTreasuryContinuousOHPilot, stopTreasuryContinuousOH } from "@/runtime/treasuryContinuousOHControl";
 import { readTreasuryContinuousOHState } from "@/runtime/treasuryContinuousOHState";
 import { beginTreasuryProductionTick, endTreasuryProductionTick, registerTreasuryProductionTerminalTransfer,
@@ -388,5 +390,48 @@ describe("T4真实facade/kernel自动多片pilot", () => {
       expect(readTreasuryContinuousOHState().status).toBe("invalid");
       expect(next.remainingAmount).toBe(100);
     } finally { scan.mockRestore(); }
+  });
+
+  it("status有界只读benchmark恰好100查询，非法不循环、CPU不足提前停止且责任不变", () => {
+    enable(); tickAt(100);
+    const memoryBefore = JSON.stringify(Memory);
+    const codeBefore = JSON.stringify(BUILD_INFO);
+    const journalBefore = JSON.stringify({ active: context.treasury.kernelJournal().active, ring: context.treasury.kernelJournal().ring });
+    const queries = jest.spyOn(taskBridge, "hasTreasuryTerminalFence");
+    const cpu = jest.spyOn(Game.cpu, "getUsed").mockReturnValue(0);
+    try {
+      const plain = continuousControl.treasuryContinuousOHStatus() as Record<string, unknown>;
+      expect(plain).not.toHaveProperty("fenceBenchmark"); expect(queries).not.toHaveBeenCalled(); expect(cpu).not.toHaveBeenCalled();
+      const measured = continuousControl.treasuryContinuousOHStatus({ fenceBenchmarkQueries: 100 }) as Record<string, unknown>;
+      const { fenceBenchmark, ...withoutMeasurement } = measured;
+      expect(withoutMeasurement).toEqual(plain);
+      expect(fenceBenchmark).toEqual({ requestedQueries: 100, queries: 100, used: 0, completed: true,
+        tick: Game.time, buildHash: BUILD_INFO.bundleHash });
+      expect(queries).toHaveBeenCalledTimes(100);
+      expect(queries.mock.calls.map(([room]) => room)).toEqual(Array.from({ length: 100 }, (_, n) => n % 2 === 0 ? T4_SOURCE : T4_TARGET));
+      expect(cpu).toHaveBeenCalledTimes(102);
+      expect(continuousControl.treasuryContinuousOHStatus()).toEqual(plain);
+      queries.mockClear(); cpu.mockClear();
+      for (const count of [0, 101, 1.5, NaN, Infinity]) {
+        expect(continuousControl.treasuryContinuousOHStatus({ fenceBenchmarkQueries: count }))
+          .toMatchObject({ fenceBenchmark: { completed: false, queries: 0, used: null, reason: "invalid_benchmark_count" } });
+      }
+      const getter = jest.fn(() => 100); const accessorOptions = {};
+      Object.defineProperty(accessorOptions, "fenceBenchmarkQueries", { get: getter });
+      expect(continuousControl.treasuryContinuousOHStatus(accessorOptions))
+        .toMatchObject({ fenceBenchmark: { completed: false, queries: 0, reason: "invalid_benchmark_count" } });
+      expect(getter).not.toHaveBeenCalled(); expect(queries).not.toHaveBeenCalled(); expect(cpu).not.toHaveBeenCalled();
+      cpu.mockReturnValue(Game.cpu.tickLimit - 9);
+      expect(continuousControl.treasuryContinuousOHStatus({ fenceBenchmarkQueries: 100 }))
+        .toMatchObject({ fenceBenchmark: { requestedQueries: 100, queries: 0, completed: false, used: 0 } });
+      expect(queries).not.toHaveBeenCalled();
+      cpu.mockReset().mockReturnValueOnce(0).mockReturnValueOnce(0).mockReturnValue(Game.cpu.tickLimit - 5);
+      expect(continuousControl.treasuryContinuousOHStatus({ fenceBenchmarkQueries: 100 }))
+        .toMatchObject({ fenceBenchmark: { requestedQueries: 100, queries: 1, completed: false, used: Game.cpu.tickLimit - 5 } });
+      expect(queries).toHaveBeenCalledTimes(1);
+      expect(JSON.stringify(Memory)).toBe(memoryBefore); expect(JSON.stringify(BUILD_INFO)).toBe(codeBefore);
+      expect(JSON.stringify({ active: context.treasury.kernelJournal().active, ring: context.treasury.kernelJournal().ring })).toBe(journalBefore);
+      expect(context.source.terminal!.send).toHaveBeenCalledTimes(1);
+    } finally { queries.mockRestore(); cpu.mockRestore(); }
   });
 });
