@@ -4,6 +4,8 @@
  * history 只记录 native 调用前的永久扣减；失败、未决和后续恢复都不退款。
  * 本模块不读 Game/Memory，不剪裁历史，也不管理试运行 cohort。
  */
+import { isTreasuryContinuousOHProvenFrozenData } from "@/runtime/treasuryContinuousOHDataTree";
+
 export const TREASURY_CONTINUOUS_OH_HARD_BOUNDS = Object.freeze({
   sliceAmount: 26,
   rolling24hOH: 260,
@@ -68,6 +70,10 @@ const CONSUMPTION_KEYS = [
   "sequence", "attemptId", "amount", "fee", "atTick", "atMs", "epoch",
 ] as const;
 const ATTEMPT_ID_PATTERN = /^[A-Za-z0-9:_\-.]{1,128}$/;
+// 只复用已深冻结历史的成功数学证明；动态时钟、费用和下一片额度始终 fresh。
+// State 校验与公开 check 使用不同 anchor，最多保留四个身份，避免两者互相顶掉。
+const validatedFrozenHistory = new WeakMap<readonly TreasuryContinuousOHConsumption[], Set<string>>();
+const HISTORY_VALIDATION_IDENTITIES_MAX = 4;
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
@@ -265,6 +271,16 @@ function validateHistory(
   ) {
     return failure("invalid_budget_anchor");
   }
+  const provenFrozen = isTreasuryContinuousOHProvenFrozenData(history);
+  const validationIdentity = provenFrozen ? [
+    ...POLICY_KEYS.map((key) => policy[key]), enabledAtMs, enabledAtTick, sequenceHighWater,
+  ].join("|") : null;
+  const cachedIdentities = provenFrozen ? validatedFrozenHistory.get(history) : undefined;
+  if (validationIdentity !== null && cachedIdentities?.has(validationIdentity)) {
+    cachedIdentities.delete(validationIdentity);
+    cachedIdentities.add(validationIdentity);
+    return { ok: true, reason: "ok" };
+  }
   if (
     !isDataHistory(history) ||
     history.length > TREASURY_CONTINUOUS_OH_HARD_BOUNDS.lifetimeNativeCalls
@@ -346,6 +362,14 @@ function validateHistory(
     previousSequence = entry.sequence;
     previousTick = entry.atTick;
     previousMs = entry.atMs;
+  }
+  if (validationIdentity !== null) {
+    const identities = cachedIdentities ?? new Set<string>();
+    identities.add(validationIdentity);
+    while (identities.size > HISTORY_VALIDATION_IDENTITIES_MAX) {
+      identities.delete(identities.values().next().value!);
+    }
+    validatedFrozenHistory.set(history, identities);
   }
   return { ok: true, reason: "ok" };
 }

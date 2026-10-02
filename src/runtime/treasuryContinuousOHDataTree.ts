@@ -5,6 +5,12 @@ function prototypeHooksSafe(): boolean {
   return !("toJSON" in Object.prototype) && !("toJSON" in Array.prototype);
 }
 
+/** 只有本模块已完整证明并冻结的后代才可复用纯数学结论；浅冻结不提供证据。 */
+export function isTreasuryContinuousOHProvenFrozenData(raw: unknown): raw is object {
+  return raw !== null && typeof raw === "object" && prototypeHooksSafe() &&
+    frozenData.has(raw) && Object.isFrozen(raw);
+}
+
 function jsonDataTree(raw: unknown, seen = new WeakSet<object>(), depth = 0, freeze = false): boolean {
   if (raw === null || typeof raw === "string" || typeof raw === "boolean") return true;
   if (typeof raw === "number") return Number.isFinite(raw);

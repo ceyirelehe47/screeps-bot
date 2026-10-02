@@ -436,7 +436,7 @@ function closeCycle(state: TreasuryContinuousOHState, reason: string, stop: bool
     stopReason: stop ? reason.slice(0, 80) || "operator_stop" : state.stopReason,
     currentCycle: cycle && cycle.status !== "closed" ? { ...cycle, status: "closed", closeReason: reason.slice(0, 80) || "closed" } : cycle,
   })) { setMode("drain"); return fail("control_write_failed"); }
-  if (!setMode(cycle ? "drain" : stop ? "off" : "canary")) return fail("mode_write_failed");
+  if (!setMode(cycle || stop ? "drain" : "canary")) return fail("mode_write_failed");
   return ok(stop ? "stopping" : "cycle_closed");
 }
 
@@ -809,8 +809,11 @@ function normalizeControlWork(): TreasuryContinuousOHResult {
       }
     }
     if (state.sessionStatus === "stopping") {
+      // 任务表不可读时无法证明原责任已清；只在完整读回后交还普通 writer。
+      const tasks = taskStore();
+      if (tasks === null) { setMode("drain"); return fail("task_store_unreadable"); }
       if (state.currentCycle !== null || !kernelIdleAndCertified(state) ||
-          Object.values(taskStore() ?? {}).some((task) => task.treasurySlice?.runId === CONTINUOUS_RUN_ID)) {
+          Object.values(tasks).some((task) => task.treasurySlice?.runId === CONTINUOUS_RUN_ID)) {
         setMode("drain"); return ok("stopping_original_responsibility_held");
       }
       return writeTreasuryContinuousOHState({ ...treasuryContinuousOHStatePayload(state), sessionStatus: "stopped" }) &&
