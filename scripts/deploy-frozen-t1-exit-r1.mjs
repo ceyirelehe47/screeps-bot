@@ -67,15 +67,15 @@ async function remoteCode() {
   return { bytes: Buffer.byteLength(body.modules.main, "utf8"), sha256: sha256(body.modules.main) };
 }
 
-const [me, live, deployTag, modeCfg, quota, control, core, tasks] = await Promise.all([
+const [me, live, deployTag, modeCfg, quota, control, mirror, core, tasks] = await Promise.all([
   request("/api/auth/me"), remoteCode(), memory("runtime.lastDeployTag"),
   memory("cfg.treasuryTerminalTransferSlice0"), memory("runtime.treasuryProductionT1Quota"),
-  memory("runtime.treasuryT1FirstLiveControl"), memory("runtime.treasuryCore"), memory("data.resourceControl.tasks"),
+  memory("runtime.treasuryT1FirstLiveControl"), memory("runtime.treasuryT1FirstLiveControlMirror"), memory("runtime.treasuryCore"), memory("data.resourceControl.tasks"),
 ]);
 if (me._id !== manifest.accountId || me.username !== manifest.accountName ||
     live.sha256 !== manifest.expectedLiveSha256 ||
     deployTag !== manifest.expectedLiveDeployTag ||
-    (modeCfg !== undefined && modeCfg?.mode !== "off") || quota !== undefined || control !== undefined || core !== undefined ||
+    (modeCfg !== undefined && modeCfg?.mode !== "off") || quota !== undefined || control !== undefined || mirror !== undefined || core !== undefined ||
     !tasks || typeof tasks !== "object" || Array.isArray(tasks) ||
     Object.values(tasks).some((task) => !task || typeof task !== "object" || task.treasurySlice !== undefined)) {
   throw new Error("live account, code, mode, quota, or deployment identity changed");

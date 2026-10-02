@@ -2,7 +2,7 @@ import { bumpTreasuryCommitmentRevision } from "@/runtime/treasury/commitmentRev
 import type { TreasuryCoreWorkRecord } from "@/runtime/treasury/kernel/types";
 import type { ResourceTransferTask } from "@/runtime/logistics/resourceTransferTasks";
 import { readTreasuryT1Quota, readTreasuryT1Responsibility } from "@/runtime/treasuryT1Responsibility";
-import { readTreasuryT1FirstLiveControl } from "@/runtime/treasuryT1FirstLiveControl";
+import { readTreasuryT1FirstLiveControl } from "@/runtime/treasuryT1FirstLiveState";
 import {
   decodeTreasuryT1DurableFacts,
   TREASURY_T1_ACTION_KIND,
