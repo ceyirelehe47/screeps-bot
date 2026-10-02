@@ -65,6 +65,7 @@ declare global {
   var closeTreasuryT3FirstLive: typeof import("@/runtime/treasuryT3FirstLiveControl").closeTreasuryT3FirstLive;
   var treasuryT3FirstLiveStatus: typeof import("@/runtime/treasuryT3FirstLiveControl").treasuryT3FirstLiveStatus;
   var enableTreasuryContinuousOH: typeof import("@/runtime/treasuryContinuousOHControl").enableTreasuryContinuousOH;
+  var enableTreasuryContinuousOHFromDemand: typeof import("@/runtime/treasuryContinuousOHControl").enableTreasuryContinuousOHFromDemand;
   var stopTreasuryContinuousOH: typeof import("@/runtime/treasuryContinuousOHControl").stopTreasuryContinuousOH;
   var treasuryContinuousOHStatus: typeof import("@/runtime/treasuryContinuousOHControl").treasuryContinuousOHStatus;
   var acceptTreasuryContinuousOHPilot: typeof import("@/runtime/treasuryContinuousOHControl").acceptTreasuryContinuousOHPilot;

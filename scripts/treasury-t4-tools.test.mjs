@@ -59,7 +59,9 @@ function mockedTool(name, action, scenario) {
     deployBundleHash:'a'.repeat(64),mainSha256:createHash('sha256').update(bundle).digest('hex'),
     sourceCommit:'b'.repeat(40),sourceTree:'c'.repeat(40),mainBytes:Buffer.byteLength(bundle)};
   const manifestPath=join(root,'manifest.json'),optionsPath=join(root,'options.json');
-  writeFileSync(optionsPath,JSON.stringify({pilotTaskId:'74075640:1:OH:E4N58->E1N57',pilotTaskCreatedAt:74075640,pilotTaskAmount:1384}));
+  writeFileSync(optionsPath,JSON.stringify(action==='enable-from-demand'?
+    (scenario==='bad-demand-policy'?{pilotTaskId:'invented'}:{lifetimeNativeCalls:9,maxPrepareCycles:16}):
+    {pilotTaskId:'74075640:1:OH:E4N58->E1N57',pilotTaskCreatedAt:74075640,pilotTaskAmount:1384}));
   writeFileSync(secret,JSON.stringify({main:{hostname:'screeps.com',branch:'default',token:'not-a-real-token'}}));
   writeFileSync(manifestPath,JSON.stringify(manifest));
   writeFileSync(preload,`
@@ -71,10 +73,12 @@ const scenario=${JSON.stringify(scenario)},trace=${JSON.stringify(trace)},action
 const manifest=${JSON.stringify(manifest)},bundle=${JSON.stringify(bundle)};
 const key='__codexTreasuryT4Result';
 const memory={runtime:{lastDeployTag:manifest.buildTag,lastDeployBundleHash:manifest.deployBundleHash},cfg:{},data:{resourceControl:{tasks:{}}}};
+if(scenario==='wrong-runtime')memory.runtime.lastDeployBundleHash='unexpected-runtime';
 const cargoSandbox={Memory:memory,Game:{time:123,shard:{name:'shard1'},creeps:{
  source:{name:'source',room:{name:'E4N58'},store:{}},target:{name:'target',room:{name:'E1N57'},store:{}},
  between:{name:'between',room:{name:'E9N59'},store:{OH:10}}}},
  global:{__creepAssignmentState:{between:{synthesisCarrierPendingResource:'OH',synthesisCarrierPendingFromId:'source-terminal',synthesisCarrierPendingToId:'target-terminal'}}}};
+const demandSandbox={Memory:memory,Game:{time:123,shard:{name:'shard1'}},enableTreasuryContinuousOHFromDemand:policy=>({ok:true,reason:'enabled_awaiting_natural_pilot',receivedPolicy:policy??null})};
 if(scenario==='prior-marker')stored={marker:'prior-owned-marker',status:'executing'};
 const record=()=>writeFileSync(trace,JSON.stringify(calls));
 const response=v=>({ok:true,status:200,json:async()=>v});
@@ -101,7 +105,7 @@ globalThis.fetch=async(input,init={})=>{
     if(expression.includes('delete Memory.')){cleanup=true;if(scenario==='cleanup-missing-data'){record();throw Error('cleanup response lost and action not observed');}if(scenario!=='cleanup-retained'){stored=null;delete memory[key];}record();return response({ok:1});}
     const match=expression.match(/marker\\s*:\\s*(\"[^\"]+\")/);
     if(!match)throw Error('mock could not extract action marker');
-    if(action==='cargo'){vm.runInNewContext(expression,cargoSandbox,{timeout:1000});stored=memory[key];}
+    if(action==='cargo'||action==='enable-from-demand'){vm.runInNewContext(expression,action==='cargo'?cargoSandbox:demandSandbox,{timeout:1000});stored=memory[key];}
     else stored={marker:JSON.parse(match[1]),action,status:'returned',result:action==='inspect'?{tick:123,shard:'shard1',rooms:{},transactions:{}}:{entryResult:{ok:true,reason:'armed'},snapshot:{tick:123,shard:'shard1',rooms:{},transactions:{}}}};
     if(scenario==='unknown-post')throw Error('mock response lost after server accepted action');
     return response({ok:1});
@@ -111,7 +115,7 @@ globalThis.fetch=async(input,init={})=>{
 `);
   const tool=name==='capture-production.mjs'?fileURLToPath(new URL('../docs/reports/treasury-T2-first-production-evidence-20261002/tools/capture-production.mjs',import.meta.url)):fileURLToPath(new URL(`./${name}`,import.meta.url));
   const args=name==='capture-production.mjs'?[secret,join(root,'capture.json'),audit,'--all-shards']:
-    [action,secret,out,...(['inspect','cargo'].includes(action)?[]:[manifestPath,optionsPath])];
+    [action,secret,out,...(['inspect','cargo'].includes(action)?[]:[manifestPath,...(scenario==='default-demand'?[]:[optionsPath])])];
   const child=spawnSync(process.execPath,['--import',preload,tool,...args],{encoding:'utf8',timeout:5000,cwd,
     env:{...process.env,SCREEPS_TOKEN:''}});
   const calls=existsSync(trace)?JSON.parse(readFileSync(trace,'utf8')):[];
@@ -216,4 +220,27 @@ test('cargo执行完整expression捕获两端以外仍在途的己方creep', () 
  assert.equal(capturedResult.result.creepCount,3);assert.equal(capturedResult.result.creeps.length,3);
  assert.deepEqual(capturedResult.result.creeps.find(c=>c.name==='between'),{name:'between',room:'E9N59',store:{OH:10},
   assignment:{synthesisCarrierPendingResource:'OH',synthesisCarrierPendingFromId:'source-terminal',synthesisCarrierPendingToId:'target-terminal'}});
+});
+
+test('FromDemand执行真实expression，传递收紧policy且未知POST只读取一次原UUID',()=>{
+ for(const scenario of ['normal','unknown-post']){
+  const {child,calls,capturedResult,cleanupResult}=mockedTool('treasury-t4-production.mjs','enable-from-demand',scenario);
+  assert.equal(child.status,0,child.stderr);
+  assert.deepEqual(capturedResult.result.entryResult,{ok:true,reason:'enabled_awaiting_natural_pilot',receivedPolicy:{lifetimeNativeCalls:9,maxPrepareCycles:16}});
+  assert.equal(calls.filter(c=>c.path==='/api/user/console'&&c.method==='POST'&&!c.isCleanup).length,1);
+  assert.equal(cleanupResult.cleared,true);
+ }
+});
+test('FromDemand允许默认policy且不传任何任务身份',()=>{
+ const {child,capturedResult}=mockedTool('treasury-t4-production.mjs','enable-from-demand','default-demand');
+ assert.equal(child.status,0,child.stderr);assert.equal(capturedResult.result.entryResult.receivedPolicy,null);
+});
+test('FromDemand坏policy或SHA漂移零POST，运行时漂移不进入产品函数',()=>{
+ for(const scenario of ['bad-demand-policy','wrong-code']){
+  const {child,calls}=mockedTool('treasury-t4-production.mjs','enable-from-demand',scenario);
+  assert.notEqual(child.status,0);assert.equal(calls.some(c=>c.path==='/api/user/console'&&c.method==='POST'),false);
+ }
+ const {child,capturedResult}=mockedTool('treasury-t4-production.mjs','enable-from-demand','wrong-runtime');
+ assert.notEqual(child.status,0);assert.equal(capturedResult.status,'threw');assert.match(capturedResult.error,/deployment changed/);
+ assert.equal(capturedResult.result,undefined);
 });

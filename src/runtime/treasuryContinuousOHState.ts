@@ -1,6 +1,7 @@
 import { canonicalStableHashV1 } from "@/runtime/marketDirectContinuousPolicy";
 import { runtime, finiteNonNegative, treasuryT1SerializedBytes } from "@/runtime/treasuryFirstLiveState";
 import { hashTreasuryCanonicalString, formatTreasuryStableTransactionId } from "@/runtime/treasury/transactionId";
+import { treasuryContinuousOHDataToken, treasuryContinuousOHJSONBytes } from "@/runtime/treasuryContinuousOHDataTree";
 import type { TreasuryT1Quota } from "@/runtime/treasuryTerminalResponsibility";
 import type { TreasuryCoreRingEntry } from "@/runtime/treasury/kernel/types";
 import {
@@ -17,10 +18,7 @@ export const TREASURY_CONTINUOUS_OH_SESSION_MS = 72 * 60 * 60_000;
 export const TREASURY_CONTINUOUS_OH_SESSION_TICKS = 72_000;
 export const TREASURY_CONTINUOUS_OH_MAX_MEMORY_BYTES = 1_900_000;
 
-export interface TreasuryContinuousOHPilot {
-  readonly taskId: string;
-  readonly taskCreatedAt: number;
-  readonly taskAmount: number;
+interface TreasuryContinuousOHPilotBounds {
   readonly cap: 26;
   readonly sliceCap: 10;
   readonly completedAtTick: number | null;
@@ -29,6 +27,12 @@ export interface TreasuryContinuousOHPilot {
   readonly releasedAtTick: number | null;
   readonly releasedAtMs: number | null;
 }
+
+/** schema2 的启动等待态明确没有 task 身份；绑定后不允许再回到 null 或更换。 */
+export type TreasuryContinuousOHPilot = TreasuryContinuousOHPilotBounds & (
+  | { readonly taskId: string; readonly taskCreatedAt: number; readonly taskAmount: number }
+  | { readonly taskId: null; readonly taskCreatedAt: null; readonly taskAmount: null }
+);
 
 export interface TreasuryContinuousOHCycle {
   readonly sequence: number;
@@ -61,7 +65,7 @@ export interface TreasuryContinuousOHClosedCertificate {
 }
 
 export interface TreasuryContinuousOHState {
-  readonly schemaVersion: 1;
+  readonly schemaVersion: 1 | 2;
   readonly runId: typeof CONTROL_RUN_ID;
   readonly sessionId: string;
   readonly sessionStatus: "running" | "pilot_complete_awaiting_release" | "stopping" | "stopped";
@@ -175,7 +179,7 @@ function validRing(value: unknown, cycle: TreasuryContinuousOHCycle): value is T
 }
 
 function stateHash(payload: TreasuryContinuousOHStatePayload): string {
-  return canonicalStableHashV1({ domain: "treasury-t4:continuous-oh-state-v1", payload });
+  return canonicalStableHashV1({ domain: `treasury-t4:continuous-oh-state-v${payload.schemaVersion}`, payload });
 }
 
 export function sealTreasuryContinuousOHState(payload: TreasuryContinuousOHStatePayload): TreasuryContinuousOHState {
@@ -188,7 +192,7 @@ export function validTreasuryContinuousOHState(raw: unknown): raw is TreasuryCon
       "deadlineTick", "deadlineMs", "deployTag", "deployBundleHash", "sourceTerminalId", "targetTerminalId",
       "policy", "pilot", "sequenceHighWater", "currentCycle", "closedCycles", "consumption", "stopReason", "hash"])) return false;
     const state = raw as unknown as TreasuryContinuousOHState;
-    if (state.schemaVersion !== 1 || state.runId !== CONTROL_RUN_ID ||
+    if (![1, 2].includes(state.schemaVersion) || state.runId !== CONTROL_RUN_ID ||
         !shortString(state.sessionId, 128) ||
         !["running", "pilot_complete_awaiting_release", "stopping", "stopped"].includes(state.sessionStatus) ||
         (state.modeTransition !== null && state.modeTransition !== "canary_after_closure") ||
@@ -209,9 +213,17 @@ export function validTreasuryContinuousOHState(raw: unknown): raw is TreasuryCon
     if (!normalized.ok || JSON.stringify(normalized.policy) !== JSON.stringify(state.policy) ||
         state.sequenceHighWater > state.policy.maxPrepareCycles) return false;
     const pilot = state.pilot;
+    const unbound = pilot.taskId === null && pilot.taskCreatedAt === null && pilot.taskAmount === null;
+    const bound = shortString(pilot.taskId, 80) && finiteNonNegative(pilot.taskCreatedAt) &&
+      finiteNonNegative(pilot.taskAmount) && pilot.taskAmount > 0;
     if (!fields(pilot, ["taskId", "taskCreatedAt", "taskAmount", "cap", "sliceCap", "completedAtTick", "completedAtMs", "completionReason", "releasedAtTick", "releasedAtMs"]) ||
-        !shortString(pilot.taskId, 80) || !finiteNonNegative(pilot.taskCreatedAt) ||
-        !finiteNonNegative(pilot.taskAmount) || pilot.taskAmount < 1 || pilot.cap !== 26 || pilot.sliceCap !== 10 ||
+        !(bound || state.schemaVersion === 2 && unbound) || pilot.cap !== 26 || pilot.sliceCap !== 10 ||
+        unbound && (state.sequenceHighWater !== 0 || state.currentCycle !== null || state.closedCycles.length !== 0 ||
+          state.consumption.length !== 0 || state.modeTransition !== null || pilot.completedAtTick !== null ||
+          pilot.completedAtMs !== null || pilot.completionReason !== null || pilot.releasedAtTick !== null || pilot.releasedAtMs !== null) ||
+        state.schemaVersion === 2 && bound && (pilot.taskAmount! > pilot.cap ||
+          pilot.taskCreatedAt! < state.enabledAtTick ||
+          !new RegExp(`^${pilot.taskCreatedAt}:[1-9][0-9]*:OH:E4N58->E1N57$`).test(pilot.taskId!)) ||
         ((pilot.completedAtTick === null) !== (pilot.completedAtMs === null)) ||
         ((pilot.completedAtTick === null) !== (pilot.completionReason === null)) ||
         (pilot.completedAtTick !== null && (!finiteNonNegative(pilot.completedAtTick) || !finiteNonNegative(pilot.completedAtMs) ||
@@ -291,43 +303,79 @@ export function validTreasuryContinuousOHState(raw: unknown): raw is TreasuryCon
   } catch { return false; }
 }
 
-export function readTreasuryContinuousOHState(): TreasuryContinuousOHStateRead {
+let validationGame: Game | undefined;
+let validationMemory: Memory | undefined;
+const validatedData = new Map<string, boolean>();
+
+/** 只记忆完整字节对应的纯数学/签名结论；每次读取仍遍历两本全部 descriptor 和值。 */
+function validToken(raw: unknown, token: string): boolean {
+  if (validationGame !== Game || validationMemory !== Memory) {
+    validationGame = Game; validationMemory = Memory; validatedData.clear();
+  }
+  const cached = validatedData.get(token);
+  if (cached !== undefined) {
+    validatedData.delete(token); validatedData.set(token, cached); return cached;
+  }
+  const valid = validTreasuryContinuousOHState(raw);
+  validatedData.set(token, valid);
+  while (validatedData.size > 4) validatedData.delete(validatedData.keys().next().value!);
+  return valid;
+}
+
+function readStatePair(): { read: TreasuryContinuousOHStateRead; token?: string } {
   try {
     const memory = runtime();
     const primary = memory?.[PRIMARY];
     const mirror = memory?.[MIRROR];
-    if (primary === undefined && mirror === undefined) return { status: "absent" };
-    if (!validTreasuryContinuousOHState(primary) || !validTreasuryContinuousOHState(mirror) ||
-        JSON.stringify(primary) !== JSON.stringify(mirror)) return { status: "invalid" };
-    return { status: "valid", value: primary };
-  } catch { return { status: "invalid" }; }
+    if (primary === undefined && mirror === undefined) return { read: { status: "absent" } };
+    const first = treasuryContinuousOHDataToken(primary);
+    const second = treasuryContinuousOHDataToken(mirror);
+    if (first === null || second === null || first !== second || !validToken(primary, first)) return { read: { status: "invalid" } };
+    return { read: { status: "valid", value: primary as TreasuryContinuousOHState }, token: first };
+  } catch { return { read: { status: "invalid" } }; }
+}
+
+export function readTreasuryContinuousOHState(): TreasuryContinuousOHStateRead {
+  return readStatePair().read;
 }
 
 /** 成对发布失败只能恢复已验证签名的原快照；无证据时保留坏态并停新work。 */
 export function writeTreasuryContinuousOHState(payload: TreasuryContinuousOHStatePayload): boolean {
-  const baseline = readTreasuryContinuousOHState();
+  const baselinePair = readStatePair();
+  const baseline = baselinePair.read;
   let destination: Record<string, unknown> | undefined;
   let sealed: TreasuryContinuousOHState | undefined;
+  let serialized: string | null = null;
   try {
+    if (baseline.status === "invalid") return false;
+    if (baseline.status === "valid" && (payload.schemaVersion !== baseline.value.schemaVersion ||
+        baseline.value.pilot.taskId !== null && (payload.pilot.taskId !== baseline.value.pilot.taskId ||
+          payload.pilot.taskCreatedAt !== baseline.value.pilot.taskCreatedAt || payload.pilot.taskAmount !== baseline.value.pilot.taskAmount))) return false;
     sealed = sealTreasuryContinuousOHState(payload);
+    serialized = treasuryContinuousOHDataToken(sealed);
+    if (serialized === null || !validToken(sealed, serialized)) return false;
     // 已验证自己的两份book是替换，不是新增；坏/未知原值绝不据此减去字节。
-    const removedBytes = baseline.status === "valid" ? treasuryT1SerializedBytes(baseline.value) * 2 : 0;
-    const projectedBytes = treasuryT1SerializedBytes(Memory) - removedBytes + treasuryT1SerializedBytes(sealed) * 2 + 512;
-    if (!validTreasuryContinuousOHState(sealed) || projectedBytes >= TREASURY_CONTINUOUS_OH_MAX_MEMORY_BYTES) return false;
+    const removedBytes = baselinePair.token === undefined ? 0 : treasuryContinuousOHJSONBytes(baselinePair.token) * 2;
+    const projectedBytes = treasuryT1SerializedBytes(Memory) - removedBytes + treasuryContinuousOHJSONBytes(serialized) * 2 + 512;
+    if (projectedBytes >= TREASURY_CONTINUOUS_OH_MAX_MEMORY_BYTES) return false;
     const memory = Memory as unknown as { runtime?: Record<string, unknown> };
     if (memory.runtime !== undefined && !object(memory.runtime)) return false;
     memory.runtime ??= {};
     destination = memory.runtime;
-    destination[PRIMARY] = JSON.parse(JSON.stringify(sealed));
-    destination[MIRROR] = JSON.parse(JSON.stringify(sealed));
-    const readback = readTreasuryContinuousOHState();
-    if (readback.status === "valid" && readback.value.hash === sealed.hash) return true;
+    destination[PRIMARY] = JSON.parse(serialized);
+    destination[MIRROR] = JSON.parse(serialized);
+    const readback = readStatePair();
+    if (readback.read.status === "valid" && readback.token === serialized) return true;
   } catch { /* 只恢复已知baseline，绝不将无效历史当成新session。 */ }
   try {
     if (baseline.status === "valid" && destination !== undefined && runtime() === destination && sealed !== undefined) {
-      const before = JSON.stringify(baseline.value);
-      const after = JSON.stringify(sealed);
-      const known = (raw: unknown) => [before, after].includes(JSON.stringify(raw));
+      const before = baselinePair.token;
+      const after = serialized;
+      if (before === undefined || after === null) return false;
+      const known = (raw: unknown) => {
+        const token = treasuryContinuousOHDataToken(raw);
+        return token !== null && (token === before || token === after);
+      };
       if (known(destination[PRIMARY]) && known(destination[MIRROR])) {
         destination[PRIMARY] = JSON.parse(before);
         destination[MIRROR] = JSON.parse(before);

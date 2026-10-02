@@ -1,11 +1,12 @@
 import { getTreasuryService } from "@/runtime/runtimeServices";
 import { runSynthesisControl } from "@/runtime/synthesisControl";
-import { enableTreasuryContinuousOH, acceptTreasuryContinuousOHPilot,
+import { enableTreasuryContinuousOH, enableTreasuryContinuousOHFromDemand, acceptTreasuryContinuousOHPilot,
   inspectTreasuryContinuousOHProcurement } from "@/runtime/treasuryContinuousOHControl";
 import { readTreasuryContinuousOHState } from "@/runtime/treasuryContinuousOHState";
+import { resetTreasuryCoreLifecycleFactsForTest } from "@/runtime/treasury/kernel/kernel";
 import { beginTreasuryProductionTick, endTreasuryProductionTick, registerTreasuryProductionTerminalTransfer,
   runTreasuryTerminalTransferTask } from "@/runtime/treasuryTerminalTransfer";
-import type { ResourceTransferTask } from "@/runtime/logistics/resourceTransferTasks";
+import { reconcileResourceTransferTasks, type ResourceTransferTask } from "@/runtime/logistics/resourceTransferTasks";
 import { initializeT4, applyLatestT4Native, t4CanonicalTask, t4Ledger, t4Store, setT4Missing,
   T4_SOURCE, T4_TARGET, type T4Fixture, type T4MutableStore } from "../../test/treasuryT4Fixture";
 
@@ -25,7 +26,8 @@ describe("T4真实synthesis producer采购桥接", () => {
   }
   function dispatch(tick: number, task = t4CanonicalTask(context)): void {
     at(tick); beginTreasuryProductionTick();
-    try { runTreasuryTerminalTransferTask(task, t4Ledger(context), true, jest.fn()); }
+    const canonical = Memory.data!.resourceControl!.tasks[task.id] as ResourceTransferTask;
+    try { runTreasuryTerminalTransferTask(canonical, t4Ledger(context), true, jest.fn()); }
     finally { endTreasuryProductionTick(); }
   }
   function state() {
@@ -60,6 +62,21 @@ describe("T4真实synthesis producer采购桥接", () => {
     return labs;
   }
   function producer(tick: number): void { at(tick); runSynthesisControl(); }
+  function demandStartupFixture(stored = 913): string {
+    expect(reconcileResourceTransferTasks({ automaticTaskNoProgressTtl: 0 })).toBe(1);
+    expect(t4CanonicalTask(context)).toMatchObject({ status: "cancelled", amount: 913, remainingAmount: 913,
+      reason: `synthesis:${T4_TARGET}:UH2O`, lastError: "automatic_no_progress_timeout" });
+    (context.source.storage!.store as T4MutableStore)[RESOURCE_HYDROXIDE] = stored;
+    (context.source.terminal!.store as T4MutableStore)[RESOURCE_HYDROXIDE] = 0;
+    equipSynthesisLabs();
+    return JSON.stringify(t4CanonicalTask(context));
+  }
+  function rebootService(): void {
+    const root = global as unknown as { Memory: Memory; __runtimeServices?: unknown };
+    root.Memory = JSON.parse(JSON.stringify(Memory)) as Memory;
+    delete root.__runtimeServices; resetTreasuryCoreLifecycleFactsForTest();
+    context.treasury = getTreasuryService();
+  }
   function naturalTask(): ResourceTransferTask {
     const tasks = Object.values(Memory.data!.resourceControl!.tasks) as ResourceTransferTask[];
     const created = tasks.filter((task) => task.id !== context.task.id && task.status === "pending" &&
@@ -135,5 +152,99 @@ describe("T4真实synthesis producer采购桥接", () => {
     expect(context.treasury.kernelJournal().active[0].attemptId).toBe(attemptId);
     expect(context.source.terminal!.send).toHaveBeenCalledTimes(4);
     expect((context.source.terminal!.store as T4MutableStore)[RESOURCE_HYDROXIDE]).toBe(10);
+  });
+
+  it("真实TTL cancelled913保留，demand启动自然建26并原子绑定，跨reset完成10/10/6后release再自然建Storage-only10", () => {
+    const old = demandStartupFixture();
+    expect(enableTreasuryContinuousOHFromDemand()).toMatchObject({ ok: true, reason: "enabled_awaiting_natural_pilot" });
+    expect(state()).toMatchObject({ schemaVersion: 2, sequenceHighWater: 0, currentCycle: null, consumption: [],
+      pilot: { taskId: null, taskCreatedAt: null, taskAmount: null } });
+    rebootService(); producer(110);
+    let task = naturalTask();
+    expect(task).toMatchObject({ amount: 26, remainingAmount: 26, createdAt: 110, origin: "automatic",
+      reason: `synthesis:${T4_TARGET}:UH2O` });
+    expect(state().pilot.taskId).toBeNull();
+    dispatch(111, task);
+    const identity = { taskId: task.id, taskCreatedAt: task.createdAt, taskAmount: task.amount };
+    expect(state().pilot).toMatchObject(identity);
+    expect(context.source.terminal!.send).not.toHaveBeenCalled();
+    rebootService(); task = naturalTask();
+    expect(state().pilot).toMatchObject(identity);
+    // 下一tick的本房备货结果；新task创建/绑定过程中Terminal始终为0。
+    (context.source.storage!.store as T4MutableStore)[RESOURCE_HYDROXIDE] = 887;
+    (context.source.terminal!.store as T4MutableStore)[RESOURCE_HYDROXIDE] = 26;
+    (context.source.terminal!.send as jest.Mock).mockImplementation(() => {
+      context.nativeTicks.push(Game.time);
+      expect(state().pilot).toMatchObject(identity);
+      const runtime = Memory.runtime as unknown as Record<string, unknown>;
+      expect(runtime.treasuryContinuousOH).toEqual(runtime.treasuryContinuousOHMirror);
+      return OK;
+    });
+    for (const tick of [120, 170, 220]) {
+      dispatch(tick, task);
+      expect(context.source.terminal!.send).toHaveBeenCalledTimes([120, 170, 220].indexOf(tick) + 1);
+      applyLatestT4Native(context);
+      for (let n = 1; n <= 12; n += 1) dispatch(tick + n, task);
+    }
+    task = Memory.data!.resourceControl!.tasks[task.id] as ResourceTransferTask;
+    expect((context.source.terminal!.send as jest.Mock).mock.calls.map((call) => call[1])).toEqual([10, 10, 6]);
+    expect(task).toMatchObject({ amount: 26, remainingAmount: 0, status: "done" });
+    expect((context.target.terminal!.store as T4MutableStore)[RESOURCE_HYDROXIDE]).toBe(30);
+    expect(state()).toMatchObject({ sessionStatus: "pilot_complete_awaiting_release", currentCycle: null });
+    expect(state().closedCycles.map((entry) => [entry.outcome, entry.ring?.generation])).toEqual([
+      ["committed", 1], ["committed", 1], ["committed", 1],
+    ]);
+    expect(context.treasury.kernelJournal().active).toHaveLength(0);
+    at(250); expect(acceptTreasuryContinuousOHPilot().ok).toBe(true);
+    setT4Missing(context, 10); producer(270);
+    const future = naturalTask();
+    expect(future.id).not.toBe(task.id);
+    expect(future).toMatchObject({ amount: 10, remainingAmount: 10, origin: "automatic", createdAt: 270 });
+    expect(state().pilot).toMatchObject(identity);
+    expect(JSON.stringify(t4CanonicalTask(context))).toBe(old);
+    expect(context.source.terminal!.send).toHaveBeenCalledTimes(3);
+  });
+
+  it("unbound启动真实need26但Storage仅10时拒绝partial pilot，不造会停死的task10", () => {
+    const old = demandStartupFixture(10);
+    expect(enableTreasuryContinuousOHFromDemand().ok).toBe(false);
+    expect(readTreasuryContinuousOHState().status).toBe("absent");
+    producer(110); producer(120);
+    expect(Object.values(Memory.data!.resourceControl!.tasks).filter((task) => task.status === "pending")).toHaveLength(0);
+    expect(JSON.stringify(t4CanonicalTask(context))).toBe(old);
+    expect(context.source.terminal!.send).not.toHaveBeenCalled();
+  });
+
+  it("坏主本、mirror半写或真实T4未决历史都不能借demand启动覆盖重开", () => {
+    const old = demandStartupFixture();
+    expect(enableTreasuryContinuousOHFromDemand().ok).toBe(true);
+    const runtime = Memory.runtime as unknown as Record<string, unknown>;
+    const primary = JSON.stringify(runtime.treasuryContinuousOH);
+    const mirror = JSON.stringify(runtime.treasuryContinuousOHMirror);
+    runtime.treasuryContinuousOH = { schemaVersion: 2 };
+    expect(readTreasuryContinuousOHState().status).toBe("invalid");
+    expect(enableTreasuryContinuousOHFromDemand().ok).toBe(false);
+    expect(runtime.treasuryContinuousOH).toEqual({ schemaVersion: 2 });
+    runtime.treasuryContinuousOH = JSON.parse(primary);
+    delete runtime.treasuryContinuousOHMirror;
+    expect(readTreasuryContinuousOHState().status).toBe("invalid");
+    expect(enableTreasuryContinuousOHFromDemand().ok).toBe(false);
+    expect(runtime.treasuryContinuousOHMirror).toBeUndefined();
+    runtime.treasuryContinuousOHMirror = JSON.parse(mirror);
+    producer(110); const task = naturalTask(); dispatch(111, task);
+    (context.source.storage!.store as T4MutableStore)[RESOURCE_HYDROXIDE] = 903;
+    (context.source.terminal!.store as T4MutableStore)[RESOURCE_HYDROXIDE] = 10;
+    (context.source.terminal!.send as jest.Mock).mockImplementation(() => { context.nativeTicks.push(Game.time); return NaN; });
+    dispatch(120, task);
+    expect(state().consumption).toHaveLength(1);
+    const attempt = context.treasury.kernelJournal().active[0].attemptId;
+    delete runtime.treasuryContinuousOH; delete runtime.treasuryContinuousOHMirror;
+    (Memory.cfg as unknown as { treasuryTerminalTransferT4: { mode: string } }).treasuryTerminalTransferT4.mode = "off";
+    expect(readTreasuryContinuousOHState().status).toBe("absent");
+    expect(enableTreasuryContinuousOHFromDemand().ok).toBe(false);
+    expect(readTreasuryContinuousOHState().status).toBe("absent");
+    expect(context.treasury.kernelJournal().active[0].attemptId).toBe(attempt);
+    expect(JSON.stringify(t4CanonicalTask(context))).toBe(old);
+    expect(context.source.terminal!.send).toHaveBeenCalledTimes(1);
   });
 });

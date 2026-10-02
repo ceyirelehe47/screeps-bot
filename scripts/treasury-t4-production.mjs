@@ -3,7 +3,7 @@ import {readFile,mkdir,writeFile} from 'node:fs/promises';
 import {gunzipSync} from 'node:zlib';
 import {randomUUID,createHash} from 'node:crypto';
 const [action,secretPath,output,...args] = process.argv.slice(2);
-if(!['inspect','cargo','enable','accept','stop'].includes(action)||!secretPath||!output)throw Error('usage: inspect|cargo|enable|accept|stop secret output [manifest options.json]');
+if(!['inspect','cargo','enable','enable-from-demand','accept','stop'].includes(action)||!secretPath||!output)throw Error('usage: inspect|cargo|enable|enable-from-demand|accept|stop secret output [manifest options.json]');
 const s=JSON.parse(await readFile(secretPath,'utf8')),token=process.env.SCREEPS_TOKEN||s.main?.token;
 if(!token||s.main.hostname!=='screeps.com'||s.main.branch!=='default')throw Error('target mismatch');
 const marker=randomUUID(),key='__codexTreasuryT4Result';
@@ -45,7 +45,13 @@ if(!['inspect','cargo'].includes(action)) {
     !Number.isSafeInteger(options.pilotTaskCreatedAt)||options.pilotTaskCreatedAt<0||
     !Number.isSafeInteger(options.pilotTaskAmount)||options.pilotTaskAmount<1)throw Error('invalid exact pilot');
  }
- const call=action==='enable'?`enableTreasuryContinuousOH(${JSON.stringify(options)})`:action==='accept'?'acceptTreasuryContinuousOHPilot()':'stopTreasuryContinuousOH()';
+ if(action==='enable-from-demand'&&optionsPath){
+  options=JSON.parse(await readFile(optionsPath,'utf8'));
+  const bounds={sliceAmount:26,rolling24hOH:260,rolling24hEnergy:100,rolling24hNativeCalls:30,lifetimeOH:780,lifetimeEnergy:300,lifetimeNativeCalls:90,maxPrepareCycles:128,minNativeIntervalTicks:72000};
+  if(!options||typeof options!=='object'||Array.isArray(options)||Object.entries(options).some(([k,v])=>
+    !Object.hasOwn(bounds,k)||!Number.isSafeInteger(v)||v<1||v>bounds[k]||k==='minNativeIntervalTicks'&&v<50))throw Error('invalid demand policy');
+ }
+ const call=action==='enable'?`enableTreasuryContinuousOH(${JSON.stringify(options)})`:action==='enable-from-demand'?`enableTreasuryContinuousOHFromDemand(${options===undefined?'':JSON.stringify(options)})`:action==='accept'?'acceptTreasuryContinuousOHPilot()':'stopTreasuryContinuousOH()';
  body=`(()=>{if(Memory.runtime?.lastDeployTag!==${JSON.stringify(m.buildTag)}||Memory.runtime?.lastDeployBundleHash!==${JSON.stringify(m.deployBundleHash)})throw Error('deployment changed');return {tick:Game.time,ms:Date.now(),entryResult:${call}}})()`;
 }
 const expression=`(()=>{if(Game.shard.name!=='shard1'||Memory.${key}!==undefined)throw Error('guard');const r=Memory.${key}={marker:${JSON.stringify(marker)},action:${JSON.stringify(action)},status:'executing'};try{r.result=${body};r.status='returned'}catch(e){r.status='threw';r.error=String(e)}return r.status})()`;

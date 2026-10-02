@@ -26,6 +26,7 @@ import {
   TREASURY_CONTINUOUS_OH_MAX_MEMORY_BYTES,
   readTreasuryContinuousOHState, writeTreasuryContinuousOHState, treasuryContinuousOHStatePayload,
   treasuryContinuousOHWorkKey,
+  sealTreasuryContinuousOHState,
   type TreasuryContinuousOHState, type TreasuryContinuousOHCycle, type TreasuryContinuousOHClosedCertificate,
 } from "@/runtime/treasuryContinuousOHState";
 
@@ -161,9 +162,10 @@ function kernelIdleAndCertified(state: TreasuryContinuousOHState): boolean {
   const health = kernelReadable();
   if (!health) return false;
   if (health.status === "absent") return state.consumption.length === 0 && state.closedCycles.every((cert) => cert.ring === null);
+  const certified = new Set(state.closedCycles.flatMap((cert) => cert.ring === null ? [] : [JSON.stringify(cert.ring)]));
   return Object.values(health.memory.active).length === 0 && health.memory.ring.every((entry) =>
     !entry.workKey.startsWith(`biz:${CONTINUOUS_RUN_ID}:`) ||
-    state.closedCycles.some((cert) => cert.ring !== null && JSON.stringify(cert.ring) === JSON.stringify(entry)));
+    certified.has(JSON.stringify(entry)));
 }
 
 function fixedGateReason(state: TreasuryContinuousOHState): string | null {
@@ -226,13 +228,21 @@ export function continuousClosedWorkAcknowledged(workKey: string, attemptId?: st
     (attemptId === undefined || cert.ring.attemptId === attemptId));
 }
 
+/** 同次 fresh 责任读取只验证一遍完整book，不为ring每条再读整本。 */
+export function readTreasuryContinuousOHClosedWorkSet(): ReadonlySet<string> | null {
+  const read = readTreasuryContinuousOHState();
+  if (read.status === "invalid") return null;
+  return new Set(read.status === "absent" ? [] : read.value.closedCycles.flatMap((cert) =>
+    cert.ring !== null && cert.cycle.quota?.status === "drained" ? [`${cert.ring.workKey}\n${cert.ring.attemptId}`] : []));
+}
+
 export function continuousSessionOwnsActivity(): boolean {
   const read = readTreasuryContinuousOHState();
   return read.status === "invalid" || read.status === "valid" && read.value.sessionStatus !== "stopped";
 }
 
 /**
- * 只让已验收的固定路线借普通 synthesis producer 建单，再由自然 carrier 备货。
+ * 未绑定 pilot 或已验收的持续期借普通 synthesis producer 建单，再自然备货。
  * ON 时完整接管此候选的建单权限：busy/预算/坏态不能回退 Terminal 增量合并，
  * 否则会改变已签名 task 身份。此投影没有 native/额度/任务写入权限。
  */
@@ -253,52 +263,92 @@ export function inspectTreasuryContinuousOHProcurement(
     const state = read.value;
     const clock = now();
     if (!clock || !finiteNonNegative(requestedAmount) || requestedAmount < 1 ||
-        state.sessionStatus !== "running" || state.pilot.releasedAtTick === null ||
-        clock.tick <= state.pilot.releasedAtTick || state.currentCycle !== null || state.modeTransition !== null ||
+        state.sessionStatus !== "running" || state.pilot.taskId !== null && (state.pilot.releasedAtTick === null ||
+          clock.tick <= state.pilot.releasedAtTick) || state.currentCycle !== null || state.modeTransition !== null ||
         rawMode() !== "canary" || fixedGateReason(state) !== null || !safeEnvironment() || !cargoQuiescent(state) ||
         state.sequenceHighWater >= state.policy.maxPrepareCycles || !otherLanesClear() ||
         !kernelIdleAndCertified(state) || readTreasuryLaneResponsibility(TREASURY_T4_LANE).status !== "clear") return held;
+    return { ownsRoute: true, amount: procurementSupplyAmount(state, requestedAmount) };
+  } catch { return held; }
+}
+
+/** 未绑定 pilot 的采购整量26，必须同时证明其10/10/6三片资金和预算足够。 */
+function procurementBudgetPlan(state: TreasuryContinuousOHState, amount: number): { fee: number } | null {
+  const clock = now();
+  if (!clock || !finiteNonNegative(amount) || amount < 1) return null;
+  const slice = state.pilot.taskId === null ? Math.min(state.policy.sliceAmount, state.pilot.sliceCap) : amount;
+  const calls = Math.ceil(amount / slice);
+  if (state.sequenceHighWater + calls > state.policy.maxPrepareCycles) return null;
+  let fee = 0;
+  for (let remaining = amount; remaining > 0; remaining -= slice) {
+    const quote = Game.market.calcTransactionCost(Math.min(slice, remaining), TREASURY_T4_LANE.sourceRoom, TREASURY_T4_LANE.targetRoom);
+    if (!finiteNonNegative(quote) || quote > 100) return null;
+    fee += quote;
+  }
+  const firstFee = Game.market.calcTransactionCost(Math.min(slice, amount), TREASURY_T4_LANE.sourceRoom, TREASURY_T4_LANE.targetRoom);
+  if (!checkTreasuryContinuousOHBudget(state.policy, state.consumption, state.enabledAtMs,
+    clock.ms, clock.tick, Math.min(slice, amount), firstFee).ok) return null;
+  const totals = summarizeTreasuryContinuousOHBudget(state.policy, state.consumption, state.enabledAtMs, clock.ms);
+  for (const used of [totals.rolling24h, totals.epoch24h]) {
+    if (used.oh + amount > state.policy.rolling24hOH || used.energy + fee > state.policy.rolling24hEnergy ||
+        used.nativeCalls + calls > state.policy.rolling24hNativeCalls) return null;
+  }
+  return totals.lifetime.oh + amount <= state.policy.lifetimeOH && totals.lifetime.energy + fee <= state.policy.lifetimeEnergy &&
+    totals.lifetime.nativeCalls + calls <= state.policy.lifetimeNativeCalls ? { fee } : null;
+}
+
+function procurementSupplyAmount(state: TreasuryContinuousOHState, requestedAmount: number, adoptingTask?: ResourceTransferTask): number {
+  try {
+    const clock = now();
+    if (!clock) return 0;
+    const sourceRoomName = TREASURY_T4_LANE.sourceRoom;
+    const targetRoomName = TREASURY_T4_LANE.targetRoom;
+    const resource = TREASURY_T4_LANE.resource;
+    const product = RESOURCE_UTRIUM_ACID;
     const tasks = taskStore();
     if (!tasks || Object.entries(tasks).some(([id, task]) => task.id !== id ||
         !isValidTreasuryTransferTaskForCommitment(task) || task.treasurySlice !== undefined ||
-        taskInScope(task) && task.status === "pending" && task.remainingAmount > 0)) return held;
+        taskInScope(task) && task.status === "pending" && task.remainingAmount > 0 && task.id !== adoptingTask?.id)) return 0;
     // producer 已完成 canonical 初始化；此只读入口不迁移旧表或初始化 Memory。
-    if (Memory.data?.resourceControl?.taskSchemaVersion !== 2) return held;
+    if (Memory.data?.resourceControl?.taskSchemaVersion !== 2) return 0;
     const prospectId = "treasury-T4-procurement-prospect";
-    if (tasks[prospectId] !== undefined) return held;
-    const demand = inspectConfiguredSynthesisTransferDemand(targetRoomName, resource, product, prospectId);
-    if (demand.status !== "bounded" || !finiteNonNegative(demand.amount) || demand.amount < 1) return held;
+    if (tasks[prospectId] !== undefined) return 0;
+    const demand = inspectConfiguredSynthesisTransferDemand(targetRoomName, resource, product, adoptingTask?.id ?? prospectId);
+    if (demand.status !== "bounded" || !finiteNonNegative(demand.amount) || demand.amount < 1) return 0;
     const rooms = Object.values(Game.rooms).filter((room) => room.controller?.my === true);
     const observation = buildTreasuryObservation({ scope: "market-fresh", epochSeq: 0, rooms });
     const commitments = buildTreasuryCommitmentIndex({ tick: clock.tick, tasks,
       reservations: Memory.runtime?.resourceReservations ?? {}, observation });
     if (commitments.commitmentCompleteness(sourceRoomName, resource) !== "complete" ||
         commitments.commitmentCompleteness(targetRoomName, resource) !== "complete" ||
-        !observation.locationExists(sourceRoomName, "storage")) return held;
+        !observation.locationExists(sourceRoomName, "storage")) return 0;
     const floor = Memory.cfg?.resourceControl?.rooms?.[sourceRoomName]?.mineralFloor?.[resource] ?? 0;
     const stored = observation.amount(sourceRoomName, "storage", resource);
     const terminal = observation.amount(sourceRoomName, "terminal", resource);
-    const outgoing = commitments.outgoing(sourceRoomName, resource);
+    const outgoing = commitments.outgoing(sourceRoomName, resource) - (adoptingTask?.remainingAmount ?? 0);
     const reserved = commitments.reservedProduction(sourceRoomName, resource);
     const carried = inspectTreasuryCarrierProductionCommitment(sourceRoomName, resource);
-    if (![floor, stored, terminal, outgoing, reserved, carried].every(finiteNonNegative)) return held;
+    if (![floor, stored, terminal, outgoing, reserved, carried].every(finiteNonNegative)) return 0;
     // 只计可转移的 Storage/Terminal 现货，不借 lab 或既有待出/生产/搬运责任。
     // Terminal 已备好时仍可直接复用；kernel 已证实完全 idle。
     const backing = stored + terminal - floor - outgoing - reserved - carried!;
-    if (!finiteNonNegative(backing) || backing < 1) return held;
-    const maximum = Math.min(requestedAmount, demand.amount, state.policy.sliceAmount, backing);
-    // 剩余预算允许小片就接小片；不为凑满默认10而停住真实1..9需求。
-    for (let amount = maximum; amount >= 1; amount -= 1) {
-      const fee = Game.market.calcTransactionCost(amount, sourceRoomName, targetRoomName);
-      if (!checkTreasuryContinuousOHBudget(state.policy, state.consumption, state.enabledAtMs,
-        clock.ms, clock.tick, amount, fee).ok) continue;
-      const prospect: ResourceTransferTask = { id: prospectId, resource, fromRoomName: sourceRoomName,
+    if (!finiteNonNegative(backing) || backing < 1) return 0;
+    const unbound = state.pilot.taskId === null;
+    const desired = Math.min(requestedAmount, demand.amount, unbound ? state.pilot.cap : state.policy.sliceAmount);
+    if (unbound && backing < desired) return 0;
+    const maximum = Math.min(desired, backing);
+    // 持续期可接真实1..9小片；未绑定 pilot 必须整批足额，不能以部分货建死任务。
+    for (let amount = maximum; amount >= (unbound ? maximum : 1); amount -= 1) {
+      const plan = procurementBudgetPlan(state, amount);
+      if (!plan) continue;
+      const fee = plan.fee;
+      const prospect: ResourceTransferTask = adoptingTask ?? { id: prospectId, resource, fromRoomName: sourceRoomName,
         toRoomName: targetRoomName, amount, remainingAmount: amount, status: "pending", origin: "automatic",
         reason: TREASURY_T4_LANE.requiredReason, createdAt: clock.tick, updatedAt: clock.tick, lastProgressAt: clock.tick };
-      if (inspectTreasuryResourceTransferPreparation(prospect, amount, fee).ok) return { ownsRoute: true, amount };
+      if (inspectTreasuryResourceTransferPreparation(prospect, amount, fee).ok) return amount;
     }
-    return held;
-  } catch { return held; }
+    return 0;
+  } catch { return 0; }
 }
 
 function quotaIdentityEqual(left: TreasuryT1Quota, right: TreasuryT1Quota): boolean {
@@ -443,6 +493,66 @@ export function enableTreasuryContinuousOH(options?: TreasuryContinuousOHEnableO
   } catch { return fail("enable_failed"); }
 }
 
+/** 无旧任务可绑定时，只签入等待态；任务只能由正常 synthesis producer 创建。 */
+export function enableTreasuryContinuousOHFromDemand(policyOptions?: Partial<TreasuryContinuousOHPolicy>): TreasuryContinuousOHResult {
+  try {
+    const prior = readTreasuryContinuousOHState();
+    if (prior.status !== "absent") return fail(prior.status === "invalid" ? "state_invalid" : "session_already_used");
+    const policy = normalizeTreasuryContinuousOHPolicy(policyOptions);
+    if (policy.ok === false) return fail(policy.reason);
+    const clock = now();
+    const ids = endpoints();
+    const tasks = taskStore();
+    if (!clock || !ids || !tasks) return fail("demand_or_endpoint_gate");
+    if (rawMode() !== undefined && rawMode() !== "off") return fail("mode_not_off");
+    const health = kernelReadable();
+    if (!health || health.status === "healthy" && (Object.keys(health.memory.active).length > 0 ||
+        health.memory.ring.some((entry) => entry.workKey.startsWith(`biz:${CONTINUOUS_RUN_ID}:`))) ||
+        Object.values(tasks).some((task) => task.treasurySlice !== undefined) || !otherLanesClear() ||
+        readTreasuryLaneResponsibility(TREASURY_T4_LANE).status !== "clear") return fail("history_or_responsibility_present");
+    if (!deploymentMatches() || !safeEnvironment()) return fail("environment_gate");
+    const initial = sealTreasuryContinuousOHState({
+      schemaVersion: 2, runId: CONTROL_RUN_ID,
+      sessionId: formatTreasuryStableTransactionId(CONTROL_RUN_ID, clock.tick, clock.ms,
+        BUILD_INFO.tag, BUILD_INFO.bundleHash, ids.source.id, ids.target.id),
+      sessionStatus: "running", modeTransition: null, enabledAtTick: clock.tick, enabledAtMs: clock.ms,
+      lastObservedAtTick: clock.tick, lastObservedAtMs: clock.ms,
+      deadlineTick: clock.tick + TREASURY_CONTINUOUS_OH_SESSION_TICKS,
+      deadlineMs: clock.ms + TREASURY_CONTINUOUS_OH_SESSION_MS,
+      deployTag: BUILD_INFO.tag, deployBundleHash: BUILD_INFO.bundleHash,
+      sourceTerminalId: ids.source.id, targetTerminalId: ids.target.id, policy: policy.policy,
+      pilot: { taskId: null, taskCreatedAt: null, taskAmount: null, cap: 26, sliceCap: 10,
+        completedAtTick: null, completedAtMs: null, completionReason: null, releasedAtTick: null, releasedAtMs: null },
+      sequenceHighWater: 0, currentCycle: null, closedCycles: [], consumption: [], stopReason: "",
+    });
+    if (!cargoQuiescent(initial)) return fail("terminal_cargo_held");
+    if (procurementSupplyAmount(initial, initial.pilot.cap) < 1) return fail("demand_supply_or_budget_gate");
+    if (!writeTreasuryContinuousOHState(treasuryContinuousOHStatePayload(initial))) return fail("state_write_failed");
+    if (!setMode("canary")) { closeTreasuryContinuousOH("enable_mode_write_failed"); return fail("mode_write_failed"); }
+    return ok("enabled_awaiting_natural_pilot");
+  } catch { return fail("enable_from_demand_failed"); }
+}
+
+function adoptNaturalPilotTask(state: TreasuryContinuousOHState): TreasuryContinuousOHResult {
+  if (state.schemaVersion !== 2 || state.pilot.taskId !== null || state.currentCycle !== null ||
+      state.sequenceHighWater !== 0 || state.sessionStatus !== "running" || rawMode() !== "canary" ||
+      fixedGateReason(state) || !safeEnvironment() || !cargoQuiescent(state) || !otherLanesClear() ||
+      !kernelIdleAndCertified(state) || readTreasuryLaneResponsibility(TREASURY_T4_LANE).status !== "clear") return ok("pilot_binding_held");
+  const tasks = taskStore();
+  if (!tasks || Object.entries(tasks).some(([id, task]) => task.id !== id || !isValidTreasuryTransferTaskForCommitment(task))) return fail("task_store_unreadable");
+  const candidates = Object.values(tasks).filter((task) => taskInScope(task) && task.status === "pending" && task.remainingAmount > 0);
+  if (candidates.length === 0) return ok("awaiting_natural_pilot_task");
+  if (candidates.length !== 1) return ok("pilot_binding_ambiguous");
+  const task = candidates[0];
+  if (task.treasurySlice !== undefined || task.amount > state.pilot.cap || task.remainingAmount !== task.amount ||
+      task.createdAt < state.enabledAtTick || task.createdAt > Game.time ||
+      !new RegExp(`^${task.createdAt}:[1-9][0-9]*:OH:E4N58->E1N57$`).test(task.id)) return ok("pilot_task_identity_unavailable");
+  if (procurementSupplyAmount(state, task.remainingAmount, task) < 1) return ok("pilot_binding_demand_or_supply_held");
+  return writeTreasuryContinuousOHState({ ...treasuryContinuousOHStatePayload(state),
+    pilot: { ...state.pilot, taskId: task.id, taskCreatedAt: task.createdAt, taskAmount: task.amount },
+  }) ? ok("natural_pilot_task_bound") : fail("pilot_binding_write_failed");
+}
+
 function appendClosedCycle(state: TreasuryContinuousOHState): TreasuryContinuousOHResult {
   const cycle = state.currentCycle;
   if (!cycle || cycle.status !== "closed") return ok("no_closed_cycle");
@@ -500,7 +610,7 @@ function cancelSatisfiedTasks(state: TreasuryContinuousOHState): TreasuryContinu
 }
 
 function markPilotCompletion(state: TreasuryContinuousOHState): TreasuryContinuousOHResult {
-  if (state.pilot.releasedAtTick !== null || state.sessionStatus !== "running" || state.currentCycle !== null ||
+  if (state.pilot.taskId === null || state.pilot.releasedAtTick !== null || state.sessionStatus !== "running" || state.currentCycle !== null ||
       !kernelIdleAndCertified(state)) return ok("pilot_not_complete");
   const committed = pilotCommitted(state);
   if (committed.cycles < 1) return ok("pilot_no_committed_slice");
@@ -543,6 +653,7 @@ export function acceptTreasuryContinuousOHPilot(): TreasuryContinuousOHResult {
 }
 
 function prepareNextCycle(state: TreasuryContinuousOHState): TreasuryContinuousOHResult {
+  if (state.pilot.taskId === null) return ok("awaiting_natural_pilot_task");
   const clock = now()!;
   if (state.pilot.releasedAtTick !== null && clock.tick <= state.pilot.releasedAtTick) return ok("pilot_release_next_tick");
   if (state.sequenceHighWater >= state.policy.maxPrepareCycles) return ok("prepare_cycle_budget_exhausted");
@@ -692,6 +803,7 @@ export function normalizeTreasuryContinuousOHControl(): TreasuryContinuousOHResu
     }
     if (state.currentCycle !== null) return maintainCycle(state);
     if (!kernelIdleAndCertified(state)) return fail("kernel_or_uncertified_history_held");
+    if (state.pilot.taskId === null) return adoptNaturalPilotTask(state);
     const stale = cancelSatisfiedTasks(state);
     if (!stale.ok) return stale;
     const pilot = markPilotCompletion(state);

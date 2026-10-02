@@ -1,6 +1,6 @@
 import { detectLegacyTreasuryStores, readTreasuryCoreStoreHealth } from "@/runtime/treasury/kernel/store";
 import { TREASURY_TERMINAL_LANES, treasuryLaneWorkKey, type TreasuryTerminalLane } from "@/runtime/treasuryTerminalLane";
-import { readTreasuryContinuousOHQuota, continuousClosedWorkAcknowledged } from "@/runtime/treasuryContinuousOHControl";
+import { readTreasuryContinuousOHQuota, readTreasuryContinuousOHClosedWorkSet } from "@/runtime/treasuryContinuousOHControl";
 import { readTreasuryContinuousOHFenceQuota, continuousFenceClosedWorkAcknowledged } from "@/runtime/treasuryContinuousOHFence";
 import type { TreasuryContinuousOHFenceProjection } from "@/runtime/treasuryContinuousOHFence";
 
@@ -126,6 +126,8 @@ export function readTreasuryLaneResponsibility(lane: TreasuryTerminalLane,
         record.identity.actionKind === lane.actionKind)) {
       return { status: "held", reason: "kernel_work_present" };
     }
+    const continuousClosed = lane.continuous && !fenceProjection ? readTreasuryContinuousOHClosedWorkSet() : undefined;
+    if (continuousClosed === null) return { status: "invalid", reason: "closed_work_history_unreadable" };
     if (quota.status === "valid") {
       if (quota.value.status !== "drained") return { status: "held", reason: "quota_unclosed" };
       // drained is the durable task/closure acknowledgement. The bounded ring
@@ -138,7 +140,7 @@ export function readTreasuryLaneResponsibility(lane: TreasuryTerminalLane,
         !(lane.continuous && (fenceProjection ? continuousProjection
           ? continuousProjection.closed.has(`${entry.workKey}\n${entry.attemptId}`)
           : continuousFenceClosedWorkAcknowledged(entry.workKey, entry.attemptId)
-          : continuousClosedWorkAcknowledged(entry.workKey, entry.attemptId))))) {
+          : continuousClosed?.has(`${entry.workKey}\n${entry.attemptId}`))))) {
       return { status: "invalid", reason: "closed_work_without_quota" };
     }
     return { status: "clear", reason: "no_responsibility" };
