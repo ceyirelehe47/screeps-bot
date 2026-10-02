@@ -1,0 +1,29 @@
+T2 PowerCreep Terminal Energy 本地回归证据
+
+工作树：/Users/forst/.codex/worktrees/treasury-t2-first-production/screeps
+命令：PATH=/Users/forst/.nvm/versions/node/v22.23.3/bin:$PATH npm test -- --runInBand src/runtime/treasuryT2PowerCargo.test.ts
+来源：该命令最终运行的工具输出（exit_code=0）。
+范围：真实本地 PowerCreep 现役任务调度 + T2 arm/正式 writer/settlement 路径；仅 native usePower/send 和交易/Store 采用 Jest 桩。未启用线上 PowerCreep，未对真实现场执行 action。
+
+PASS src/runtime/treasuryT2PowerCargo.test.ts
+  T2 active PowerCreep terminal energy cargo
+    ✓ held T2 preserves E4N58 terminal fallback task through a real send and settlement (56 ms)
+    ✓ held T2 preserves E1N57 terminal fallback task through a real send and settlement (23 ms)
+    ✓ ordinary E4N58 terminal operate_extension OK prevents same-tick T2 arm (1 ms)
+    ✓ ordinary E4N58 terminal operate_extension throw prevents same-tick T2 arm (10 ms)
+    ✓ ordinary E4N58 terminal operate_extension malformed prevents same-tick T2 arm (1 ms)
+    ✓ ordinary E1N57 terminal operate_extension OK prevents same-tick T2 arm
+    ✓ ordinary E1N57 terminal operate_extension throw prevents same-tick T2 arm (1 ms)
+    ✓ ordinary E1N57 terminal operate_extension malformed prevents same-tick T2 arm (1 ms)
+    ✓ E4N58 nonterminal storage operate_extension remains runnable with ordinary-first (10 ms)
+    ✓ E4N58 nonterminal storage operate_extension remains runnable with T2-first (9 ms)
+    ✓ E1N57 nonterminal storage operate_extension remains runnable with ordinary-first (8 ms)
+    ✓ E1N57 nonterminal storage operate_extension remains runnable with T2-first (8 ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       12 passed, 12 total
+Snapshots:   0 total
+Time:        1.249 s, estimated 2 s
+Ran all test suites matching /src\/runtime\/treasuryT2PowerCargo.test.ts/i.
+
+既有受影响 suite：src/runtime/powerCreepControl.test.ts

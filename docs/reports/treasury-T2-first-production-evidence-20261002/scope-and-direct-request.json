@@ -1,0 +1,28 @@
+{
+  "schema": "screeps-t2-session-scope/v1",
+  "date": "2026-10-02",
+  "userDirectRequest": "接下来上线国库系统吧",
+  "taskPackage": "screeps-agent-treasury-t2-first-production-2026-10-02.zip",
+  "interpretation": "当前请求推进交接包限定的T2首次生产接管，附件授权模板不作为已经发生的授权记录。",
+  "limits": {
+    "account": "forster",
+    "shard": "shard1",
+    "route": "E4N58->E1N57",
+    "resource": "UH",
+    "purpose": "synthesis:E1N57:UH2O",
+    "nativeCalls": 1,
+    "amount": 100,
+    "feeEnergy": 100,
+    "admissionTicks": 600,
+    "admissionMinutes": 30,
+    "controlSeconds": 60
+  },
+  "currentBusinessGate": "实际UH2O剩余需求500，本地UH500已覆盖；UH新补料需求0，禁止生产绑定，不重复纯OFF上传。",
+  "productionCodePostPerformed": false,
+  "treasuryArmPerformed": false,
+  "treasuryNativePerformed": false,
+  "diagnosticTemporaryWritesOnly": [
+    "skill shard probe",
+    "Game只读投影结果键及清理"
+  ]
+}

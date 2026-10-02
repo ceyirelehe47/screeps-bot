@@ -420,6 +420,126 @@ describe("resource control live-like capacity recovery", () => {
     };
   });
 
+  function createOutgoingEnergyReliefScenario() {
+    const pressureRoom = createMutableRoom(
+      "E3N59",
+      { [RESOURCE_ENERGY]: 191_141, [RESOURCE_HYDROGEN]: 660_000 },
+      { [RESOURCE_ENERGY]: 18_531 },
+    );
+    const donor = createMutableRoom(
+      "E4N58",
+      { [RESOURCE_ENERGY]: 400_000 },
+      { [RESOURCE_ENERGY]: 100_000, [RESOURCE_UTRIUM_HYDRIDE]: 10_000 },
+    );
+    const synthesisReceiver = createMutableRoom(
+      "E1N57",
+      { [RESOURCE_ENERGY]: 200_000 },
+      { [RESOURCE_ENERGY]: 20_000 },
+    );
+    for (const room of [pressureRoom, donor, synthesisReceiver]) {
+      Game.rooms[room.name] = room;
+    }
+    // Storage 尚未达到恢复水位；承接已有 relief，而不是本轮新规划责任。
+    Memory.runtime = {
+      resourceControl: {
+        updatedAt: 0,
+        rooms: { [pressureRoom.name]: { capacityState: "pressure" } },
+        lastActions: [],
+        lastMarketActions: [],
+      },
+    } as any;
+    Game.time = 1;
+    const relief = createAutomaticResourceTransferTask(
+      pressureRoom.name,
+      donor.name,
+      RESOURCE_ENERGY,
+      30_000,
+      `capacity:relief:${RESOURCE_ENERGY}`,
+    );
+    const synthesis = createAutomaticResourceTransferTask(
+      donor.name,
+      synthesisReceiver.name,
+      RESOURCE_UTRIUM_HYDRIDE,
+      10_000,
+      `synthesis:${synthesisReceiver.name}:${RESOURCE_UTRIUM_ACID}`,
+    );
+    if (typeof relief === "string") throw new Error(relief);
+    if (typeof synthesis === "string") throw new Error(synthesis);
+    Game.time = 10;
+    return { pressureRoom, donor, synthesisReceiver, relief: relief.task, synthesis: synthesis.task };
+  }
+
+  it("does not reverse-feed a healthy outgoing Energy relief room and keeps the donor UH send window executable", () => {
+    const { pressureRoom, donor, synthesisReceiver, relief, synthesis } =
+      createOutgoingEnergyReliefScenario();
+
+    runResourceControl();
+
+    expect(Memory.runtime?.resourceControl?.rooms[pressureRoom.name]?.capacityState).toBe("pressure");
+    expect(Memory.runtime?.resourceControl?.lastActions).not.toEqual(
+      expect.arrayContaining([expect.stringMatching(/^send:E4N58->E3N59:energy=/)]),
+    );
+    expect(donor.terminal!.send).toHaveBeenCalledWith(
+      RESOURCE_UTRIUM_HYDRIDE, 10_000, synthesisReceiver.name, expect.anything(),
+    );
+    expect(pressureRoom.terminal!.send).toHaveBeenCalledWith(
+      RESOURCE_ENERGY, 10_000, donor.name, expect.anything(),
+    );
+    expect(relief.remainingAmount).toBe(20_000);
+    expect(synthesis).toMatchObject({ status: "done", remainingAmount: 0 });
+    expect(donor.terminal!.send).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ["source-depleted", (task: ReturnType<typeof createOutgoingEnergyReliefScenario>["relief"]) => {
+      task.blockedReason = "source_depleted";
+      task.blockedSince = 9;
+    }],
+    ["receiver-capacity", (task: ReturnType<typeof createOutgoingEnergyReliefScenario>["relief"]) => {
+      task.blockedReason = "receiver_capacity";
+      task.blockedSince = 9;
+    }],
+    ["expired", (task: ReturnType<typeof createOutgoingEnergyReliefScenario>["relief"]) => {
+      task.lastProgressAt = 0;
+      Game.time = 5_010;
+    }],
+    ["done", (task: ReturnType<typeof createOutgoingEnergyReliefScenario>["relief"]) => {
+      task.status = "done";
+      task.remainingAmount = 0;
+    }],
+    ["cancelled", (task: ReturnType<typeof createOutgoingEnergyReliefScenario>["relief"]) => {
+      task.status = "cancelled";
+    }],
+    ["failed", (task: ReturnType<typeof createOutgoingEnergyReliefScenario>["relief"]) => {
+      task.status = "failed";
+    }],
+    ["empty-pending", (task: ReturnType<typeof createOutgoingEnergyReliefScenario>["relief"]) => {
+      task.remainingAmount = 0;
+    }],
+    ["missing-target-room", (task: ReturnType<typeof createOutgoingEnergyReliefScenario>["relief"]) => {
+      task.toRoomName = "E9N59";
+    }],
+    ["ordinary-energy-transfer", (task: ReturnType<typeof createOutgoingEnergyReliefScenario>["relief"]) => {
+      task.reason = "energy-support";
+    }],
+    ["non-energy-relief", (task: ReturnType<typeof createOutgoingEnergyReliefScenario>["relief"]) => {
+      task.resource = RESOURCE_HYDROGEN;
+      task.reason = `capacity:relief:${RESOURCE_HYDROGEN}`;
+    }],
+  ] as const)("keeps ordinary Energy balancing available for %s outgoing relief responsibility", (_label, mutate) => {
+    const { donor, relief } = createOutgoingEnergyReliefScenario();
+    mutate(relief);
+
+    runResourceControl();
+
+    expect(Memory.runtime?.resourceControl?.lastActions).toEqual(
+      expect.arrayContaining([expect.stringMatching(/^send:E4N58->E3N59:energy=/)]),
+    );
+    expect(donor.terminal!.send).toHaveBeenCalledWith(
+      RESOURCE_ENERGY, 8_859, "E3N59", expect.anything(),
+    );
+  });
+
   it("recovers a sticky 50000-free terminal through real carrier moves without next-cycle jitter", () => {
     const room = createMutableRoom(
       "W82N1",

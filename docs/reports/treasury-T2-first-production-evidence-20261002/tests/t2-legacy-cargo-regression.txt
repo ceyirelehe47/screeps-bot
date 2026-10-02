@@ -1,0 +1,121 @@
+  console.log
+    {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:991:11)
+
+  console.log
+    {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:991:11)
+
+  console.log
+    {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:991:11)
+
+  console.log
+    {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:991:11)
+
+  console.log
+    {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:991:11)
+
+  console.log
+    {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:991:11)
+
+  console.log
+    {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:991:11)
+
+  console.log
+    {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:991:11)
+
+  console.log
+    {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:991:11)
+
+  console.log
+    {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:991:11)
+
+  console.log
+    {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:991:11)
+
+  console.log
+    {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:991:11)
+
+  console.log
+    {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:991:11)
+
+  console.log
+    {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:991:11)
+
+  console.log
+    {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:991:11)
+
+  console.log
+    {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:991:11)
+
+  console.log
+    {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:991:11)
+
+PASS src/runtime/treasuryT2LegacyCargo.test.ts
+  T2 guards real legacy terminal cargo execution points
+    ✓ real E4N58 remote-withdraw native first rejects a same-tick T2 binding (3 ms)
+    ✓ real E4N58 remote-transfer native first rejects a same-tick T2 binding (1 ms)
+    ✓ real E4N58 mining-transfer native first rejects a same-tick T2 binding (1 ms)
+    ✓ real E4N58 power-transfer native first rejects a same-tick T2 binding
+    ✓ real E4N58 reserved-energy-withdraw native first rejects a same-tick T2 binding (3 ms)
+    ✓ real E1N57 remote-withdraw native first rejects a same-tick T2 binding
+    ✓ real E1N57 remote-transfer native first rejects a same-tick T2 binding (1 ms)
+    ✓ real E1N57 mining-transfer native first rejects a same-tick T2 binding
+    ✓ real E1N57 power-transfer native first rejects a same-tick T2 binding (1 ms)
+    ✓ real E1N57 reserved-energy-withdraw native first rejects a same-tick T2 binding (1 ms)
+    ✓ T2 responsibility holds real E4N58 remote-withdraw and resumes original cargo after confirmed release (51 ms)
+    ✓ T2 responsibility holds real E4N58 remote-transfer and resumes original cargo after confirmed release (23 ms)
+    ✓ T2 responsibility holds real E4N58 mining-transfer and resumes original cargo after confirmed release (21 ms)
+    ✓ T2 responsibility holds real E4N58 power-transfer and resumes original cargo after confirmed release (21 ms)
+    ✓ T2 responsibility holds real E4N58 reserved-energy-withdraw and resumes original cargo after confirmed release (22 ms)
+    ✓ T2 responsibility holds real E1N57 remote-withdraw and resumes original cargo after confirmed release (21 ms)
+    ✓ T2 responsibility holds real E1N57 remote-transfer and resumes original cargo after confirmed release (20 ms)
+    ✓ T2 responsibility holds real E1N57 mining-transfer and resumes original cargo after confirmed release (21 ms)
+    ✓ T2 responsibility holds real E1N57 power-transfer and resumes original cargo after confirmed release (21 ms)
+    ✓ T2 responsibility holds real E1N57 reserved-energy-withdraw and resumes original cargo after confirmed release (20 ms)
+    ✓ T2 keeps ordinary remoteMining Storage delivery runnable in E4N58 (8 ms)
+    ✓ T2 keeps ordinary remoteMining Storage delivery runnable in E1N57 (7 ms)
+    ✓ refuses an already full receiver Storage before arm and leaves its real Terminal fallback runnable
+    ✓ T2 responsibility permits actual remote-withdraw native in old unrelated E3N59 (8 ms)
+    ✓ T2 responsibility permits actual remote-transfer native in old unrelated E3N59 (8 ms)
+    ✓ T2 responsibility permits actual mining-transfer native in old unrelated E3N59 (7 ms)
+    ✓ T2 responsibility permits actual power-transfer native in old unrelated E3N59 (7 ms)
+    ✓ T2 responsibility permits actual reserved-energy-withdraw native in old unrelated E3N59 (7 ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       28 passed, 28 total
+Snapshots:   0 total
+Time:        1.465 s, estimated 2 s
+Ran all test suites matching /src\/runtime\/treasuryT2LegacyCargo.test.ts/i.

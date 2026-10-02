@@ -1,0 +1,12 @@
+
+> screeps@2026.10.2-1 test
+> jest --config jest.config.cjs --runInBand src/runtime/resourceControl.capacityRegression.test.ts src/runtime/resourceControl.test.ts
+
+PASS src/runtime/resourceControl.capacityRegression.test.ts
+PASS src/runtime/resourceControl.test.ts
+
+Test Suites: 2 passed, 2 total
+Tests:       20 passed, 20 total
+Snapshots:   0 total
+Time:        1.548 s, estimated 3 s
+Ran all test suites matching /src\/runtime\/resourceControl.capacityRegression.test.ts|src\/runtime\/resourceControl.test.ts/i.

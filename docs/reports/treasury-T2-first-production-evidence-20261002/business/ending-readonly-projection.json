@@ -1,0 +1,669 @@
+{
+  "schema": "treasury-t2-ending-readonly-projection/v1",
+  "capturedAtUtc": "2026-10-02T10:20:24.586Z",
+  "completedAtUtc": "2026-10-02T10:20:28.401Z",
+  "observation": {
+    "startedAtUtc": "2026-10-02T10:03:32Z",
+    "startedAtTick": 74077720,
+    "endedAtTick": 74077960,
+    "newTicks": 240,
+    "closed": true,
+    "furtherProductionPolling": false
+  },
+  "main": {
+    "sha256": "1bf02d8415f552239dd034865c4e62d5c6a00a978af36f78b64640ea05f6f061",
+    "bytes": 3285061
+  },
+  "liveDeployTag": "2026.10.2-1+447ab5c@2026-10-02T06:10:35.260Z",
+  "currentDeployBundleHash": "31d7862330a31f620544e07482933253e658806373f42def32ab51f27665c955",
+  "sameRemoteMainAsInitial": true,
+  "shards": {
+    "shard0": {
+      "memorySha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "memoryBytes": 2,
+      "latestTick": 0,
+      "lastDeployTag": null,
+      "treasuryKeyPathsInCfgRuntimeData": [],
+      "treasuryInstrumentationKeyPaths": [],
+      "treasuryPersistedResponsibilityPresent": false
+    },
+    "shard1": {
+      "memorySha256": "d82c2df9136c80c118aed0f0e8e9dc56a8d1948e965bfb9efa3888c274d44287",
+      "memoryBytes": 1535363,
+      "latestTick": 74077960,
+      "lastDeployTag": "2026.10.2-1+447ab5c@2026-10-02T06:10:35.260Z",
+      "treasuryKeyPathsInCfgRuntimeData": [],
+      "treasuryInstrumentationKeyPaths": [
+        "analytics.cpuMonitor.latest.phases.treasuryBeginTick",
+        "analytics.cpuMonitor.latest.phases.treasuryT1Shadow",
+        "analytics.cpuMonitor.summary.avgPhases.treasuryBeginTick",
+        "analytics.cpuMonitor.summary.avgPhases.treasuryT1Shadow"
+      ],
+      "treasuryPersistedResponsibilityPresent": false
+    },
+    "shard2": {
+      "memorySha256": "86567c14fc2c5eb2616b0e6f0f7cb45bc8a42d92ac2323bbab39af8d458b8733",
+      "memoryBytes": 14042,
+      "latestTick": 73967635,
+      "lastDeployTag": "2026.3.9-1+dd66515@2026-04-17T04:58:06.288Z",
+      "treasuryKeyPathsInCfgRuntimeData": [],
+      "treasuryInstrumentationKeyPaths": [],
+      "treasuryPersistedResponsibilityPresent": false
+    },
+    "shard3": {
+      "memorySha256": "dd05cf0e6a91678ac03b70040a06f078ef74f04876393e006d529fbe8a0b9b60",
+      "memoryBytes": 1305,
+      "latestTick": 0,
+      "lastDeployTag": "2026.3.9-1+46010db@2026-03-17T11:03:46.000Z",
+      "treasuryKeyPathsInCfgRuntimeData": [],
+      "treasuryInstrumentationKeyPaths": [],
+      "treasuryPersistedResponsibilityPresent": false
+    }
+  },
+  "originalTask": {
+    "id": "74073650:1:UH:E4N58->E1N57",
+    "resource": "UH",
+    "fromRoomName": "E4N58",
+    "toRoomName": "E1N57",
+    "amount": 1715,
+    "remainingAmount": 1715,
+    "status": "pending",
+    "createdAt": 74073650,
+    "updatedAt": 74073680,
+    "origin": "automatic",
+    "lastProgressAt": 74073650,
+    "reason": "synthesis:E1N57:UH2O"
+  },
+  "endingBusinessDemand": {
+    "synthesisConfig": {
+      "enabled": true,
+      "donorRoomNames": [],
+      "reactions": [
+        {
+          "product": "UH2O",
+          "targetAmount": 2385,
+          "batchSize": 2215,
+          "donorRoomNames": []
+        }
+      ],
+      "plannerOwnership": {
+        "owner": "hubPlanner",
+        "hubRoomName": "E4N58",
+        "revision": 41513
+      }
+    },
+    "synthesisRuntime": {
+      "stage": "loading",
+      "activeProduct": "UH2O",
+      "targetAmount": 2385,
+      "batchSize": 2215,
+      "reagentA": "UH",
+      "reagentB": "OH",
+      "missing": {
+        "OH": 828
+      },
+      "pendingTasks": 3
+    },
+    "ownedStructureResourceTotals": {
+      "E4N58": {
+        "UH": 3928,
+        "OH": 1384,
+        "UH2O": 720
+      },
+      "E1N57": {
+        "UH": 500,
+        "OH": 3,
+        "UH2O": 1885
+      }
+    }
+  },
+  "businessResult": "no_actual_UH_need_not_deployed_not_armed",
+  "productionActionBoundary": {
+    "candidateCodeUploaded": false,
+    "treasuryArmCalled": false,
+    "treasuryNativeCalled": false,
+    "ordinaryProductionActionsContinued": true,
+    "basis": "代码独立GET原件不变、四shard完整Memory无Treasury责任、原任务未扣减；普通交易与analytics推进另有正向证据。"
+  },
+  "marketContinuity": {
+    "before": {
+      "permit": {
+        "currentPermitEpoch": 17,
+        "currentPermitId": "mbr-permit-v3:17:csh1:eed4ece99b5b6668b20a61c210ec050b",
+        "permitChainHead": "csh1:2a862c71b87b644e5057dd720b9ef705",
+        "permitEpochHighWater": 17,
+        "permitChainHeadHighWater": "csh1:2a862c71b87b644e5057dd720b9ef705",
+        "totalChainLength": 17
+      },
+      "receipt": {
+        "receiptHeadHash": "csh1:d407f33ae7fda9ec3c3c22714b7a640d",
+        "finalizedAttemptSeq": 63,
+        "nextAttemptSeq": 64,
+        "coverageStartTick": 73913263,
+        "lifetimeConfirmed": {
+          "global": {
+            "count": 62,
+            "amount": 62000
+          },
+          "resources": {
+            "X": {
+              "count": 25,
+              "amount": 25000
+            },
+            "L": {
+              "count": 36,
+              "amount": 36000
+            },
+            "H": {
+              "count": 1,
+              "amount": 1000
+            }
+          },
+          "rooms": {
+            "E6N59": {
+              "count": 6,
+              "amount": 6000
+            },
+            "E4N58": {
+              "count": 19,
+              "amount": 19000
+            },
+            "E1N57": {
+              "count": 36,
+              "amount": 36000
+            },
+            "E3N59": {
+              "count": 1,
+              "amount": 1000
+            }
+          },
+          "lanes": {
+            "X:E6N59": {
+              "count": 6,
+              "amount": 6000
+            },
+            "X:E4N58": {
+              "count": 19,
+              "amount": 19000
+            },
+            "L:E1N57": {
+              "count": 36,
+              "amount": 36000
+            },
+            "H:E3N59": {
+              "count": 1,
+              "amount": 1000
+            }
+          }
+        }
+      },
+      "permitRetainedDigest": "d7011ee103c2a2d057227edf892a244dc46d0445e4f67392fd176079f308fd3a",
+      "receiptRetainedDigest": "59357ac87adcb8ce4713eddfe68371908f8a0cd49e07172d8634059d19d3005e",
+      "anchor": {
+        "updatedAt": 74077746,
+        "anchorHash": "csh1:f019d74e60e68c0994296da549313818",
+        "hardBlocker": null,
+        "activationBlocker": null,
+        "roomRegistryCheckpointCommitment": "csh1:f7a7a9d7c0cdecbdb64424a0082cb99f",
+        "laneLifecycleCommitment": "csh1:2f55e7ee2d56145387b0452b21333510",
+        "pricingRatchetCommitment": "csh1:a651e910ce5afae8f7fa57a9f49702e1",
+        "trustedFloorsCommitment": "csh1:26870019f38883de6a1e98ff0d15139b"
+      },
+      "anchorMirrorEqual": true,
+      "roomIncarnationHighWater": [
+        {
+          "roomName": "E1N57",
+          "incarnationHighWater": 1,
+          "lastInstanceId": "mbr-room:csh1:d41b4689460eec57b378d95420321d49",
+          "admitted": true
+        },
+        {
+          "roomName": "E3N59",
+          "incarnationHighWater": 1,
+          "lastInstanceId": "mbr-room:csh1:ca7a5d5355187d077d8115db18903e4b",
+          "admitted": true
+        },
+        {
+          "roomName": "E4N58",
+          "incarnationHighWater": 1,
+          "lastInstanceId": "mbr-room:csh1:cc039a97c5b3666113d35c29544554cd",
+          "admitted": true
+        },
+        {
+          "roomName": "E5N59",
+          "incarnationHighWater": 1,
+          "lastInstanceId": "mbr-room:csh1:b0c428c7dfeeaba5a61a3944d38a241c",
+          "admitted": true
+        },
+        {
+          "roomName": "E6N59",
+          "incarnationHighWater": 1,
+          "lastInstanceId": "mbr-room:csh1:0453c59187f39f225c33583c1be8f517",
+          "admitted": true
+        },
+        {
+          "roomName": "E7N57",
+          "incarnationHighWater": 1,
+          "lastInstanceId": "mbr-room:csh1:dc8b1e0bc7ab9c0d8cfe474731a9ca30",
+          "admitted": true
+        },
+        {
+          "roomName": "E7N58",
+          "incarnationHighWater": 1,
+          "lastInstanceId": "mbr-room:csh1:839503d8b24ff27a2e6d4b5b1c5d1153",
+          "admitted": true
+        },
+        {
+          "roomName": "W1N57",
+          "incarnationHighWater": 1,
+          "lastInstanceId": "mbr-room:csh1:bf8bda74747d03f17143f8c61b8e0f58",
+          "admitted": true
+        }
+      ],
+      "laneLifecycleHighWaterDigest": "2a7c3e333ca91bbe6440775ecc37705635539632dd89e28a1b08ad8fed9d6c17",
+      "pricingRatchetHighWater": [
+        {
+          "resource": "H",
+          "value": 629.193,
+          "marketDate": "2026-10-01"
+        },
+        {
+          "resource": "K",
+          "value": 100.914,
+          "marketDate": "2026-10-01"
+        },
+        {
+          "resource": "L",
+          "value": 883.482,
+          "marketDate": "2026-10-01"
+        },
+        {
+          "resource": "O",
+          "value": 151.782,
+          "marketDate": "2026-10-01"
+        },
+        {
+          "resource": "U",
+          "value": 47.718,
+          "marketDate": "2026-10-01"
+        },
+        {
+          "resource": "X",
+          "value": 589.857,
+          "marketDate": "2026-10-01"
+        },
+        {
+          "resource": "Z",
+          "value": 63.868,
+          "marketDate": "2026-10-01"
+        }
+      ],
+      "trustedFloorHighWater": [
+        {
+          "resource": "energy",
+          "value": 46.977,
+          "marketDate": "2026-10-01",
+          "updatedAt": 74077736
+        },
+        {
+          "resource": "H",
+          "value": 629.193,
+          "marketDate": "2026-10-01",
+          "updatedAt": 74069174
+        },
+        {
+          "resource": "K",
+          "value": 100.914,
+          "marketDate": "2026-10-01",
+          "updatedAt": 74069174
+        },
+        {
+          "resource": "L",
+          "value": 883.482,
+          "marketDate": "2026-10-01",
+          "updatedAt": 74069174
+        },
+        {
+          "resource": "O",
+          "value": 151.782,
+          "marketDate": "2026-10-01",
+          "updatedAt": 74069174
+        },
+        {
+          "resource": "U",
+          "value": 47.718,
+          "marketDate": "2026-10-01",
+          "updatedAt": 74069174
+        },
+        {
+          "resource": "X",
+          "value": 589.857,
+          "marketDate": "2026-10-01",
+          "updatedAt": 74069174
+        },
+        {
+          "resource": "Z",
+          "value": 63.868,
+          "marketDate": "2026-10-01",
+          "updatedAt": 74069174
+        }
+      ],
+      "persistentDirectAccountClaim": null,
+      "pendingCounts": {
+        "managedOrders": 0,
+        "pendingMutations": 0,
+        "pendingDirectDeals": 0,
+        "marketStaging": 0,
+        "marketReservations": 0
+      },
+      "directPendingCount": 0,
+      "v3PendingPresent": false
+    },
+    "after": {
+      "permit": {
+        "currentPermitEpoch": 17,
+        "currentPermitId": "mbr-permit-v3:17:csh1:eed4ece99b5b6668b20a61c210ec050b",
+        "permitChainHead": "csh1:2a862c71b87b644e5057dd720b9ef705",
+        "permitEpochHighWater": 17,
+        "permitChainHeadHighWater": "csh1:2a862c71b87b644e5057dd720b9ef705",
+        "totalChainLength": 17
+      },
+      "receipt": {
+        "receiptHeadHash": "csh1:d407f33ae7fda9ec3c3c22714b7a640d",
+        "finalizedAttemptSeq": 63,
+        "nextAttemptSeq": 64,
+        "coverageStartTick": 73913263,
+        "lifetimeConfirmed": {
+          "global": {
+            "count": 62,
+            "amount": 62000
+          },
+          "resources": {
+            "X": {
+              "count": 25,
+              "amount": 25000
+            },
+            "L": {
+              "count": 36,
+              "amount": 36000
+            },
+            "H": {
+              "count": 1,
+              "amount": 1000
+            }
+          },
+          "rooms": {
+            "E6N59": {
+              "count": 6,
+              "amount": 6000
+            },
+            "E4N58": {
+              "count": 19,
+              "amount": 19000
+            },
+            "E1N57": {
+              "count": 36,
+              "amount": 36000
+            },
+            "E3N59": {
+              "count": 1,
+              "amount": 1000
+            }
+          },
+          "lanes": {
+            "X:E6N59": {
+              "count": 6,
+              "amount": 6000
+            },
+            "X:E4N58": {
+              "count": 19,
+              "amount": 19000
+            },
+            "L:E1N57": {
+              "count": 36,
+              "amount": 36000
+            },
+            "H:E3N59": {
+              "count": 1,
+              "amount": 1000
+            }
+          }
+        }
+      },
+      "permitRetainedDigest": "d7011ee103c2a2d057227edf892a244dc46d0445e4f67392fd176079f308fd3a",
+      "receiptRetainedDigest": "59357ac87adcb8ce4713eddfe68371908f8a0cd49e07172d8634059d19d3005e",
+      "anchor": {
+        "updatedAt": 74077961,
+        "anchorHash": "csh1:f683a30cfb7aab029a1d6bd8cbbe64c8",
+        "hardBlocker": null,
+        "activationBlocker": null,
+        "roomRegistryCheckpointCommitment": "csh1:f7a7a9d7c0cdecbdb64424a0082cb99f",
+        "laneLifecycleCommitment": "csh1:2f55e7ee2d56145387b0452b21333510",
+        "pricingRatchetCommitment": "csh1:a651e910ce5afae8f7fa57a9f49702e1",
+        "trustedFloorsCommitment": "csh1:855f76d66b700172d96e7613c95c991d"
+      },
+      "anchorMirrorEqual": true,
+      "roomIncarnationHighWater": [
+        {
+          "roomName": "E1N57",
+          "incarnationHighWater": 1,
+          "lastInstanceId": "mbr-room:csh1:d41b4689460eec57b378d95420321d49",
+          "admitted": true
+        },
+        {
+          "roomName": "E3N59",
+          "incarnationHighWater": 1,
+          "lastInstanceId": "mbr-room:csh1:ca7a5d5355187d077d8115db18903e4b",
+          "admitted": true
+        },
+        {
+          "roomName": "E4N58",
+          "incarnationHighWater": 1,
+          "lastInstanceId": "mbr-room:csh1:cc039a97c5b3666113d35c29544554cd",
+          "admitted": true
+        },
+        {
+          "roomName": "E5N59",
+          "incarnationHighWater": 1,
+          "lastInstanceId": "mbr-room:csh1:b0c428c7dfeeaba5a61a3944d38a241c",
+          "admitted": true
+        },
+        {
+          "roomName": "E6N59",
+          "incarnationHighWater": 1,
+          "lastInstanceId": "mbr-room:csh1:0453c59187f39f225c33583c1be8f517",
+          "admitted": true
+        },
+        {
+          "roomName": "E7N57",
+          "incarnationHighWater": 1,
+          "lastInstanceId": "mbr-room:csh1:dc8b1e0bc7ab9c0d8cfe474731a9ca30",
+          "admitted": true
+        },
+        {
+          "roomName": "E7N58",
+          "incarnationHighWater": 1,
+          "lastInstanceId": "mbr-room:csh1:839503d8b24ff27a2e6d4b5b1c5d1153",
+          "admitted": true
+        },
+        {
+          "roomName": "W1N57",
+          "incarnationHighWater": 1,
+          "lastInstanceId": "mbr-room:csh1:bf8bda74747d03f17143f8c61b8e0f58",
+          "admitted": true
+        }
+      ],
+      "laneLifecycleHighWaterDigest": "2a7c3e333ca91bbe6440775ecc37705635539632dd89e28a1b08ad8fed9d6c17",
+      "pricingRatchetHighWater": [
+        {
+          "resource": "H",
+          "value": 629.193,
+          "marketDate": "2026-10-01"
+        },
+        {
+          "resource": "K",
+          "value": 100.914,
+          "marketDate": "2026-10-01"
+        },
+        {
+          "resource": "L",
+          "value": 883.482,
+          "marketDate": "2026-10-01"
+        },
+        {
+          "resource": "O",
+          "value": 151.782,
+          "marketDate": "2026-10-01"
+        },
+        {
+          "resource": "U",
+          "value": 47.718,
+          "marketDate": "2026-10-01"
+        },
+        {
+          "resource": "X",
+          "value": 589.857,
+          "marketDate": "2026-10-01"
+        },
+        {
+          "resource": "Z",
+          "value": 63.868,
+          "marketDate": "2026-10-01"
+        }
+      ],
+      "trustedFloorHighWater": [
+        {
+          "resource": "energy",
+          "value": 46.977,
+          "marketDate": "2026-10-01",
+          "updatedAt": 74077956
+        },
+        {
+          "resource": "H",
+          "value": 629.193,
+          "marketDate": "2026-10-01",
+          "updatedAt": 74069174
+        },
+        {
+          "resource": "K",
+          "value": 100.914,
+          "marketDate": "2026-10-01",
+          "updatedAt": 74069174
+        },
+        {
+          "resource": "L",
+          "value": 883.482,
+          "marketDate": "2026-10-01",
+          "updatedAt": 74069174
+        },
+        {
+          "resource": "O",
+          "value": 151.782,
+          "marketDate": "2026-10-01",
+          "updatedAt": 74069174
+        },
+        {
+          "resource": "U",
+          "value": 47.718,
+          "marketDate": "2026-10-01",
+          "updatedAt": 74069174
+        },
+        {
+          "resource": "X",
+          "value": 589.857,
+          "marketDate": "2026-10-01",
+          "updatedAt": 74069174
+        },
+        {
+          "resource": "Z",
+          "value": 63.868,
+          "marketDate": "2026-10-01",
+          "updatedAt": 74069174
+        }
+      ],
+      "persistentDirectAccountClaim": null,
+      "pendingCounts": {
+        "managedOrders": 0,
+        "pendingMutations": 0,
+        "pendingDirectDeals": 0,
+        "marketStaging": 0,
+        "marketReservations": 0
+      },
+      "directPendingCount": 0,
+      "v3PendingPresent": false
+    },
+    "permitAndReceiptChainContinuous": true,
+    "trustedFloorHighWaterNonRegression": true,
+    "note": "anchorHash/trustedFloorsCommitment随普通行情刷新变化；不机械要求整个市场对象完全相同。"
+  },
+  "ordinaryProgress": {
+    "hubBefore": {
+      "updatedAt": 74077700,
+      "status": "distributing",
+      "protectionConfigIncarnationHighWater": 1,
+      "protectionAttemptHighWater": 41991
+    },
+    "hubAfter": {
+      "updatedAt": 74077950,
+      "status": "distributing",
+      "protectionConfigIncarnationHighWater": 1,
+      "protectionAttemptHighWater": 41996
+    },
+    "roomAnalyticsBefore": {
+      "E4N58": {
+        "tick": 74077745,
+        "workerCount": 1,
+        "carrierCount": 1,
+        "harvesterCount": 0,
+        "spawnSpawning": 0,
+        "controllerLevel": 8,
+        "controllerProgress": 0
+      },
+      "E1N57": {
+        "tick": 74077745,
+        "workerCount": 1,
+        "carrierCount": 1,
+        "harvesterCount": 0,
+        "spawnSpawning": 1,
+        "controllerLevel": 8,
+        "controllerProgress": 0
+      }
+    },
+    "roomAnalyticsAfter": {
+      "E4N58": {
+        "tick": 74077960,
+        "workerCount": 1,
+        "carrierCount": 1,
+        "harvesterCount": 0,
+        "spawnSpawning": 3,
+        "controllerLevel": 8,
+        "controllerProgress": 0
+      },
+      "E1N57": {
+        "tick": 74077960,
+        "workerCount": 1,
+        "carrierCount": 1,
+        "harvesterCount": 0,
+        "spawnSpawning": 0,
+        "controllerLevel": 8,
+        "controllerProgress": 0
+      }
+    },
+    "resourceControlLastActions": [
+      "send:E4N58->E3N59:energy=10000:cost=328",
+      "send:E1N57->E3N59:energy=790:cost=51",
+      "capacity-plan:E3N59->E4N58:energy=14244",
+      "task-send:74077750:1:energy:W1N57->E1N57:energy=2739:cost=261",
+      "capacity-relief-send:W1N57->E1N57:energy=2739:cost=261",
+      "task-send:74077960:1:energy:E3N59->E4N58:energy=10000:cost=328",
+      "capacity-relief-send:E3N59->E4N58:energy=10000:cost=328",
+      "terminal-logistics:W1N57:count=1"
+    ],
+    "synthesisSuccessfulRunsBefore": 0,
+    "synthesisSuccessfulRunsAfter": 0
+  },
+  "inputSha256": {
+    "initialMemory": "2b445a994edd0917646243f05590b662bc57fdedf69d680fa011010d7da4ab86",
+    "endingSnapshot": "fe5f519e7741008b264e69b7c42ff87ecfcbe1844b693885f2e1ff9c24dbf565"
+  }
+}

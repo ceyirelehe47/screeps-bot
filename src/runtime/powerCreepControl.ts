@@ -1,3 +1,4 @@
+import { executeTreasuryFencedTerminalCargo } from "@/runtime/treasuryTerminalCargo";
 import type {
   PowerCreepRoomCapability,
   PowerCreepRoomEnergyPolicy,
@@ -551,7 +552,7 @@ function executeTask(powerCreep: PowerCreep, task: PowerCreepTask): void {
       result = powerCreep.usePower(PWR_REGEN_SOURCE, target || undefined);
       break;
     case "operate_extension":
-      result = powerCreep.usePower(PWR_OPERATE_EXTENSION, target || undefined);
+      result = executeTreasuryFencedTerminalCargo(target, () => powerCreep.usePower(PWR_OPERATE_EXTENSION, target || undefined));
       break;
     default:
       return;

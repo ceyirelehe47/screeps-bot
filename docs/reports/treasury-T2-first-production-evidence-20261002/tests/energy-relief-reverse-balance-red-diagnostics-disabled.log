@@ -1,0 +1,49 @@
+
+> screeps@2026.10.2-1 test
+> jest --config jest.config.cjs --runInBand src/runtime/resourceControl.capacityRegression.test.ts -t outgoing Energy relief|outgoing relief responsibility --globals {"ts-jest":{"diagnostics":false}}
+
+ts-jest[ts-jest-transformer] (WARN) Define `ts-jest` config under `globals` is deprecated. Please do
+transform: {
+    <transform_regex>: ['ts-jest', { /* ts-jest config goes here in Jest */ }],
+},
+See more at https://kulshekhar.github.io/ts-jest/docs/getting-started/presets#advanced
+FAIL src/runtime/resourceControl.capacityRegression.test.ts
+  resource control live-like capacity recovery
+    ✓ does not reverse-feed a healthy outgoing Energy relief room and keeps the donor UH send window executable (10 ms)
+    ✓ keeps ordinary Energy balancing available for source-depleted outgoing relief responsibility (2 ms)
+    ✓ keeps ordinary Energy balancing available for receiver-capacity outgoing relief responsibility (2 ms)
+    ✓ keeps ordinary Energy balancing available for expired outgoing relief responsibility (1 ms)
+    ✓ keeps ordinary Energy balancing available for done outgoing relief responsibility (1 ms)
+    ✓ keeps ordinary Energy balancing available for cancelled outgoing relief responsibility (1 ms)
+    ✓ keeps ordinary Energy balancing available for failed outgoing relief responsibility (1 ms)
+    ✕ keeps ordinary Energy balancing available for empty-pending outgoing relief responsibility (1 ms)
+    ✓ keeps ordinary Energy balancing available for missing-target-room outgoing relief responsibility (1 ms)
+    ✓ keeps ordinary Energy balancing available for ordinary-energy-transfer outgoing relief responsibility (1 ms)
+    ✓ keeps ordinary Energy balancing available for non-energy-relief outgoing relief responsibility (1 ms)
+    ○ skipped recovers a sticky 50000-free terminal through real carrier moves without next-cycle jitter
+    ○ skipped bootstraps the full capacity-relief fee while retaining coverage-expiry observability
+    ○ skipped rejects the whole fee bootstrap batch when only a smaller batch would fit
+    ○ skipped admits exactly 50000 into a normal 150000-free Storage and none at 100000
+
+  ● resource control live-like capacity recovery › keeps ordinary Energy balancing available for empty-pending outgoing relief responsibility
+
+    expect(received).toEqual(expected) // deep equality
+
+    Expected: ArrayContaining [StringMatching /^send:E4N58->E3N59:energy=/]
+    Received: ["task-send:1:2:UH:E4N58->E1N57:UH=10000:cost=0", "task-auto-done:1:1:energy:E3N59->E4N58:non_positive_remaining", "terminal-logistics:E3N59:count=1"]
+
+      533 |     runResourceControl();
+      534 |
+    > 535 |     expect(Memory.runtime?.resourceControl?.lastActions).toEqual(
+          |                                                          ^
+      536 |       expect.arrayContaining([expect.stringMatching(/^send:E4N58->E3N59:energy=/)]),
+      537 |     );
+      538 |     expect(donor.terminal!.send).toHaveBeenCalledWith(
+
+      at src/runtime/resourceControl.capacityRegression.test.ts:535:58
+
+Test Suites: 1 failed, 1 total
+Tests:       1 failed, 4 skipped, 10 passed, 15 total
+Snapshots:   0 total
+Time:        2.12 s
+Ran all test suites matching /src\/runtime\/resourceControl.capacityRegression.test.ts/i with tests matching "outgoing Energy relief|outgoing relief responsibility".

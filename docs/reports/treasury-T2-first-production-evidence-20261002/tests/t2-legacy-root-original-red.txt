@@ -1,0 +1,109 @@
+
+> screeps@2026.10.2-2 test
+> jest --config jest.config.cjs --runInBand src/runtime/treasuryT2LegacyRoot.test.ts
+
+FAIL src/runtime/treasuryT2LegacyRoot.test.ts
+  T2 unknown legacy Treasury roots are not silently empty
+    ✕ refuses opaque or malformed legacy root {"schemaVersion":999} without altering its facts (5 ms)
+    ✕ refuses opaque or malformed legacy root {"receipts":null} without altering its facts (1 ms)
+    ✓ refuses opaque or malformed legacy root {"receipts":0} without altering its facts (1 ms)
+    ✓ refuses opaque or malformed legacy root {"receipts":[{}]} without altering its facts
+    ✕ refuses opaque or malformed legacy root {"unknownResponsibility":{}} without altering its facts (2 ms)
+    ✓ refuses opaque or malformed legacy root {"receipts":{"oldAttempt":{}}} without altering its facts
+    ✓ refuses opaque or malformed legacy root {"intents":"lost"} without altering its facts (1 ms)
+    ✓ preserves a recognized empty legacy root {} while allowing bounded new binding (1 ms)
+    ✓ preserves a recognized empty legacy root {"receipts":{},"intents":{}} while allowing bounded new binding (2 ms)
+    ✓ preserves a recognized empty legacy root {"receipts":[],"intents":[],"retiredAttemptRanges":[]} while allowing bounded new binding (1 ms)
+    ✕ rechecks in-place legacy corruption {"receipts":null} after a clear same-tick fence (1 ms)
+    ✕ rechecks in-place legacy corruption {"unknownResponsibility":{}} after a clear same-tick fence
+
+  ● T2 unknown legacy Treasury roots are not silently empty › refuses opaque or malformed legacy root {"schemaVersion":999} without altering its facts
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: false
+    Received: true
+
+      12 |     (Memory.runtime as unknown as Record<string, unknown>).treasury = root;
+      13 |     const before = JSON.stringify(Memory);
+    > 14 |     expect(armTreasuryT2FirstLive(context.task.id, context.task.createdAt).ok).toBe(false);
+         |                                                                                ^
+      15 |     expect(JSON.stringify(Memory)).toBe(before);
+      16 |     expect(hasTreasuryTerminalFence(T2_TARGET)).toBe(true);
+      17 |   });
+
+      at src/runtime/treasuryT2LegacyRoot.test.ts:14:80
+
+  ● T2 unknown legacy Treasury roots are not silently empty › refuses opaque or malformed legacy root {"receipts":null} without altering its facts
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: false
+    Received: true
+
+      12 |     (Memory.runtime as unknown as Record<string, unknown>).treasury = root;
+      13 |     const before = JSON.stringify(Memory);
+    > 14 |     expect(armTreasuryT2FirstLive(context.task.id, context.task.createdAt).ok).toBe(false);
+         |                                                                                ^
+      15 |     expect(JSON.stringify(Memory)).toBe(before);
+      16 |     expect(hasTreasuryTerminalFence(T2_TARGET)).toBe(true);
+      17 |   });
+
+      at src/runtime/treasuryT2LegacyRoot.test.ts:14:80
+
+  ● T2 unknown legacy Treasury roots are not silently empty › refuses opaque or malformed legacy root {"unknownResponsibility":{}} without altering its facts
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: false
+    Received: true
+
+      12 |     (Memory.runtime as unknown as Record<string, unknown>).treasury = root;
+      13 |     const before = JSON.stringify(Memory);
+    > 14 |     expect(armTreasuryT2FirstLive(context.task.id, context.task.createdAt).ok).toBe(false);
+         |                                                                                ^
+      15 |     expect(JSON.stringify(Memory)).toBe(before);
+      16 |     expect(hasTreasuryTerminalFence(T2_TARGET)).toBe(true);
+      17 |   });
+
+      at src/runtime/treasuryT2LegacyRoot.test.ts:14:80
+
+  ● T2 unknown legacy Treasury roots are not silently empty › rechecks in-place legacy corruption {"receipts":null} after a clear same-tick fence
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+      30 |     expect(hasTreasuryTerminalFence(T2_TARGET)).toBe(false);
+      31 |     Object.assign(root, change);
+    > 32 |     expect(hasTreasuryTerminalFence(T2_TARGET)).toBe(true);
+         |                                                 ^
+      33 |     expect(armTreasuryT2FirstLive(context.task.id, context.task.createdAt).ok).toBe(false);
+      34 |   });
+      35 | });
+
+      at src/runtime/treasuryT2LegacyRoot.test.ts:32:49
+
+  ● T2 unknown legacy Treasury roots are not silently empty › rechecks in-place legacy corruption {"unknownResponsibility":{}} after a clear same-tick fence
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+      30 |     expect(hasTreasuryTerminalFence(T2_TARGET)).toBe(false);
+      31 |     Object.assign(root, change);
+    > 32 |     expect(hasTreasuryTerminalFence(T2_TARGET)).toBe(true);
+         |                                                 ^
+      33 |     expect(armTreasuryT2FirstLive(context.task.id, context.task.createdAt).ok).toBe(false);
+      34 |   });
+      35 | });
+
+      at src/runtime/treasuryT2LegacyRoot.test.ts:32:49
+
+Test Suites: 1 failed, 1 total
+Tests:       5 failed, 7 passed, 12 total
+Snapshots:   0 total
+Time:        1.04 s, estimated 2 s
+Ran all test suites matching /src\/runtime\/treasuryT2LegacyRoot.test.ts/i.

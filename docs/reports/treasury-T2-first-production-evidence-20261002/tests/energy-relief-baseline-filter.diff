@@ -1,0 +1,13 @@
+--- product-resourceControl.ts
++++ baseline-resourceControl.ts
+@@ -2367,10 +2367,6 @@
+     .filter(
+       (snapshot) => !context.healthyIncomingEnergyRooms.has(snapshot.roomName),
+     )
+-    .filter((snapshot) => !context.tasks.some((task) => task.fromRoomName === snapshot.roomName &&
+-      task.resource === RESOURCE_ENERGY && task.reason === "capacity:relief:energy" &&
+-      context.snapshotByRoom.has(task.toRoomName) &&
+-      isHealthyReceiverCapacityCommitment(task, resolveCapacityConfig().automaticTaskNoProgressTtl)))
+     .sort((left, right) => {
+       const needDiff =
+         (remainingEnergyNeedByRoom.get(right.roomName) || 0) -

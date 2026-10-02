@@ -1,0 +1,221 @@
+
+> screeps@2026.10.2-2 test
+> jest --config jest.config.cjs --runInBand src/runtime/treasuryT2Binding.integration.test.ts
+
+  console.log
+    {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:967:11)
+
+  console.log
+    {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:967:11)
+
+  console.log
+    {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:967:11)
+
+  console.log
+    {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:967:11)
+
+  console.log
+    {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:967:11)
+
+  console.log
+    {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:967:11)
+
+  console.log
+    {"kind":"treasury-production-T1","tick":100,"taskId":"old-H-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:967:11)
+
+  console.log
+    {"kind":"treasury-production-T2","tick":108,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:967:11)
+
+  console.log
+    {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:967:11)
+
+  console.log
+    {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:967:11)
+
+  console.log
+    {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:967:11)
+
+  console.log
+    {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"candidate_rejected","reason":"live facts, fee, or shared receiver capacity outside policy"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:967:11)
+
+  console.log
+    {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_blocked","reason":"执行前复验失败：容量不足：E4N58/terminal/UH 可用 -615 < 最坏流出 100"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:967:11)
+
+  console.log
+    {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"quota_reservation_failed","reason":"dispatch was not entered"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:967:11)
+
+  console.log
+    {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_not_executed"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:967:11)
+
+  console.log
+    {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"admission_rejected","reason":"容量不足：E4N58/terminal/energy 可用 -79980 < 最坏流出 10"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:967:11)
+
+  console.log
+    {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:967:11)
+
+  console.log
+    {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:967:11)
+
+  console.log
+    {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:967:11)
+
+  console.log
+    {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:967:11)
+
+  console.log
+    {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:967:11)
+
+  console.log
+    {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:967:11)
+
+  console.log
+    {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:967:11)
+
+  console.log
+    {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:967:11)
+
+  console.log
+    {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:967:11)
+
+  console.log
+    {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:967:11)
+
+FAIL src/runtime/treasuryT2Binding.integration.test.ts
+  T2 UH exact business binding and shared commitments
+    ✓ sends only min(100, 1 UH), then settles that exact slice once (54 ms)
+    ✓ sends only min(100, 99 UH), then settles that exact slice once (20 ms)
+    ✓ sends only min(100, 100 UH), then settles that exact slice once (20 ms)
+    ✓ sends only min(100, 101 UH), then settles that exact slice once (20 ms)
+    ✓ sends only min(100, 1715 UH), then settles that exact slice once (19 ms)
+    ✓ refuses a H binding before publishing a grant
+    ✓ refuses a OH binding before publishing a grant (1 ms)
+    ✓ refuses a wrong source binding before publishing a grant
+    ✓ refuses a wrong target binding before publishing a grant (1 ms)
+    ✓ refuses a manual origin binding before publishing a grant
+    ✓ refuses a other synthesis binding before publishing a grant (1 ms)
+    ✓ refuses a missing reason binding before publishing a grant
+    ✓ refuses a done binding before publishing a grant
+    ✓ refuses a zero binding before publishing a grant
+    ✓ refuses a unsafe amount binding before publishing a grant (1 ms)
+    ✓ refuses a unsafe remaining binding before publishing a grant
+    ✓ does not spend an existing grant after bound resource facts drift (5 ms)
+    ✓ does not spend an existing grant after bound route facts drift (5 ms)
+    ✓ does not spend an existing grant after bound origin facts drift (5 ms)
+    ✓ does not spend an existing grant after bound reason facts drift (5 ms)
+    ✓ does not spend an existing grant after bound identity facts drift (5 ms)
+    ✓ does not spend an existing grant after bound amount facts drift (4 ms)
+    ✓ does not spend an existing grant after bound remaining facts drift (4 ms)
+    ✓ cannot authorize another task or the H grant by actor/run name (10 ms)
+    ✓ does not grant native authority to a caller-supplied actor for UH (1 ms)
+    ✓ does not grant native authority to a caller-supplied actor for H (1 ms)
+    ✓ cannot bypass old H reserved responsibility with a new T2 run
+    ✓ cannot bypass old H dispatching responsibility with a new T2 run
+    ✓ cannot bypass old H invalid responsibility with a new T2 run (1 ms)
+    ✓ cannot bypass old H drained-without-closure responsibility with a new T2 run
+    ✓ does not treat a damaged old H control as absent while binding T2
+    ✓ keeps a genuinely settled H quota consumed while granting the independent UH lane (36 ms)
+    ✓ excludes exactly 100 from the 1715 task, keeps 1615 committed and does not inherit a reused ID (9 ms)
+    ✓ respects UH production ownership 2285 while keeping the 1615 remainder (8 ms)
+    ✓ respects UH production ownership 2286 while keeping the 1615 remainder
+    ✓ respects target capacity 1715 for the work plus original remainder (8 ms)
+    ✓ respects target capacity 1714 for the work plus original remainder (1 ms)
+    ✓ refuses invalid or above-budget fee 101
+    ✓ refuses invalid or above-budget fee NaN
+    ✓ refuses invalid or above-budget fee 1.5
+    ✓ refuses invalid or above-budget fee 9007199254740992 (1 ms)
+    ✓ rejects a new same-tick production reservation at admission (2 ms)
+    ✓ rechecks source ownership after admission immediately before the native boundary (14 ms)
+    ✓ keeps the original admitted attempt across a transient quota write failure and drains it without native (13 ms)
+    ✓ refuses native when an old closed H activity gains a valid unclosed quota after T2 admission (10 ms)
+    ✕ keeps Energy production ownership 89980 separate from UH and the remaining task fee (4 ms)
+    ✓ keeps Energy production ownership 89981 separate from UH and the remaining task fee
+    ✓ preserves active market resource exposure at admission
+    ✓ preserves active market fee exposure at admission
+    ✓ leaves both default-OFF lanes and legacy reservation bytes unchanged
+    ✓ refuses the archived 1715 UH task when 1885 UH2O plus 500 reagent already covers target 2385
+    ✓ refuses duplicate UH supply when a different healthy inbound already covers the product deficit
+    ✓ keeps the original unknown attempt for missing transaction evidence and never decrements or retries (24 ms)
+    ✓ keeps the original unknown attempt for different engine ID evidence and never decrements or retries (22 ms)
+    ✓ keeps the original unknown attempt for duplicate evidence and never decrements or retries (22 ms)
+    ✓ keeps the original unknown attempt for resource evidence and never decrements or retries (23 ms)
+    ✓ keeps the original unknown attempt for route evidence and never decrements or retries (23 ms)
+    ✓ keeps the original unknown attempt for amount evidence and never decrements or retries (23 ms)
+    ✓ keeps the original unknown attempt for tick evidence and never decrements or retries (22 ms)
+    ✓ keeps the original unknown attempt for description evidence and never decrements or retries (23 ms)
+    ✓ keeps the original unknown attempt for source extra UH evidence and never decrements or retries (23 ms)
+    ✓ keeps the original unknown attempt for target foreign energy evidence and never decrements or retries (22 ms)
+
+  ● T2 UH exact business binding and shared commitments › keeps Energy production ownership 89980 separate from UH and the remaining task fee
+
+    expect(jest.fn()).toHaveBeenCalledTimes(expected)
+
+    Expected number of calls: 1
+    Received number of calls: 0
+
+      284 |     const arm = armTreasuryT2FirstLive(context.task.id, context.task.createdAt);
+      285 |     if (reserved === 89981) { expect(arm.ok).toBe(false); }
+    > 286 |     else { expect(arm.ok).toBe(true); send(); expect(context.source.terminal!.send).toHaveBeenCalledTimes(1); endTreasuryProductionTick(); }
+          |                                                                                     ^
+      287 |   });
+      288 |
+      289 |   it.each(["resource", "fee"])("preserves active market %s exposure at admission", (kind) => {
+
+      at src/runtime/treasuryT2Binding.integration.test.ts:286:85
+
+Test Suites: 1 failed, 1 total
+Tests:       1 failed, 61 passed, 62 total
+Snapshots:   0 total
+Time:        1.822 s, estimated 3 s
+Ran all test suites matching /src\/runtime\/treasuryT2Binding.integration.test.ts/i.

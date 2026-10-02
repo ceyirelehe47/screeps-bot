@@ -1,0 +1,40 @@
+FAIL src/runtime/resourceControl.capacityRegression.test.ts
+  resource control live-like capacity recovery
+    ✕ does not reverse-feed a healthy outgoing Energy relief room and keeps the donor UH send window executable (9 ms)
+    ✓ keeps ordinary Energy balancing available for source-depleted outgoing relief responsibility (2 ms)
+    ✓ keeps ordinary Energy balancing available for receiver-capacity outgoing relief responsibility (3 ms)
+    ✓ keeps ordinary Energy balancing available for expired outgoing relief responsibility (2 ms)
+    ✓ keeps ordinary Energy balancing available for done outgoing relief responsibility (1 ms)
+    ✓ keeps ordinary Energy balancing available for cancelled outgoing relief responsibility (1 ms)
+    ✓ keeps ordinary Energy balancing available for failed outgoing relief responsibility (1 ms)
+    ✓ keeps ordinary Energy balancing available for empty-pending outgoing relief responsibility (1 ms)
+    ✓ keeps ordinary Energy balancing available for missing-target-room outgoing relief responsibility (1 ms)
+    ✓ keeps ordinary Energy balancing available for ordinary-energy-transfer outgoing relief responsibility (1 ms)
+    ✓ keeps ordinary Energy balancing available for non-energy-relief outgoing relief responsibility (1 ms)
+    ○ skipped recovers a sticky 50000-free terminal through real carrier moves without next-cycle jitter
+    ○ skipped bootstraps the full capacity-relief fee while retaining coverage-expiry observability
+    ○ skipped rejects the whole fee bootstrap batch when only a smaller batch would fit
+    ○ skipped admits exactly 50000 into a normal 150000-free Storage and none at 100000
+
+  ● resource control live-like capacity recovery › does not reverse-feed a healthy outgoing Energy relief room and keeps the donor UH send window executable
+
+    expect(received).not.toEqual(expected) // deep equality
+
+    Expected: not ArrayContaining [StringMatching /^send:E4N58->E3N59:energy=/]
+    Received:     ["send:E4N58->E3N59:energy=8859:cost=0", "task-send:1:1:energy:E3N59->E4N58:energy=10000:cost=0", "capacity-relief-send:E3N59->E4N58:energy=10000:cost=0"]
+
+      477 |
+      478 |     expect(Memory.runtime?.resourceControl?.rooms[pressureRoom.name]?.capacityState).toBe("pressure");
+    > 479 |     expect(Memory.runtime?.resourceControl?.lastActions).not.toEqual(
+          |                                                              ^
+      480 |       expect.arrayContaining([expect.stringMatching(/^send:E4N58->E3N59:energy=/)]),
+      481 |     );
+      482 |     expect(donor.terminal!.send).toHaveBeenCalledWith(
+
+      at Object.<anonymous> (src/runtime/resourceControl.capacityRegression.test.ts:479:62)
+
+Test Suites: 1 failed, 1 total
+Tests:       1 failed, 4 skipped, 10 passed, 15 total
+Snapshots:   0 total
+Time:        3.111 s
+Ran all test suites matching /src\/runtime\/resourceControl.capacityRegression.test.ts/i with tests matching "outgoing Energy relief|outgoing relief responsibility".

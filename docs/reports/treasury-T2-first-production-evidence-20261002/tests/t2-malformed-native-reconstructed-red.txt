@@ -1,0 +1,303 @@
+T2 malformed native 返回值：隔离副本重建缺陷回归红证据（2026-10-02）
+
+证据性质：这是独立复制当前最终代码后，仅删除新加的 malformed-return 校验块，对审查发现缺陷进行重建。不是原始 pre-fix 运行，不代表实际线上 native 实验。最终工作树产品未修改。
+
+复制范围仅 src/、test/、package.json、jest.config.cjs、tsconfig*.json；node_modules 为绝对路径符号链接。没有复制 .secret.json、部署配置或生产数据。
+
+测试使用真实绑定 suite 的 5 个 T2 参数（undefined、NaN、+1、-999、字符串 "0"）与 T1 undefined 兼容例；native 效果、交易与 Store 是 suite 的测试装夹。
+
+重建元数据：
+{
+  "classification": "隔离副本重建修复前缺陷；非原始 pre-fix 运行",
+  "original_workspace": "/Users/forst/.codex/worktrees/treasury-t2-first-production/screeps",
+  "isolated_workspace": "/tmp/screeps-t2-native-return-red-reconstruction",
+  "copied": [
+    "src/",
+    "test/",
+    "package.json",
+    "jest.config.cjs",
+    "tsconfig.build.json",
+    "tsconfig.json"
+  ],
+  "node_modules_symlink": "/Users/forst/.codex/worktrees/treasury-t2-first-production/screeps/node_modules",
+  "original_product_sha256": "75998d1b7b096f3dc0d293b0809790a08efcac4be37b8cf2026fb9ca78912bf5",
+  "reconstructed_product_sha256": "c16de5702f9107aa326e4fce46aacf25246891f19a89a1d757177cfaf39f9751",
+  "test_suite_sha256": "1b6470c62b2d9649afc3795645e57b831df9e1e23c58d0243b25c044275ce394",
+  "deleted_only": "Malformed native return documentedCodes validation and throw; remaining adapter return stays {ok:code===OK,code}"
+}
+
+执行命令：
+/Users/forst/.nvm/versions/node/v22.23.3/bin/node /tmp/screeps-t2-native-return-red-reconstruction/node_modules/jest/bin/jest.js src/runtime/treasuryT2Binding.integration.test.ts --runInBand --testNamePattern 'malformed native return|preserves original H durable recovery'
+执行 cwd：/tmp/screeps-t2-native-return-red-reconstruction
+退出码：1
+最终产品 SHA-256 读回复核：75998d1b7b096f3dc0d293b0809790a08efcac4be37b8cf2026fb9ca78912bf5（与复制前一致）
+
+唯一重建差异：
+--- current-final/src/runtime/treasuryTerminalTransferLane.ts
++++ isolated-reconstruction/src/runtime/treasuryTerminalTransferLane.ts
+@@ -526,14 +526,6 @@
+     actor: `treasury:${TREASURY_T1_RUN_ID}`,
+     description: TREASURY_T1_DESCRIPTION_PREFIX + context.attemptId,
+   }));
+-  // Only documented negative send/gateway results prove no execution. A malformed return
+-  // crossed the native boundary and must remain outcome_unknown on the original attempt.
+-  const documentedCodes: readonly number[] = [OK, ERR_NOT_OWNER, ERR_NO_PATH, ERR_NAME_EXISTS, ERR_BUSY,
+-    ERR_NOT_FOUND, ERR_NOT_ENOUGH_RESOURCES, ERR_INVALID_TARGET, ERR_FULL, ERR_NOT_IN_RANGE,
+-    ERR_INVALID_ARGS, ERR_TIRED, ERR_NO_BODYPART, ERR_RCL_NOT_ENOUGH, ERR_GCL_NOT_ENOUGH];
+-  if (!documentedCodes.includes(code)) {
+-    throw new Error("Treasury terminal.send returned an invalid native result");
+-  }
+   lastNativeAttempt = {
+     taskId: args.taskId,
+     attemptId: context.attemptId,
+
+完整 Jest 输出：
+  console.log
+    {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_not_executed"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:979:11)
+
+  console.log
+    {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_not_executed"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:979:11)
+
+  console.log
+    {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_not_executed"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:979:11)
+
+  console.log
+    {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_not_executed"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:979:11)
+
+  console.log
+    {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_not_executed"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:979:11)
+
+  console.log
+    {"kind":"treasury-production-T1","tick":100,"taskId":"malformed-H-task","status":"dispatch_not_executed"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:979:11)
+
+FAIL src/runtime/treasuryT2Binding.integration.test.ts
+  T2 UH exact business binding and shared commitments
+    ✕ keeps an actually executed malformed native return undefined unknown until original evidence settles (44 ms)
+    ✕ keeps an actually executed malformed native return NaN unknown until original evidence settles (9 ms)
+    ✕ keeps an actually executed malformed native return 1 unknown until original evidence settles (10 ms)
+    ✕ keeps an actually executed malformed native return -999 unknown until original evidence settles (7 ms)
+    ✕ keeps an actually executed malformed native return 0 unknown until original evidence settles (8 ms)
+    ✕ preserves original H durable recovery when its real native effect returns undefined (7 ms)
+    ○ skipped sends only min(100, 1 UH), then settles that exact slice once
+    ○ skipped sends only min(100, 99 UH), then settles that exact slice once
+    ○ skipped sends only min(100, 100 UH), then settles that exact slice once
+    ○ skipped sends only min(100, 101 UH), then settles that exact slice once
+    ○ skipped sends only min(100, 1715 UH), then settles that exact slice once
+    ○ skipped refuses a H binding before publishing a grant
+    ○ skipped refuses a OH binding before publishing a grant
+    ○ skipped refuses a wrong source binding before publishing a grant
+    ○ skipped refuses a wrong target binding before publishing a grant
+    ○ skipped refuses a manual origin binding before publishing a grant
+    ○ skipped refuses a other synthesis binding before publishing a grant
+    ○ skipped refuses a missing reason binding before publishing a grant
+    ○ skipped refuses a done binding before publishing a grant
+    ○ skipped refuses a zero binding before publishing a grant
+    ○ skipped refuses a unsafe amount binding before publishing a grant
+    ○ skipped refuses a unsafe remaining binding before publishing a grant
+    ○ skipped does not spend an existing grant after bound resource facts drift
+    ○ skipped does not spend an existing grant after bound route facts drift
+    ○ skipped does not spend an existing grant after bound origin facts drift
+    ○ skipped does not spend an existing grant after bound reason facts drift
+    ○ skipped does not spend an existing grant after bound identity facts drift
+    ○ skipped does not spend an existing grant after bound amount facts drift
+    ○ skipped does not spend an existing grant after bound remaining facts drift
+    ○ skipped cannot authorize another task or the H grant by actor/run name
+    ○ skipped does not grant native authority to a caller-supplied actor for UH
+    ○ skipped does not grant native authority to a caller-supplied actor for H
+    ○ skipped cannot bypass old H reserved responsibility with a new T2 run
+    ○ skipped cannot bypass old H dispatching responsibility with a new T2 run
+    ○ skipped cannot bypass old H invalid responsibility with a new T2 run
+    ○ skipped cannot bypass old H drained-without-closure responsibility with a new T2 run
+    ○ skipped does not treat a damaged old H control as absent while binding T2
+    ○ skipped keeps a genuinely settled H quota consumed while granting the independent UH lane
+    ○ skipped excludes exactly 100 from the 1715 task, keeps 1615 committed and does not inherit a reused ID
+    ○ skipped respects UH production ownership 2285 while keeping the 1615 remainder
+    ○ skipped respects UH production ownership 2286 while keeping the 1615 remainder
+    ○ skipped respects target capacity 1715 for the work plus original remainder
+    ○ skipped respects target capacity 1714 for the work plus original remainder
+    ○ skipped refuses invalid or above-budget fee 101
+    ○ skipped refuses invalid or above-budget fee NaN
+    ○ skipped refuses invalid or above-budget fee 1.5
+    ○ skipped refuses invalid or above-budget fee 9007199254740992
+    ○ skipped rejects a new same-tick production reservation at admission
+    ○ skipped rechecks source ownership after admission immediately before the native boundary
+    ○ skipped keeps the original admitted attempt across a transient quota write failure and drains it without native
+    ○ skipped refuses native when an old closed H activity gains a valid unclosed quota after T2 admission
+    ○ skipped keeps Energy production ownership 9980 separate from UH and the remaining task fee
+    ○ skipped keeps Energy production ownership 9981 separate from UH and the remaining task fee
+    ○ skipped refuses a room-total fee budget that cannot satisfy the actual terminal ownership scope
+    ○ skipped preserves active market resource exposure at admission
+    ○ skipped preserves active market fee exposure at admission
+    ○ skipped leaves both default-OFF lanes and legacy reservation bytes unchanged
+    ○ skipped refuses the archived 1715 UH task when 1885 UH2O plus 500 reagent already covers target 2385
+    ○ skipped refuses duplicate UH supply when a different healthy inbound already covers the product deficit
+    ○ skipped keeps the original unknown attempt for missing transaction evidence and never decrements or retries
+    ○ skipped keeps the original unknown attempt for different engine ID evidence and never decrements or retries
+    ○ skipped keeps the original unknown attempt for duplicate evidence and never decrements or retries
+    ○ skipped keeps the original unknown attempt for resource evidence and never decrements or retries
+    ○ skipped keeps the original unknown attempt for route evidence and never decrements or retries
+    ○ skipped keeps the original unknown attempt for amount evidence and never decrements or retries
+    ○ skipped keeps the original unknown attempt for tick evidence and never decrements or retries
+    ○ skipped keeps the original unknown attempt for description evidence and never decrements or retries
+    ○ skipped keeps the original unknown attempt for source extra UH evidence and never decrements or retries
+    ○ skipped keeps the original unknown attempt for target foreign energy evidence and never decrements or retries
+
+  ● T2 UH exact business binding and shared commitments › keeps an actually executed malformed native return undefined unknown until original evidence settles
+
+    expect(received).toMatchObject(expected)
+
+    - Expected  - 2
+    + Received  + 2
+
+      Object {
+    -   "outcome": "unknown",
+    -   "phase": "outcome_unknown",
+    +   "outcome": "not_executed",
+    +   "phase": "closing",
+      }
+
+      389 |     expect(armTreasuryT2FirstLive(context.task.id, context.task.createdAt).ok).toBe(true); send();
+      390 |     const attempt = context.treasury.kernelJournal().active[0].attemptId;
+    > 391 |     expect(context.treasury.kernelJournal().active[0]).toMatchObject({ phase: "outcome_unknown", outcome: "unknown" });
+          |                                                        ^
+      392 |     expect(context.task.remainingAmount).toBe(1715);
+      393 |     expect((Memory.runtime as unknown as Record<string, unknown>).treasuryProductionT2Quota).toMatchObject({ status: "dispatching", attemptId: attempt });
+      394 |     expect(hasTreasuryTerminalFence(T2_TARGET)).toBe(true);
+
+      at src/runtime/treasuryT2Binding.integration.test.ts:391:56
+
+  ● T2 UH exact business binding and shared commitments › keeps an actually executed malformed native return NaN unknown until original evidence settles
+
+    expect(received).toMatchObject(expected)
+
+    - Expected  - 2
+    + Received  + 2
+
+      Object {
+    -   "outcome": "unknown",
+    -   "phase": "outcome_unknown",
+    +   "outcome": "not_executed",
+    +   "phase": "closing",
+      }
+
+      389 |     expect(armTreasuryT2FirstLive(context.task.id, context.task.createdAt).ok).toBe(true); send();
+      390 |     const attempt = context.treasury.kernelJournal().active[0].attemptId;
+    > 391 |     expect(context.treasury.kernelJournal().active[0]).toMatchObject({ phase: "outcome_unknown", outcome: "unknown" });
+          |                                                        ^
+      392 |     expect(context.task.remainingAmount).toBe(1715);
+      393 |     expect((Memory.runtime as unknown as Record<string, unknown>).treasuryProductionT2Quota).toMatchObject({ status: "dispatching", attemptId: attempt });
+      394 |     expect(hasTreasuryTerminalFence(T2_TARGET)).toBe(true);
+
+      at src/runtime/treasuryT2Binding.integration.test.ts:391:56
+
+  ● T2 UH exact business binding and shared commitments › keeps an actually executed malformed native return 1 unknown until original evidence settles
+
+    expect(received).toMatchObject(expected)
+
+    - Expected  - 2
+    + Received  + 2
+
+      Object {
+    -   "outcome": "unknown",
+    -   "phase": "outcome_unknown",
+    +   "outcome": "not_executed",
+    +   "phase": "closing",
+      }
+
+      389 |     expect(armTreasuryT2FirstLive(context.task.id, context.task.createdAt).ok).toBe(true); send();
+      390 |     const attempt = context.treasury.kernelJournal().active[0].attemptId;
+    > 391 |     expect(context.treasury.kernelJournal().active[0]).toMatchObject({ phase: "outcome_unknown", outcome: "unknown" });
+          |                                                        ^
+      392 |     expect(context.task.remainingAmount).toBe(1715);
+      393 |     expect((Memory.runtime as unknown as Record<string, unknown>).treasuryProductionT2Quota).toMatchObject({ status: "dispatching", attemptId: attempt });
+      394 |     expect(hasTreasuryTerminalFence(T2_TARGET)).toBe(true);
+
+      at src/runtime/treasuryT2Binding.integration.test.ts:391:56
+
+  ● T2 UH exact business binding and shared commitments › keeps an actually executed malformed native return -999 unknown until original evidence settles
+
+    expect(received).toMatchObject(expected)
+
+    - Expected  - 2
+    + Received  + 2
+
+      Object {
+    -   "outcome": "unknown",
+    -   "phase": "outcome_unknown",
+    +   "outcome": "not_executed",
+    +   "phase": "closing",
+      }
+
+      389 |     expect(armTreasuryT2FirstLive(context.task.id, context.task.createdAt).ok).toBe(true); send();
+      390 |     const attempt = context.treasury.kernelJournal().active[0].attemptId;
+    > 391 |     expect(context.treasury.kernelJournal().active[0]).toMatchObject({ phase: "outcome_unknown", outcome: "unknown" });
+          |                                                        ^
+      392 |     expect(context.task.remainingAmount).toBe(1715);
+      393 |     expect((Memory.runtime as unknown as Record<string, unknown>).treasuryProductionT2Quota).toMatchObject({ status: "dispatching", attemptId: attempt });
+      394 |     expect(hasTreasuryTerminalFence(T2_TARGET)).toBe(true);
+
+      at src/runtime/treasuryT2Binding.integration.test.ts:391:56
+
+  ● T2 UH exact business binding and shared commitments › keeps an actually executed malformed native return 0 unknown until original evidence settles
+
+    expect(received).toMatchObject(expected)
+
+    - Expected  - 2
+    + Received  + 2
+
+      Object {
+    -   "outcome": "unknown",
+    -   "phase": "outcome_unknown",
+    +   "outcome": "not_executed",
+    +   "phase": "closing",
+      }
+
+      389 |     expect(armTreasuryT2FirstLive(context.task.id, context.task.createdAt).ok).toBe(true); send();
+      390 |     const attempt = context.treasury.kernelJournal().active[0].attemptId;
+    > 391 |     expect(context.treasury.kernelJournal().active[0]).toMatchObject({ phase: "outcome_unknown", outcome: "unknown" });
+          |                                                        ^
+      392 |     expect(context.task.remainingAmount).toBe(1715);
+      393 |     expect((Memory.runtime as unknown as Record<string, unknown>).treasuryProductionT2Quota).toMatchObject({ status: "dispatching", attemptId: attempt });
+      394 |     expect(hasTreasuryTerminalFence(T2_TARGET)).toBe(true);
+
+      at src/runtime/treasuryT2Binding.integration.test.ts:391:56
+
+  ● T2 UH exact business binding and shared commitments › preserves original H durable recovery when its real native effect returns undefined
+
+    expect(received).toMatchObject(expected)
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+    -   "outcome": "unknown",
+    +   "outcome": "not_executed",
+      }
+
+      425 |     runTreasuryTerminalTransferTask(hTask, ledger, true, jest.fn());
+      426 |     const attempt = context.treasury.kernelJournal().active[0].attemptId;
+    > 427 |     expect(context.treasury.kernelJournal().active[0]).toMatchObject({ outcome: "unknown" });
+          |                                                        ^
+      428 |     expect(hTask.remainingAmount).toBe(100);
+      429 |     expect(hasTreasuryTerminalFence(oldSource.name)).toBe(true);
+      430 |     endTreasuryProductionTick(); recover();
+
+      at Object.<anonymous> (src/runtime/treasuryT2Binding.integration.test.ts:427:56)
+
+Test Suites: 1 failed, 1 total
+Tests:       6 failed, 63 skipped, 69 total
+Snapshots:   0 total
+Time:        2.9 s
+Ran all test suites matching /src\/runtime\/treasuryT2Binding.integration.test.ts/i with tests matching "malformed native return|preserves original H durable recovery".

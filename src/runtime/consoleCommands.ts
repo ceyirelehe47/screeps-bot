@@ -83,6 +83,8 @@ import {
   treasuryT1FirstLiveStatus,
 } from "@/runtime/treasuryT1FirstLiveControl";
 
+import { armTreasuryT2FirstLive, heartbeatTreasuryT2FirstLive, closeTreasuryT2FirstLive, treasuryT2FirstLiveStatus } from "@/runtime/treasuryT2FirstLiveControl";
+
 interface SynthesisControlStatusResult {
   ok: true;
   enabled: boolean;
@@ -185,6 +187,10 @@ export function registerConsoleCommands(): void {
   global.hubProgressRaw = hubProgressRaw;
   global.memoryAudit = memoryAudit;
   global.memoryAuditRaw = memoryAuditRaw;
+  global.armTreasuryT2FirstLive = armTreasuryT2FirstLive;
+  global.heartbeatTreasuryT2FirstLive = heartbeatTreasuryT2FirstLive;
+  global.closeTreasuryT2FirstLive = closeTreasuryT2FirstLive;
+  global.treasuryT2FirstLiveStatus = treasuryT2FirstLiveStatus;
   global.armTreasuryT1FirstLive = armTreasuryT1FirstLive;
   global.heartbeatTreasuryT1FirstLive = heartbeatTreasuryT1FirstLive;
   global.closeTreasuryT1FirstLive = closeTreasuryT1FirstLive;

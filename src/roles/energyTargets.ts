@@ -1,3 +1,4 @@
+import { executeTreasuryFencedTerminalCargo } from "@/runtime/treasuryTerminalCargo";
 import {
   getPickupTargetEnergyAmount,
   getReservedPickupTarget,
@@ -284,7 +285,7 @@ export function pickupEnergyFromPreferredTarget(
     return { picked: pickupCode === OK, outOfRange: false };
   }
 
-  const withdrawCode = measureCreepIntent(() => creep.withdraw(sourceTarget, RESOURCE_ENERGY));
+  const withdrawCode = measureCreepIntent(() => executeTreasuryFencedTerminalCargo(sourceTarget, () => creep.withdraw(sourceTarget, RESOURCE_ENERGY)));
   if (withdrawCode === ERR_NOT_IN_RANGE) {
     moveToTarget(creep, sourceTarget, 1, moveOptions);
     return { picked: false, outOfRange: true };

@@ -1,3 +1,5 @@
+import { inspectSynthesisTransferNeed } from "@/runtime/synthesisControl";
+import { validateReservationStoreHealth } from "@/runtime/resourceReservation";
 import {
   listCarrierDispatchEntriesByRoom,
   listCarrierTasksByRoom,
@@ -1006,10 +1008,9 @@ function resolveState(
 
 export function collectResourceControlSnapshots(
   capturedResources?: readonly ResourceConstant[],
+  liveRooms?: readonly Room[],
 ): ResourceControlSnapshot[] {
-  const rooms = getTickContextService()
-    .getMyRooms()
-    .filter((room) => !!room.terminal);
+  const rooms = (liveRooms ?? getTickContextService().getMyRooms()).filter((room) => !!room.terminal);
   const capacityConfig = resolveCapacityConfig();
 
   return rooms.map((room) => {
@@ -2365,6 +2366,11 @@ function applyInternalBalancing(
     .filter(
       (snapshot) => !context.healthyIncomingEnergyRooms.has(snapshot.roomName),
     )
+    .filter((snapshot) => !context.tasks.some((task) => task.fromRoomName === snapshot.roomName &&
+      task.resource === RESOURCE_ENERGY && task.reason === "capacity:relief:energy" &&
+      Number.isSafeInteger(task.remainingAmount) && task.remainingAmount > 0 &&
+      context.snapshotByRoom.has(task.toRoomName) &&
+      isHealthyReceiverCapacityCommitment(task, resolveCapacityConfig().automaticTaskNoProgressTtl)))
     .sort((left, right) => {
       const needDiff =
         (remainingEnergyNeedByRoom.get(right.roomName) || 0) -
@@ -5318,7 +5324,7 @@ function executeTransferTasks(
         if (donor && receiver) {
           applyPostSendDelta(donor, receiver, task.resource, amount, fee);
         } else {
-          actions.push(`treasury-t1-local-snapshot-missing:${task.id}`);
+          actions.push(`treasury-${task.resource === RESOURCE_UTRIUM_HYDRIDE ? "t2" : "t1"}-local-snapshot-missing:${task.id}`);
         }
         // Reserve the accepted work in this tick's shared receiver ledger even
         // if a diagnostic snapshot disappeared after the final API checks.
@@ -5326,11 +5332,11 @@ function executeTransferTasks(
         terminalBusy.add(task.fromRoomName);
         sendBudget.remaining -= 1;
         recordFixedCpuAction("resourceControl");
-        actions.push(`treasury-t1-scheduled:${task.id}:${amount}`);
+        actions.push(`treasury-${task.resource === RESOURCE_UTRIUM_HYDRIDE ? "t2" : "t1"}-scheduled:${task.id}:${amount}`);
       },
     );
     if (treasuryDisposition.handled) {
-      actions.push(`treasury-t1-${treasuryDisposition.status || "held"}:${task.id}`);
+      actions.push(`treasury-${task.resource === RESOURCE_UTRIUM_HYDRIDE ? "t2" : "t1"}-${treasuryDisposition.status || "held"}:${task.id}`);
       continue;
     }
 
@@ -7493,6 +7499,42 @@ function syncTerminalFeedTasks(
     validRoomNames,
   );
   return actions;
+}
+
+/** T2 arm/admission/native 共享同一只读占用口径；仅交还接管切片，余量及费用仍承诺。 */
+export function inspectTreasuryResourceTransferReadiness(task: ResourceTransferTask, amount: number, fee: number, liveLedger?: ReceiverCapacityLedger): {ok: boolean; reason: string} {
+  try {
+    if (!Number.isSafeInteger(amount) || amount < 1 || amount > 100 || amount > task.remainingAmount ||
+        !Number.isSafeInteger(fee) || fee < 0 || fee > 100 || !validateReservationStoreHealth().healthy) return {ok:false,reason:"shared_commitment_invalid"};
+    const demand = inspectSynthesisTransferNeed(task.toRoomName, task.resource, RESOURCE_UTRIUM_ACID, task.id);
+    if (!demand.ok || demand.amount < amount) return {ok:false,reason:demand.reason};
+    const snapshots = collectResourceControlSnapshots(undefined, Object.values(Game.rooms).filter((room) => room.controller?.my === true));
+    const donor = snapshots.find((entry) => entry.roomName === task.fromRoomName);
+    const receiver = snapshots.find((entry) => entry.roomName === task.toRoomName);
+    if (!donor?.storage || !receiver?.storage) return {ok:false,reason:"shared_endpoint_unavailable"};
+    const config = resolveCapacityConfig();
+    const context = createResourceControlTransferContext(snapshots, config, {count:0}, {readonlyCarrierBoard:true});
+    const outgoing = getHealthyOutgoingCommitment(donor.roomName, task.resource, context);
+    const ownHealthy = isHealthyResourceTransferTaskReservation(task,"outgoing");
+    const residualResourceCommitment = Math.max(0,outgoing - (ownHealthy ? amount : 0));
+    const sourceBudget = Math.min(
+      getStock(donor,task.resource) - getProtectedResourceAmount(donor,task.resource,config,context) - residualResourceCommitment,
+      getTerminalResourceAmount(donor,task.resource) - getProductionCommitmentAmount(donor.roomName,task.resource,context) - residualResourceCommitment,
+    );
+    if (!Number.isSafeInteger(sourceBudget) || sourceBudget < amount) return {ok:false,reason:"shared_source_resource_protected"};
+    const ownFee = context.outgoingFeeByTaskId.get(task.id) ?? 0;
+    const remainderFee = ownFee > 0 && task.remainingAmount > amount ? Game.market.calcTransactionCost(task.remainingAmount - amount,task.fromRoomName,task.toRoomName) : 0;
+    const terminalEnergyBudget = donor.terminalEnergy - getProductionCommitmentAmount(donor.roomName,RESOURCE_ENERGY,context) -
+      getHealthyOutgoingCommitment(donor.roomName,RESOURCE_ENERGY,context) - getOutgoingTransactionFeeReserve(donor,context) + ownFee - remainderFee;
+    const energyBudget = Math.min(terminalEnergyBudget, getTerminalActionEnergyBudget(donor,context) + ownFee - remainderFee);
+    if (!Number.isSafeInteger(energyBudget) || energyBudget < fee || donor.terminalEnergy < fee) return {ok:false,reason:"shared_fee_energy_protected"};
+    if (!canTerminalSendPreserveMarketSaleExposure(donor.terminal,task.resource,amount,fee)) return {ok:false,reason:"shared_market_exposure_protected"};
+    const ledger = liveLedger ?? context.receiverCapacityLedger;
+    const capacity = ledger.getAvailableAmount(receiver.roomName,task.resource,task.id) - Math.max(0,task.remainingAmount-amount);
+    const cargoCapacity = getLocalCarrierDestinationCommittedAmount(receiver.terminal.id);
+    if (!Number.isSafeInteger(capacity) || capacity - cargoCapacity < amount) return {ok:false,reason:"shared_receiver_capacity_protected"};
+    return {ok:true,reason:"shared_ready"};
+  } catch { return {ok:false,reason:"shared_commitment_unreadable"}; }
 }
 
 export function getResourceControlDonorAvailable(

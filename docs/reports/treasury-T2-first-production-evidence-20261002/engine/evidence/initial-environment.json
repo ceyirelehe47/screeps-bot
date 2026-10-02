@@ -1,0 +1,335 @@
+{
+  "schema": "screeps-t2-lab-environment/v1",
+  "capturedAtUtc": "2026-10-02T10:12:59.404Z",
+  "isolatedWorldOnly": true,
+  "root": "/srv/screeps-treasury-t1",
+  "run": "/srv/screeps-treasury-t1/r6-t2-20261002",
+  "userId": "7dad41a4bfc9d96",
+  "username": "forster",
+  "node": "v22.22.1",
+  "packages": [
+    {
+      "name": "screeps",
+      "version": "4.3.0"
+    },
+    {
+      "name": "@screeps/engine",
+      "version": "4.3.0"
+    },
+    {
+      "name": "@screeps/common",
+      "version": "2.16.0"
+    }
+  ],
+  "tick": 756,
+  "paused": true,
+  "code": {
+    "sha256": "1bf02d8415f552239dd034865c4e62d5c6a00a978af36f78b64640ea05f6f061",
+    "bytes": 3285061
+  },
+  "previousT1": {
+    "control": {
+      "schemaVersion": 1,
+      "runId": "treasury-t1-first-live-2026-09-27",
+      "status": "closed",
+      "startedAtTick": 716,
+      "deadlineTick": 1316,
+      "startedAtMs": 1790929297938,
+      "deadlineMs": 1790931097938,
+      "lastHeartbeatAtMs": 1790929297938,
+      "controlUntilMs": 1790929357938,
+      "taskId": "lab-exit-c2-H",
+      "taskCreatedAt": 716,
+      "taskAmount": 100,
+      "taskRemainingAtArm": 100,
+      "sourceTerminalId": "a67d41dd18b97eb",
+      "targetTerminalId": "370f41dd18e91de",
+      "deployTag": "2026.10.2-1+447ab5c@2026-10-02T06:10:35.260Z",
+      "deployBundleHash": "31d7862330a31f620544e07482933253e658806373f42def32ab51f27665c955",
+      "closeReason": "native_attempt",
+      "hash": "csh1:f13071e8dd82088783d3f4965ecd633b"
+    },
+    "quota": {
+      "schemaVersion": 2,
+      "runId": "treasury-production-T1-2026-09-24",
+      "status": "drained",
+      "taskId": "lab-exit-c2-H",
+      "taskCreatedAt": 716,
+      "taskAmount": 100,
+      "workKey": "biz:treasury-production-T1-2026-09-24:fe69fe6671db25fc",
+      "attemptId": "tk1_1_9992ef348b720174",
+      "amount": 100,
+      "reservedAtTick": 730
+    },
+    "activeCount": 0
+  },
+  "objects": [
+    {
+      "room": "W9N8",
+      "type": "controller",
+      "x": 26,
+      "y": 36,
+      "level": 8,
+      "_id": "7c8d07718c78e1f",
+      "meta": {
+        "revision": 1,
+        "created": 1477476554951,
+        "version": 0,
+        "updated": 1790491791095
+      },
+      "$loki": 5,
+      "user": "7dad41a4bfc9d96",
+      "progress": 0,
+      "downgradeTime": 200559,
+      "safeMode": null
+    },
+    {
+      "room": "W8N8",
+      "type": "controller",
+      "x": 5,
+      "y": 21,
+      "level": 8,
+      "_id": "34ae07720e89057",
+      "meta": {
+        "revision": 1,
+        "created": 1477476557032,
+        "version": 0,
+        "updated": 1790925166280
+      },
+      "$loki": 27,
+      "user": "7dad41a4bfc9d96",
+      "progress": 0,
+      "downgradeTime": 200677,
+      "safeMode": null
+    },
+    {
+      "room": "E3N59",
+      "type": "controller",
+      "x": 33,
+      "y": 34,
+      "level": 8,
+      "_id": "cfbb41a9984f364",
+      "meta": {
+        "revision": 1,
+        "created": 1790264908164,
+        "version": 0,
+        "updated": 1790265119114
+      },
+      "$loki": 371,
+      "user": "7dad41a4bfc9d96",
+      "progress": 0,
+      "downgradeTime": 200187,
+      "safeMode": null
+    },
+    {
+      "room": "E4N58",
+      "type": "controller",
+      "x": 17,
+      "y": 28,
+      "level": 8,
+      "_id": "e35341ac1ac4787",
+      "meta": {
+        "revision": 1,
+        "created": 1790264918444,
+        "version": 0,
+        "updated": 1790265119117
+      },
+      "$loki": 372,
+      "user": "7dad41a4bfc9d96",
+      "progress": 0,
+      "downgradeTime": 200187,
+      "safeMode": null
+    },
+    {
+      "type": "terminal",
+      "room": "E3N59",
+      "x": 25,
+      "y": 25,
+      "user": "7dad41a4bfc9d96",
+      "store": {
+        "H": 500,
+        "energy": 9996
+      },
+      "storeCapacity": 300000,
+      "cooldown": 0,
+      "hits": 3000,
+      "hitsMax": 3000,
+      "notifyWhenAttacked": false,
+      "_id": "a67d41dd18b97eb",
+      "meta": {
+        "revision": 46,
+        "created": 1790265119115,
+        "version": 0,
+        "updated": 1790929320949
+      },
+      "$loki": 374,
+      "send": null,
+      "cooldownTime": 740
+    },
+    {
+      "type": "storage",
+      "room": "E3N59",
+      "x": 26,
+      "y": 25,
+      "user": "7dad41a4bfc9d96",
+      "store": {
+        "energy": 100000
+      },
+      "storeCapacity": 1000000,
+      "hits": 10000,
+      "hitsMax": 10000,
+      "notifyWhenAttacked": false,
+      "_id": "702141dd18c0a7a",
+      "meta": {
+        "revision": 0,
+        "created": 1790265119116,
+        "version": 0
+      },
+      "$loki": 375
+    },
+    {
+      "type": "terminal",
+      "room": "E4N58",
+      "x": 25,
+      "y": 25,
+      "user": "7dad41a4bfc9d96",
+      "store": {
+        "H": 1200,
+        "energy": 2900
+      },
+      "storeCapacity": 300000,
+      "cooldown": 0,
+      "hits": 3000,
+      "hitsMax": 3000,
+      "notifyWhenAttacked": false,
+      "_id": "370f41dd18e91de",
+      "meta": {
+        "revision": 92,
+        "created": 1790265119118,
+        "version": 0,
+        "updated": 1790929447885
+      },
+      "$loki": 376,
+      "cooldownTime": 716,
+      "store.H": 1101
+    },
+    {
+      "type": "storage",
+      "room": "E4N58",
+      "x": 26,
+      "y": 25,
+      "user": "7dad41a4bfc9d96",
+      "store": {
+        "energy": 97050
+      },
+      "storeCapacity": 1000000,
+      "hits": 10000,
+      "hitsMax": 10000,
+      "notifyWhenAttacked": false,
+      "_id": "d7dc41dd18efd58",
+      "meta": {
+        "revision": 81,
+        "created": 1790265119118,
+        "version": 0,
+        "updated": 1790929448953
+      },
+      "$loki": 377
+    },
+    {
+      "type": "terminal",
+      "room": "W9N8",
+      "x": 25,
+      "y": 25,
+      "user": "7dad41a4bfc9d96",
+      "store": {
+        "H": 400,
+        "energy": 9964
+      },
+      "storeCapacity": 300000,
+      "cooldown": 0,
+      "hits": 3000,
+      "hitsMax": 3000,
+      "notifyWhenAttacked": false,
+      "send": null,
+      "cooldownTime": 730,
+      "_id": "305d1a08ef8a17d",
+      "meta": {
+        "revision": 27,
+        "created": 1790491791096,
+        "version": 0,
+        "updated": 1790929304479
+      },
+      "$loki": 444
+    },
+    {
+      "type": "storage",
+      "room": "W9N8",
+      "x": 26,
+      "y": 25,
+      "user": "7dad41a4bfc9d96",
+      "store": {
+        "H": 1000,
+        "energy": 100000
+      },
+      "storeCapacity": 1000000,
+      "hits": 10000,
+      "hitsMax": 10000,
+      "notifyWhenAttacked": false,
+      "_id": "bf0c1a08efaebb6",
+      "meta": {
+        "revision": 0,
+        "created": 1790491791099,
+        "version": 0
+      },
+      "$loki": 445
+    },
+    {
+      "type": "terminal",
+      "room": "W8N8",
+      "x": 25,
+      "y": 25,
+      "user": "7dad41a4bfc9d96",
+      "store": {
+        "H": 900,
+        "energy": 9928
+      },
+      "storeCapacity": 300000,
+      "cooldown": 0,
+      "hits": 3000,
+      "hitsMax": 3000,
+      "notifyWhenAttacked": false,
+      "send": null,
+      "cooldownTime": 735,
+      "_id": "fcf6b7556c9e0a5",
+      "meta": {
+        "revision": 5,
+        "created": 1790925166281,
+        "version": 0,
+        "updated": 1790929312017
+      },
+      "$loki": 449
+    },
+    {
+      "type": "storage",
+      "room": "W8N8",
+      "x": 26,
+      "y": 25,
+      "user": "7dad41a4bfc9d96",
+      "store": {
+        "H": 1000,
+        "energy": 100000
+      },
+      "storeCapacity": 1000000,
+      "hits": 10000,
+      "hitsMax": 10000,
+      "notifyWhenAttacked": false,
+      "_id": "12dab7556ca8f3a",
+      "meta": {
+        "revision": 0,
+        "created": 1790925166282,
+        "version": 0
+      },
+      "$loki": 450
+    }
+  ]
+}

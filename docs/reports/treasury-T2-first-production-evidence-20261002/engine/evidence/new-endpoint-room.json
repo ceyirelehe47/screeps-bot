@@ -1,0 +1,11 @@
+{
+  "schema": "screeps-t2-lab-room/v1",
+  "isolatedWorldOnly": true,
+  "tick": 756,
+  "room": "E1N57",
+  "ownerUserId": "7dad41a4bfc9d96",
+  "controllerId": "e43ec1b0287c1a7",
+  "terminalId": "5ca4c1b028a9b3b",
+  "storageId": "a252c1b028c5660",
+  "terrainSource": "E4N58"
+}

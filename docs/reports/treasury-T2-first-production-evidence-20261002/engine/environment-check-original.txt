@@ -1,0 +1,18 @@
+Id=screeps-treasury-t1.service
+ActiveState=active
+SubState=running
+ExecStart={ path=/srv/screeps-treasury-t1/r4/start-uts.sh ; argv[]=/srv/screeps-treasury-t1/r4/start-uts.sh ; ignore_errors=no ; start_time=[Fri 2026-10-02 18:09:47 CST] ; stop_time=[n/a] ; pid=3433016 ; code=(null) ; status=0/0 }
+WorkingDirectory=/srv/screeps-treasury-t1/server
+Id=dsh.service
+ActiveState=active
+SubState=running
+
+Id=nginx.service
+ActiveState=active
+SubState=running
+LISTEN 0      511        127.0.0.1:21026      0.0.0.0:*    users:(("node",pid=3433042,fd=22))                                                    
+LISTEN 0      511        127.0.0.1:21025      0.0.0.0:*    users:(("node",pid=3433042,fd=25))                                                    
+LISTEN 0      511            [::1]:21027         [::]:*    users:(("node",pid=3433030,fd=22))                                                    
+d47abf3a20a0ba894f1413f63f2532a5b079bba941a04f7f51114aeb95a14a0b  /srv/screeps-treasury-t1/r6-t2-20261002/db-before.json
+-rw-r--r-- 1 root       root       4165154 Oct  2 15:18 /srv/screeps-treasury-t1/r5-exit-20261002/db-before-unknown-restart.json
+-rw-r--r-- 1 screepslab screepslab 4855379 Oct  2 14:09 /srv/screeps-treasury-t1/r5-exit-20261002/db-before.json

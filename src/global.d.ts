@@ -55,6 +55,10 @@ declare global {
   const __BUILD_DEPLOY_BRANCH__: string;
 
   var creepApi: CreepApi;
+  var armTreasuryT2FirstLive: typeof import("@/runtime/treasuryT2FirstLiveControl").armTreasuryT2FirstLive;
+  var heartbeatTreasuryT2FirstLive: typeof import("@/runtime/treasuryT2FirstLiveControl").heartbeatTreasuryT2FirstLive;
+  var closeTreasuryT2FirstLive: typeof import("@/runtime/treasuryT2FirstLiveControl").closeTreasuryT2FirstLive;
+  var treasuryT2FirstLiveStatus: typeof import("@/runtime/treasuryT2FirstLiveControl").treasuryT2FirstLiveStatus;
   var armTreasuryT1FirstLive:
     typeof import("@/runtime/treasuryT1FirstLiveControl").armTreasuryT1FirstLive;
   var heartbeatTreasuryT1FirstLive:

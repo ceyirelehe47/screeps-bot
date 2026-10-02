@@ -1,0 +1,492 @@
+{
+  "schema": "treasury-t2-current-demand-verification/v1",
+  "inputSha256": {
+    "preflight": "5ca823adb337c112c74f61e2a03b3a7dc6648521a77d36847bfe4b5186358589",
+    "game": "3318c635c82ef13cd2a7f9921d202e76c5b781eb9c07444d40b844cd867613cf"
+  },
+  "tick": 74077911,
+  "shard": "shard1",
+  "currentProduct": "UH2O",
+  "configuredTargetAmount": 2385,
+  "configuredBatchSize": 2215,
+  "productInLabs": 1885,
+  "productDeficit": 500,
+  "desiredReagentAmount": 500,
+  "reagentUHInLabs": 500,
+  "reagentOHInLabs": 3,
+  "actualUHMissingBeforeOtherCoverage": 0,
+  "actualOHMissingBeforeOtherCoverage": 497,
+  "businessGate": "blocked_no_actual_UH_need",
+  "sourceTerminal": {
+    "id": "69fc583c60d86221e8bdf547",
+    "owner": "forster",
+    "active": true,
+    "cooldown": 9,
+    "free": 105788
+  },
+  "targetTerminal": {
+    "id": "69fe4e87e810942b688bb6f1",
+    "owner": "forster",
+    "active": true,
+    "cooldown": 0,
+    "free": 59849
+  },
+  "recentAutomaticEnergySourceWindow": {
+    "transactionCount": 15,
+    "amount": 122586,
+    "firstTick": 74077770,
+    "lastTick": 74077910,
+    "tickIntervals": [
+      10
+    ],
+    "transactions": [
+      {
+        "time": 74077770,
+        "sender": {
+          "username": "forster"
+        },
+        "recipient": {
+          "username": "forster"
+        },
+        "resourceType": "energy",
+        "amount": 8083,
+        "from": "E4N58",
+        "to": "E3N59",
+        "description": "resourceControl:auto-balance",
+        "transactionId": "6abf824f3cc45e001393f1f2"
+      },
+      {
+        "time": 74077780,
+        "sender": {
+          "username": "forster"
+        },
+        "recipient": {
+          "username": "forster"
+        },
+        "resourceType": "energy",
+        "amount": 7847,
+        "from": "E4N58",
+        "to": "E3N59",
+        "description": "resourceControl:auto-balance",
+        "transactionId": "6abf82783cc45e001393fccb"
+      },
+      {
+        "time": 74077790,
+        "sender": {
+          "username": "forster"
+        },
+        "recipient": {
+          "username": "forster"
+        },
+        "resourceType": "energy",
+        "amount": 8083,
+        "from": "E4N58",
+        "to": "E3N59",
+        "description": "resourceControl:auto-balance",
+        "transactionId": "6abf82a13cc45e0013940780"
+      },
+      {
+        "time": 74077800,
+        "sender": {
+          "username": "forster"
+        },
+        "recipient": {
+          "username": "forster"
+        },
+        "resourceType": "energy",
+        "amount": 9433,
+        "from": "E4N58",
+        "to": "E3N59",
+        "description": "resourceControl:auto-balance",
+        "transactionId": "6abf82cb3cc45e0013941274"
+      },
+      {
+        "time": 74077810,
+        "sender": {
+          "username": "forster"
+        },
+        "recipient": {
+          "username": "forster"
+        },
+        "resourceType": "energy",
+        "amount": 9433,
+        "from": "E4N58",
+        "to": "E3N59",
+        "description": "resourceControl:auto-balance",
+        "transactionId": "6abf82f53cc45e0013941d31"
+      },
+      {
+        "time": 74077820,
+        "sender": {
+          "username": "forster"
+        },
+        "recipient": {
+          "username": "forster"
+        },
+        "resourceType": "energy",
+        "amount": 8021,
+        "from": "E4N58",
+        "to": "E3N59",
+        "description": "resourceControl:auto-balance",
+        "transactionId": "6abf83203cc45e00139427f2"
+      },
+      {
+        "time": 74077830,
+        "sender": {
+          "username": "forster"
+        },
+        "recipient": {
+          "username": "forster"
+        },
+        "resourceType": "energy",
+        "amount": 10000,
+        "from": "E4N58",
+        "to": "E3N59",
+        "description": "resourceControl:auto-balance",
+        "transactionId": "6abf834b3cc45e00139432b8"
+      },
+      {
+        "time": 74077840,
+        "sender": {
+          "username": "forster"
+        },
+        "recipient": {
+          "username": "forster"
+        },
+        "resourceType": "energy",
+        "amount": 6680,
+        "from": "E4N58",
+        "to": "E3N59",
+        "description": "resourceControl:auto-balance",
+        "transactionId": "6abf83743cc45e0013943d5a"
+      },
+      {
+        "time": 74077850,
+        "sender": {
+          "username": "forster"
+        },
+        "recipient": {
+          "username": "forster"
+        },
+        "resourceType": "energy",
+        "amount": 10000,
+        "from": "E4N58",
+        "to": "E3N59",
+        "description": "resourceControl:auto-balance",
+        "transactionId": "6abf839e3cc45e0013944813"
+      },
+      {
+        "time": 74077860,
+        "sender": {
+          "username": "forster"
+        },
+        "recipient": {
+          "username": "forster"
+        },
+        "resourceType": "energy",
+        "amount": 4176,
+        "from": "E4N58",
+        "to": "E3N59",
+        "description": "resourceControl:auto-balance",
+        "transactionId": "6abf83c83cc45e00139452dd"
+      },
+      {
+        "time": 74077870,
+        "sender": {
+          "username": "forster"
+        },
+        "recipient": {
+          "username": "forster"
+        },
+        "resourceType": "energy",
+        "amount": 9119,
+        "from": "E4N58",
+        "to": "E3N59",
+        "description": "resourceControl:auto-balance",
+        "transactionId": "6abf83f13cc45e0013945d9a"
+      },
+      {
+        "time": 74077880,
+        "sender": {
+          "username": "forster"
+        },
+        "recipient": {
+          "username": "forster"
+        },
+        "resourceType": "energy",
+        "amount": 6142,
+        "from": "E4N58",
+        "to": "E3N59",
+        "description": "resourceControl:auto-balance",
+        "transactionId": "6abf841a3cc45e001394687a"
+      },
+      {
+        "time": 74077890,
+        "sender": {
+          "username": "forster"
+        },
+        "recipient": {
+          "username": "forster"
+        },
+        "resourceType": "energy",
+        "amount": 8731,
+        "from": "E4N58",
+        "to": "E3N59",
+        "description": "resourceControl:auto-balance",
+        "transactionId": "6abf84453cc45e0013947337"
+      },
+      {
+        "time": 74077900,
+        "sender": {
+          "username": "forster"
+        },
+        "recipient": {
+          "username": "forster"
+        },
+        "resourceType": "energy",
+        "amount": 8107,
+        "from": "E4N58",
+        "to": "E3N59",
+        "description": "resourceControl:auto-balance",
+        "transactionId": "6abf846e3cc45e0013947e02"
+      },
+      {
+        "time": 74077910,
+        "sender": {
+          "username": "forster"
+        },
+        "recipient": {
+          "username": "forster"
+        },
+        "resourceType": "energy",
+        "amount": 8731,
+        "from": "E4N58",
+        "to": "E3N59",
+        "description": "resourceControl:auto-balance",
+        "transactionId": "6abf84973cc45e00139488c4"
+      }
+    ]
+  },
+  "recentOpposingEnergyRelief": {
+    "transactionCount": 14,
+    "amount": 111037,
+    "transactions": [
+      {
+        "time": 74077780,
+        "sender": {
+          "username": "forster"
+        },
+        "recipient": {
+          "username": "forster"
+        },
+        "resourceType": "energy",
+        "amount": 10000,
+        "from": "E3N59",
+        "to": "E4N58",
+        "description": "resourceControl:task:74077780:1:energy:E3N59->E4N58",
+        "transactionId": "6abf82783cc45e001393fccc"
+      },
+      {
+        "time": 74077790,
+        "sender": {
+          "username": "forster"
+        },
+        "recipient": {
+          "username": "forster"
+        },
+        "resourceType": "energy",
+        "amount": 6951,
+        "from": "E3N59",
+        "to": "E4N58",
+        "description": "resourceControl:task:74077780:1:energy:E3N59->E4N58",
+        "transactionId": "6abf82a13cc45e0013940781"
+      },
+      {
+        "time": 74077800,
+        "sender": {
+          "username": "forster"
+        },
+        "recipient": {
+          "username": "forster"
+        },
+        "resourceType": "energy",
+        "amount": 10000,
+        "from": "E3N59",
+        "to": "E4N58",
+        "description": "resourceControl:task:74077800:1:energy:E3N59->E4N58",
+        "transactionId": "6abf82cb3cc45e0013941275"
+      },
+      {
+        "time": 74077810,
+        "sender": {
+          "username": "forster"
+        },
+        "recipient": {
+          "username": "forster"
+        },
+        "resourceType": "energy",
+        "amount": 5601,
+        "from": "E3N59",
+        "to": "E4N58",
+        "description": "resourceControl:task:74077800:1:energy:E3N59->E4N58",
+        "transactionId": "6abf82f53cc45e0013941d32"
+      },
+      {
+        "time": 74077820,
+        "sender": {
+          "username": "forster"
+        },
+        "recipient": {
+          "username": "forster"
+        },
+        "resourceType": "energy",
+        "amount": 10000,
+        "from": "E3N59",
+        "to": "E4N58",
+        "description": "resourceControl:task:74077820:1:energy:E3N59->E4N58",
+        "transactionId": "6abf83203cc45e00139427f3"
+      },
+      {
+        "time": 74077830,
+        "sender": {
+          "username": "forster"
+        },
+        "recipient": {
+          "username": "forster"
+        },
+        "resourceType": "energy",
+        "amount": 5601,
+        "from": "E3N59",
+        "to": "E4N58",
+        "description": "resourceControl:task:74077820:1:energy:E3N59->E4N58",
+        "transactionId": "6abf834b3cc45e00139432b9"
+      },
+      {
+        "time": 74077840,
+        "sender": {
+          "username": "forster"
+        },
+        "recipient": {
+          "username": "forster"
+        },
+        "resourceType": "energy",
+        "amount": 10000,
+        "from": "E3N59",
+        "to": "E4N58",
+        "description": "resourceControl:task:74077840:1:energy:E3N59->E4N58",
+        "transactionId": "6abf83743cc45e0013943d5b"
+      },
+      {
+        "time": 74077850,
+        "sender": {
+          "username": "forster"
+        },
+        "recipient": {
+          "username": "forster"
+        },
+        "resourceType": "energy",
+        "amount": 4751,
+        "from": "E3N59",
+        "to": "E4N58",
+        "description": "resourceControl:task:74077840:1:energy:E3N59->E4N58",
+        "transactionId": "6abf839e3cc45e0013944814"
+      },
+      {
+        "time": 74077860,
+        "sender": {
+          "username": "forster"
+        },
+        "recipient": {
+          "username": "forster"
+        },
+        "resourceType": "energy",
+        "amount": 10000,
+        "from": "E3N59",
+        "to": "E4N58",
+        "description": "resourceControl:task:74077860:1:energy:E3N59->E4N58",
+        "transactionId": "6abf83c83cc45e00139452de"
+      },
+      {
+        "time": 74077870,
+        "sender": {
+          "username": "forster"
+        },
+        "recipient": {
+          "username": "forster"
+        },
+        "resourceType": "energy",
+        "amount": 5527,
+        "from": "E3N59",
+        "to": "E4N58",
+        "description": "resourceControl:task:74077860:1:energy:E3N59->E4N58",
+        "transactionId": "6abf83f13cc45e0013945d9b"
+      },
+      {
+        "time": 74077880,
+        "sender": {
+          "username": "forster"
+        },
+        "recipient": {
+          "username": "forster"
+        },
+        "resourceType": "energy",
+        "amount": 10000,
+        "from": "E3N59",
+        "to": "E4N58",
+        "description": "resourceControl:task:74077880:1:energy:E3N59->E4N58",
+        "transactionId": "6abf841a3cc45e001394687b"
+      },
+      {
+        "time": 74077890,
+        "sender": {
+          "username": "forster"
+        },
+        "recipient": {
+          "username": "forster"
+        },
+        "resourceType": "energy",
+        "amount": 6303,
+        "from": "E3N59",
+        "to": "E4N58",
+        "description": "resourceControl:task:74077880:1:energy:E3N59->E4N58",
+        "transactionId": "6abf84453cc45e0013947338"
+      },
+      {
+        "time": 74077900,
+        "sender": {
+          "username": "forster"
+        },
+        "recipient": {
+          "username": "forster"
+        },
+        "resourceType": "energy",
+        "amount": 10000,
+        "from": "E3N59",
+        "to": "E4N58",
+        "description": "resourceControl:task:74077900:1:energy:E3N59->E4N58",
+        "transactionId": "6abf846e3cc45e0013947e03"
+      },
+      {
+        "time": 74077910,
+        "sender": {
+          "username": "forster"
+        },
+        "recipient": {
+          "username": "forster"
+        },
+        "resourceType": "energy",
+        "amount": 6303,
+        "from": "E3N59",
+        "to": "E4N58",
+        "description": "resourceControl:task:74077900:1:energy:E3N59->E4N58",
+        "transactionId": "6abf84973cc45e00139488c5"
+      }
+    ]
+  },
+  "recentUHTransactionCount": 0,
+  "limits": [
+    "Game labs和terminal为tick74077911同tick实物；配置及Storage/Factory零库存取自本轮较早preflight。",
+    "未读取有效accepted cargo；额外覆盖只会降低UH补料缺口，本次UH缺口已经为0。",
+    "近40条交易去重后的观测窗口只覆盖74077770至74077910，不能追溯原任务全部历史。"
+  ]
+}

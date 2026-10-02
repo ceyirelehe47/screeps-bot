@@ -496,6 +496,39 @@ function roomResourceAmount(room: Room, resource: ResourceConstant): number {
   return total;
 }
 
+/** 只读复用真实合成目标：跨房补料不能仍按已被产品现货覆盖的整batch授权。 */
+export function inspectSynthesisTransferNeed(roomName: string, resource: ResourceConstant, product: ResourceConstant, excludeTaskId: string): {ok: boolean; amount: number; reason: string} {
+  try {
+    const cfg = normalizeConfig(); const roomCfg = cfg.rooms[roomName];
+    const room = Game.rooms[roomName]; const state = Memory.runtime?.synthesisControl?.rooms?.[roomName];
+    if (!cfg.enabled || !roomCfg?.enabled || !room?.controller?.my || !state || state.activeProduct !== product ||
+        !["acquiring","loading","synthesizing"].includes(state.stage) || state.boostPause !== undefined) {
+      return {ok:false,amount:0,reason:"synthesis_demand_inactive"};
+    }
+    const plan = roomCfg.reactions.find((entry) => entry.product === product && entry.targetAmount === state.targetAmount && entry.batchSize === state.batchSize);
+    const active = plan;
+    if (!active || !Number.isSafeInteger(active.targetAmount) || !Number.isSafeInteger(active.batchSize) ||
+        active.targetAmount !== state.targetAmount || active.batchSize !== state.batchSize || active.batchSize < 1 ||
+        !getProductReagents(product)?.includes(resource)) return {ok:false,amount:0,reason:"synthesis_plan_identity_changed"};
+    const productDeficit = Math.max(0, active.targetAmount - roomResourceAmount(room, product));
+    const required = Math.min(active.batchSize, roundUpReactionAmount(productDeficit));
+    let covered = roomResourceAmount(room, resource);
+    for (const creep of Object.values(Game.creeps)) {
+      const cargo = creep.memory as unknown as {room?: string; home?: string; synthesisCarrierPendingResource?: ResourceConstant; synthesisCarrierPendingToId?: string};
+      const assignment = getCreepAssignmentState(creep.name);
+      const targetId = assignment?.synthesisCarrierPendingToId ?? cargo.synthesisCarrierPendingToId;
+      const target = targetId ? Game.getObjectById(targetId as Id<AnyStoreStructure>) : null;
+      if (creep.room?.name === roomName || target?.room?.name === roomName) covered += creep.store.getUsedCapacity(resource);
+    }
+    for (const task of Object.values(Memory.data?.resourceControl?.tasks ?? {})) {
+      if (task.id !== excludeTaskId && task.toRoomName === roomName && task.resource === resource &&
+          countsResourceTransferTaskTowardDemand(task as ResourceTransferTask, resolveResourceTransferTaskHealthOptions())) covered += task.remainingAmount;
+    }
+    const amount = Math.max(0, required - covered);
+    return {ok:amount > 0,amount,reason:amount > 0 ? "synthesis_need_confirmed" : "synthesis_need_already_covered"};
+  } catch { return {ok:false,amount:0,reason:"synthesis_demand_unreadable"}; }
+}
+
 function roomTransferableAmount(room: Room, resource: ResourceConstant): number {
   let total = 0;
   if (room.storage) {

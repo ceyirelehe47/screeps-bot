@@ -1,0 +1,19 @@
+{
+  "ok": 1,
+  "result": {
+    "ok": 1,
+    "n": 1
+  },
+  "ops": [
+    {
+      "user": "634fe406347a7b69b28aeccb",
+      "expression": "(()=>{if(Game.shard.name!=='shard1'||Memory.__codexTreasuryT2Result!==undefined)throw Error('guard');const r=Memory.__codexTreasuryT2Result={marker:\"a0a26610-bec4-480b-84e2-3bf50b4fad70\",action:\"inspect\",status:'executing'};try{r.result=({tick:Game.time,shard:Game.shard.name,ms:Date.now(),rooms:['E4N58','E1N57'].map(r=>{const t=Game.rooms[r].terminal;return {room:r,id:t.id,owner:t.owner.username,active:t.isActive(),cooldown:t.cooldown,store:t.store,free:t.store.getFreeCapacity()}}),labs:Game.rooms.E1N57.find(FIND_MY_STRUCTURES).filter(s=>s.structureType===STRUCTURE_LAB).map(s=>({id:s.id,store:s.store})),incoming:Game.market.incomingTransactions.slice(0,40),outgoing:Game.market.outgoingTransactions.slice(0,40)});r.status='returned'}catch(e){r.status='threw';r.error=String(e)}return r.status})()",
+      "shard": "shard1",
+      "_id": "6abf84944086a30013ed0e34"
+    }
+  ],
+  "insertedCount": 1,
+  "insertedIds": [
+    "6abf84944086a30013ed0e34"
+  ]
+}

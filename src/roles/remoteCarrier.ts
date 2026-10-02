@@ -1,3 +1,4 @@
+import { executeTreasuryFencedTerminalCargo, isTerminalCargoBlocked } from "@/runtime/treasuryTerminalCargo";
 import { moveToTarget, moveToTargetRoom } from "@/roles/shared";
 import { measureCreepDecision, measureCreepIntent } from "@/runtime/cpuPhaseProfiler";
 import { hasTerminalActionClaim } from "@/runtime/marketActionArbiter";
@@ -250,7 +251,7 @@ export const remoteCarrierRole: RoleFactory = (targetRoom: string, targetX?: str
         }
 
         const roomName = assignment.target.room?.name || creep.room.name;
-        if (hasTerminalActionClaim(roomName)) return ERR_BUSY;
+        if (hasTerminalActionClaim(roomName) || isTerminalCargoBlocked(assignment.target)) return ERR_BUSY;
         const requestedAmount = Math.min(
           creep.store.getFreeCapacity(assignment.resource) ?? 0,
           getAvailableResourceAmount(
@@ -266,11 +267,11 @@ export const remoteCarrierRole: RoleFactory = (targetRoom: string, targetX?: str
           roomName,
         ) || undefined;
         if (!exposureClaim) return ERR_NOT_ENOUGH_RESOURCES;
-        return creep.withdraw(
+        return executeTreasuryFencedTerminalCargo(assignment.target, () => creep.withdraw(
           assignment.target,
           assignment.resource,
           exposureClaim.amount,
-        );
+        ));
       });
     } catch (error) {
       exposureClaim?.release();
@@ -304,7 +305,7 @@ export const remoteCarrierRole: RoleFactory = (targetRoom: string, targetX?: str
       return false;
     }
 
-    const code = measureCreepIntent(() => creep.transfer(target, resource));
+    const code = measureCreepIntent(() => executeTreasuryFencedTerminalCargo(target, () => creep.transfer(target, resource)));
     if (code === ERR_NOT_IN_RANGE) {
       moveToTarget(creep, target);
       return false;

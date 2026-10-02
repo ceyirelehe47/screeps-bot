@@ -1,0 +1,10 @@
+--- current-final/src/runtime/treasuryTerminalTransfer.ts
++++ isolated-reconstruction/src/runtime/treasuryTerminalTransfer.ts
+@@ -53,7 +53,6 @@
+       if (ensureReservationSchemaActivated().status === "rejected") return false;
+       const service = getTreasuryService();
+       // 在kernel跨tick清理pending之前，先绑定原attempt并确认两lane task-side取消事实。
+-      if (!t1.prepareRecovery(service) || !t2.prepareRecovery(service)) return false;
+       service.beginTick(); t1.recover(service); t2.recover(service);
+       recoveryOnlyService = service; return true;
+     } catch { return false; }

@@ -1,0 +1,47 @@
+
+> screeps@2026.10.2-1 test
+> jest --config jest.config.cjs --runInBand src/runtime/treasuryT2Binding.red.test.ts
+
+FAIL src/runtime/treasuryT2Binding.red.test.ts
+  T2 UH formal-path preimplementation counterexamples
+    ✕ registers a separate UH action contract on the production registry (1 ms)
+    ✕ offers a durable T2 binding entry instead of authorizing UH through the H grant (1 ms)
+
+  ● T2 UH formal-path preimplementation counterexamples › registers a separate UH action contract on the production registry
+
+    expect(received).toBeDefined()
+
+    Received: undefined
+
+       5 |   it("registers a separate UH action contract on the production registry", () => {
+       6 |     registerTreasuryProductionTerminalTransfer();
+    >  7 |     expect(findTreasuryActionAdapter("production.terminal-transfer.uh-synthesis.slice0")).toBeDefined();
+         |                                                                                           ^
+       8 |   });
+       9 |
+      10 |   it("offers a durable T2 binding entry instead of authorizing UH through the H grant", () => {
+
+      at Object.<anonymous> (src/runtime/treasuryT2Binding.red.test.ts:7:91)
+
+  ● T2 UH formal-path preimplementation counterexamples › offers a durable T2 binding entry instead of authorizing UH through the H grant
+
+    expect(received).toEqual(expected) // deep equality
+
+    Expected: Any<Function>
+    Received: undefined
+
+      12 |     try { control = require("@/runtime/treasuryT2FirstLiveControl") as Record<string, unknown>; }
+      13 |     catch { /* Baseline has no UH authority. Preserve the semantic assertion. */ }
+    > 14 |     expect(control.armTreasuryT2FirstLive).toEqual(expect.any(Function));
+         |                                            ^
+      15 |   });
+      16 | });
+      17 |
+
+      at Object.<anonymous> (src/runtime/treasuryT2Binding.red.test.ts:14:44)
+
+Test Suites: 1 failed, 1 total
+Tests:       2 failed, 2 total
+Snapshots:   0 total
+Time:        1.099 s, estimated 2 s
+Ran all test suites matching /src\/runtime\/treasuryT2Binding.red.test.ts/i.

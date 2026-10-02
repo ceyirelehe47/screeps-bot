@@ -1,0 +1,2 @@
+const base = require('/Users/forst/.codex/worktrees/treasury-t2-first-production/screeps/jest.config.cjs');
+module.exports = { ...base, rootDir: '/Users/forst/.codex/worktrees/treasury-t2-first-production/screeps', moduleNameMapper: { '^@/runtime/resourceControl$': '/tmp/treasury-energy-relief-regression/resourceControl.balance-baseline.ts', ...base.moduleNameMapper } };

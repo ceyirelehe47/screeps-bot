@@ -1,0 +1,82 @@
+{
+  "isolatedWorldOnly": true,
+  "tick": 756,
+  "room": "E1N57",
+  "labs": [
+    {
+      "type": "lab",
+      "room": "E1N57",
+      "user": "7dad41a4bfc9d96",
+      "x": 25,
+      "y": 27,
+      "store": {
+        "energy": 2000
+      },
+      "storeCapacity": 5000,
+      "storeCapacityResource": {
+        "energy": 2000
+      },
+      "hits": 500,
+      "hitsMax": 500,
+      "cooldownTime": 756,
+      "notifyWhenAttacked": false,
+      "_id": "907ec1ebdfae530",
+      "meta": {
+        "revision": 0,
+        "created": 1790936268282,
+        "version": 0
+      },
+      "$loki": 456
+    },
+    {
+      "type": "lab",
+      "room": "E1N57",
+      "user": "7dad41a4bfc9d96",
+      "x": 27,
+      "y": 27,
+      "store": {
+        "energy": 2000
+      },
+      "storeCapacity": 5000,
+      "storeCapacityResource": {
+        "energy": 2000
+      },
+      "hits": 500,
+      "hitsMax": 500,
+      "cooldownTime": 756,
+      "notifyWhenAttacked": false,
+      "_id": "3d45c1ebdfbcec9",
+      "meta": {
+        "revision": 0,
+        "created": 1790936268283,
+        "version": 0
+      },
+      "$loki": 457
+    },
+    {
+      "type": "lab",
+      "room": "E1N57",
+      "user": "7dad41a4bfc9d96",
+      "x": 26,
+      "y": 28,
+      "store": {
+        "energy": 2000
+      },
+      "storeCapacity": 5000,
+      "storeCapacityResource": {
+        "energy": 2000
+      },
+      "hits": 500,
+      "hitsMax": 500,
+      "cooldownTime": 756,
+      "notifyWhenAttacked": false,
+      "_id": "4dcec1ebdfc4e3f",
+      "meta": {
+        "revision": 0,
+        "created": 1790936268284,
+        "version": 0
+      },
+      "$loki": 458
+    }
+  ]
+}

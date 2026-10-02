@@ -1,0 +1,173 @@
+TAP version 13
+# Subtest: 完整 Memory 解码拒绝 API 失败、缺失、非对象，接受压缩对象
+ok 1 - 完整 Memory 解码拒绝 API 失败、缺失、非对象，接受压缩对象
+  ---
+  duration_ms: 0.83475
+  type: 'test'
+  ...
+# Subtest: 默认无责任可通过，坏根、活动、任务租约、核心责任拒绝
+ok 2 - 默认无责任可通过，坏根、活动、任务租约、核心责任拒绝
+  ---
+  duration_ms: 0.186917
+  type: 'test'
+  ...
+# Subtest: 未知 legacy treasury 字段或版本不能解释为空责任
+ok 3 - 未知 legacy treasury 字段或版本不能解释为空责任
+  ---
+  duration_ms: 0.096667
+  type: 'test'
+  ...
+# Subtest: legacy 已知安全表的 null 坏值不能解释为空表
+ok 4 - legacy 已知安全表的 null 坏值不能解释为空表
+  ---
+  duration_ms: 0.044958
+  type: 'test'
+  ...
+# Subtest: 写临时诊断键前须验证实际 account，而非只看 secret target
+not ok 5 - 写临时诊断键前须验证实际 account，而非只看 secret target
+  ---
+  duration_ms: 28.658042
+  type: 'test'
+  location: '/Users/forst/.codex/worktrees/treasury-t2-first-production/screeps/docs/reports/treasury-T2-first-production-evidence-20261002/tools/deploy-guard.test.mjs:99:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    true !== false
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: false
+  actual: true
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///Users/forst/.codex/worktrees/treasury-t2-first-production/screeps/docs/reports/treasury-T2-first-production-evidence-20261002/tools/deploy-guard.test.mjs:101:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: 产品 arm 在当前实际 code SHA 漂移时不得提交 console
+not ok 6 - 产品 arm 在当前实际 code SHA 漂移时不得提交 console
+  ---
+  duration_ms: 27.196
+  type: 'test'
+  location: '/Users/forst/.codex/worktrees/treasury-t2-first-production/screeps/docs/reports/treasury-T2-first-production-evidence-20261002/tools/deploy-guard.test.mjs:104:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    true !== false
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: false
+  actual: true
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///Users/forst/.codex/worktrees/treasury-t2-first-production/screeps/docs/reports/treasury-T2-first-production-evidence-20261002/tools/deploy-guard.test.mjs:106:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: 产品动作 POST 响应未知仍读取原 marker，不能重发产品动作
+not ok 7 - 产品动作 POST 响应未知仍读取原 marker，不能重发产品动作
+  ---
+  duration_ms: 27.861208
+  type: 'test'
+  location: '/Users/forst/.codex/worktrees/treasury-t2-first-production/screeps/docs/reports/treasury-T2-first-production-evidence-20261002/tools/deploy-guard.test.mjs:109:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    file:///private/var/folders/k0/l1vlcbps5gv99pckw10ngqwr0000gn/T/t2-tool-guard-UZVz09/mock-fetch.mjs:25
+        if(scenario==='unknown-post')throw Error('mock response lost after server accepted action');
+                                           ^
+    
+    Error: mock response lost after server accepted action
+        at globalThis.fetch (file:///private/var/folders/k0/l1vlcbps5gv99pckw10ngqwr0000gn/T/t2-tool-guard-UZVz09/mock-fetch.mjs:25:40)
+        at req (file:///Users/forst/.codex/worktrees/treasury-t2-first-production/screeps/docs/reports/treasury-T2-first-production-evidence-20261002/tools/product-console.mjs:24:17)
+        at file:///Users/forst/.codex/worktrees/treasury-t2-first-production/screeps/docs/reports/treasury-T2-first-production-evidence-20261002/tools/product-console.mjs:30:22
+    
+    Node.js v22.23.3
+    
+    
+    1 !== 0
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 1
+  operator: 'strictEqual'
+  stack: |-
+    globalThis.fetch (file:///private/var/folders/k0/l1vlcbps5gv99pckw10ngqwr0000gn/T/t2-tool-guard-UZVz09/mock-fetch.mjs:25:40)
+    req (file:///Users/forst/.codex/worktrees/treasury-t2-first-production/screeps/docs/reports/treasury-T2-first-production-evidence-20261002/tools/product-console.mjs:24:17)
+    file:///Users/forst/.codex/worktrees/treasury-t2-first-production/screeps/docs/reports/treasury-T2-first-production-evidence-20261002/tools/product-console.mjs:30:22
+    TestContext.<anonymous> (file:///Users/forst/.codex/worktrees/treasury-t2-first-production/screeps/docs/reports/treasury-T2-first-production-evidence-20261002/tools/deploy-guard.test.mjs:111:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: 清理临时键必须有 cleanup 后 Memory GET 正向读回
+not ok 8 - 清理临时键必须有 cleanup 后 Memory GET 正向读回
+  ---
+  duration_ms: 27.216708
+  type: 'test'
+  location: '/Users/forst/.codex/worktrees/treasury-t2-first-production/screeps/docs/reports/treasury-T2-first-production-evidence-20261002/tools/deploy-guard.test.mjs:116:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    false !== true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///Users/forst/.codex/worktrees/treasury-t2-first-production/screeps/docs/reports/treasury-T2-first-production-evidence-20261002/tools/deploy-guard.test.mjs:119:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: 现场代码证据不接受缺失 main 的模块集
+not ok 9 - 现场代码证据不接受缺失 main 的模块集
+  ---
+  duration_ms: 28.990083
+  type: 'test'
+  location: '/Users/forst/.codex/worktrees/treasury-t2-first-production/screeps/docs/reports/treasury-T2-first-production-evidence-20261002/tools/deploy-guard.test.mjs:122:1'
+  failureType: 'testCodeFailure'
+  error: 'Expected "actual" to be strictly unequal to: 0'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 0
+  operator: 'notStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///Users/forst/.codex/worktrees/treasury-t2-first-production/screeps/docs/reports/treasury-T2-first-production-evidence-20261002/tools/deploy-guard.test.mjs:124:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..9
+# tests 9
+# suites 0
+# pass 4
+# fail 5
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 181.911667

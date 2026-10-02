@@ -9,12 +9,8 @@ import {
   claimTerminalAmountOutsideMarketSaleExposure,
   claimTerminalSendOutsideMarketSaleExposure,
 } from "@/runtime/marketSaleExposure";
-import { hasTreasuryT1TerminalFence } from "@/runtime/treasuryTaskCommitmentBridge";
-import {
-  TREASURY_T1_RUN_ID,
-  TREASURY_T1_SOURCE_ROOM,
-  TREASURY_T1_TARGET_ROOM,
-} from "@/runtime/treasuryT1Facts";
+import { hasTreasuryTerminalFence } from "@/runtime/treasuryTaskCommitmentBridge";
+import { treasuryTerminalNativeGrantAllows, treasuryTerminalSendGrantAllows } from "@/runtime/treasuryTerminalDispatchAuthority";
 
 export type TerminalActionKind = "market_deal" | "terminal_send";
 export type MarketAccountActionKind =
@@ -90,12 +86,8 @@ export interface TerminalSendRequest {
 }
 
 function blockedByTreasuryT1(roomName: string, actor: string, destinationRoomName?: string): boolean {
-  if (actor === `treasury:${TREASURY_T1_RUN_ID}`) return false;
-  return hasTreasuryT1TerminalFence() && (
-    roomName === TREASURY_T1_SOURCE_ROOM || roomName === TREASURY_T1_TARGET_ROOM ||
-    destinationRoomName === TREASURY_T1_SOURCE_ROOM ||
-    destinationRoomName === TREASURY_T1_TARGET_ROOM
-  );
+  if (treasuryTerminalNativeGrantAllows(roomName, actor)) return false;
+  return hasTreasuryTerminalFence(roomName) || destinationRoomName !== undefined && hasTreasuryTerminalFence(destinationRoomName);
 }
 
 let claimTick: number | undefined;
@@ -105,6 +97,7 @@ const terminalActionsInFlight = new Set<string>();
 // A prior send can change either endpoint when the engine applies arrivals.
 // Native calls from other rooms only claim their source in terminalClaims.
 const terminalSendAffectedRooms = new Set<string>();
+const terminalCargoAffectedRooms = new Set<string>();
 let marketAccountClaim: MarketAccountClaim | undefined;
 let corruptPersistentMarketAccountClaim = false;
 
@@ -249,6 +242,7 @@ function syncClaimTick(): void {
   terminalClaims.clear();
   terminalActionsInFlight.clear();
   terminalSendAffectedRooms.clear();
+  terminalCargoAffectedRooms.clear();
   marketAccountClaim = undefined;
   corruptPersistentMarketAccountClaim = false;
 
@@ -292,6 +286,14 @@ export function getTerminalActionClaim(roomName: string): TerminalActionClaim | 
 export function getTerminalActionClaims(): TerminalActionClaim[] {
   syncClaimTick();
   return Array.from(terminalClaims.values(), claim => ({ ...claim }));
+}
+
+/** Carrier native intents can mutate a terminal before the Treasury dispatcher. */
+export function recordTerminalCargoEffectThisTick(roomName: string): void {
+  syncClaimTick(); terminalCargoAffectedRooms.add(roomName);
+}
+export function hasTerminalCargoEffectThisTick(roomName: string): boolean {
+  syncClaimTick(); return terminalCargoAffectedRooms.has(roomName);
 }
 
 export function hasTerminalActionClaim(roomName: string): boolean {
@@ -716,6 +718,7 @@ export function executePreparedDirectMarketDeal(
 export function executeTerminalSend(
   request: TerminalSendRequest,
 ): ScreepsReturnCode {
+  if (request.actor.startsWith("treasury:") && !treasuryTerminalSendGrantAllows(request.terminal, request.resourceType, request.amount, request.transactionCost, request.destinationRoomName, request.actor)) return ERR_BUSY;
   if (blockedByTreasuryT1(request.terminal.room.name, request.actor, request.destinationRoomName)) {
     return ERR_BUSY;
   }
@@ -852,6 +855,7 @@ export function clearMarketActionArbiterForTest(
   terminalClaims.clear();
   terminalActionsInFlight.clear();
   terminalSendAffectedRooms.clear();
+  terminalCargoAffectedRooms.clear();
   marketAccountClaim = undefined;
   corruptPersistentMarketAccountClaim = false;
   if (!preservePersistent) {

@@ -1,0 +1,42 @@
+
+> screeps@2026.10.2-1 test
+> jest --config jest.config.cjs --runInBand src/runtime/treasuryT2Binding.red.test.ts src/runtime/treasuryT2Binding.integration.test.ts src/runtime/treasuryT2Lifecycle.integration.test.ts
+
+FAIL src/runtime/treasuryT2Binding.red.test.ts
+  ● Test suite failed to run
+
+    [96msrc/runtime/treasuryTerminalTransfer.ts[0m:[93m19[0m:[93m87[0m - [91merror[0m[90m TS2339: [0mProperty 'treasurySlice' does not exist on type '{ id: string; resource: ResourceConstant; fromRoomName: string; toRoomName: string; amount: number; remainingAmount: number; status: "pending" | "done" | "cancelled" | "failed"; ... 7 more ...; lastError?: string; }'.
+
+    [7m19[0m   return Object.values(Memory.data?.resourceControl?.tasks ?? {}).some((task) => task.treasurySlice?.runId === lane.runId);
+    [7m  [0m [91m                                                                                      ~~~~~~~~~~~~~[0m
+
+FAIL src/runtime/treasuryT2Lifecycle.integration.test.ts
+  ● Test suite failed to run
+
+    [96msrc/runtime/treasuryFirstLiveControl.ts[0m:[93m6[0m:[93m10[0m - [91merror[0m[90m TS2305: [0mModule '"@/runtime/resourceControl"' has no exported member 'inspectTreasuryResourceTransferReadiness'.
+
+    [7m6[0m import { inspectTreasuryResourceTransferReadiness } from "@/runtime/resourceControl";
+    [7m [0m [91m         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+    [96msrc/runtime/treasuryFirstLiveControl.ts[0m:[93m11[0m:[93m3[0m - [91merror[0m[90m TS2724: [0m'"@/runtime/marketActionArbiter"' has no exported member named 'hasTerminalCargoEffectThisTick'. Did you mean 'hasTerminalSendEffectThisTick'?
+
+    [7m11[0m   hasTerminalCargoEffectThisTick,
+    [7m  [0m [91m  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+      [96msrc/runtime/marketActionArbiter.ts[0m:[93m302[0m:[93m17[0m
+        [7m302[0m export function hasTerminalSendEffectThisTick(roomName: string): boolean {
+        [7m   [0m [96m                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+        'hasTerminalSendEffectThisTick' is declared here.
+
+FAIL src/runtime/treasuryT2Binding.integration.test.ts
+  ● Test suite failed to run
+
+    [96msrc/runtime/treasuryT2Binding.integration.test.ts[0m:[93m44[0m:[93m28[0m - [91merror[0m[90m TS2339: [0mProperty 'postings' does not exist on type 'TreasuryCoreIdentityFacts'.
+
+    [7m44[0m     expect(record.identity.postings).toEqual(expect.arrayContaining([
+    [7m  [0m [91m                           ~~~~~~~~[0m
+
+Test Suites: 3 failed, 3 total
+Tests:       0 total
+Snapshots:   0 total
+Time:        1.122 s, estimated 2 s
+Ran all test suites matching /src\/runtime\/treasuryT2Binding.red.test.ts|src\/runtime\/treasuryT2Binding.integration.test.ts|src\/runtime\/treasuryT2Lifecycle.integration.test.ts/i.

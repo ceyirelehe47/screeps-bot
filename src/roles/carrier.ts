@@ -44,11 +44,7 @@ import { getPlannedStoragePos, getPlannedControllerLinkPos, getProtoStorageConta
 import { getCreepConfigService, getTickContextService } from "@/runtime/runtimeServices";
 import { isPositionAllowedForCreep, shouldRestrictToSafeZone } from "@/runtime/safeZoneHelpers";
 import { hasTerminalActionClaim } from "@/runtime/marketActionArbiter";
-import {
-  hasTreasuryT1TerminalFence,
-  TREASURY_T1_SOURCE_ROOM,
-  TREASURY_T1_TARGET_ROOM,
-} from "@/runtime/treasuryTaskCommitmentBridge";
+import { isTerminalCargoBlocked as terminalHeldForTreasuryT1, executeTreasuryFencedTerminalCargo } from "@/runtime/treasuryTerminalCargo";
 import {
   claimTerminalAmountOutsideMarketSaleExposure,
   getTerminalAmountOutsideMarketSaleExposure,
@@ -68,14 +64,6 @@ type CarrierPickupTarget = Resource | StructureContainer | StructureLink | Struc
 type DeadStorePickupTarget = Tombstone | Ruin;
 type DeadStorePickupAssignment = { target: DeadStorePickupTarget; resource: ResourceConstant };
 type CarrierTaskFilter = (task: CarrierTask) => boolean;
-
-function terminalHeldForTreasuryT1(target: unknown): boolean {
-  if (typeof target !== "object" || target === null ||
-      !("structureType" in target) || target.structureType !== STRUCTURE_TERMINAL) return false;
-  const roomName = (target as StructureTerminal).room?.name;
-  return (roomName === TREASURY_T1_SOURCE_ROOM || roomName === TREASURY_T1_TARGET_ROOM) &&
-    hasTreasuryT1TerminalFence();
-}
 
 const POWER_BANK_BOOST_PRODUCER_PREFIX = "powerBankBoost:";
 const RESOURCE_CONTROL_TERMINAL_PRELOAD_PRODUCER = "resourceControl:preload";
@@ -458,11 +446,11 @@ function pickupEnergyForCarrier(creep: Creep, options?: CarrierPickupOptions): {
           roomName,
         ) || undefined;
         if (!exposureClaim) return ERR_NOT_ENOUGH_RESOURCES;
-        return creep.withdraw(
+        return executeTreasuryFencedTerminalCargo(sourceTarget, () => creep.withdraw(
           sourceTarget,
           RESOURCE_ENERGY,
           exposureClaim.amount,
-        );
+        ));
       }
       return creep.withdraw(sourceTarget, RESOURCE_ENERGY);
     });
@@ -1248,7 +1236,7 @@ function pickupSynthesisCarrierResource(
     code = measureCreepIntent(() =>
       terminalHeldForTreasuryT1(from)
         ? ERR_BUSY
-        : creep.withdraw(from, assignment.step.resource, withdrawAmount),
+        : executeTreasuryFencedTerminalCargo(from, () => creep.withdraw(from, assignment.step.resource, withdrawAmount)),
     );
   } catch (error) {
     exposureClaim?.release();
@@ -1328,7 +1316,7 @@ function pickupOwnedRoomDeadStoreResource(creep: Creep): { picked: boolean; outO
   }
 
   const code = measureCreepIntent(() => terminalHeldForTreasuryT1(assignment.target)
-    ? ERR_BUSY : creep.withdraw(assignment.target, assignment.resource));
+    ? ERR_BUSY : executeTreasuryFencedTerminalCargo(assignment.target, () => creep.withdraw(assignment.target, assignment.resource)));
   if (code === ERR_NOT_IN_RANGE) {
     moveToTarget(creep, assignment.target);
     return { picked: false, outOfRange: true };
@@ -1432,8 +1420,8 @@ function transferCarrierResource(
   }
   const code = measureCreepIntent(() =>
     amount === undefined && requestedAmount === carriedAmount
-      ? creep.transfer(target, resource)
-      : creep.transfer(target, resource, requestedAmount),
+      ? executeTreasuryFencedTerminalCargo(target, () => creep.transfer(target, resource))
+      : executeTreasuryFencedTerminalCargo(target, () => creep.transfer(target, resource, requestedAmount)),
   );
   return {
     code,

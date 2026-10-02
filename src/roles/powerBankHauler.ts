@@ -1,3 +1,4 @@
+import { executeTreasuryFencedTerminalCargo } from "@/runtime/treasuryTerminalCargo";
 import { moveToTarget, moveToTargetRoom } from "@/roles/shared";
 import { POWER_BANK_STATUS, isPowerBankPatrolRoom } from "@/runtime/powerBankConstants";
 import { measureCreepIntent } from "@/runtime/cpuPhaseProfiler";
@@ -506,7 +507,7 @@ function deliverPower(creep: Creep, fallbackEncodedRoute?: string): boolean {
     reportDeliveryBlocker(creep, task, "capacity");
     return false;
   }
-  const code = measureCreepIntent(() => creep.transfer(candidate.target, resource, transferable));
+  const code = measureCreepIntent(() => executeTreasuryFencedTerminalCargo(candidate.target, () => creep.transfer(candidate.target, resource, transferable)));
   if (code === ERR_NOT_IN_RANGE) {
     moveToTarget(creep, candidate.target);
   } else if (code === OK) {

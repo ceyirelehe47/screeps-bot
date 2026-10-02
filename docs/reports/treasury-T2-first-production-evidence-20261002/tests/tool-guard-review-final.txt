@@ -1,0 +1,76 @@
+TAP version 13
+# Subtest: 完整 Memory 解码拒绝 API 失败、缺失、非对象，接受压缩对象
+ok 1 - 完整 Memory 解码拒绝 API 失败、缺失、非对象，接受压缩对象
+  ---
+  duration_ms: 0.867458
+  type: 'test'
+  ...
+# Subtest: 默认无责任可通过，坏根、活动、任务租约、核心责任拒绝
+ok 2 - 默认无责任可通过，坏根、活动、任务租约、核心责任拒绝
+  ---
+  duration_ms: 0.480084
+  type: 'test'
+  ...
+# Subtest: 未知 legacy treasury 字段或版本不能解释为空责任
+ok 3 - 未知 legacy treasury 字段或版本不能解释为空责任
+  ---
+  duration_ms: 0.10075
+  type: 'test'
+  ...
+# Subtest: legacy 已知安全表的 null 坏值不能解释为空表
+ok 4 - legacy 已知安全表的 null 坏值不能解释为空表
+  ---
+  duration_ms: 0.048083
+  type: 'test'
+  ...
+# Subtest: 写临时诊断键前须验证实际 account，而非只看 secret target
+ok 5 - 写临时诊断键前须验证实际 account，而非只看 secret target
+  ---
+  duration_ms: 26.445459
+  type: 'test'
+  ...
+# Subtest: 产品 arm 在当前实际 code SHA 漂移时不得提交 console
+ok 6 - 产品 arm 在当前实际 code SHA 漂移时不得提交 console
+  ---
+  duration_ms: 26.600541
+  type: 'test'
+  ...
+# Subtest: 产品动作 POST 响应未知仍读取原 marker，不能重发产品动作
+ok 7 - 产品动作 POST 响应未知仍读取原 marker，不能重发产品动作
+  ---
+  duration_ms: 28.984625
+  type: 'test'
+  ...
+# Subtest: 正确身份和实际 code 对应的 arm 能保存一次结果，防止拒绝全部的假通过
+ok 8 - 正确身份和实际 code 对应的 arm 能保存一次结果，防止拒绝全部的假通过
+  ---
+  duration_ms: 27.439
+  type: 'test'
+  ...
+# Subtest: 清理临时键必须有 cleanup 后 Memory GET 正向读回
+ok 9 - 清理临时键必须有 cleanup 后 Memory GET 正向读回
+  ---
+  duration_ms: 27.844208
+  type: 'test'
+  ...
+# Subtest: 现场代码证据不接受缺失 main 的模块集
+ok 10 - 现场代码证据不接受缺失 main 的模块集
+  ---
+  duration_ms: 27.017292
+  type: 'test'
+  ...
+# Subtest: 私有 audit 拒绝仓库中的 ..audit 子目录，不能把双点名字当父目录
+ok 11 - 私有 audit 拒绝仓库中的 ..audit 子目录，不能把双点名字当父目录
+  ---
+  duration_ms: 51.646125
+  type: 'test'
+  ...
+1..11
+# tests 11
+# suites 0
+# pass 11
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 254.1745

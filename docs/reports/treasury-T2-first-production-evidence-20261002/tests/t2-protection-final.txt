@@ -1,0 +1,174 @@
+
+> screeps@2026.10.2-2 test
+> jest --config jest.config.cjs --runInBand src/runtime/treasuryT2Binding.integration.test.ts src/runtime/treasuryT2FenceCache.test.ts
+
+PASS src/runtime/treasuryT2FenceCache.test.ts
+PASS src/runtime/treasuryT2Binding.integration.test.ts
+  ● Console
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:975:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:975:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:975:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:975:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:975:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:975:11)
+
+    console.log
+      {"kind":"treasury-production-T1","tick":100,"taskId":"old-H-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:975:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":108,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:975:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:975:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:975:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:975:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"candidate_rejected","reason":"live facts, fee, or shared receiver capacity outside policy"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:975:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_blocked","reason":"执行前复验失败：容量不足：E4N58/terminal/UH 可用 -615 < 最坏流出 100"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:975:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"quota_reservation_failed","reason":"dispatch was not entered"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:975:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_not_executed"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:975:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:975:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:975:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:975:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:975:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:975:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:975:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:975:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:975:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:975:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:975:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:975:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown","reason":"Treasury terminal.send returned an invalid native result"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:975:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown","reason":"Treasury terminal.send returned an invalid native result"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:975:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown","reason":"Treasury terminal.send returned an invalid native result"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:975:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown","reason":"Treasury terminal.send returned an invalid native result"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:975:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown","reason":"Treasury terminal.send returned an invalid native result"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:975:11)
+
+    console.log
+      {"kind":"treasury-production-T1","tick":100,"taskId":"malformed-H-task","status":"dispatch_unknown","reason":"Treasury terminal.send returned an invalid native result"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:975:11)
+
+
+Test Suites: 2 passed, 2 total
+Tests:       73 passed, 73 total
+Snapshots:   0 total
+Time:        2.649 s
+Ran all test suites matching /src\/runtime\/treasuryT2Binding.integration.test.ts|src\/runtime\/treasuryT2FenceCache.test.ts/i.

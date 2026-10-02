@@ -1,0 +1,17 @@
+--- current-final/src/runtime/treasuryTerminalTransferLane.ts
++++ isolated-reconstruction/src/runtime/treasuryTerminalTransferLane.ts
+@@ -526,14 +526,6 @@
+     actor: `treasury:${TREASURY_T1_RUN_ID}`,
+     description: TREASURY_T1_DESCRIPTION_PREFIX + context.attemptId,
+   }));
+-  // Only documented negative send/gateway results prove no execution. A malformed return
+-  // crossed the native boundary and must remain outcome_unknown on the original attempt.
+-  const documentedCodes: readonly number[] = [OK, ERR_NOT_OWNER, ERR_NO_PATH, ERR_NAME_EXISTS, ERR_BUSY,
+-    ERR_NOT_FOUND, ERR_NOT_ENOUGH_RESOURCES, ERR_INVALID_TARGET, ERR_FULL, ERR_NOT_IN_RANGE,
+-    ERR_INVALID_ARGS, ERR_TIRED, ERR_NO_BODYPART, ERR_RCL_NOT_ENOUGH, ERR_GCL_NOT_ENOUGH];
+-  if (!documentedCodes.includes(code)) {
+-    throw new Error("Treasury terminal.send returned an invalid native result");
+-  }
+   lastNativeAttempt = {
+     taskId: args.taskId,
+     attemptId: context.attemptId,

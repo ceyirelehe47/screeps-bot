@@ -1,3 +1,4 @@
+import { executeTreasuryFencedTerminalCargo } from "@/runtime/treasuryTerminalCargo";
 import { clearMovementState, moveToTarget, moveToTargetRoom } from "@/roles/shared";
 import { measureCreepDecision, measureCreepIntent } from "@/runtime/cpuPhaseProfiler";
 import { getMyUsername } from "@/runtime/remoteMining";
@@ -448,7 +449,7 @@ export const remoteMiningCarrierRole: RoleFactory = (targetRoom: string, sourceI
         return false;
       }
 
-      const code = measureCreepIntent(() => creep.transfer(target, RESOURCE_ENERGY));
+      const code = measureCreepIntent(() => executeTreasuryFencedTerminalCargo(target, () => creep.transfer(target, RESOURCE_ENERGY)));
       if (code === ERR_NOT_IN_RANGE) {
         moveToTarget(creep, target, 1);
         return false;
