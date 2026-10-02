@@ -85,6 +85,7 @@ import {
 
 import { armTreasuryT2FirstLive, heartbeatTreasuryT2FirstLive, closeTreasuryT2FirstLive, treasuryT2FirstLiveStatus } from "@/runtime/treasuryT2FirstLiveControl";
 import { armTreasuryT3FirstLive, prepareTreasuryT3FirstLive, heartbeatTreasuryT3FirstLive, closeTreasuryT3FirstLive, treasuryT3FirstLiveStatus } from "@/runtime/treasuryT3FirstLiveControl";
+import { enableTreasuryContinuousOH, stopTreasuryContinuousOH, treasuryContinuousOHStatus, acceptTreasuryContinuousOHPilot } from "@/runtime/treasuryContinuousOHControl";
 
 interface SynthesisControlStatusResult {
   ok: true;
@@ -197,6 +198,10 @@ export function registerConsoleCommands(): void {
   global.heartbeatTreasuryT3FirstLive = heartbeatTreasuryT3FirstLive;
   global.closeTreasuryT3FirstLive = closeTreasuryT3FirstLive;
   global.treasuryT3FirstLiveStatus = treasuryT3FirstLiveStatus;
+  global.enableTreasuryContinuousOH = enableTreasuryContinuousOH;
+  global.stopTreasuryContinuousOH = stopTreasuryContinuousOH;
+  global.treasuryContinuousOHStatus = treasuryContinuousOHStatus;
+  global.acceptTreasuryContinuousOHPilot = acceptTreasuryContinuousOHPilot;
   global.armTreasuryT1FirstLive = armTreasuryT1FirstLive;
   global.heartbeatTreasuryT1FirstLive = heartbeatTreasuryT1FirstLive;
   global.closeTreasuryT1FirstLive = closeTreasuryT1FirstLive;

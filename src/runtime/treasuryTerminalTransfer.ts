@@ -1,17 +1,17 @@
 import { getTreasuryService } from "@/runtime/runtimeServices";
 import { ensureReservationSchemaActivated } from "@/runtime/resourceReservation";
 import type { TreasuryService } from "@/runtime/treasury/facade";
-import { createTreasuryFirstLiveControl } from "@/runtime/treasuryFirstLiveControl";
+import { createTreasuryTerminalControl, readTreasuryTerminalControl } from "@/runtime/treasuryTerminalControl";
+import { continuousSessionOwnsActivity } from "@/runtime/treasuryContinuousOHControl";
 import { registerTreasuryPolicyResolver, type TreasuryPolicyResolver } from "@/runtime/treasury/policyAuthority";
 import { createTreasuryTerminalTransferLane } from "@/runtime/treasuryTerminalTransferLane";
 import { TREASURY_TERMINAL_LANES, treasuryLaneTaskMatches, type TreasuryTerminalLane } from "@/runtime/treasuryTerminalLane";
-import { createTreasuryFirstLiveState } from "@/runtime/treasuryFirstLiveState";
 import { readTreasuryLaneQuota } from "@/runtime/treasuryTerminalResponsibility";
 import type { ResourceTransferTask } from "@/runtime/logistics/resourceTransferTasks";
 import type { ReceiverCapacityLedger } from "@/runtime/logistics/receiverCapacityLedger";
 export { TREASURY_T1_SOURCE_ROOM, TREASURY_T1_TARGET_ROOM } from "@/runtime/treasuryT1Facts";
 const productionPolicy: TreasuryPolicyResolver = Object.freeze({
-  policyId: "treasury.production-terminal-slices-T1-T2-T3", policyVersion: 3,
+  policyId: "treasury.production-terminal-slices-T1-T2-T3-T4", policyVersion: 4,
   evaluate(context) {
     const lane = TREASURY_TERMINAL_LANES.find((entry) => entry.actionKind === context.actionKind);
     if (!lane || !context.rooms.includes(lane.sourceRoom) || !context.rooms.includes(lane.targetRoom) ||
@@ -21,13 +21,20 @@ const productionPolicy: TreasuryPolicyResolver = Object.freeze({
     return {withhold:0,strategicReserve:0,emergencyOverride:false,auditReason:"fixed terminal lane; bounded adapter owns the limit"};
   },
 });
-const engines = TREASURY_TERMINAL_LANES.map((lane) => ({
-  lane, engine: createTreasuryTerminalTransferLane(lane), control: createTreasuryFirstLiveControl(lane),
-}));
+type ProductionEngine = { lane: TreasuryTerminalLane; engine: ReturnType<typeof createTreasuryTerminalTransferLane>;
+  control: ReturnType<typeof createTreasuryTerminalControl> };
+let installedEngines: ProductionEngine[] | null = null;
+/** 角色只读导入也会经过这张依赖图；工厂装配须等模块完成初始化后实际调用。 */
+function productionEngines(): ProductionEngine[] {
+  return installedEngines ??= TREASURY_TERMINAL_LANES.map((lane) => ({
+    lane, engine: createTreasuryTerminalTransferLane(lane), control: createTreasuryTerminalControl(lane),
+  }));
+}
 let running: ReturnType<typeof createTreasuryTerminalTransferLane> | null = null;
 let recoveryOnlyService: TreasuryService | null = null;
 function ownsActivity(lane: TreasuryTerminalLane): boolean {
-  const control = createTreasuryFirstLiveState(lane).readControl();
+  if (lane.continuous && continuousSessionOwnsActivity()) return true;
+  const control = readTreasuryTerminalControl(lane);
   const quota = readTreasuryLaneQuota(lane);
   if (control.status === "invalid" || control.status === "valid" && control.value.status !== "closed" ||
       quota.status === "invalid" || quota.status === "valid" && quota.value.status !== "drained") return true;
@@ -37,11 +44,13 @@ function ownsActivity(lane: TreasuryTerminalLane): boolean {
   return Object.values(Memory.data?.resourceControl?.tasks ?? {}).some((task) => task !== null && typeof task === "object" && (task as ResourceTransferTask).treasurySlice?.runId === lane.runId);
 }
 export function registerTreasuryProductionTerminalTransfer(): boolean {
+  const engines = productionEngines();
   let ready = true;
   for (const entry of engines) ready = entry.engine.register() && ready;
   return ready && registerTreasuryPolicyResolver(productionPolicy).status === "registered";
 }
 export function beginTreasuryProductionTick(): boolean {
+  const engines = productionEngines();
   running = null; recoveryOnlyService = null;
   // OFF/reset 后仍归一化全部历史 lane；共享生命周期只允许一个新接纳者。
   for (const entry of engines) entry.control.normalize();
@@ -63,6 +72,7 @@ export function beginTreasuryProductionTick(): boolean {
   const result = engine.begin(); if (result) running = engine; return result;
 }
 export function endTreasuryProductionTick(): void {
+  const engines = productionEngines();
   const service = recoveryOnlyService; recoveryOnlyService = null;
   const engine = running; running = null;
   if (service) { service.endTick(); for (const entry of engines) entry.control.normalize(); }
@@ -70,14 +80,16 @@ export function endTreasuryProductionTick(): void {
 }
 export function runTreasuryTerminalTransferTask(task: ResourceTransferTask, ledger: ReceiverCapacityLedger,
   nativeBudgetAvailable: boolean, onScheduled: (amount: number, fee: number) => void): {readonly handled: boolean; readonly status?: string} {
+  const engines = productionEngines();
   if (recoveryOnlyService && (task.treasurySlice !== undefined || TREASURY_TERMINAL_LANES.some((lane) => treasuryLaneTaskMatches(lane, task)))) {
     return {handled:true,status:"cross_lane_recovery_only"};
   }
   const owner = task.treasurySlice === undefined ? undefined : engines.find((entry) => entry.lane.runId === task.treasurySlice?.runId);
-  const selected = owner ?? engines.find((entry) => treasuryLaneTaskMatches(entry.lane, task)) ?? engines[0];
+  const continuousOwner = engines.find((entry) => entry.lane.continuous && ownsActivity(entry.lane) && treasuryLaneTaskMatches(entry.lane, task));
+  const selected = owner ?? continuousOwner ?? engines.find((entry) => !entry.lane.continuous && treasuryLaneTaskMatches(entry.lane, task)) ?? engines[0];
   return selected.engine.run(task, ledger, nativeBudgetAvailable, onScheduled);
 }
-export function runTreasuryT1ShadowObservation(): void { for (const entry of engines) entry.engine.shadow(); }
+export function runTreasuryT1ShadowObservation(): void { for (const entry of productionEngines()) entry.engine.shadow(); }
 export function readTreasuryT1MigrationBlockReason(): string | null {
-  return running?.blockReason() ?? engines.map((entry) => entry.engine.blockReason()).find((reason) => reason !== null) ?? null;
+  return running?.blockReason() ?? productionEngines().map((entry) => entry.engine.blockReason()).find((reason) => reason !== null) ?? null;
 }

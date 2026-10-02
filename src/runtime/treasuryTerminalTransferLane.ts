@@ -29,7 +29,8 @@ import type { ReceiverCapacityLedger } from "@/runtime/logistics/receiverCapacit
 import { withTreasuryTaskSliceExcluded } from "@/runtime/treasuryTaskCommitmentBridge";
 import { encodeTreasuryTerminalFacts, decodeTreasuryTerminalFacts,
   type TreasuryTerminalFacts as DurableT1Facts, type TreasuryTerminalEndpoint as EndpointSnapshot } from "@/runtime/treasuryTerminalFacts";
-import { createTreasuryFirstLiveControl } from "@/runtime/treasuryFirstLiveControl";
+import { createTreasuryTerminalControl } from "@/runtime/treasuryTerminalControl";
+import { writeTreasuryContinuousOHQuota } from "@/runtime/treasuryContinuousOHControl";
 import { readTreasuryLaneQuota, readTreasuryLaneResponsibility, type TreasuryT1Quota as T1Quota } from "@/runtime/treasuryTerminalResponsibility";
 import { TREASURY_TERMINAL_LANES, treasuryLaneTaskMatches, treasuryLaneWorkKey, type TreasuryTerminalLane } from "@/runtime/treasuryTerminalLane";
 import { readTreasuryCoreStoreHealth } from "@/runtime/treasury/kernel/store";
@@ -56,6 +57,7 @@ interface TreasuryT1TransferArgs {
   readonly taskUpdatedAt: number;
   readonly amount: number;
   readonly quote: number;
+  readonly sequence?: number;
   readonly username: string;
   readonly source: EndpointSnapshot;
   readonly target: EndpointSnapshot;
@@ -86,11 +88,11 @@ const TREASURY_T1_TARGET_ROOM = lane.targetRoom;
 const TREASURY_T1_WORK_KEY_PREFIX = `biz:${lane.runId}:`;
 const TREASURY_T1_QUOTA_KEY = lane.quotaKey;
 const TREASURY_T1_DESCRIPTION_PREFIX = lane.descriptionPrefix;
-const treasuryT1WorkKey = (taskId: string) => treasuryLaneWorkKey(lane, taskId);
+const treasuryT1WorkKey = (taskId: string, sequence?: number) => treasuryLaneWorkKey(lane, taskId, sequence);
 const readQuota = () => readTreasuryLaneQuota(lane);
 const readTreasuryT1Responsibility = () => readTreasuryLaneResponsibility(lane);
 const {close: closeTreasuryT1FirstLive,normalize: normalizeTreasuryT1FirstLiveControl,
-  read: readTreasuryT1FirstLiveControl,allows: treasuryT1FirstLiveAllows} = createTreasuryFirstLiveControl(lane);
+  read: readTreasuryT1FirstLiveControl,allows: treasuryT1FirstLiveAllows} = createTreasuryTerminalControl(lane);
 const decodeDurableFacts = (raw: unknown) => decodeTreasuryTerminalFacts(lane, raw);
 let adapterRegistrationReady = false;
 let activeTreasuryService: TreasuryService | null = null;
@@ -213,7 +215,8 @@ function writeTaskProgress(
   return store[taskId] === next;
 }
 
-function writeQuota(value: T1Quota): boolean {
+function writeQuota(value: T1Quota, fee?: number): boolean {
+  if (lane.continuous) return writeTreasuryContinuousOHQuota(value, fee);
   const memory = Memory as unknown as { runtime?: Record<string, unknown> };
   if (!memory.runtime) memory.runtime = {};
   memory.runtime[TREASURY_T1_QUOTA_KEY] = value;
@@ -243,7 +246,7 @@ function reserveQuota(args: TreasuryT1TransferArgs, attemptId: string): boolean 
     attemptId,
     amount: args.amount,
     reservedAtTick: Game.time,
-  });
+  }, args.quote);
 }
 
 function beginNativeAttempt(args: TreasuryT1TransferArgs, attemptId: string): boolean {
@@ -253,7 +256,7 @@ function beginNativeAttempt(args: TreasuryT1TransferArgs, attemptId: string): bo
     quota.value.taskId !== args.taskId || quota.value.workKey !== args.workKey ||
     quota.value.attemptId !== attemptId || quota.value.amount !== args.amount
   ) return false;
-  return writeQuota({ ...quota.value, status: "dispatching" });
+  return writeQuota({ ...quota.value, status: "dispatching" }, args.quote);
 }
 
 function readTerminal(roomName: string, username?: string, expectedId?: string):
@@ -332,7 +335,8 @@ function validateLiveArgs(value: unknown, requireLease: boolean): value is Treas
     args.schemaVersion !== 1 || args.runId !== TREASURY_T1_RUN_ID ||
     typeof args.taskId !== "string" || args.taskId.length < 1 || args.taskId.length > 80 ||
     !/^[A-Za-z0-9:_\.\->-]+$/.test(args.taskId) ||
-    args.workKey !== treasuryT1WorkKey(args.taskId) ||
+    args.workKey !== treasuryT1WorkKey(args.taskId, args.sequence) ||
+    (lane.continuous && (!isPositiveInteger(args.sequence) || args.sequence > 128 || args.amount > 26)) ||
     typeof args.transactionId !== "string" || args.transactionId.length < 1 || args.transactionId.length > 128 ||
     args.tick !== Game.time || !isInteger(args.taskCreatedAt) || !isPositiveInteger(args.taskAmount) ||
     !isPositiveInteger(args.taskRemainingAmount) || args.taskRemainingAmount > args.taskAmount ||
@@ -388,12 +392,15 @@ function buildTransferArgs(task: ResourceTransferTask, ledger: ReceiverCapacityL
     target.snapshot.free < amount || ledger.getAvailableAmount(TREASURY_T1_TARGET_ROOM, lane.resource, task.id) < amount
   ) return null;
   if (lane.requiredProduct !== undefined && !inspectTreasuryResourceTransferReadiness(task, amount, quote, ledger).ok) return null;
-  const transactionId = formatTreasuryTransactionId(TREASURY_T1_ACTION_KIND, TREASURY_T1_RUN_ID, task.id);
+  const sequence = lane.continuous && control.status === "valid" ? control.value.sequence : undefined;
+  if (lane.continuous && (!isPositiveInteger(sequence) || sequence > 128)) return null;
+  const transactionId = formatTreasuryTransactionId(TREASURY_T1_ACTION_KIND, TREASURY_T1_RUN_ID,
+    lane.continuous ? `${task.id}:${sequence}` : task.id);
   const args: TreasuryT1TransferArgs = {
     schemaVersion: 1,
     runId: TREASURY_T1_RUN_ID,
     taskId: task.id,
-    workKey: treasuryT1WorkKey(task.id),
+    workKey: treasuryT1WorkKey(task.id, sequence),
     transactionId,
     tick: Game.time,
     taskCreatedAt: task.createdAt,
@@ -402,6 +409,7 @@ function buildTransferArgs(task: ResourceTransferTask, ledger: ReceiverCapacityL
     taskUpdatedAt: task.updatedAt,
     amount,
     quote,
+    ...(lane.continuous ? {sequence} : {}),
     username: source.terminal.owner!.username,
     source: source.snapshot,
     target: target.snapshot,
@@ -418,6 +426,7 @@ function encodeDurableFacts(args: TreasuryT1TransferArgs): string | null {
     amount: args.amount,
     tick: args.tick,
     quote: args.quote,
+    ...(lane.continuous ? {sequence: args.sequence} : {}),
     username: args.username,
     source: args.source,
     target: args.target,
@@ -620,7 +629,7 @@ function recordFacts(record: TreasuryCoreWorkRecord): DurableT1Facts | null {
 
 function ensureTaskLeaseFromRecord(record: TreasuryCoreWorkRecord): boolean {
   const facts = recordFacts(record);
-  if (!facts || record.workKey !== treasuryT1WorkKey(facts.taskId)) return false;
+  if (!facts || record.workKey !== treasuryT1WorkKey(facts.taskId, facts.sequence)) return false;
   const store = taskStore();
   const task = store?.[facts.taskId];
   const quota = readQuota();
@@ -651,7 +660,7 @@ function ensureTaskLeaseFromRecord(record: TreasuryCoreWorkRecord): boolean {
 function applyFinalRecordOutcome(record: TreasuryCoreWorkRecord): boolean {
   if (record.outcome !== "committed" && record.outcome !== "not_executed") return false;
   const facts = recordFacts(record);
-  if (!facts || record.workKey !== treasuryT1WorkKey(facts.taskId)) return false;
+  if (!facts || record.workKey !== treasuryT1WorkKey(facts.taskId, facts.sequence)) return false;
   ensureTaskLeaseFromRecord(record);
   return writeTaskProgress(
     facts.taskId,
@@ -721,11 +730,12 @@ function cancelUninvokedT1Work(service: TreasuryService): boolean {
           control.value.taskId !== task.id || control.value.taskCreatedAt !== facts.taskCreatedAt ||
           task.createdAt !== facts.taskCreatedAt || task.amount !== control.value.taskAmount ||
           !historicalSliceAmountAllowed(control.value, facts.amount) ||
-          record.workKey !== treasuryT1WorkKey(task.id) ||
+          (lane.continuous && facts.sequence !== control.value.sequence) ||
+          record.workKey !== treasuryT1WorkKey(task.id, facts.sequence) ||
           !writeQuota({ schemaVersion: 2, runId: TREASURY_T1_RUN_ID, status: "reserved",
             taskId: task.id, taskCreatedAt: task.createdAt, taskAmount: task.amount,
             workKey: record.workKey, attemptId: record.attemptId, amount: facts.amount,
-            reservedAtTick: Game.time })) return false;
+            reservedAtTick: Game.time }, facts.quote)) return false;
     }
     if (!facts || !ensureTaskLeaseFromRecord(record)) return false;
     // Publish the task-side result while the original, validated pending work
@@ -1046,6 +1056,15 @@ function runTreasuryTerminalTransferTask(
       return { handled: true, status: "quota_unclosed" };
     }
     return { handled: false };
+  }
+  // 持续 ON 的预算/间隔/无需求空闲仍保留作用域归属；只有正式 OFF 才交旧 writer。
+  if (lane.continuous) {
+    const continuousControl = readTreasuryT1FirstLiveControl();
+    if (continuousControl.status !== "valid") return {handled:true,status:"continuous_control_unavailable"};
+    if (continuousControl.value.taskId === "") return {handled:true,status:"continuous_idle_or_budget_held"};
+    if (continuousControl.value.taskId !== task.id || continuousControl.value.taskCreatedAt !== task.createdAt) {
+      return {handled:true,status:"continuous_other_task_held"};
+    }
   }
   if (mode !== "canary") return { handled: true, status: mode === "drain" ? "draining" : "invalid_mode" };
   const currentControl = readTreasuryT1FirstLiveControl();

@@ -23,6 +23,8 @@ export interface Control {
   closeReason: string;
   /** 只有 T3 编码拥有此字段；旧 T1/T2 的签名形状保持不变。 */
   maxSliceAmount?: number;
+  /** 仅持续 lane 派生的控制视图使用；旧三 lane 不接受此额外字段。 */
+  sequence?: number;
   hash: string;
 }
 

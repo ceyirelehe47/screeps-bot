@@ -6,6 +6,7 @@ import { readTreasuryLaneResponsibility } from "@/runtime/treasuryTerminalRespon
 import { inspectTreasuryResourceTransferReadiness, inspectTreasuryResourceTransferPreparation } from "@/runtime/resourceControl";
 import type { ResourceTransferTask } from "@/runtime/logistics/resourceTransferTasks";
 import { resolveTreasuryTerminalSliceAmount } from "@/runtime/treasuryTerminalAmount";
+import { readTreasuryTerminalControl } from "@/runtime/treasuryTerminalControl";
 import {
   hasTerminalActionClaim,
   hasTerminalSendEffectThisTick,
@@ -111,7 +112,7 @@ function taskMatches(control: Control, task: ResourceTransferTask, amount: numbe
 function otherResponsibilityClear(): boolean {
   return TREASURY_TERMINAL_LANES.every((other) => {
     if (other === lane) return true;
-    const control = createTreasuryFirstLiveState(other).readControl();
+    const control = readTreasuryTerminalControl(other);
     return control.status !== "invalid" && !(control.status === "valid" && control.value.status !== "closed") &&
       readTreasuryLaneResponsibility(other).status === "clear";
   });

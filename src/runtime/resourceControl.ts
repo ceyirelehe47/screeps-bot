@@ -1,4 +1,5 @@
 import { inspectSynthesisTransferNeed } from "@/runtime/synthesisControl";
+import { terminalFeedBoundTaskIdentity } from "@/runtime/terminalFeedTarget";
 import {
   inspectAutomaticSynthesisTransferDemand,
   resolveSynthesisStagingFeedCapacity,
@@ -36,7 +37,7 @@ import {
 } from "@/runtime/logistics/resourceTransferTasks";
 import { bumpTreasuryCommitmentRevision } from "@/runtime/treasury/commitmentRevision";
 import { runTreasuryTerminalTransferTask } from "@/runtime/treasuryTerminalTransfer";
-import { TREASURY_TERMINAL_LANES, TREASURY_T3_LANE, treasuryLaneTaskMatches } from "@/runtime/treasuryTerminalLane";
+import { TREASURY_TERMINAL_LANES, TREASURY_T3_LANE, TREASURY_T4_LANE, treasuryLaneTaskMatches } from "@/runtime/treasuryTerminalLane";
 import {
   DEFAULT_CAPACITY_HEADROOM_POLICY,
   getReceiverSafeCapacity,
@@ -345,6 +346,7 @@ interface TerminalStagingBatch {
   transactionFee: number;
   dispatchClass?: CarrierTaskDispatchClass;
   productionDemandBounded?: boolean;
+  productionResourceTransferTaskId?: string;
 }
 
 interface TerminalEnergyPlanOptions {
@@ -5703,6 +5705,7 @@ function createTerminalFeedTask(
         fromId: room.storage.id,
         toId: room.terminal.id,
         amount: missing,
+        destinationTargetAmount: terminalAmount + missing,
       },
     ],
   };
@@ -6157,6 +6160,7 @@ function appendTerminalResourceFeedDrafts(
     ResourceConstant,
     CarrierTaskDispatchClass
   >,
+  boundResourceTransferTaskByResource?: ReadonlyMap<ResourceConstant, string>,
 ): void {
   // 永久闩：ResourceControl 不再为 native/Hub legacy seller 搬运待售货物。
   // desiredFeedByResource 来自既有内部 transfer staging 或已签名的
@@ -6165,12 +6169,18 @@ function appendTerminalResourceFeedDrafts(
   let feedCapacity = initialFeedCapacity;
   for (const [resource, target] of desiredFeedByResource.entries()) {
     if (feedCapacity <= 0) break;
-    const requestedDraft = createTerminalFeedTask(
+    let requestedDraft = createTerminalFeedTask(
       snapshot,
       resource,
       limitByAdditionalCapacity ? target : Math.min(target, feedCapacity),
     );
     if (!requestedDraft) continue;
+    const boundTaskId = boundResourceTransferTaskByResource?.get(resource);
+    if (boundTaskId) {
+      const boundTask = Memory.data?.resourceControl?.tasks[boundTaskId];
+      requestedDraft = { ...requestedDraft, steps: requestedDraft.steps.map((step) => ({ ...step, boundResourceTransferTaskId: boundTaskId,
+        ...(boundTask ? { boundResourceTransferTaskIdentity: terminalFeedBoundTaskIdentity(boundTask) } : {}) })) };
+    }
     const draft = limitByAdditionalCapacity
       ? limitCarrierTaskDraftAmount(requestedDraft, feedCapacity)
       : requestedDraft;
@@ -6614,7 +6624,11 @@ function limitCarrierTaskDraftAmount(
     .map((step) => {
       const amount = Math.min(step.amount, remaining);
       remaining -= amount;
-      return { ...step, amount };
+      return { ...step, amount,
+        ...(step.destinationTargetAmount !== undefined
+          ? { destinationTargetAmount: Math.max(0, step.destinationTargetAmount - step.amount) + amount }
+          : {}),
+      };
     })
     .filter((step) => step.amount > 0);
   return steps.length > 0 ? { ...draft, steps } : null;
@@ -6869,7 +6883,7 @@ function reserveTransferTaskStagingBatch(
     batch: {
       resource: task.resource,
       amount: reservedAmount,
-      ...(inspectTaskSynthesisDemand(task, context).status === "bounded" ? { productionDemandBounded: true } : {}),
+      ...(inspectTaskSynthesisDemand(task, context).status === "bounded" ? { productionDemandBounded: true, productionResourceTransferTaskId: task.id } : {}),
       transactionFee: Game.market.calcTransactionCost(
         reservedAmount,
         source.roomName,
@@ -7533,6 +7547,9 @@ function syncTerminalFeedTasks(
           ? [[marketCargoTarget.resource, "market_egress" as const] as const]
           : []),
       ]),
+      stagingBatch?.productionResourceTransferTaskId
+        ? new Map([[stagingBatch.resource, stagingBatch.productionResourceTransferTaskId]])
+        : undefined,
     );
     const validDraftSet = mergeMarketTerminalEnergyReadinessDraft(
       snapshot,
@@ -7571,7 +7588,7 @@ export function inspectTreasuryResourceTransferReadiness(task: ResourceTransferT
 
 /** 仅 OH 准备入口可接受正常 Storage 备货；尚不授予 native。 */
 export function inspectTreasuryResourceTransferPreparation(task: ResourceTransferTask, amount: number, fee: number): {ok: boolean; reason: string} {
-  if (!treasuryLaneTaskMatches(TREASURY_T3_LANE, task)) return {ok:false,reason:"outside_preparation_lane"};
+  if (![TREASURY_T3_LANE,TREASURY_T4_LANE].some((lane) => treasuryLaneTaskMatches(lane, task))) return {ok:false,reason:"outside_preparation_lane"};
   return inspectTreasuryResourceTransferAvailability(task, amount, fee, undefined, false);
 }
 
@@ -7593,7 +7610,7 @@ function inspectTreasuryResourceTransferAvailability(task: ResourceTransferTask,
     const residualResourceCommitment = Math.max(0,outgoing - (ownHealthy ? amount : 0));
     // OH 首片只自然备货真实缺口；本任务余量仍由房间库存承担，
     // 不要求把仍有承诺的 Storage 余量也提前塞进同一 Terminal。
-    const terminalResourceCommitment = treasuryLaneTaskMatches(TREASURY_T3_LANE, task)
+    const terminalResourceCommitment = [TREASURY_T3_LANE,TREASURY_T4_LANE].some((lane) => treasuryLaneTaskMatches(lane, task))
       ? Math.max(0, outgoing - (ownHealthy ? task.remainingAmount : 0))
       : residualResourceCommitment;
     const roomResourceBudget = getStock(donor,task.resource) - getProtectedResourceAmount(donor,task.resource,config,context) - residualResourceCommitment;

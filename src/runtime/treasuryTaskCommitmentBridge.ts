@@ -1,10 +1,11 @@
 import { bumpTreasuryCommitmentRevision, readTreasuryCommitmentRevision } from "@/runtime/treasury/commitmentRevision";
 import { readTreasuryCoreStoreHealth } from "@/runtime/treasury/kernel/store";
 import { readTreasuryWorldSequence } from "@/runtime/treasury/observation";
+import { readTreasuryTerminalControl, readTreasuryTerminalFenceControl } from "@/runtime/treasuryTerminalControl";
+import { readTreasuryContinuousOHFenceProjection, type TreasuryContinuousOHFenceProjection } from "@/runtime/treasuryContinuousOHFence";
 import type { TreasuryCoreWorkRecord } from "@/runtime/treasury/kernel/types";
 import type { ResourceTransferTask } from "@/runtime/logistics/resourceTransferTasks";
-import { createTreasuryFirstLiveState } from "@/runtime/treasuryFirstLiveState";
-import { readTreasuryLaneQuota, readTreasuryLaneResponsibility, isKnownEmptyLegacyTreasuryRoot } from "@/runtime/treasuryTerminalResponsibility";
+import { readTreasuryLaneQuota, readTreasuryLaneFenceQuota, readTreasuryLaneResponsibility, isKnownEmptyLegacyTreasuryRoot } from "@/runtime/treasuryTerminalResponsibility";
 import { decodeTreasuryTerminalFacts } from "@/runtime/treasuryTerminalFacts";
 import { TREASURY_T1_LANE, TREASURY_T2_LANE, TREASURY_T3_LANE, TREASURY_TERMINAL_LANES, treasuryLaneWorkKey, treasuryLaneTaskMatches, type TreasuryTerminalLane } from "@/runtime/treasuryTerminalLane";
 export {
@@ -46,7 +47,7 @@ function sameFenceSnapshot(cached: Omit<FenceCache, "value"> | null | undefined,
     cached.revision === revision && cached.worldSequence === worldSequence && cached.quotaToken === quotaToken &&
     cached.pointers.length === pointers.length && cached.pointers.every((pointer,index) => pointer === pointers[index]);
 }
-function hasLaneFence(lane: TreasuryTerminalLane): boolean {
+function hasLaneFence(lane: TreasuryTerminalLane, continuousProjection = readTreasuryContinuousOHFenceProjection()): boolean {
   const runtime = Memory.runtime as unknown as Record<string, unknown> | undefined;
   const data = Memory.data as unknown as Record<string, unknown> | undefined;
   const resource = data?.resourceControl as Record<string,unknown> | undefined;
@@ -61,10 +62,12 @@ function hasLaneFence(lane: TreasuryTerminalLane): boolean {
   }).join(";");
   // Fixed-size control/quota validation is cheap and catches in-place corruption, including the mirror.
   // Only the empire-wide kernel/task responsibility inspection is cached.
-  const control = createTreasuryFirstLiveState(lane).readControl();
+  const control = lane.continuous ? continuousProjection.control : readTreasuryTerminalFenceControl(lane);
   if (!isKnownEmptyLegacyTreasuryRoot(runtime?.treasury)) return true;
-  if (control.status === "invalid" || TREASURY_TERMINAL_LANES.some((known) => readTreasuryLaneQuota(known).status === "invalid")) return true;
-  if (lane.requiredProduct !== undefined && control.status === "valid" && control.value.status === "active") return true;
+  if (control.status === "invalid" || TREASURY_TERMINAL_LANES.some((known) =>
+      (known.continuous ? continuousProjection.quota : readTreasuryLaneFenceQuota(known)).status === "invalid")) return true;
+  if (lane.requiredProduct !== undefined && control.status === "valid" && control.value.status === "active" &&
+      (!lane.continuous || control.value.taskId !== "")) return true;
   const revision = readTreasuryCommitmentRevision(); const worldSequence = readTreasuryWorldSequence();
   const cached = fenceCache.get(lane.name);
   if (sameFenceSnapshot(cached, revision, worldSequence, quotaToken, pointers)) return cached!.value;
@@ -76,7 +79,7 @@ function hasLaneFence(lane: TreasuryTerminalLane): boolean {
         health:readTreasuryCoreStoreHealth()};
     } catch { return true; }
   }
-  const value = readTreasuryLaneResponsibility(lane, coreFenceSnapshot!.health).status !== "clear";
+  const value = readTreasuryLaneResponsibility(lane, coreFenceSnapshot!.health, true, continuousProjection).status !== "clear";
   // Core publication replaces its root; leases bump revision, controls/quotas replace their signed object.
   // Thus same-tick new responsibility is visible without re-scanning the empire on every carrier action.
   fenceCache.set(lane.name,{game:Game,memory:Memory,tick:Game.time,revision,worldSequence,pointers,quotaToken,value});
@@ -86,8 +89,10 @@ export function hasTreasuryT1TerminalFence(): boolean { return hasLaneFence(TREA
 export function hasTreasuryT2TerminalFence(): boolean { return hasLaneFence(TREASURY_T2_LANE); }
 export function hasTreasuryT3TerminalFence(): boolean { return hasLaneFence(TREASURY_T3_LANE); }
 export function hasTreasuryTerminalFence(roomName: string): boolean {
-  return TREASURY_TERMINAL_LANES.some((lane) =>
-    (roomName === lane.sourceRoom || roomName === lane.targetRoom) && hasLaneFence(lane));
+  const lanes = TREASURY_TERMINAL_LANES.filter((lane) => roomName === lane.sourceRoom || roomName === lane.targetRoom);
+  if (lanes.length === 0) return false;
+  const snapshot: TreasuryContinuousOHFenceProjection = readTreasuryContinuousOHFenceProjection();
+  return lanes.some((lane) => hasLaneFence(lane, snapshot));
 }
 /** Exact canonical rows survive cancellation/cleanup while their native responsibility remains. */
 export function hasTreasuryT1TaskRetention(task: ResourceTransferTask): boolean {
@@ -120,17 +125,18 @@ export function treasuryTaskCommitmentView(
   tasks: Record<string, ResourceTransferTask>,
   active: readonly TreasuryCoreWorkRecord[],
 ): Record<string, ResourceTransferTask> {
-  const activeSlices = new Map<string, { amount: number; count: number; taskCreatedAt: number; taskAmount: number | null; attemptId: string; lane: TreasuryTerminalLane }>();
+  const activeSlices = new Map<string, { amount: number; count: number; taskCreatedAt: number; taskAmount: number | null; workKey: string; attemptId: string; lane: TreasuryTerminalLane }>();
   for (const record of active) {
     const lane = TREASURY_TERMINAL_LANES.find((entry) => entry.actionKind === record.identity.actionKind);
     if (!lane) continue;
     const facts = decodeTreasuryTerminalFacts(lane, record.identity.durableFacts?.payload);
     const quota = readTreasuryLaneQuota(lane);
-    const control = createTreasuryFirstLiveState(lane).readControl();
-    if (!facts || record.workKey !== treasuryLaneWorkKey(lane, facts.taskId)) continue;
+    const control = readTreasuryTerminalControl(lane);
+    if (!facts || record.workKey !== treasuryLaneWorkKey(lane, facts.taskId, facts.sequence)) continue;
     const previous = activeSlices.get(facts.taskId);
     activeSlices.set(facts.taskId, {
       amount: facts.amount,
+      workKey: record.workKey,
       count: (previous?.count ?? 0) + 1,
       taskCreatedAt: facts.taskCreatedAt,
       taskAmount: quota.status === "valid" && quota.value.taskId === facts.taskId &&
@@ -151,7 +157,7 @@ export function treasuryTaskCommitmentView(
       if (
         lease === undefined ||
         (lease.schemaVersion === 1 && lease.runId === activeSlice.lane.runId &&
-          lease.workKey === treasuryLaneWorkKey(activeSlice.lane, taskId) && lease.amount === activeSlice.amount &&
+          lease.workKey === activeSlice.workKey && lease.amount === activeSlice.amount &&
           (lease.attemptId === activeSlice.attemptId || (lease.phase === "preparing" && lease.attemptId === "")))
       ) {
         excludedAmount = activeSlice.amount;

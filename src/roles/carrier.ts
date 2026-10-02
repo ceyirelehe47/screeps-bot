@@ -55,10 +55,18 @@ import {
 } from "@/runtime/terminalBootstrapRecovery";
 import {
   claimLocalCarrierDestinationCapacity,
+  claimLocalCarrierReturnToSourceCapacity,
   getLocalCarrierDestinationAvailableAmount,
   type LocalCarrierDestinationCapacityClaim,
 } from "@/runtime/localCarrierDestinationCapacity";
 import { isSpawnActive } from "@/runtime/tickContext";
+import {
+  getTerminalFeedRemainingTarget,
+  noteTerminalFeedAcceptedDelivery,
+  noteTerminalFeedAcceptedPickup,
+  readTerminalFeedTargetAmount,
+  revalidateTerminalFeedSnapshotTarget,
+} from "@/runtime/terminalFeedTarget";
 
 type CarrierPickupTarget = Resource | StructureContainer | StructureLink | StructureStorage | StructureTerminal | Tombstone | Ruin;
 type DeadStorePickupTarget = Tombstone | Ruin;
@@ -629,6 +637,10 @@ function clearSynthesisCarrierPendingSnapshot(
   delete state.synthesisCarrierPendingResource;
   delete state.synthesisCarrierPendingTaskType;
   delete state.synthesisCarrierPendingTaskRef;
+  delete state.synthesisCarrierPendingDestinationTargetAmount;
+  delete state.synthesisCarrierPendingBoundResourceTransferTaskId;
+  delete state.synthesisCarrierPendingBoundResourceTransferTaskIdentity;
+  delete state.synthesisCarrierPendingReturnToId;
 }
 
 function releaseSynthesisCarrierTaskBinding(creep: Creep): void {
@@ -721,6 +733,7 @@ function isCarrierTaskStepRunnable(
   step: CarrierTaskStep,
   fallbackRoomName?: string,
   taskType?: CarrierTask["type"],
+  task?: CarrierTask,
 ): boolean {
   const from = resolveTaskStructure(step.fromId);
   const to = resolveTaskStructure(step.toId);
@@ -736,6 +749,8 @@ function isCarrierTaskStepRunnable(
   if (targetFree <= 0) {
     return false;
   }
+  const feedTarget = task ? readTerminalFeedTargetAmount(task, step) : undefined;
+  if (feedTarget !== undefined && getTerminalFeedRemainingTarget(to, step.resource, feedTarget) <= 0) return false;
   return true;
 }
 
@@ -745,7 +760,7 @@ function selectPickupStep(task: CarrierTask, creep: Creep): CarrierTaskStep | nu
   let best: CarrierTaskStep | null = null;
   let bestRange = Infinity;
   for (const step of task.steps) {
-    if (!isCarrierTaskStepRunnable(step, assignedRoomName, task.type)) {
+    if (!isCarrierTaskStepRunnable(step, assignedRoomName, task.type, task)) {
       continue;
     }
     const from = resolveTaskStructure(step.fromId);
@@ -784,7 +799,7 @@ function isCarrierTaskRunnable(
   roomName?: string,
 ): boolean {
   return task.steps.some((step) =>
-    isCarrierTaskStepRunnable(step, roomName, task.type),
+    isCarrierTaskStepRunnable(step, roomName, task.type, task),
   );
 }
 
@@ -1115,7 +1130,10 @@ function pickupSynthesisCarrierResource(
   }
 
   const freeCapacity = creep.store.getFreeCapacity(assignment.step.resource);
-  const requestedAmount = Math.min(assignment.step.amount, freeCapacity);
+  const feedTargetAmount = readTerminalFeedTargetAmount(assignment.task, assignment.step);
+  const feedDestination = feedTargetAmount !== undefined ? resolveTaskStructure(assignment.step.toId) : null;
+  const requestedAmount = Math.min(assignment.step.amount, freeCapacity,
+    feedTargetAmount !== undefined ? feedDestination ? getTerminalFeedRemainingTarget(feedDestination, assignment.step.resource, feedTargetAmount) : 0 : Number.POSITIVE_INFINITY);
   let exposureClaim:
     | ReturnType<typeof claimTerminalAmountOutsideMarketSaleExposure>
     | undefined;
@@ -1154,12 +1172,12 @@ function pickupSynthesisCarrierResource(
     assignment.task,
   );
   const requiresTaskAmountClaim = isTerminalOffload ||
-    isCapacityReliefPreload || isMarketEgressPreload || (
+    isCapacityReliefPreload || isMarketEgressPreload || feedTargetAmount !== undefined || (
     isNukerEnergySupplyCarrierTask(assignment.task) &&
     assignment.step.resource === RESOURCE_ENERGY
   );
   const requiresDestinationCapacityClaim = isTerminalOffload ||
-    isCapacityReliefPreload || isMarketEgressPreload;
+    isCapacityReliefPreload || isMarketEgressPreload || feedTargetAmount !== undefined;
   let claimRequestedAmount = withdrawAmount;
   let destinationTarget: AnyStoreStructure | null = null;
   if (requiresDestinationCapacityClaim) {
@@ -1260,6 +1278,9 @@ function pickupSynthesisCarrierResource(
   }
   taskAmountClaim?.commit();
   destinationCapacityClaim?.commit();
+  if (feedTargetAmount !== undefined && feedDestination) {
+    noteTerminalFeedAcceptedPickup(creep.name, feedDestination.id, assignment.step.resource, withdrawAmount);
+  }
 
   // Record the accepted intent — store mutation happens next tick in live Screeps
   const state = ensureCreepAssignmentState(creep.name);
@@ -1269,6 +1290,11 @@ function pickupSynthesisCarrierResource(
   state.synthesisCarrierPendingToId = assignment.step.toId;
   state.synthesisCarrierPendingResource = assignment.step.resource;
   state.synthesisCarrierPendingTaskType = assignment.task.type;
+  if (feedTargetAmount !== undefined) state.synthesisCarrierPendingDestinationTargetAmount = feedTargetAmount;
+  else delete state.synthesisCarrierPendingDestinationTargetAmount;
+  state.synthesisCarrierPendingBoundResourceTransferTaskId = assignment.step.boundResourceTransferTaskId;
+  state.synthesisCarrierPendingBoundResourceTransferTaskIdentity = assignment.step.boundResourceTransferTaskIdentity;
+  delete state.synthesisCarrierPendingReturnToId;
   const pendingTaskRef = cloneCarrierDispatchRef(assignment.ref);
   if (pendingTaskRef) {
     state.synthesisCarrierPendingTaskRef = pendingTaskRef;
@@ -1430,6 +1456,60 @@ function transferCarrierResource(
   };
 }
 
+function returnBoundedTerminalFeedCargo(creep: Creep, resource: ResourceConstant): boolean {
+  const state = ensureCreepAssignmentState(creep.name);
+  const source = state.synthesisCarrierPendingFromId ? resolveTaskStructure(state.synthesisCarrierPendingFromId) : null;
+  if (source?.structureType !== STRUCTURE_STORAGE || !source.room?.controller?.my || source.store.getFreeCapacity(resource) <= 0) return true;
+  state.synthesisCarrierPendingReturnToId = source.id;
+  const capacity = claimLocalCarrierReturnToSourceCapacity({ claimantId: creep.name, target: source as StructureStorage, resource,
+    requestedAmount: creep.store.getUsedCapacity(resource) });
+  if (!capacity) return true;
+  let code: ScreepsReturnCode;
+  try { code = measureCreepIntent(() => creep.transfer(source, resource, capacity.amount)); }
+  catch (error) { capacity.release(); throw error; }
+  if (code === OK) {
+    capacity.commit();
+    state.synthesisCarrierPendingDeliveryTick = Game.time;
+  } else {
+    capacity.release();
+    if (code === ERR_NOT_IN_RANGE) moveToTarget(creep, source);
+  }
+  return true;
+}
+
+function deliverBoundedTerminalFeedCargo(
+  creep: Creep,
+  target: AnyStoreStructure,
+  resource: ResourceConstant,
+  frozenTargetAmount: number,
+  boundTaskId?: string,
+  boundTaskIdentity?: string,
+): boolean {
+  const carried = creep.store.getUsedCapacity(resource);
+  if (ensureCreepAssignmentState(creep.name).synthesisCarrierPendingReturnToId) return returnBoundedTerminalFeedCargo(creep, resource);
+  const currentTarget = revalidateTerminalFeedSnapshotTarget(target, resource, frozenTargetAmount, boundTaskId, boundTaskIdentity);
+  const allowance = Math.min(carried, target.store.getFreeCapacity(resource),
+    getTerminalFeedRemainingTarget(target, resource, currentTarget, creep.name));
+  // 已取货的责任保留在原 snapshot；过量/满库不落入 generic Terminal cleanup。
+  if (allowance <= 0) return returnBoundedTerminalFeedCargo(creep, resource);
+  const capacityClaim = claimLocalCarrierDestinationCapacity({ claimantId: creep.name, target, resource, requestedAmount: allowance });
+  if (!capacityClaim) return true;
+  const beforeAmount = target.store.getUsedCapacity(resource);
+  let transfer: CarrierTransferResult;
+  try { transfer = transferCarrierResource(creep, target, resource, capacityClaim.amount); }
+  catch (error) { capacityClaim.release(); throw error; }
+  if (transfer.code === OK) {
+    capacityClaim.commit();
+    noteTerminalFeedAcceptedDelivery(creep.name, target, resource, transfer.acceptedAmount, beforeAmount);
+    // Native Store 尚未变化；直到下一 tick 真正交付完毕才清除 provenance。
+    ensureCreepAssignmentState(creep.name).synthesisCarrierPendingDeliveryTick = Game.time;
+  } else {
+    capacityClaim.release();
+    if (transfer.code === ERR_NOT_IN_RANGE) moveToTarget(creep, target);
+  }
+  return true;
+}
+
 function deliverSynthesisCarrierResource(creep: Creep): boolean {
   const assigned = getAssignedSynthesisCarrierTask(creep);
   const state = ensureCreepAssignmentState(creep.name);
@@ -1450,12 +1530,39 @@ function deliverSynthesisCarrierResource(creep: Creep): boolean {
     const _cdFrom = state.synthesisCarrierPendingFromId
       ? resolveTaskStructure(state.synthesisCarrierPendingFromId)
       : null;
+    if (state.synthesisCarrierPendingDestinationTargetAmount !== undefined && !_cdTarget) return returnBoundedTerminalFeedCargo(creep, _cdResource);
+    if (_cdTarget?.structureType === STRUCTURE_TERMINAL &&
+        state.synthesisCarrierPendingDestinationTargetAmount === undefined &&
+        state.synthesisCarrierPendingTaskType === "terminal_feed") {
+      const originalTask = state.synthesisCarrierPendingTaskRef ? findCarrierTaskByRef(state.synthesisCarrierPendingTaskRef) : assigned;
+      const originalStep = originalTask?.steps.find((step) => step.id === state.synthesisCarrierPendingStepId &&
+        step.fromId === state.synthesisCarrierPendingFromId && step.toId === _cdToId && step.resource === _cdResource);
+      if (originalTask && originalStep) {
+        const legacyTarget = readTerminalFeedTargetAmount(originalTask, originalStep);
+        if (legacyTarget !== undefined) {
+          state.synthesisCarrierPendingDestinationTargetAmount = originalTask.updatedAt <= (state.synthesisCarrierPendingPickupTick ?? Game.time)
+            ? legacyTarget : 0;
+          state.synthesisCarrierPendingBoundResourceTransferTaskId = originalStep.boundResourceTransferTaskId;
+          state.synthesisCarrierPendingBoundResourceTransferTaskIdentity = originalStep.boundResourceTransferTaskIdentity;
+        }
+      } else if (_cdFrom?.structureType === STRUCTURE_STORAGE && state.synthesisCarrierPendingTaskRef?.namespace === RESOURCE_CONTROL_TERMINAL_PRELOAD_PRODUCER) {
+        const legacyTarget = readTerminalFeedTargetAmount({ type: "terminal_feed", producer: RESOURCE_CONTROL_TERMINAL_PRELOAD_PRODUCER,
+          roomName: _cdTarget.room?.name || creep.room.name } as CarrierTask,
+          { toKind: "terminal", resource: _cdResource } as CarrierTaskStep);
+        if (legacyTarget !== undefined) state.synthesisCarrierPendingDestinationTargetAmount = legacyTarget;
+      }
+    }
     const isTerminalOffloadSnapshot =
       _cdTarget?.structureType === STRUCTURE_STORAGE &&
       (
         state.synthesisCarrierPendingTaskType === "terminal_offload" ||
         _cdFrom?.structureType === STRUCTURE_TERMINAL
       );
+    if (_cdTarget?.structureType === STRUCTURE_TERMINAL && state.synthesisCarrierPendingDestinationTargetAmount !== undefined) {
+      return deliverBoundedTerminalFeedCargo(creep, _cdTarget, _cdResource,
+        state.synthesisCarrierPendingDestinationTargetAmount, state.synthesisCarrierPendingBoundResourceTransferTaskId,
+        state.synthesisCarrierPendingBoundResourceTransferTaskIdentity);
+    }
     if (_cdTarget && _cdTarget.store.getFreeCapacity(_cdResource) > 0) {
       const _cdTransfer = transferCarrierResource(
         creep,
@@ -1659,6 +1766,19 @@ function deliverSynthesisCarrierResource(creep: Creep): boolean {
     return false;
   }
 
+  const boundedFeedTarget = assigned && assignedStep ? readTerminalFeedTargetAmount(assigned, assignedStep) : undefined;
+  if (boundedFeedTarget !== undefined && assignedStep && target.structureType === STRUCTURE_TERMINAL) {
+    state.synthesisCarrierPendingToId = assignedStep.toId;
+    state.synthesisCarrierPendingFromId = assignedStep.fromId;
+    state.synthesisCarrierPendingResource = resource;
+    state.synthesisCarrierPendingTaskType = "terminal_feed";
+    state.synthesisCarrierPendingDestinationTargetAmount = boundedFeedTarget;
+    state.synthesisCarrierPendingBoundResourceTransferTaskId = assignedStep.boundResourceTransferTaskId;
+    state.synthesisCarrierPendingBoundResourceTransferTaskIdentity = assignedStep.boundResourceTransferTaskIdentity;
+    return deliverBoundedTerminalFeedCargo(creep, target, resource, boundedFeedTarget,
+      assignedStep.boundResourceTransferTaskId, assignedStep.boundResourceTransferTaskIdentity);
+  }
+
   const transfer = transferCarrierResource(creep, target, resource);
   const code = transfer.code;
   if (code === ERR_NOT_IN_RANGE) {
@@ -1691,6 +1811,8 @@ export const carrierRole: RoleFactory = () => ({
       : undefined;
 
     const deliveryState = ensureCreepAssignmentState(creep.name);
+    if (deliveryState.synthesisCarrierPendingPickupTick === Game.time &&
+        deliveryState.synthesisCarrierPendingDestinationTargetAmount !== undefined) return true;
     if (deliveryState.synthesisCarrierPendingDeliveryTick === Game.time - 1) {
       delete deliveryState.synthesisCarrierPendingDeliveryTick;
       if (creep.store.getUsedCapacity() === 0) {

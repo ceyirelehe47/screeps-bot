@@ -1,6 +1,6 @@
 import { hashTreasuryCanonicalString } from "@/runtime/treasury/transactionId";
 export interface TreasuryTerminalLane {
-  readonly name: "T1" | "T2" | "T3";
+  readonly name: "T1" | "T2" | "T3" | "T4";
   readonly runId: string;
   readonly actionKind: string;
   readonly sourceRoom: string;
@@ -16,6 +16,7 @@ export interface TreasuryTerminalLane {
   readonly requiredReason?: string;
   readonly requiredProduct?: ResourceConstant;
   readonly demandBoundedSlice?: boolean;
+  readonly continuous?: boolean;
 }
 export const TREASURY_T1_LANE: TreasuryTerminalLane = Object.freeze({
   name: "T1", runId: "treasury-production-T1-2026-09-24",
@@ -48,9 +49,26 @@ export const TREASURY_T3_LANE: TreasuryTerminalLane = Object.freeze({
   requiredReason: "synthesis:E1N57:UH2O", requiredProduct: RESOURCE_UTRIUM_ACID,
   demandBoundedSlice: true,
 });
-export const TREASURY_TERMINAL_LANES = Object.freeze([TREASURY_T1_LANE, TREASURY_T2_LANE, TREASURY_T3_LANE]);
-export const treasuryLaneWorkKey = (lane: TreasuryTerminalLane, taskId: string): string =>
-  `biz:${lane.runId}:${hashTreasuryCanonicalString(taskId)}`;
+export const TREASURY_T4_LANE: TreasuryTerminalLane = Object.freeze({
+  name: "T4", runId: "treasury-continuous-oh-T4-2026-10-02",
+  actionKind: "production.terminal-transfer.oh-continuous.slice", sourceRoom: "E4N58", targetRoom: "E1N57",
+  resource: RESOURCE_HYDROXIDE, controlRunId: "treasury-continuous-oh-control-2026-10-02",
+  controlKey: "treasuryContinuousOH", controlMirrorKey: "treasuryContinuousOHMirror",
+  quotaKey: "treasuryContinuousOH", configKey: "treasuryTerminalTransferT4",
+  descriptionPrefix: "treasury-T4-2026-10-02:",
+  semanticIdentity: "production.terminal-transfer.oh-continuous@E4N58-E1N57-OH-v1",
+  requiredReason: "synthesis:E1N57:UH2O", requiredProduct: RESOURCE_UTRIUM_ACID,
+  demandBoundedSlice: true, continuous: true,
+});
+export const TREASURY_TERMINAL_LANES = Object.freeze([TREASURY_T1_LANE, TREASURY_T2_LANE, TREASURY_T3_LANE, TREASURY_T4_LANE]);
+/** 已签名 currentCycle 才能最终授予权限；这里只建立稳定的身份字符串。 */
+export function treasuryLaneWorkKey(lane: TreasuryTerminalLane, taskId: string, sequence?: number): string {
+  const base = `biz:${lane.runId}:${hashTreasuryCanonicalString(taskId)}`;
+  if (!lane.continuous) return base;
+  const state = (Memory.runtime as unknown as Record<string, { currentCycle?: { sequence?: unknown } }> | undefined)?.[lane.quotaKey];
+  const value = sequence ?? state?.currentCycle?.sequence;
+  return `${base}:${typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : 0}`;
+}
 export const treasuryLaneTaskMatches = (lane: TreasuryTerminalLane, task: { fromRoomName: string; toRoomName: string; resource: ResourceConstant; origin?: string; reason?: string }): boolean =>
   task.fromRoomName === lane.sourceRoom && task.toRoomName === lane.targetRoom && task.resource === lane.resource &&
   (lane.requiredReason === undefined || task.origin === "automatic" && task.reason === lane.requiredReason);

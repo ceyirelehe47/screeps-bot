@@ -5,10 +5,11 @@ import { isValidTreasuryTransferTaskForCommitment } from "@/runtime/treasury/com
 import type { TreasuryLocationCommitmentRequest } from "@/runtime/treasury/facade";
 import { readTreasuryCoreStoreHealth } from "@/runtime/treasury/kernel/store";
 import { readTreasuryWorldSequence } from "@/runtime/treasury/observation";
-import { createTreasuryFirstLiveState, runtime } from "@/runtime/treasuryFirstLiveState";
-import { decodeTreasuryT3DurableFacts } from "@/runtime/treasuryT3Facts";
+import { runtime } from "@/runtime/treasuryFirstLiveState";
+import { readTreasuryTerminalControl } from "@/runtime/treasuryTerminalControl";
+import { decodeTreasuryTerminalFacts } from "@/runtime/treasuryTerminalFacts";
 import { readTreasuryLaneQuota, readTreasuryLaneResponsibility } from "@/runtime/treasuryTerminalResponsibility";
-import { TREASURY_T3_LANE, TREASURY_TERMINAL_LANES, treasuryLaneTaskMatches, treasuryLaneWorkKey } from "@/runtime/treasuryTerminalLane";
+import { TREASURY_TERMINAL_LANES, treasuryLaneTaskMatches, treasuryLaneWorkKey } from "@/runtime/treasuryTerminalLane";
 
 function integer(value: unknown): value is number {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
@@ -59,13 +60,16 @@ function carrierProductionCommitment(roomName: string, resource: string): number
 }
 
 /**
- * 只把 T3 自己已签名任务的残余责任定位到真实 Storage；房间承诺原额保留。
+ * T3 只允许完整 Storage 支持；T4 可将确证的一部分余量定位到 Storage。
+ * 两者都保留房间全部承诺，剩下尚无 Storage 证明的责任继续占 Terminal。
  * Terminal 的发送量、费用、其他任务和生产保护继续由原授权公式扣除。
  * 每次接纳及 fresh 执行复验重新检查全部证明，不缓存位置豁免。
  */
 export function treasuryT3CommittedOutgoingForLocation(request: TreasuryLocationCommitmentRequest): number | undefined {
   try {
-    const lane = TREASURY_T3_LANE;
+    const lane = TREASURY_TERMINAL_LANES.find((entry) =>
+      (entry.name === "T3" || entry.continuous) && entry.actionKind === request.context.actionKind);
+    if (!lane) return undefined;
     const { context, candidate, observation, commitments, roomCommittedOutgoing } = request;
     if (request.roomName !== lane.sourceRoom || request.locationKind !== "terminal" || request.resource !== lane.resource ||
         context.actionKind !== lane.actionKind || candidate === null ||
@@ -75,8 +79,8 @@ export function treasuryT3CommittedOutgoingForLocation(request: TreasuryLocation
         !integer(roomCommittedOutgoing) || commitments.commitmentCompleteness(lane.sourceRoom, lane.resource) !== "complete" ||
         observation.isStale() || observation.epoch.observedAtTick !== Game.time ||
         observation.epoch.worldSequence < readTreasuryWorldSequence()) return undefined;
-    const facts = decodeTreasuryT3DurableFacts(candidate.identity.durableFacts.payload);
-    const controlRead = createTreasuryFirstLiveState(lane).readControl();
+    const facts = decodeTreasuryTerminalFacts(lane, candidate.identity.durableFacts.payload);
+    const controlRead = readTreasuryTerminalControl(lane);
     if (!facts || facts.tick !== Game.time || controlRead.status !== "valid" || controlRead.value.status !== "active") return undefined;
     const control = controlRead.value;
     const now = Date.now();
@@ -90,7 +94,8 @@ export function treasuryT3CommittedOutgoingForLocation(request: TreasuryLocation
         facts.taskId !== control.taskId || facts.taskCreatedAt !== control.taskCreatedAt ||
         facts.source.id !== control.sourceTerminalId || facts.target.id !== control.targetTerminalId ||
         !integer(control.maxSliceAmount) || facts.amount > control.maxSliceAmount ||
-        candidate.workKey !== treasuryLaneWorkKey(lane, facts.taskId)) return undefined;
+        (lane.continuous && facts.sequence !== control.sequence) ||
+        candidate.workKey !== treasuryLaneWorkKey(lane, facts.taskId, facts.sequence)) return undefined;
     const tasks = Memory.data?.resourceControl?.tasks as Record<string, ResourceTransferTask> | undefined;
     const task = tasks?.[facts.taskId];
     if (!task || task.id !== facts.taskId || !isValidTreasuryTransferTaskForCommitment(task) ||
@@ -113,8 +118,8 @@ export function treasuryT3CommittedOutgoingForLocation(request: TreasuryLocation
         health.status === "healthy" && health.ringDegraded !== null) return undefined;
     for (const other of TREASURY_TERMINAL_LANES) {
       if (other === lane) continue;
-      const otherControl = createTreasuryFirstLiveState(other).readControl();
-      if (otherControl.status === "invalid" || otherControl.status === "valid" && otherControl.value.status === "active" ||
+      const otherControl = readTreasuryTerminalControl(other);
+      if (otherControl.status === "invalid" || otherControl.status === "valid" && otherControl.value.status !== "closed" ||
           readTreasuryLaneResponsibility(other).status !== "clear") return undefined;
     }
     const source = observation.location(lane.sourceRoom, "terminal");
@@ -145,7 +150,9 @@ export function treasuryT3CommittedOutgoingForLocation(request: TreasuryLocation
     if (![stored, reserved, carried, terminalOccupied, storageOccupied].every(integer)) return undefined;
     const otherPending = roomCommittedOutgoing - residual;
     const storageBacking = stored - reserved - carried! - otherPending - terminalOccupied - storageOccupied;
-    if (!integer(storageBacking) || storageBacking < residual) return undefined;
-    return otherPending;
+    if (!integer(storageBacking) || !lane.continuous && storageBacking < residual) return undefined;
+    // 首片 10：room 承诺 903 = Storage 887 + Terminal 16；Terminal 26 仍只准花 10。
+    const storageAssigned = lane.continuous ? Math.min(residual, storageBacking) : residual;
+    return roomCommittedOutgoing - storageAssigned;
   } catch { return undefined; }
 }

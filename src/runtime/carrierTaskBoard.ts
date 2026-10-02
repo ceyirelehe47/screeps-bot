@@ -24,6 +24,10 @@ export interface CarrierTaskStep {
   readonly fromId: string;
   readonly toId: string;
   readonly amount: number;
+  /** Terminal feed 的目标库存上限；不是可以反复领取的搬运增量。 */
+  readonly destinationTargetAmount?: number;
+  readonly boundResourceTransferTaskId?: string;
+  readonly boundResourceTransferTaskIdentity?: string;
 }
 
 /**
@@ -708,6 +712,9 @@ function cloneCarrierTaskStep(step: CarrierTaskStep): MutableCarrierTaskStepForT
     fromId: step.fromId,
     toId: step.toId,
     amount: step.amount,
+    ...(step.destinationTargetAmount !== undefined ? { destinationTargetAmount: step.destinationTargetAmount } : {}),
+    ...(step.boundResourceTransferTaskId !== undefined ? { boundResourceTransferTaskId: step.boundResourceTransferTaskId } : {}),
+    ...(step.boundResourceTransferTaskIdentity !== undefined ? { boundResourceTransferTaskIdentity: step.boundResourceTransferTaskIdentity } : {}),
   };
 }
 

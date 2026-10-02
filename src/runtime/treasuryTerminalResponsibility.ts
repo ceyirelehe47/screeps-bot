@@ -1,5 +1,8 @@
 import { detectLegacyTreasuryStores, readTreasuryCoreStoreHealth } from "@/runtime/treasury/kernel/store";
 import { TREASURY_TERMINAL_LANES, treasuryLaneWorkKey, type TreasuryTerminalLane } from "@/runtime/treasuryTerminalLane";
+import { readTreasuryContinuousOHQuota, continuousClosedWorkAcknowledged } from "@/runtime/treasuryContinuousOHControl";
+import { readTreasuryContinuousOHFenceQuota, continuousFenceClosedWorkAcknowledged } from "@/runtime/treasuryContinuousOHFence";
+import type { TreasuryContinuousOHFenceProjection } from "@/runtime/treasuryContinuousOHFence";
 
 export interface TreasuryT1Quota {
   readonly schemaVersion: 2;
@@ -28,6 +31,7 @@ export function readTreasuryLaneQuota(lane: TreasuryTerminalLane):
   | { readonly status: "absent" }
   | { readonly status: "invalid" }
   | { readonly status: "valid"; readonly value: TreasuryT1Quota } {
+  if (lane.continuous) return readTreasuryContinuousOHQuota();
   const raw = (Memory.runtime as unknown as Record<string, unknown> | undefined)?.[lane.quotaKey];
   if (raw === undefined) return { status: "absent" };
   const fields = ["schemaVersion", "runId", "status", "taskId", "taskCreatedAt", "taskAmount",
@@ -42,6 +46,9 @@ export function readTreasuryLaneQuota(lane: TreasuryTerminalLane):
       !integer(raw.taskCreatedAt) || !integer(raw.taskAmount) || raw.taskAmount < raw.amount ||
       !integer(raw.reservedAtTick)) return { status: "invalid" };
   return { status: "valid", value: raw as unknown as TreasuryT1Quota };
+}
+export function readTreasuryLaneFenceQuota(lane: TreasuryTerminalLane): ReturnType<typeof readTreasuryLaneQuota> {
+  return lane.continuous ? readTreasuryContinuousOHFenceQuota() : readTreasuryLaneQuota(lane);
 }
 
 const KNOWN_LEGACY_COLLECTIONS = new Set([
@@ -74,7 +81,8 @@ export function isKnownEmptyLegacyTreasuryRoot(raw: unknown): boolean {
 
 /** 只读识别责任；不初始化服务、不迁移预约，不把损坏记录当作空表。 */
 export function readTreasuryLaneResponsibility(lane: TreasuryTerminalLane,
-  coreHealth?: ReturnType<typeof readTreasuryCoreStoreHealth>): TreasuryT1Responsibility {
+  coreHealth?: ReturnType<typeof readTreasuryCoreStoreHealth>, fenceProjection = false,
+  continuousProjection?: TreasuryContinuousOHFenceProjection): TreasuryT1Responsibility {
   try {
     const runtime = Memory.runtime as unknown;
     const data = Memory.data as unknown;
@@ -85,8 +93,10 @@ export function readTreasuryLaneResponsibility(lane: TreasuryTerminalLane,
     if (!isKnownEmptyLegacyTreasuryRoot(legacy) || detectLegacyTreasuryStores().length > 0) {
       return { status: "invalid", reason: "legacy_store_unreadable" };
     }
-    const quota = readTreasuryLaneQuota(lane);
-    if (TREASURY_TERMINAL_LANES.some((other) => readTreasuryLaneQuota(other).status === "invalid")) {
+    const quotaReader = fenceProjection ? (known: TreasuryTerminalLane) => known.continuous && continuousProjection
+      ? continuousProjection.quota : readTreasuryLaneFenceQuota(known) : readTreasuryLaneQuota;
+    const quota = quotaReader(lane);
+    if (TREASURY_TERMINAL_LANES.some((other) => quotaReader(other).status === "invalid")) {
       return { status: "invalid", reason: "quota_invalid" };
     }
     if (quota.status === "invalid") return { status: "invalid", reason: "quota_invalid" };
@@ -124,7 +134,11 @@ export function readTreasuryLaneResponsibility(lane: TreasuryTerminalLane,
         return { status: "invalid", reason: "drained_quota_without_closure" };
       }
     } else if (health.status === "healthy" && health.memory.ring.some((entry) =>
-        entry.workKey.startsWith(`biz:${lane.runId}:`))) {
+        entry.workKey.startsWith(`biz:${lane.runId}:`) &&
+        !(lane.continuous && (fenceProjection ? continuousProjection
+          ? continuousProjection.closed.has(`${entry.workKey}\n${entry.attemptId}`)
+          : continuousFenceClosedWorkAcknowledged(entry.workKey, entry.attemptId)
+          : continuousClosedWorkAcknowledged(entry.workKey, entry.attemptId))))) {
       return { status: "invalid", reason: "closed_work_without_quota" };
     }
     return { status: "clear", reason: "no_responsibility" };

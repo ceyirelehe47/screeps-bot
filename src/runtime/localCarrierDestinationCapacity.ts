@@ -76,7 +76,7 @@ function seedCarrierCommitment(
 function seedLiveCarrierCommitments(target: DestinationCapacityLedger): void {
   for (const creep of Object.values(Game.creeps)) {
     const state = getCreepAssignmentState(creep.name);
-    const snapshotTargetId = state?.synthesisCarrierPendingToId;
+    const snapshotTargetId = state?.synthesisCarrierPendingReturnToId ?? state?.synthesisCarrierPendingToId;
     const snapshotResource = state?.synthesisCarrierPendingResource;
     if (snapshotTargetId && snapshotResource) {
       if (seedCarrierCommitment(
@@ -300,6 +300,24 @@ export function claimLocalCarrierDestinationCapacity(params: {
       }
     },
   };
+}
+
+/** 已接受 terminal_feed 余货只可退回原 source Storage；不改原目标 provenance。 */
+export function claimLocalCarrierReturnToSourceCapacity(params: {
+  claimantId: string; target: StructureStorage; resource: ResourceConstant; requestedAmount: number;
+}): LocalCarrierDestinationCapacityClaim | null {
+  const state = getCreepAssignmentState(params.claimantId);
+  if (state?.synthesisCarrierPendingTaskType !== "terminal_feed" || state.synthesisCarrierPendingFromId !== params.target.id ||
+      state.synthesisCarrierPendingReturnToId !== params.target.id || state.synthesisCarrierPendingResource !== params.resource) return null;
+  const current = ensureLedger();
+  const existing = current.claimByClaimantId.get(params.claimantId);
+  if (existing && existing.targetId !== params.target.id) {
+    if (!existing.seeded || existing.targetId !== state.synthesisCarrierPendingToId || existing.seededTransfer?.committed) return null;
+    current.committedByTargetId.set(existing.targetId, Math.max(0, (current.committedByTargetId.get(existing.targetId) || 0) - existing.amount));
+    current.claimByClaimantId.delete(params.claimantId);
+    seedCarrierCommitment(current, params.claimantId, params.target.id, Game.creeps[params.claimantId]?.store.getUsedCapacity(params.resource) || 0);
+  }
+  return claimLocalCarrierDestinationCapacity(params);
 }
 
 export function getLocalCarrierDestinationCommittedAmount(
