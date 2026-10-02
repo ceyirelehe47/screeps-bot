@@ -35,6 +35,7 @@ import { TREASURY_TERMINAL_LANES, treasuryLaneTaskMatches, treasuryLaneWorkKey, 
 import { readTreasuryCoreStoreHealth } from "@/runtime/treasury/kernel/store";
 import { inspectTreasuryResourceTransferReadiness } from "@/runtime/resourceControl";
 import { withTreasuryTerminalNativeGrant } from "@/runtime/treasuryTerminalDispatchAuthority";
+import { resolveTreasuryTerminalSliceAmount } from "@/runtime/treasuryTerminalAmount";
 
 const TREASURY_T1_MAX_HYDROGEN = 100;
 const TREASURY_T1_MAX_FEE_ENERGY = 100;
@@ -373,7 +374,11 @@ function buildTransferArgs(task: ResourceTransferTask, ledger: ReceiverCapacityL
     task.fromRoomName !== TREASURY_T1_SOURCE_ROOM || task.toRoomName !== TREASURY_T1_TARGET_ROOM ||
     !treasuryLaneTaskMatches(lane, task) || task.id.length > 80
   ) return null;
-  const amount = Math.min(task.remainingAmount, TREASURY_T1_MAX_HYDROGEN);
+  const control = readTreasuryT1FirstLiveControl();
+  if (lane.demandBoundedSlice && (control.status !== "valid" || control.value.maxSliceAmount === undefined)) return null;
+  const amount = resolveTreasuryTerminalSliceAmount(lane, task,
+    lane.demandBoundedSlice && control.status === "valid" ? control.value.maxSliceAmount : TREASURY_T1_MAX_HYDROGEN);
+  if (amount < 1) return null;
   const source = readTerminal(TREASURY_T1_SOURCE_ROOM);
   const target = readTerminal(TREASURY_T1_TARGET_ROOM);
   if (source.status !== "ok" || target.status !== "ok" || source.snapshot.cooldown !== 0) return null;
@@ -382,7 +387,7 @@ function buildTransferArgs(task: ResourceTransferTask, ledger: ReceiverCapacityL
     quote === null || source.snapshot.resourceAmount < amount || source.snapshot.energy < quote ||
     target.snapshot.free < amount || ledger.getAvailableAmount(TREASURY_T1_TARGET_ROOM, lane.resource, task.id) < amount
   ) return null;
-  if (lane.name === "T2" && !inspectTreasuryResourceTransferReadiness(task, amount, quote, ledger).ok) return null;
+  if (lane.requiredProduct !== undefined && !inspectTreasuryResourceTransferReadiness(task, amount, quote, ledger).ok) return null;
   const transactionId = formatTreasuryTransactionId(TREASURY_T1_ACTION_KIND, TREASURY_T1_RUN_ID, task.id);
   const args: TreasuryT1TransferArgs = {
     schemaVersion: 1,
@@ -501,7 +506,7 @@ function executeT1(args: TreasuryT1TransferArgs): { ok: boolean; code: number } 
     hasConflictingTerminalActionThisTick() ||
     !task || !treasuryT1FirstLiveAllows(task, args.amount) ||
     !validateLiveArgs(args, true) ||
-    lane.name === "T2" && !inspectTreasuryResourceTransferReadiness(task, args.amount, args.quote, context.ledger).ok ||
+    lane.requiredProduct !== undefined && !inspectTreasuryResourceTransferReadiness(task, args.amount, args.quote, context.ledger).ok ||
     context.ledger.getAvailableAmount(TREASURY_T1_TARGET_ROOM, lane.resource, args.taskId) < args.amount
   ) {
     return { ok: false, code: ERR_BUSY };
@@ -675,6 +680,13 @@ function applyRingOutcome(attemptId: string, workKey: string, terminalPhase: str
   return writeTaskProgress(taskId, workKey, attemptId, quota.value.amount, outcome);
 }
 
+/** 恢复只校验持久历史量与签名上界，不用今天的需求重算昨天的责任。 */
+function historicalSliceAmountAllowed(control: { taskRemainingAtArm: number; maxSliceAmount?: number }, amount: number): boolean {
+  if (!lane.demandBoundedSlice) return amount === Math.min(control.taskRemainingAtArm, 100);
+  return isPositiveInteger(amount) && isPositiveInteger(control.maxSliceAmount) &&
+    amount <= Math.min(control.taskRemainingAtArm, control.maxSliceAmount, 100);
+}
+
 function closeUnadmittedPreparingLease(): void {
   if (readQuota().status !== "absent") return;
   const control = readTreasuryT1FirstLiveControl();
@@ -690,7 +702,7 @@ function closeUnadmittedPreparingLease(): void {
       task.fromRoomName === TREASURY_T1_SOURCE_ROOM && task.toRoomName === TREASURY_T1_TARGET_ROOM &&
       task.resource === lane.resource && lease?.schemaVersion === 1 && lease.runId === TREASURY_T1_RUN_ID &&
       lease.workKey === treasuryT1WorkKey(task.id) && lease.phase === "preparing" && lease.attemptId === "" &&
-      lease.amount === Math.min(value.taskRemainingAtArm, 100)) updateTaskLease(task, null);
+      historicalSliceAmountAllowed(value, lease.amount)) updateTaskLease(task, null);
 }
 
 function cancelUninvokedT1Work(service: TreasuryService): boolean {
@@ -708,7 +720,7 @@ function cancelUninvokedT1Work(service: TreasuryService): boolean {
       if (!facts || !task || control.status !== "valid" || control.value.status !== "closed" ||
           control.value.taskId !== task.id || control.value.taskCreatedAt !== facts.taskCreatedAt ||
           task.createdAt !== facts.taskCreatedAt || task.amount !== control.value.taskAmount ||
-          facts.amount !== Math.min(control.value.taskRemainingAtArm, 100) ||
+          !historicalSliceAmountAllowed(control.value, facts.amount) ||
           record.workKey !== treasuryT1WorkKey(task.id) ||
           !writeQuota({ schemaVersion: 2, runId: TREASURY_T1_RUN_ID, status: "reserved",
             taskId: task.id, taskCreatedAt: task.createdAt, taskAmount: task.amount,
@@ -1036,6 +1048,11 @@ function runTreasuryTerminalTransferTask(
     return { handled: false };
   }
   if (mode !== "canary") return { handled: true, status: mode === "drain" ? "draining" : "invalid_mode" };
+  const currentControl = readTreasuryT1FirstLiveControl();
+  if (lane.demandBoundedSlice && currentControl.status === "valid" && currentControl.value.status === "preparing") {
+    return task.id === currentControl.value.taskId && task.createdAt === currentControl.value.taskCreatedAt
+      ? { handled: true, status: "preparation_staging" } : { handled: false };
+  }
   if (!service) return { handled: true, status: "lifecycle_unavailable" };
   if (!adapterRegistrationReady) return { handled: true, status: "adapter_registration_unavailable" };
   const journal = service.kernelJournal();

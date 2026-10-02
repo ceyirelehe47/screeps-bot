@@ -496,6 +496,43 @@ function roomResourceAmount(room: Room, resource: ResourceConstant): number {
   return total;
 }
 
+function roomSynthesisProductAmount(room: Room, product: ResourceConstant): number {
+  let amount = roomResourceAmount(room, product);
+  for (const creep of Object.values(Game.creeps)) {
+    const assignment = getCreepAssignmentState(creep.name);
+    if (assignment?.synthesisCarrierPendingResource !== product || !assignment.synthesisCarrierPendingToId) continue;
+    const target = Game.getObjectById(assignment.synthesisCarrierPendingToId as Id<AnyStoreStructure>);
+    // 只承认已接受、本房 Storage/Terminal 目的地的产物卸货；路过或外运产品不覆盖本房目标。
+    if (!target || target.room?.name !== room.name ||
+        target.id !== room.storage?.id && target.id !== room.terminal?.id) continue;
+    amount += creep.store.getUsedCapacity(product);
+  }
+  return amount;
+}
+
+/** 普通自动补料的已启用配方边界；完成后保留配方事实，避免旧整批余量继续发送。 */
+export function inspectConfiguredSynthesisTransferDemand(
+  roomName: string, resource: ResourceConstant, product: ResourceConstant, excludeTaskId: string,
+): { status: "unmanaged" } | { status: "held"; reason: string } | { status: "bounded"; amount: number; reason: string } {
+  try {
+    const cfg = normalizeConfig();
+    const roomCfg = cfg.rooms[roomName];
+    const room = Game.rooms[roomName];
+    const plans = roomCfg?.reactions.filter((entry) => entry.product === product) || [];
+    if (!cfg.enabled || !roomCfg?.enabled || !room?.controller?.my || plans.length === 0 ||
+        !getProductReagents(product)?.includes(resource)) return { status: "unmanaged" };
+    // Task reason 不含 target/batch 身份；只有唯一已启用配方才能在 idle 后证明完成。
+    if (plans.length === 1 && roomSynthesisProductAmount(room, product) >= plans[0].targetAmount) {
+      return { status: "bounded", amount: 0, reason: "synthesis_target_satisfied" };
+    }
+    const need = inspectSynthesisTransferNeed(roomName, resource, product, excludeTaskId);
+    if (need.ok || need.reason === "synthesis_need_already_covered") {
+      return { status: "bounded", amount: need.amount, reason: need.reason };
+    }
+    return { status: "held", reason: need.reason };
+  } catch { return { status: "held", reason: "synthesis_demand_unreadable" }; }
+}
+
 /** 只读复用真实合成目标：跨房补料不能仍按已被产品现货覆盖的整batch授权。 */
 export function inspectSynthesisTransferNeed(roomName: string, resource: ResourceConstant, product: ResourceConstant, excludeTaskId: string): {ok: boolean; amount: number; reason: string} {
   try {
@@ -510,7 +547,7 @@ export function inspectSynthesisTransferNeed(roomName: string, resource: Resourc
     if (!active || !Number.isSafeInteger(active.targetAmount) || !Number.isSafeInteger(active.batchSize) ||
         active.targetAmount !== state.targetAmount || active.batchSize !== state.batchSize || active.batchSize < 1 ||
         !getProductReagents(product)?.includes(resource)) return {ok:false,amount:0,reason:"synthesis_plan_identity_changed"};
-    const productDeficit = Math.max(0, active.targetAmount - roomResourceAmount(room, product));
+    const productDeficit = Math.max(0, active.targetAmount - roomSynthesisProductAmount(room, product));
     const required = Math.min(active.batchSize, roundUpReactionAmount(productDeficit));
     let covered = roomResourceAmount(room, resource);
     for (const creep of Object.values(Game.creeps)) {

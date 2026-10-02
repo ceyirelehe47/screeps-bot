@@ -59,6 +59,11 @@ declare global {
   var heartbeatTreasuryT2FirstLive: typeof import("@/runtime/treasuryT2FirstLiveControl").heartbeatTreasuryT2FirstLive;
   var closeTreasuryT2FirstLive: typeof import("@/runtime/treasuryT2FirstLiveControl").closeTreasuryT2FirstLive;
   var treasuryT2FirstLiveStatus: typeof import("@/runtime/treasuryT2FirstLiveControl").treasuryT2FirstLiveStatus;
+  var armTreasuryT3FirstLive: typeof import("@/runtime/treasuryT3FirstLiveControl").armTreasuryT3FirstLive;
+  var prepareTreasuryT3FirstLive: typeof import("@/runtime/treasuryT3FirstLiveControl").prepareTreasuryT3FirstLive;
+  var heartbeatTreasuryT3FirstLive: typeof import("@/runtime/treasuryT3FirstLiveControl").heartbeatTreasuryT3FirstLive;
+  var closeTreasuryT3FirstLive: typeof import("@/runtime/treasuryT3FirstLiveControl").closeTreasuryT3FirstLive;
+  var treasuryT3FirstLiveStatus: typeof import("@/runtime/treasuryT3FirstLiveControl").treasuryT3FirstLiveStatus;
   var armTreasuryT1FirstLive:
     typeof import("@/runtime/treasuryT1FirstLiveControl").armTreasuryT1FirstLive;
   var heartbeatTreasuryT1FirstLive:

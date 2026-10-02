@@ -103,6 +103,22 @@ import { treasuryBoundedDeepFreezeSnapshot } from "@/runtime/treasury/durableSna
 
 export const TREASURY_FRESH_EPOCH_LIMIT = 8;
 
+/** 装配方只读位置承诺端口；缺上下文/返回非法值时保留房间全额承诺。 */
+export interface TreasuryLocationCommitmentRequest {
+  readonly roomName: string;
+  readonly locationKind: string;
+  readonly resource: string;
+  readonly roomCommittedOutgoing: number;
+  readonly observation: TreasuryObservationView;
+  readonly commitments: TreasuryCommitmentIndex;
+  readonly occupancyOutflow: (roomName: string, locationKind: string, resource: string) => number;
+  readonly context: TreasuryCoreAdmissionContext;
+  readonly candidate: {
+    readonly workKey: string;
+    readonly identity: TreasuryCoreIdentityFacts;
+  } | null;
+}
+
 export interface TreasuryServiceDeps {
   /** 生产=TickContext.getMyRooms()（注入避免 runtimeServices 依赖环）。 */
   readonly getRooms: () => readonly Room[];
@@ -118,6 +134,8 @@ export interface TreasuryServiceDeps {
   readonly holderExists?: (holderId: string) => boolean;
   /** holder 身份解析（owner 声明验证用）。 */
   readonly resolveHolder?: (holderId: string) => TreasuryHolderResolution | undefined;
+  /** 仅影响物理位置扣减；room/policy 总量不经过此端口。 */
+  readonly committedOutgoingForLocation?: (request: TreasuryLocationCommitmentRequest) => number | undefined;
 }
 
 /** contract 接纳选项（workKey 必填，业务任务身份）。 */
@@ -374,6 +392,27 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
   /** 已签发未进入调用边界的许可 + 签发 tick（真实 leak 计数用）。 */
   const outstandingPermits = new Set<TreasuryCoreDispatchPermit>();
   const issuedTickOfPermit = new WeakMap<TreasuryCoreDispatchPermit, number>();
+  /** 同步接纳端口的真实身份；调用结束即释放，reset 不继承位置豁免。 */
+  let admissionCandidate: TreasuryLocationCommitmentRequest["candidate"] = null;
+
+  function withAdmissionCandidate<T>(candidate: NonNullable<TreasuryLocationCommitmentRequest["candidate"]>, action: () => T): T {
+    const previous = admissionCandidate;
+    admissionCandidate = candidate;
+    try { return action(); } finally { admissionCandidate = previous; }
+  }
+
+  function locationCommitmentCandidate(context: TreasuryCoreAdmissionContext): TreasuryLocationCommitmentRequest["candidate"] {
+    if (context.excludeAttemptId !== null) {
+      const health = readTreasuryCoreStoreHealth();
+      if (health.status !== "healthy") return null;
+      const record = health.memory.active[context.excludeAttemptId];
+      if (!record || record.attemptId !== context.excludeAttemptId || record.phase !== "pending" ||
+          record.identity.actionKind !== context.actionKind || record.identity.canonicalDigest !== context.contractDigest) return null;
+      return { workKey: record.workKey, identity: record.identity };
+    }
+    return admissionCandidate?.identity.actionKind === context.actionKind &&
+      admissionCandidate.identity.canonicalDigest === context.contractDigest ? admissionCandidate : null;
+  }
 
   function coreAdapterPort(kind: string): TreasuryCoreActionAdapterPort | undefined {
     const adapter = findTreasuryActionAdapter(kind);
@@ -417,12 +456,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
   function buildAdmissionFactSources(
     state: TreasuryTickState,
     occupancy: { byKey: ReadonlyMap<string, number>; inflowByLocation: ReadonlyMap<string, number> },
-    policyContext: {
-      readonly contractId: string;
-      readonly contractDigest: string;
-      readonly actionKind: string;
-      readonly ownerIdentity: TreasuryCoreAdmissionContext["ownerIdentity"];
-    },
+    policyContext: TreasuryCoreAdmissionContext,
   ): TreasuryAdmissionFactSources {
     const ownerKeyForPolicy =
       policyContext.ownerIdentity !== null
@@ -439,8 +473,21 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         occupancy.inflowByLocation.get(overlayLocationKey(roomName, locationKind)) ?? 0,
       commitmentScopeComplete: (roomName, resource) =>
         service.commitments().commitmentCompleteness(roomName, resource) === "complete",
-      committedOutgoing: (roomName, resource) =>
-        service.commitments().pendingOutgoing(roomName, resource),
+      committedOutgoing: (roomName, resource, locationKind) => {
+        const commitments = service.commitments();
+        const roomCommittedOutgoing = commitments.pendingOutgoing(roomName, resource);
+        if (locationKind === undefined || deps.committedOutgoingForLocation === undefined) return roomCommittedOutgoing;
+        try {
+          const located = deps.committedOutgoingForLocation({
+            roomName, locationKind, resource, roomCommittedOutgoing,
+            observation: state.observation, commitments, context: policyContext,
+            candidate: locationCommitmentCandidate(policyContext),
+            occupancyOutflow: (room, kind, res) => occupancy.byKey.get(overlayResourceKey(room, kind, res)) ?? 0,
+          });
+          return typeof located === "number" && Number.isSafeInteger(located) && located >= 0 &&
+            located <= roomCommittedOutgoing ? located : roomCommittedOutgoing;
+        } catch { return roomCommittedOutgoing; }
+      },
       reservedProduction: (roomName, resource, excludeOwner) =>
         service.commitments().reservedProduction(roomName, resource, excludeOwner),
       policyReserve: (resource, rooms) => {
@@ -1164,7 +1211,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         metrics.transactionsRejectedInvalid += 1;
         return { status: "rejected", reason: context.reason, reasonCode: "invalid_input" };
       }
-      const admission = kernel.admit({
+      const admission = withAdmissionCandidate({ workKey: options.workKey, identity: identity.facts }, () => kernel.admit({
         workKey: options.workKey,
         identity: identity.facts,
         worstCase,
@@ -1173,7 +1220,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         postings: candidateLegs.map((leg) => ({ ...leg })),
         admissionContext: context.context,
         structureBindings: structureBindingsOfLegs(candidateLegs),
-      });
+      }));
       if (admission.status === "rejected" && admission.reasonCode === "capacity_insufficient") {
         metrics.transactionsRejectedInvalid += 1;
       }
@@ -1325,14 +1372,14 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       if (context.status === "rejected") {
         return { status: "rejected", reason: context.reason, reasonCode: "invalid_input" };
       }
-      const admission = kernel.executeRearm(rearm, {
+      const admission = withAdmissionCandidate({ workKey: (rearm as TreasuryCoreRearmPermit).workKey, identity: identity.facts }, () => kernel.executeRearm(rearm, {
         identity: identity.facts,
         worstCase,
         canonicalArgs: typed.args,
         postings: candidateLegs.map((leg) => ({ ...leg })),
         admissionContext: context.context,
         structureBindings: structureBindingsOfLegs(candidateLegs),
-      });
+      }));
       if (admission.status === "admitted") {
         permitsIssuedThisTick += 1;
         issuedPermits.add(admission.dispatch);

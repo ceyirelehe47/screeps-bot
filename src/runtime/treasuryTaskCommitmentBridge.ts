@@ -1,10 +1,12 @@
 import { bumpTreasuryCommitmentRevision, readTreasuryCommitmentRevision } from "@/runtime/treasury/commitmentRevision";
+import { readTreasuryCoreStoreHealth } from "@/runtime/treasury/kernel/store";
+import { readTreasuryWorldSequence } from "@/runtime/treasury/observation";
 import type { TreasuryCoreWorkRecord } from "@/runtime/treasury/kernel/types";
 import type { ResourceTransferTask } from "@/runtime/logistics/resourceTransferTasks";
 import { createTreasuryFirstLiveState } from "@/runtime/treasuryFirstLiveState";
 import { readTreasuryLaneQuota, readTreasuryLaneResponsibility, isKnownEmptyLegacyTreasuryRoot } from "@/runtime/treasuryTerminalResponsibility";
 import { decodeTreasuryTerminalFacts } from "@/runtime/treasuryTerminalFacts";
-import { TREASURY_T1_LANE, TREASURY_T2_LANE, TREASURY_TERMINAL_LANES, treasuryLaneWorkKey, treasuryLaneTaskMatches, type TreasuryTerminalLane } from "@/runtime/treasuryTerminalLane";
+import { TREASURY_T1_LANE, TREASURY_T2_LANE, TREASURY_T3_LANE, TREASURY_TERMINAL_LANES, treasuryLaneWorkKey, treasuryLaneTaskMatches, type TreasuryTerminalLane } from "@/runtime/treasuryTerminalLane";
 export {
   TREASURY_T1_ACTION_KIND,
   TREASURY_T1_RUN_ID,
@@ -33,10 +35,17 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
  * flight. A damaged quota is held conservatively; a drained quota alone is
  * inert, but an active kernel record or task lease still keeps the fence. */
 interface FenceCache {
-  game: Game; memory: Memory; tick: number; revision: number;
+  game: Game; memory: Memory; tick: number; revision: number; worldSequence: number;
   pointers: readonly unknown[]; quotaToken: string; value: boolean;
 }
 const fenceCache = new Map<string, FenceCache>();
+let coreFenceSnapshot: (Omit<FenceCache, "value"> & { health: ReturnType<typeof readTreasuryCoreStoreHealth> }) | null = null;
+function sameFenceSnapshot(cached: Omit<FenceCache, "value"> | null | undefined,
+  revision: number, worldSequence: number, quotaToken: string, pointers: readonly unknown[]): boolean {
+  return cached?.game === Game && cached.memory === Memory && cached.tick === Game.time &&
+    cached.revision === revision && cached.worldSequence === worldSequence && cached.quotaToken === quotaToken &&
+    cached.pointers.length === pointers.length && cached.pointers.every((pointer,index) => pointer === pointers[index]);
+}
 function hasLaneFence(lane: TreasuryTerminalLane): boolean {
   const runtime = Memory.runtime as unknown as Record<string, unknown> | undefined;
   const data = Memory.data as unknown as Record<string, unknown> | undefined;
@@ -55,18 +64,27 @@ function hasLaneFence(lane: TreasuryTerminalLane): boolean {
   const control = createTreasuryFirstLiveState(lane).readControl();
   if (!isKnownEmptyLegacyTreasuryRoot(runtime?.treasury)) return true;
   if (control.status === "invalid" || TREASURY_TERMINAL_LANES.some((known) => readTreasuryLaneQuota(known).status === "invalid")) return true;
-  if (lane.name === "T2" && control.status === "valid" && control.value.status === "active") return true;
-  const revision = readTreasuryCommitmentRevision(); const cached = fenceCache.get(lane.name);
-  if (cached?.game === Game && cached.memory === Memory && cached.tick === Game.time && cached.revision === revision &&
-      cached.quotaToken === quotaToken && cached.pointers.every((pointer,index) => pointer === pointers[index])) return cached.value;
-  const value = readTreasuryLaneResponsibility(lane).status !== "clear";
+  if (lane.requiredProduct !== undefined && control.status === "valid" && control.value.status === "active") return true;
+  const revision = readTreasuryCommitmentRevision(); const worldSequence = readTreasuryWorldSequence();
+  const cached = fenceCache.get(lane.name);
+  if (sameFenceSnapshot(cached, revision, worldSequence, quotaToken, pointers)) return cached!.value;
+  // 两个 lane 共用端点时只复用同一 core 的验证快照；各 lane 的额度、
+  // task lease、actionKind 与历史仍各自检查，绝不把另一个 lane 的 clear 当作本 lane clear。
+  if (!sameFenceSnapshot(coreFenceSnapshot, revision, worldSequence, quotaToken, pointers)) {
+    try {
+      coreFenceSnapshot = {game:Game,memory:Memory,tick:Game.time,revision,worldSequence,pointers,quotaToken,
+        health:readTreasuryCoreStoreHealth()};
+    } catch { return true; }
+  }
+  const value = readTreasuryLaneResponsibility(lane, coreFenceSnapshot!.health).status !== "clear";
   // Core publication replaces its root; leases bump revision, controls/quotas replace their signed object.
   // Thus same-tick new responsibility is visible without re-scanning the empire on every carrier action.
-  fenceCache.set(lane.name,{game:Game,memory:Memory,tick:Game.time,revision,pointers,quotaToken,value});
+  fenceCache.set(lane.name,{game:Game,memory:Memory,tick:Game.time,revision,worldSequence,pointers,quotaToken,value});
   return value;
 }
 export function hasTreasuryT1TerminalFence(): boolean { return hasLaneFence(TREASURY_T1_LANE); }
 export function hasTreasuryT2TerminalFence(): boolean { return hasLaneFence(TREASURY_T2_LANE); }
+export function hasTreasuryT3TerminalFence(): boolean { return hasLaneFence(TREASURY_T3_LANE); }
 export function hasTreasuryTerminalFence(roomName: string): boolean {
   return TREASURY_TERMINAL_LANES.some((lane) =>
     (roomName === lane.sourceRoom || roomName === lane.targetRoom) && hasLaneFence(lane));

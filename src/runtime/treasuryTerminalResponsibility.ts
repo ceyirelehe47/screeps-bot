@@ -73,7 +73,8 @@ export function isKnownEmptyLegacyTreasuryRoot(raw: unknown): boolean {
 }
 
 /** 只读识别责任；不初始化服务、不迁移预约，不把损坏记录当作空表。 */
-export function readTreasuryLaneResponsibility(lane: TreasuryTerminalLane): TreasuryT1Responsibility {
+export function readTreasuryLaneResponsibility(lane: TreasuryTerminalLane,
+  coreHealth?: ReturnType<typeof readTreasuryCoreStoreHealth>): TreasuryT1Responsibility {
   try {
     const runtime = Memory.runtime as unknown;
     const data = Memory.data as unknown;
@@ -89,7 +90,7 @@ export function readTreasuryLaneResponsibility(lane: TreasuryTerminalLane): Trea
       return { status: "invalid", reason: "quota_invalid" };
     }
     if (quota.status === "invalid") return { status: "invalid", reason: "quota_invalid" };
-    const health = readTreasuryCoreStoreHealth();
+    const health = coreHealth ?? readTreasuryCoreStoreHealth();
     if (health.status !== "healthy" && health.status !== "absent") {
       return { status: "invalid", reason: "kernel_unhealthy" };
     }

@@ -3,8 +3,9 @@ import { createTreasuryFirstLiveState, runtime, finiteNonNegative, treasuryT1Ser
   type Control, type Payload } from "@/runtime/treasuryFirstLiveState";
 import { TREASURY_TERMINAL_LANES, treasuryLaneTaskMatches, type TreasuryTerminalLane } from "@/runtime/treasuryTerminalLane";
 import { readTreasuryLaneResponsibility } from "@/runtime/treasuryTerminalResponsibility";
-import { inspectTreasuryResourceTransferReadiness } from "@/runtime/resourceControl";
+import { inspectTreasuryResourceTransferReadiness, inspectTreasuryResourceTransferPreparation } from "@/runtime/resourceControl";
 import type { ResourceTransferTask } from "@/runtime/logistics/resourceTransferTasks";
+import { resolveTreasuryTerminalSliceAmount } from "@/runtime/treasuryTerminalAmount";
 import {
   hasTerminalActionClaim,
   hasTerminalSendEffectThisTick,
@@ -97,7 +98,7 @@ function taskEligible(task: ResourceTransferTask, amount: number): boolean {
     task.status === "pending" &&
     task.fromRoomName === TREASURY_T1_SOURCE_ROOM &&
     task.toRoomName === TREASURY_T1_TARGET_ROOM && treasuryLaneTaskMatches(lane, task) &&
-    finiteNonNegative(task.remainingAmount) && amount >= 1 && amount <= 100 &&
+    finiteNonNegative(task.remainingAmount) && Number.isSafeInteger(amount) && amount >= 1 && amount <= 100 &&
     amount <= task.remainingAmount;
 }
 
@@ -111,7 +112,7 @@ function otherResponsibilityClear(): boolean {
   return TREASURY_TERMINAL_LANES.every((other) => {
     if (other === lane) return true;
     const control = createTreasuryFirstLiveState(other).readControl();
-    return control.status !== "invalid" && !(control.status === "valid" && control.value.status === "active") &&
+    return control.status !== "invalid" && !(control.status === "valid" && control.value.status !== "closed") &&
       readTreasuryLaneResponsibility(other).status === "clear";
   });
 }
@@ -127,6 +128,7 @@ function treasuryT1FirstLiveAllows(task: ResourceTransferTask, amount: number): 
     deploymentMatches() && control.deployTag === BUILD_INFO.tag &&
     control.deployBundleHash === BUILD_INFO.bundleHash &&
     ids?.source === control.sourceTerminalId && ids.target === control.targetTerminalId &&
+    (!lane.demandBoundedSlice || finiteNonNegative(control.maxSliceAmount) && amount <= control.maxSliceAmount) &&
     taskMatches(control, task, amount) && safeCpuAndMemory();
 }
 
@@ -152,12 +154,22 @@ function setMode(mode: "off" | "canary" | "drain"): boolean {
   }
 }
 
-function armTreasuryT1FirstLive(taskId: string, createdAt: number): { ok: boolean; reason: string } {
-  if (!otherResponsibilityClear() || readTreasuryT1FirstLiveControl().status !== "absent" ||
+function startTreasuryFirstLive(taskId: string, createdAt: number, requestedAmount: number, initialStatus: "preparing" | "active"): { ok: boolean; reason: string } {
+  if (!Number.isSafeInteger(requestedAmount) || requestedAmount < 1 || requestedAmount > 100 ||
+      !lane.demandBoundedSlice && requestedAmount !== 100) return { ok: false, reason: "slice_amount_invalid" };
+  if (initialStatus === "preparing" && !lane.demandBoundedSlice) return { ok: false, reason: "preparation_not_supported" };
+  const prior = readTreasuryT1FirstLiveControl();
+  const prepared = initialStatus === "active" && lane.demandBoundedSlice && prior.status === "valid" && prior.value.status === "preparing" ? prior.value : undefined;
+  if (!otherResponsibilityClear() || prior.status !== "absent" && prepared === undefined ||
       runtime()?.[lane.quotaKey] !== undefined ||
       readTreasuryT1Responsibility().status !== "clear") return { ok: false, reason: "already_used_or_unsettled" };
-  if (rawMode() !== undefined && rawMode() !== "off") return { ok: false, reason: "mode_not_off" };
+  if (prepared === undefined ? rawMode() !== undefined && rawMode() !== "off" : rawMode() !== "canary") return { ok: false, reason: "mode_not_off" };
   if (!deploymentMatches() || !safeCpuAndMemory()) return { ok: false, reason: "environment_gate" };
+  const now = Date.now();
+  if (prepared && (now < prepared.startedAtMs || now >= prepared.deadlineMs || now >= prepared.controlUntilMs ||
+      Game.time < prepared.startedAtTick || Game.time >= prepared.deadlineTick ||
+      prepared.deployTag !== BUILD_INFO.tag || prepared.deployBundleHash !== BUILD_INFO.bundleHash ||
+      prepared.maxSliceAmount !== requestedAmount)) return { ok: false, reason: "preparation_expired_or_changed" };
   if (endpointAlreadyTouchedThisTick()) return { ok: false, reason: "terminal_action_this_tick" };
   const task = Memory.data?.resourceControl?.tasks?.[taskId] as ResourceTransferTask | undefined;
   const ids = endpointIds();
@@ -166,25 +178,28 @@ function armTreasuryT1FirstLive(taskId: string, createdAt: number): { ok: boolea
       !taskEligible(task, Math.min(task.remainingAmount, 100))) {
     return { ok: false, reason: "task_or_endpoint_gate" };
   }
+  if (prepared && (!taskMatches(prepared, task, 1) || ids.source !== prepared.sourceTerminalId ||
+      ids.target !== prepared.targetTerminalId)) return { ok: false, reason: "preparation_identity_changed" };
   const source = Game.rooms[TREASURY_T1_SOURCE_ROOM].terminal!;
   const target = Game.rooms[TREASURY_T1_TARGET_ROOM].terminal!;
-  const amount = Math.min(task.remainingAmount, 100);
+  const amount = resolveTreasuryTerminalSliceAmount(lane, task, requestedAmount);
+  if (amount < 1) return { ok: false, reason: "synthesis_need_already_covered" };
   let fee: number;
   try { fee = Game.market.calcTransactionCost(amount, TREASURY_T1_SOURCE_ROOM, TREASURY_T1_TARGET_ROOM); }
   catch { return { ok: false, reason: "quote_unavailable" }; }
-  if (source.cooldown !== 0 || !finiteNonNegative(fee) || fee > 100 ||
-      (source.store.getUsedCapacity(lane.resource) ?? 0) < amount ||
+  if (!finiteNonNegative(fee) || fee > 100 ||
+      initialStatus === "active" && (source.cooldown !== 0 || (source.store.getUsedCapacity(lane.resource) ?? 0) < amount) ||
       (source.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0) < fee ||
       (target.store.getFreeCapacity() ?? 0) < amount) {
     return { ok: false, reason: "live_send_not_ready" };
   }
-  if (lane.name === "T2") {
-    const ready = inspectTreasuryResourceTransferReadiness(task, amount, fee);
+  if (lane.requiredProduct !== undefined) {
+    const ready = initialStatus === "preparing" ? inspectTreasuryResourceTransferPreparation(task, amount, fee)
+      : inspectTreasuryResourceTransferReadiness(task, amount, fee);
     if (!ready.ok) return { ok: false, reason: ready.reason };
   }
-  const now = Date.now();
-  const payload: Payload = {
-    schemaVersion: 1, runId: CONTROL_RUN_ID, status: "active",
+  const payload: Payload = prepared ? (() => { const { hash: _hash, ...original } = prepared; return {...original, status: "active" as const}; })() : {
+    schemaVersion: 1, runId: CONTROL_RUN_ID, status: initialStatus,
     startedAtTick: Game.time, deadlineTick: Game.time + 600,
     startedAtMs: now, deadlineMs: now + 30 * 60_000,
     lastHeartbeatAtMs: now,
@@ -194,15 +209,23 @@ function armTreasuryT1FirstLive(taskId: string, createdAt: number): { ok: boolea
     sourceTerminalId: ids.source, targetTerminalId: ids.target,
     deployTag: BUILD_INFO.tag, deployBundleHash: BUILD_INFO.bundleHash,
     closeReason: "",
+    ...(lane.demandBoundedSlice ? { maxSliceAmount: requestedAmount } : {}),
   };
   if (!writeControl(payload)) return { ok: false, reason: "control_write_failed" };
   if (!setMode("canary")) return { ok: false, reason: "mode_write_failed" };
-  return { ok: true, reason: "armed" };
+  return { ok: true, reason: initialStatus === "preparing" ? "prepared" : "armed" };
+}
+
+function armTreasuryT1FirstLive(taskId: string, createdAt: number, requestedAmount = 100): { ok: boolean; reason: string } {
+  return startTreasuryFirstLive(taskId, createdAt, requestedAmount, "active");
+}
+function prepareTreasuryFirstLive(taskId: string, createdAt: number, requestedAmount = 100): { ok: boolean; reason: string } {
+  return startTreasuryFirstLive(taskId, createdAt, requestedAmount, "preparing");
 }
 
 function heartbeatTreasuryT1FirstLive(): { ok: boolean; reason: string } {
   const read = readTreasuryT1FirstLiveControl();
-  if (read.status !== "valid" || read.value.status !== "active") return { ok: false, reason: "not_active" };
+  if (read.status !== "valid" || read.value.status === "closed") return { ok: false, reason: "not_active" };
   const now = Date.now();
   const value = read.value;
   if (now >= value.controlUntilMs || now >= value.deadlineMs ||
@@ -222,7 +245,7 @@ function closeTreasuryT1FirstLive(reason = "operator_stop"): { ok: boolean; reas
   const nextMode = readTreasuryT1Responsibility().status === "clear" ? "off" : "drain";
   if (read.value.status === "closed" && rawMode() === nextMode) return { ok: true, reason: "closed" };
   if (!safeCpuAndMemory()) return { ok: false, reason: "environment_gate" };
-  if (read.value.status === "active") {
+  if (read.value.status !== "closed") {
     const { hash: _hash, ...payload } = read.value;
     if (!writeControl({ ...payload, status: "closed", closeReason: reason.slice(0, 80) || "closed" })) {
       return { ok: false, reason: "control_write_failed" };
@@ -265,7 +288,7 @@ function normalizeTreasuryT1FirstLiveControl(): { ok: boolean; reason: string } 
       reason = "endpoint_identity_changed";
     } else if (responsibility.status === "held") reason = "pre_native_recovery";
   }
-  return reason ? closeTreasuryT1FirstLive(reason) : { ok: true, reason: "active" };
+  return reason ? closeTreasuryT1FirstLive(reason) : { ok: true, reason: value.status };
   } catch {
     return { ok: false, reason: "control_normalization_failed" };
   }
@@ -278,7 +301,7 @@ function treasuryT1FirstLiveStatus(): unknown {
 }
 
 return {
-  arm: armTreasuryT1FirstLive, heartbeat: heartbeatTreasuryT1FirstLive,
+  arm: armTreasuryT1FirstLive, prepare: prepareTreasuryFirstLive, heartbeat: heartbeatTreasuryT1FirstLive,
   close: closeTreasuryT1FirstLive, normalize: normalizeTreasuryT1FirstLiveControl,
   allows: treasuryT1FirstLiveAllows, status: treasuryT1FirstLiveStatus,
   read: readTreasuryT1FirstLiveControl,

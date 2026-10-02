@@ -5,7 +5,7 @@ import type { TreasuryTerminalLane } from "@/runtime/treasuryTerminalLane";
 export interface Control {
   schemaVersion: 1;
   runId: string;
-  status: "active" | "closed";
+  status: "preparing" | "active" | "closed";
   startedAtTick: number;
   deadlineTick: number;
   startedAtMs: number;
@@ -21,6 +21,8 @@ export interface Control {
   deployTag: string;
   deployBundleHash: string;
   closeReason: string;
+  /** 只有 T3 编码拥有此字段；旧 T1/T2 的签名形状保持不变。 */
+  maxSliceAmount?: number;
   hash: string;
 }
 
@@ -56,16 +58,19 @@ function valid(raw: unknown): raw is Control {
   const expected = ["schemaVersion", "runId", "status", "startedAtTick", "deadlineTick",
     "startedAtMs", "deadlineMs", "lastHeartbeatAtMs", "controlUntilMs", "taskId", "taskCreatedAt",
     "taskAmount", "taskRemainingAtArm", "sourceTerminalId", "targetTerminalId",
-    "deployTag", "deployBundleHash", "closeReason", "hash"].sort();
+    "deployTag", "deployBundleHash", "closeReason", "hash",
+    ...(lane.demandBoundedSlice ? ["maxSliceAmount"] : [])].sort();
   const keys = Object.keys(value).sort();
   if (keys.length !== expected.length || keys.some((key, index) => key !== expected[index])) return false;
   if (value.schemaVersion !== 1 || value.runId !== CONTROL_RUN_ID ||
-      (value.status !== "active" && value.status !== "closed") ||
+      (value.status !== "active" && value.status !== "closed" && !(lane.demandBoundedSlice && value.status === "preparing")) ||
       ![value.startedAtTick, value.deadlineTick, value.startedAtMs, value.deadlineMs,
       value.lastHeartbeatAtMs, value.controlUntilMs, value.taskCreatedAt, value.taskAmount,
         value.taskRemainingAtArm].every(finiteNonNegative) ||
       value.taskAmount < 1 || value.taskRemainingAtArm < 1 ||
       value.taskRemainingAtArm > value.taskAmount ||
+      (lane.demandBoundedSlice && (!finiteNonNegative(value.maxSliceAmount) ||
+        value.maxSliceAmount < 1 || value.maxSliceAmount > 100)) ||
       value.deadlineTick !== value.startedAtTick + 600 ||
       value.deadlineMs !== value.startedAtMs + 30 * 60_000 ||
       value.lastHeartbeatAtMs < value.startedAtMs ||
@@ -76,7 +81,7 @@ function valid(raw: unknown): raw is Control {
         value.deployTag, value.deployBundleHash].every((item) =>
         typeof item === "string" && item.length > 0 && item.length <= 160) ||
       typeof value.closeReason !== "string" || value.closeReason.length > 80 ||
-      (value.status === "active" && value.closeReason !== "") ||
+      (value.status !== "closed" && value.closeReason !== "") ||
       (value.status === "closed" && value.closeReason === "")) return false;
   const { hash: digest, ...payload } = value;
   return digest === hash(payload);
@@ -115,4 +120,3 @@ export function treasuryT1SerializedBytes(value: unknown): number {
   }
   return bytes;
 }
-

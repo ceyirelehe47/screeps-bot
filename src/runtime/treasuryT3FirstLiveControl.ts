@@ -1,0 +1,12 @@
+import { TREASURY_T3_LANE } from "@/runtime/treasuryTerminalLane";
+import { createTreasuryFirstLiveControl } from "@/runtime/treasuryFirstLiveControl";
+export { treasuryT1SerializedBytes } from "@/runtime/treasuryFirstLiveState";
+const control = createTreasuryFirstLiveControl(TREASURY_T3_LANE);
+export const armTreasuryT3FirstLive = control.arm;
+export const prepareTreasuryT3FirstLive = control.prepare;
+export const heartbeatTreasuryT3FirstLive = control.heartbeat;
+export const closeTreasuryT3FirstLive = control.close;
+export const normalizeTreasuryT3FirstLiveControl = control.normalize;
+export const treasuryT3FirstLiveAllows = control.allows;
+export const treasuryT3FirstLiveStatus = control.status;
+export const readTreasuryT3FirstLiveControl = control.read;

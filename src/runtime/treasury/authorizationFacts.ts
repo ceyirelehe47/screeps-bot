@@ -47,7 +47,8 @@ export interface TreasuryAdmissionFactSources {
   readonly occupancyOutflow: (roomName: string, locationKind: string, resource: string) => number;
   readonly occupancyInflow: (roomName: string, locationKind: string) => number;
   /** 业务承诺：任务流出（资源运输承诺）。 */
-  readonly committedOutgoing: (roomName: string, resource: string) => number;
+  /** 位置口径可由装配方细化；省略 locationKind 始终保留房间承诺总量。 */
+  readonly committedOutgoing: (roomName: string, resource: string, locationKind?: string) => number;
   /** 业务承诺：合法生产预留（exact owner 验证后可排除自己的那一项）。 */
   readonly reservedProduction: (roomName: string, resource: string, excludeOwner?: TreasuryOwnerIdentity) => number;
   /**
@@ -155,7 +156,7 @@ export function evaluateTreasuryAdmissionFacts(
     const available =
       sources.observedAmount(leg.roomName, leg.locationKind, leg.resource) -
       sources.occupancyOutflow(leg.roomName, leg.locationKind, leg.resource) -
-      sources.committedOutgoing(leg.roomName, leg.resource) -
+      sources.committedOutgoing(leg.roomName, leg.resource, leg.locationKind) -
       sources.reservedProduction(leg.roomName, leg.resource, options.excludeOwner);
     if (leg.amount > available) {
       return {

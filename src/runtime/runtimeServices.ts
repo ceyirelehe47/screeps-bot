@@ -4,6 +4,7 @@ import { createTreasuryService, type TreasuryService } from "@/runtime/treasury/
 import { sealTreasuryAdapterRegistryForProduction } from "@/runtime/treasury/actionContracts";
 import { sealTreasuryPolicyRegistryForProduction } from "@/runtime/treasury/policyAuthority";
 import { treasuryTaskCommitmentView } from "@/runtime/treasuryTaskCommitmentBridge";
+import { treasuryT3CommittedOutgoingForLocation } from "@/runtime/treasuryT3LocationCommitments";
 import type { CreepApi, CreepConfig, RoleName } from "@/types/system";
 
 export interface CreepConfigService extends CreepApi {
@@ -108,6 +109,7 @@ function createRuntimeServices(): RuntimeServices {
       Memory.data?.resourceControl?.tasks ?? {},
       treasuryRef?.kernelJournal().active ?? [],
     ),
+    committedOutgoingForLocation: treasuryT3CommittedOutgoingForLocation,
   });
   treasuryRef = treasury;
   sealTreasuryAdapterRegistryForProduction();
