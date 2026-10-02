@@ -1,0 +1,5 @@
+{
+  "isolatedWorldOnly": true,
+  "tick": 660,
+  "expression": "Memory.runtime.__labArmResult=(()=>{var entry=Memory.data.resourceControl.tasks[\"lab-exit-b3-H\"];return armTreasuryT1FirstLive(entry.id,entry.createdAt)})()"
+}

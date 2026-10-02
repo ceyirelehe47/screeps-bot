@@ -1,0 +1,1009 @@
+{
+  "schema": "screeps-t1-exit-r1-business-derived/v1",
+  "sourceCapture": "2026-10-02T08:36:18.758Z",
+  "sourceMemorySha256": "e30a4f629e5a8e91778cbc1fb803d55ae560d7a2d719b3b08b3748b9b4638ea2",
+  "memoryTick": 74076570,
+  "completeCanonicalTaskCount": 23,
+  "matchingTasks": [],
+  "allHydrogenTasks": [],
+  "synthesisCfg": {
+    "enabled": true,
+    "rooms": {
+      "E6N59": {
+        "enabled": true,
+        "donorRoomNames": [],
+        "reactions": [
+          {
+            "product": "XGHO2",
+            "targetAmount": 6275,
+            "batchSize": 1275,
+            "donorRoomNames": []
+          }
+        ],
+        "plannerOwnership": {
+          "owner": "hubPlanner",
+          "hubRoomName": "E4N58",
+          "revision": 41868
+        }
+      },
+      "E3N59": {
+        "enabled": true,
+        "donorRoomNames": [],
+        "reactions": []
+      },
+      "E4N58": {
+        "enabled": true,
+        "donorRoomNames": [],
+        "reactions": []
+      },
+      "E5N59": {
+        "enabled": true,
+        "donorRoomNames": [],
+        "reactions": []
+      },
+      "E7N58": {
+        "enabled": true,
+        "donorRoomNames": [],
+        "reactions": [
+          {
+            "product": "XUH2O",
+            "targetAmount": 5330,
+            "batchSize": 1440,
+            "donorRoomNames": []
+          }
+        ],
+        "plannerOwnership": {
+          "owner": "hubPlanner",
+          "hubRoomName": "E4N58",
+          "revision": 41868
+        }
+      },
+      "W1N57": {
+        "enabled": true,
+        "donorRoomNames": [],
+        "reactions": []
+      },
+      "E1N57": {
+        "enabled": true,
+        "donorRoomNames": [],
+        "reactions": [
+          {
+            "product": "UH2O",
+            "targetAmount": 2385,
+            "batchSize": 2215,
+            "donorRoomNames": []
+          }
+        ],
+        "plannerOwnership": {
+          "owner": "hubPlanner",
+          "hubRoomName": "E4N58",
+          "revision": 41513
+        }
+      },
+      "E7N57": {
+        "enabled": true,
+        "donorRoomNames": [],
+        "reactions": []
+      }
+    }
+  },
+  "synthesisRuntime": {
+    "updatedAt": 74076570,
+    "generatedTaskCount": 0,
+    "failedTaskCount": 3,
+    "successfulRunCount": 0,
+    "lastActions": [
+      "synthesis-task-failed:E6N59:GHO2:no_donor",
+      "synthesis-task-failed:E7N58:UH2O:no_donor",
+      "synthesis-task-failed:E1N57:OH:no_donor"
+    ],
+    "bindings": {},
+    "rooms": {
+      "E6N59": {
+        "stage": "loading",
+        "reagentLabIds": [
+          "69ff76778f6bc76317716181",
+          "69ff7af68305b24650437164"
+        ],
+        "productLabIds": [
+          "69ff7735f10ef6c972f4ef88",
+          "6a24a6f637a5fc1c210bb321",
+          "6a2563b85aeb18ddfb0bf294",
+          "6a256da11c925041d2d9e8a1",
+          "6a7501b74070052a085016f0",
+          "6a7503be8e505c771fccbbe6",
+          "6a7504e3e1b0d72da20d7cb8",
+          "6a779246b9afcfdbc31f33e7"
+        ],
+        "successfulRuns": 197696,
+        "pendingTasks": 3,
+        "lastTransitionAt": 74076114,
+        "reagentA": "GHO2",
+        "reagentB": "X",
+        "targetAmount": 6275,
+        "batchSize": 1275,
+        "missing": {
+          "GHO2": 1182
+        },
+        "loadingSinceTick": 74076114,
+        "activeProduct": "XGHO2"
+      },
+      "E3N59": {
+        "stage": "idle",
+        "reagentLabIds": [
+          "69fca5a1e29a4dc90a767b4e",
+          "69fd0018f10ef6d630f3f959"
+        ],
+        "productLabIds": [
+          "69fca5270e81df7c539afa2f",
+          "6a2567d7b55bec81a850b1ab",
+          "6a25e248840fac6731a1e1c0",
+          "6a26a090540c443c3e84aa00",
+          "6a8bd33a75030e07b566f1b1",
+          "6a8caaa6b4b192b69c7f1ab8",
+          "6a8cb44b8e505c24f1d4a441",
+          "6a8cfa9657ea723e4c570f8d"
+        ],
+        "successfulRuns": 162565,
+        "pendingTasks": 0,
+        "lastTransitionAt": 74072711
+      },
+      "E4N58": {
+        "stage": "idle",
+        "reagentLabIds": [
+          "69fc462398d3048047142c92",
+          "69fc5a05e78d662d050ad585"
+        ],
+        "productLabIds": [
+          "69fc4434c4df66da6077350a",
+          "6a1d1bd3eb167a647cda0b68",
+          "6a1db242e79934e7e18b8f60",
+          "6a1dc29554efec9da27fe744",
+          "6a76c629b13d531240938636",
+          "6a77574d58f67f428cf520bc",
+          "6a77645a96eee23195276c95",
+          "6a77d95fb9afcfc0721f4a71"
+        ],
+        "successfulRuns": 160584,
+        "pendingTasks": 1,
+        "lastTransitionAt": 74072384
+      },
+      "E5N59": {
+        "stage": "idle",
+        "reagentLabIds": [
+          "6a014cbaf4963ab6320ebd1e",
+          "6a015064f8c48e533c1e6e0b"
+        ],
+        "productLabIds": [
+          "6a014d8997712e1f09c00797",
+          "6a3447a19598601fe1079ce6",
+          "6a34b988c4735e690caa5f71",
+          "6a34bb31f22c72753a246bf4",
+          "6a7b1080f3048021b2674077",
+          "6a7b9a73ff052e1cd55a746b",
+          "6a7bc2f87843cf4e99fc0f8e",
+          "6a7bcc18e0c42f19b62aadf5"
+        ],
+        "successfulRuns": 202760,
+        "pendingTasks": 2,
+        "lastTransitionAt": 74074307
+      },
+      "E7N58": {
+        "stage": "loading",
+        "reagentLabIds": [
+          "6a79a0d26ef57d857baf4c19",
+          "6a7a65d2a720a2365632be9c"
+        ],
+        "productLabIds": [
+          "6a79a09dfcfb347fa823bc44",
+          "6a79a38d8dc66cc16ef77351",
+          "6a7a647879218d6525cf0393",
+          "6a7a6954728784c03858d99b",
+          "6a9be82fb4b19201b1845772",
+          "6a9bf3026d0b0838293c8700",
+          "6a9c001ba300000b68f4e825",
+          "6a9c0dbb2ab7f9fc4bcc4644"
+        ],
+        "successfulRuns": 92589,
+        "pendingTasks": 3,
+        "lastTransitionAt": 74076347,
+        "reagentA": "UH2O",
+        "reagentB": "X",
+        "targetAmount": 5330,
+        "batchSize": 1440,
+        "missing": {
+          "UH2O": 720
+        },
+        "loadingSinceTick": 74076347,
+        "activeProduct": "XUH2O"
+      },
+      "W1N57": {
+        "stage": "idle",
+        "reagentLabIds": [
+          "69feab45e651640acd1627a1",
+          "69feaff59addc82621fa06b0"
+        ],
+        "productLabIds": [
+          "69feabb3f8c48e40531d7116",
+          "6a1b422b6ab0d950675df784",
+          "6a1b9b2ce09b4e4ff00f5e56",
+          "6a1c479414fa06919abf9e31",
+          "6a790a2a35c75d4147a4c2f1",
+          "6a7914e5425ada36b66da90f",
+          "6a791ead57ea72d490506591",
+          "6a7a03372ab7f97eb9bfe8a9"
+        ],
+        "successfulRuns": 102912,
+        "pendingTasks": 0,
+        "lastTransitionAt": 74072012
+      },
+      "E1N57": {
+        "stage": "loading",
+        "reagentLabIds": [
+          "69fe4c1ad65afa29a99d519a",
+          "69fe497ab9011a73e03fc0c0"
+        ],
+        "productLabIds": [
+          "69fe48e46318ad0a63a77fc0",
+          "6a1cbdcb0fb54f1d7643ff18",
+          "6a1d28d873f1b0230793d7f4",
+          "6a1d2a63fc821118c714d6da",
+          "6a85512774b81efe214458dd",
+          "6a85a225c218032310546fb0",
+          "6a85ab7196eee229982c29f8",
+          "6a85ef3c75030e20d164b7f2"
+        ],
+        "successfulRuns": 63727,
+        "pendingTasks": 2,
+        "lastTransitionAt": 74076503,
+        "reagentA": "UH",
+        "reagentB": "OH",
+        "targetAmount": 2385,
+        "batchSize": 2215,
+        "missing": {
+          "OH": 828
+        },
+        "loadingSinceTick": 74076503,
+        "activeProduct": "UH2O"
+      },
+      "E7N57": {
+        "stage": "idle",
+        "reagentLabIds": [
+          "6a2f0edaf9baa802b6d08ddf",
+          "6a2f803b09470d787cf65e1d"
+        ],
+        "productLabIds": [
+          "6a2f0f8e540c446a9b878e77",
+          "6a552860d7ff9016ead217be",
+          "6a55833a2c7c637ff391aef4",
+          "6a561feb1351050808d99ebf",
+          "6a943802fcfb348be32d0742",
+          "6a94726afcfb34fa392d1c73",
+          "6a950be2c21803128b5a1136",
+          "6a955190b13d5351ac9e2f25"
+        ],
+        "successfulRuns": 142032,
+        "pendingTasks": 1,
+        "lastTransitionAt": 74074153
+      }
+    }
+  },
+  "resourceControlRooms": {
+    "E3N59": {
+      "state": "balanced",
+      "capacityState": "pressure",
+      "storageUsedCapacity": 815083,
+      "storageFreeCapacity": 184917,
+      "terminalUsedCapacity": 32665,
+      "terminalFreeCapacity": 267335,
+      "localOffloadCapacityCommitment": 0,
+      "desiredTerminalFreeCapacity": 80000,
+      "terminalRecoveryGap": 0,
+      "recoverableOffloadAmount": 0,
+      "stickyHeadroom": false,
+      "capacityReservation": {
+        "committed": 0,
+        "remaining": 80068
+      },
+      "staging": {
+        "admittedAmount": 5083,
+        "admittedTaskCount": 1,
+        "admittedByResource": {
+          "energy": 5083
+        },
+        "suppressedCount": 0,
+        "suppressedByReason": {}
+      },
+      "storageEnergy": 190049,
+      "terminalEnergy": 19623,
+      "energyFloor": 120000,
+      "energyTarget": 200000,
+      "energyExportStart": 250000,
+      "terminalEnergyReserve": 20000,
+      "marketEnergyReadiness": {
+        "schemaVersion": 3,
+        "revision": "market-terminal-energy-v3:74076570",
+        "observedAt": 74076570,
+        "expiresAt": 74076571,
+        "authorizationRevision": "csh1:3f7fed90d8702ff68db3238c820c1049",
+        "terminalId": "69fcff2ed22e9226307ce4fe",
+        "authorized": false,
+        "effectivePostDealEnergyReserve": 25250,
+        "marketTerminalEnergyTarget": 26250,
+        "ordinaryTerminalEnergyTarget": 20000,
+        "unresolvedEnergySendAmount": 5083,
+        "unresolvedInternalSendFees": 167,
+        "terminalScopedProductionEnergyCommitments": 0,
+        "maxTransactionEnergy": 1000,
+        "contributionCount": 3,
+        "contributions": [
+          {
+            "id": "ordinary-terminal-target:E3N59",
+            "amount": 20000,
+            "kind": "ordinary_terminal_target"
+          },
+          {
+            "id": "resource-transfer:74076570:1:energy:E3N59->E4N58:energy",
+            "amount": 5083,
+            "kind": "pending_energy_send"
+          },
+          {
+            "id": "resource-transfer:74076570:1:energy:E3N59->E4N58:fee",
+            "amount": 167,
+            "kind": "pending_internal_send_fee"
+          }
+        ],
+        "desiredTerminalEnergy": 20000,
+        "plannedFeedAmount": 0,
+        "status": "blocked",
+        "blocker": "not_authorized"
+      },
+      "nativeMineralType": "H",
+      "canMineNative": true,
+      "minerals": {
+        "H": 126540,
+        "O": 11101,
+        "U": 42053,
+        "L": 125644,
+        "K": 144401,
+        "Z": 31635,
+        "X": 64177
+      },
+      "taskHealth": {
+        "pendingIncoming": 0,
+        "pendingOutgoing": 1,
+        "blockedIncoming": {},
+        "blockedOutgoing": {}
+      }
+    },
+    "E4N58": {
+      "state": "export",
+      "capacityState": "normal",
+      "storageUsedCapacity": 7778836,
+      "storageFreeCapacity": 221164,
+      "terminalUsedCapacity": 88006,
+      "terminalFreeCapacity": 211994,
+      "localOffloadCapacityCommitment": 0,
+      "desiredTerminalFreeCapacity": 60000,
+      "terminalRecoveryGap": 0,
+      "recoverableOffloadAmount": 0,
+      "stickyHeadroom": false,
+      "capacityReservation": {
+        "committed": 6902,
+        "remaining": 104262
+      },
+      "staging": {
+        "admittedAmount": 585,
+        "admittedTaskCount": 1,
+        "admittedByResource": {
+          "UH2O": 585
+        },
+        "suppressedCount": 10,
+        "suppressedByReason": {
+          "window_limit": 10
+        }
+      },
+      "storageEnergy": 1249811,
+      "terminalEnergy": 27884,
+      "energyFloor": 120000,
+      "energyTarget": 200000,
+      "energyExportStart": 250000,
+      "terminalEnergyReserve": 20000,
+      "marketEnergyReadiness": {
+        "schemaVersion": 3,
+        "revision": "market-terminal-energy-v3:74076570",
+        "observedAt": 74076570,
+        "expiresAt": 74076571,
+        "authorizationRevision": "csh1:3f7fed90d8702ff68db3238c820c1049",
+        "roomInstanceId": "mbr-room:csh1:cc039a97c5b3666113d35c29544554cd",
+        "terminalId": "69fc583c60d86221e8bdf547",
+        "authorized": true,
+        "effectivePostDealEnergyReserve": 25000,
+        "marketTerminalEnergyTarget": 26000,
+        "ordinaryTerminalEnergyTarget": 20000,
+        "unresolvedEnergySendAmount": 0,
+        "unresolvedInternalSendFees": 656,
+        "terminalScopedProductionEnergyCommitments": 0,
+        "maxTransactionEnergy": 1000,
+        "contributionCount": 12,
+        "contributions": [
+          {
+            "id": "ordinary-terminal-target:E4N58",
+            "amount": 20000,
+            "kind": "ordinary_terminal_target"
+          },
+          {
+            "id": "resource-transfer:74072000:1:UH2O:E4N58->E7N58:fee",
+            "amount": 56,
+            "kind": "pending_internal_send_fee"
+          },
+          {
+            "id": "resource-transfer:74072000:2:GHO2:E4N58->E6N59:fee",
+            "amount": 6,
+            "kind": "pending_internal_send_fee"
+          },
+          {
+            "id": "resource-transfer:74072200:1:XGHO2:E4N58->E5N59:fee",
+            "amount": 23,
+            "kind": "pending_internal_send_fee"
+          },
+          {
+            "id": "resource-transfer:74073300:1:XUH2O:E4N58->E6N59:fee",
+            "amount": 52,
+            "kind": "pending_internal_send_fee"
+          },
+          {
+            "id": "resource-transfer:74073300:2:XGHO2:E4N58->E6N59:fee",
+            "amount": 17,
+            "kind": "pending_internal_send_fee"
+          },
+          {
+            "id": "resource-transfer:74073400:1:XUH2O:E4N58->E5N59:fee",
+            "amount": 55,
+            "kind": "pending_internal_send_fee"
+          },
+          {
+            "id": "resource-transfer:74073650:1:UH:E4N58->E1N57:fee",
+            "amount": 164,
+            "kind": "pending_internal_send_fee"
+          },
+          {
+            "id": "resource-transfer:74074950:1:XUH2O:E4N58->E7N58:fee",
+            "amount": 96,
+            "kind": "pending_internal_send_fee"
+          },
+          {
+            "id": "resource-transfer:74075630:1:UH2O:E4N58->E7N58:fee",
+            "amount": 13,
+            "kind": "pending_internal_send_fee"
+          },
+          {
+            "id": "resource-transfer:74075640:1:OH:E4N58->E1N57:fee",
+            "amount": 132,
+            "kind": "pending_internal_send_fee"
+          },
+          {
+            "id": "resource-transfer:74075800:1:XUH2O:E4N58->E7N57:fee",
+            "amount": 42,
+            "kind": "pending_internal_send_fee"
+          }
+        ],
+        "desiredTerminalEnergy": 27884,
+        "plannedFeedAmount": 0,
+        "status": "blocked",
+        "blocker": "terminal_claimed"
+      },
+      "nativeMineralType": "X",
+      "canMineNative": true,
+      "minerals": {
+        "H": 4384,
+        "O": 53026,
+        "U": 278767,
+        "L": 907589,
+        "K": 1109560,
+        "Z": 649033,
+        "X": 2894107
+      },
+      "taskHealth": {
+        "pendingIncoming": 2,
+        "pendingOutgoing": 11,
+        "blockedIncoming": {
+          "insufficient_terminal_resource_or_fee": 1
+        },
+        "blockedOutgoing": {
+          "insufficient_terminal_resource_or_fee": 1
+        }
+      }
+    },
+    "E1N57": {
+      "state": "balanced",
+      "capacityState": "normal",
+      "storageUsedCapacity": 797954,
+      "storageFreeCapacity": 202046,
+      "terminalUsedCapacity": 175563,
+      "terminalFreeCapacity": 124437,
+      "localOffloadCapacityCommitment": 0,
+      "desiredTerminalFreeCapacity": 60000,
+      "terminalRecoveryGap": 0,
+      "recoverableOffloadAmount": 0,
+      "stickyHeadroom": false,
+      "capacityReservation": {
+        "committed": 3099,
+        "remaining": 81338
+      },
+      "staging": {
+        "admittedAmount": 0,
+        "admittedTaskCount": 0,
+        "admittedByResource": {},
+        "suppressedCount": 0,
+        "suppressedByReason": {}
+      },
+      "storageEnergy": 240028,
+      "terminalEnergy": 174265,
+      "energyFloor": 120000,
+      "energyTarget": 200000,
+      "energyExportStart": 250000,
+      "terminalEnergyReserve": 20000,
+      "marketEnergyReadiness": {
+        "schemaVersion": 3,
+        "revision": "market-terminal-energy-v3:74076570",
+        "observedAt": 74076570,
+        "expiresAt": 74076571,
+        "authorizationRevision": "csh1:3f7fed90d8702ff68db3238c820c1049",
+        "roomInstanceId": "mbr-room:csh1:d41b4689460eec57b378d95420321d49",
+        "terminalId": "69fe4e87e810942b688bb6f1",
+        "authorized": true,
+        "effectivePostDealEnergyReserve": 25000,
+        "marketTerminalEnergyTarget": 26000,
+        "ordinaryTerminalEnergyTarget": 20000,
+        "unresolvedEnergySendAmount": 0,
+        "unresolvedInternalSendFees": 0,
+        "terminalScopedProductionEnergyCommitments": 0,
+        "maxTransactionEnergy": 1000,
+        "contributionCount": 1,
+        "contributions": [
+          {
+            "id": "ordinary-terminal-target:E1N57",
+            "amount": 20000,
+            "kind": "ordinary_terminal_target"
+          }
+        ],
+        "desiredTerminalEnergy": 174265,
+        "plannedFeedAmount": 0,
+        "status": "ready"
+      },
+      "nativeMineralType": "X",
+      "canMineNative": true,
+      "minerals": {
+        "H": 4649,
+        "O": 3616,
+        "U": 51277,
+        "L": 139494,
+        "K": 46467,
+        "Z": 9014,
+        "X": 230304
+      },
+      "taskHealth": {
+        "pendingIncoming": 2,
+        "pendingOutgoing": 0,
+        "blockedIncoming": {},
+        "blockedOutgoing": {}
+      }
+    }
+  },
+  "cpuLatest": {
+    "tick": 74076569,
+    "shard": "shard1",
+    "totalUsed": 54.153276500001084,
+    "bucket": 10000,
+    "limit": 120,
+    "tickLimit": 500,
+    "phases": {
+      "treasuryBeginTick": 0.013943800000561168,
+      "announceDeploy": 0.012951900000189198,
+      "marketSalePreflight": 8.601030100000571,
+      "pixelGenerator": 0.0014455999989877455,
+      "productionMonitor": 0.0022152000001369743,
+      "nukerControl": 1.5281266000001779,
+      "hubPlanner": 0.038819300001705415,
+      "hubUpgradeControl": 0.34741850000136765,
+      "synthesisControl": 1.2055290000007517,
+      "factoryControl": 0.15111070000239124,
+      "mineralExtraction": 0.008301799998662318,
+      "resourceControl": 1.699392499998794,
+      "marketSaleAutomation": 9.721692499997516,
+      "hubProgressAnalytics": 0.002559699998528231,
+      "hubProgressOverlay": 0.08384219999788911,
+      "externalTelemetryExport": 2.7116517999984353,
+      "memoryCleanup": 0.0012376000013318844,
+      "portalDiscovery": 0.0017601999988983152,
+      "flagControl": 0.11676210000041465,
+      "crossShardSignals": 0.14947919999940495,
+      "interShardControl": 0.0026467999996384606,
+      "warControl": 0.007513999998991494,
+      "powerBankObserver": 1.7425515000013547,
+      "powerBankHarvest": 0.12778089999846998,
+      "powerCreepControl": 1.0221263000003091,
+      "powerSpawnControl": 0.38385249999919324,
+      "roomPlannerConstruction": 0.01664390000041749,
+      "linkControl": 0.09182419999888225,
+      "coreDefense": 0.12993760000063048,
+      "defenseMode": 0.015844399998968584,
+      "homeDefense": 0.13935219999984838,
+      "towerControl": 0.3899180999997043,
+      "refreshWorkerTasks": 0.0007904000012786128,
+      "bootstrapRooms": 0.7188116000015725,
+      "remoteMining": 1.550723199999993,
+      "scheduleSpawnTasks": 1.6918238999987807,
+      "spawnWork": 0.05024760000196693,
+      "creepWork:decision": 3.0805150999876787,
+      "creepWork:intent": 11.005653099991832,
+      "creepWork:pathing": 2.12139070000012,
+      "creepWork": 19.533780700001444,
+      "empireInventoryShadow": 0.00534690000131377,
+      "treasuryT1Shadow": 0.00305109999862907
+    },
+    "fixedActionCounts": {
+      "creepWork": 52
+    },
+    "untracked": 0,
+    "emaTotalUsed": 87.69015176549482,
+    "rooms": {
+      "E1N57": {
+        "totalUsed": 2.169948700000532,
+        "roles": {
+          "spawn": {
+            "count": 3,
+            "used": 0.004657899999074289
+          },
+          "remoteMiningCarrier": {
+            "count": 3,
+            "used": 1.184457299999849
+          },
+          "miner": {
+            "count": 2,
+            "used": 0.26524439999957394
+          },
+          "carrier": {
+            "count": 1,
+            "used": 0.6817475000007107
+          },
+          "worker": {
+            "count": 1,
+            "used": 0.03384160000132397
+          }
+        }
+      },
+      "E3N59": {
+        "totalUsed": 1.008809500004645,
+        "roles": {
+          "spawn": {
+            "count": 3,
+            "used": 0.0027937000049860217
+          },
+          "carrier": {
+            "count": 1,
+            "used": 0.5113212000014755
+          },
+          "miner": {
+            "count": 2,
+            "used": 0.46468019999883836
+          },
+          "worker": {
+            "count": 1,
+            "used": 0.030014399999345187
+          }
+        }
+      },
+      "E4N58": {
+        "totalUsed": 0.8911737999987963,
+        "roles": {
+          "spawn": {
+            "count": 3,
+            "used": 0.0030446000018855557
+          },
+          "worker": {
+            "count": 1,
+            "used": 0.2935155000013765
+          },
+          "miner": {
+            "count": 2,
+            "used": 0.03214769999794953
+          },
+          "carrier": {
+            "count": 1,
+            "used": 0.5624659999975847
+          }
+        }
+      },
+      "E5N59": {
+        "totalUsed": 2.7911456000019825,
+        "roles": {
+          "spawn": {
+            "count": 3,
+            "used": 0.0029639999993378296
+          },
+          "miner": {
+            "count": 3,
+            "used": 1.0791386000018974
+          },
+          "worker": {
+            "count": 2,
+            "used": 0.3052544999973179
+          },
+          "remoteMiningCarrier": {
+            "count": 1,
+            "used": 0.8464263000023493
+          },
+          "carrier": {
+            "count": 1,
+            "used": 0.55736220000108
+          }
+        }
+      },
+      "E6N59": {
+        "totalUsed": 0.9967144999955053,
+        "roles": {
+          "spawn": {
+            "count": 3,
+            "used": 0.003209700000297744
+          },
+          "miner": {
+            "count": 2,
+            "used": 0.6788228999957937
+          },
+          "carrier": {
+            "count": 1,
+            "used": 0.31468189999941387
+          }
+        }
+      },
+      "E7N57": {
+        "totalUsed": 1.4015162999930908,
+        "roles": {
+          "spawn": {
+            "count": 3,
+            "used": 0.0018719999989116332
+          },
+          "carrier": {
+            "count": 2,
+            "used": 0.8766071000009106
+          },
+          "miner": {
+            "count": 2,
+            "used": 0.24558319999778178
+          },
+          "remoteMiningCarrier": {
+            "count": 1,
+            "used": 0.25026709999838204
+          },
+          "worker": {
+            "count": 1,
+            "used": 0.027186899997104774
+          }
+        }
+      },
+      "E7N58": {
+        "totalUsed": 1.366833799998858,
+        "roles": {
+          "spawn": {
+            "count": 3,
+            "used": 0.0031343000009655952
+          },
+          "remoteMiningCarrier": {
+            "count": 2,
+            "used": 0.3171208999974624
+          },
+          "carrier": {
+            "count": 1,
+            "used": 0.2978378000007069
+          },
+          "worker": {
+            "count": 1,
+            "used": 0.2696305999998003
+          },
+          "miner": {
+            "count": 2,
+            "used": 0.47911019999992277
+          }
+        }
+      },
+      "W1N57": {
+        "totalUsed": 1.3770609000039258,
+        "roles": {
+          "spawn": {
+            "count": 3,
+            "used": 0.0026767000017571263
+          },
+          "carrier": {
+            "count": 2,
+            "used": 0.6746312999985093
+          },
+          "miner": {
+            "count": 2,
+            "used": 0.44402320000699547
+          },
+          "worker": {
+            "count": 1,
+            "used": 0.25572969999666384
+          }
+        }
+      },
+      "E1N56": {
+        "totalUsed": 1.4754242999988492,
+        "roles": {
+          "colonizerHarvester": {
+            "count": 2,
+            "used": 0.5566526000020531
+          },
+          "remoteMiningCarrier": {
+            "count": 1,
+            "used": 0.673218399999314
+          },
+          "remoteMiningReserver": {
+            "count": 1,
+            "used": 0.2455532999974821
+          }
+        }
+      },
+      "E1N58": {
+        "totalUsed": 0.6589288000031956,
+        "roles": {
+          "colonizerHarvester": {
+            "count": 1,
+            "used": 0.06509100000221224
+          },
+          "remoteMiningReserver": {
+            "count": 1,
+            "used": 0.2276782999997522
+          },
+          "remoteDefender": {
+            "count": 1,
+            "used": 0.3661595000012312
+          }
+        }
+      },
+      "E4N59": {
+        "totalUsed": 1.2262454999981856,
+        "roles": {
+          "remoteMiningCarrier": {
+            "count": 2,
+            "used": 0.551026199998887
+          },
+          "remoteMiningReserver": {
+            "count": 1,
+            "used": 0.22211430000061227
+          },
+          "colonizerHarvester": {
+            "count": 2,
+            "used": 0.45310499999868625
+          }
+        }
+      },
+      "E5N58": {
+        "totalUsed": 0.9372083000016573,
+        "roles": {
+          "colonizerHarvester": {
+            "count": 2,
+            "used": 0.4488137000007555
+          },
+          "remoteMiningCarrier": {
+            "count": 1,
+            "used": 0.48839460000090185
+          }
+        }
+      },
+      "E6N57": {
+        "totalUsed": 1.3189405000030092,
+        "roles": {
+          "remoteMiningCarrier": {
+            "count": 1,
+            "used": 0.6358302000026015
+          },
+          "colonizerHarvester": {
+            "count": 2,
+            "used": 0.4621620999987499
+          },
+          "remoteMiningReserver": {
+            "count": 1,
+            "used": 0.22094820000165782
+          }
+        }
+      },
+      "E7N59": {
+        "totalUsed": 0.9998437999984162,
+        "roles": {
+          "colonizerHarvester": {
+            "count": 2,
+            "used": 0.46180979999917326
+          },
+          "remoteMiningCarrier": {
+            "count": 2,
+            "used": 0.538033999999243
+          }
+        }
+      },
+      "E8N58": {
+        "totalUsed": 0.698160400001143,
+        "roles": {
+          "colonizerHarvester": {
+            "count": 2,
+            "used": 0.45600139999805833
+          },
+          "remoteWorker": {
+            "count": 1,
+            "used": 0.24215900000308466
+          }
+        }
+      }
+    },
+    "heap": {
+      "total_heap_size": 252858368,
+      "total_heap_size_executable": 8650752,
+      "total_physical_size": 230952960,
+      "total_available_size": 583618224,
+      "used_heap_size": 174492888,
+      "heap_size_limit": 775946240,
+      "malloced_memory": 1081424,
+      "peak_malloced_memory": 11749888,
+      "does_zap_garbage": 0,
+      "externally_allocated_size": 45632864
+    }
+  },
+  "R2": {
+    "marketBaseResourceEgressTrialR2": {
+      "schemaVersion": 1,
+      "runId": "market-base-egress-r2-2026-09-26",
+      "status": "closed",
+      "startedAtTick": 73958367,
+      "endTick": 73961367,
+      "startedAtMs": 1790427990658,
+      "endMs": 1790431590658,
+      "controlUntilMs": 1790430420502,
+      "originalNotBefore": 73958767,
+      "permitId": "mbr-permit-v3:17:csh1:eed4ece99b5b6668b20a61c210ec050b",
+      "permitEpoch": 17,
+      "startAttemptSeq": 16,
+      "lastAttemptSeq": 15,
+      "callsReserved": 0,
+      "amountReserved": 0,
+      "lastReservedAtTick": 0,
+      "closeReason": "capacity_recovered",
+      "hash": "csh1:c89adc1cb159a7bc0066af1590248760"
+    },
+    "marketBaseResourceEgressTrialR2Mirror": {
+      "schemaVersion": 1,
+      "runId": "market-base-egress-r2-2026-09-26",
+      "status": "closed",
+      "startedAtTick": 73958367,
+      "endTick": 73961367,
+      "startedAtMs": 1790427990658,
+      "endMs": 1790431590658,
+      "controlUntilMs": 1790430420502,
+      "originalNotBefore": 73958767,
+      "permitId": "mbr-permit-v3:17:csh1:eed4ece99b5b6668b20a61c210ec050b",
+      "permitEpoch": 17,
+      "startAttemptSeq": 16,
+      "lastAttemptSeq": 15,
+      "callsReserved": 0,
+      "amountReserved": 0,
+      "lastReservedAtTick": 0,
+      "closeReason": "capacity_recovered",
+      "hash": "csh1:c89adc1cb159a7bc0066af1590248760"
+    }
+  },
+  "successorSuggestionTask": {
+    "id": "74073650:1:UH:E4N58->E1N57",
+    "resource": "UH",
+    "fromRoomName": "E4N58",
+    "toRoomName": "E1N57",
+    "amount": 1715,
+    "remainingAmount": 1715,
+    "status": "pending",
+    "createdAt": 74073650,
+    "updatedAt": 74073680,
+    "origin": "automatic",
+    "lastProgressAt": 74073650,
+    "reason": "synthesis:E1N57:UH2O"
+  }
+}

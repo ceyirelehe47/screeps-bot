@@ -1,0 +1,5 @@
+{
+  "isolatedWorldOnly": true,
+  "tick": 639,
+  "expression": "Memory.cfg.resourceControl.enabled=true"
+}

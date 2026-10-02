@@ -1,0 +1,56 @@
+{
+  "schema": "screeps-t1-exit-r1-evidence-verification/v1",
+  "passed": true,
+  "inputSnapshotCount": 24,
+  "mainSha256": "1bf02d8415f552239dd034865c4e62d5c6a00a978af36f78b64640ea05f6f061",
+  "A": {
+    "ordinaryTransaction": "86c6b452e8c5a87",
+    "nativeT1": 0
+  },
+  "B": {
+    "attemptId": "tk1_1_d5a2434cd5657254",
+    "transactionId": "2e09b65e4c71551",
+    "nativeT1": 1,
+    "amount": 100,
+    "actualEnergyFee": 4,
+    "committed": true,
+    "unknownRestartHeld": true,
+    "systemdRestart": {
+      "stoppedMicroseconds": "1790925522893662",
+      "startedMicroseconds": "1790925522907057"
+    },
+    "carrierSyntheticCargoRestored": true
+  },
+  "C": {
+    "attemptId": "tk1_1_9992ef348b720174",
+    "transactionId": "5096bb4bbf5435c",
+    "ordinaryBeforeT1": [
+      "d050bb47b9fb373",
+      "a72dbb49911ec4f"
+    ],
+    "nativeT1": 1,
+    "committed": true,
+    "offRestartNoResend": true,
+    "systemdRestart": {
+      "stoppedMicroseconds": "1790929389077974",
+      "startedMicroseconds": "1790929389081283"
+    }
+  },
+  "production": [
+    {
+      "file": "production-preflight-final.json",
+      "capture": "2026-10-02T08:36:18.758Z",
+      "taskCount": 23,
+      "matching": 0,
+      "memoryBytes": 1533778
+    },
+    {
+      "file": "production-preflight.json",
+      "capture": "2026-10-02T05:30:35.299Z",
+      "taskCount": 35,
+      "matching": 0,
+      "memoryBytes": 1548115
+    }
+  ],
+  "productionWrites": 0
+}

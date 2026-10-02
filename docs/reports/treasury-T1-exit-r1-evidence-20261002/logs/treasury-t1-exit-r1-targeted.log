@@ -1,0 +1,65 @@
+
+> screeps@2026.8.29-6 test
+> jest --config jest.config.cjs --runInBand --runTestsByPath src/runtime/treasuryTerminalTransfer.integration.test.ts src/runtime/treasuryTerminalTransfer.test.ts src/runtime/marketActionArbiter.test.ts
+
+PASS src/runtime/treasuryTerminalTransfer.integration.test.ts
+  ● Console
+
+    console.log
+      {"kind":"treasury-production-T1","tick":100,"taskId":"existing-H-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransfer.ts:995:11)
+
+    console.log
+      {"kind":"treasury-production-T1","tick":100,"taskId":"existing-H-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransfer.ts:995:11)
+
+    console.log
+      {"kind":"treasury-production-T1","tick":100,"taskId":"existing-H-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransfer.ts:995:11)
+
+    console.log
+      {"kind":"treasury-production-T1","tick":100,"taskId":"existing-H-task","status":"dispatch_not_executed"}
+
+      at logDecision (src/runtime/treasuryTerminalTransfer.ts:995:11)
+
+    console.log
+      {"kind":"treasury-production-T1","tick":100,"taskId":"existing-H-task","status":"dispatch_unknown","reason":"unknown native result"}
+
+      at logDecision (src/runtime/treasuryTerminalTransfer.ts:995:11)
+
+    console.log
+      {"kind":"treasury-production-T1","tick":100,"taskId":"existing-H-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransfer.ts:995:11)
+
+    console.log
+      {"kind":"treasury-production-T1","tick":100,"taskId":"existing-H-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransfer.ts:995:11)
+
+    console.log
+      {"kind":"treasury-production-T1","tick":100,"taskId":"existing-H-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransfer.ts:995:11)
+
+    console.log
+      {"kind":"treasury-production-T1","tick":100,"taskId":"existing-H-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransfer.ts:995:11)
+
+    console.log
+      {"kind":"treasury-production-T1","tick":120,"taskId":"existing-H-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransfer.ts:995:11)
+
+PASS src/runtime/treasuryTerminalTransfer.test.ts
+PASS src/runtime/marketActionArbiter.test.ts
+
+Test Suites: 3 passed, 3 total
+Tests:       47 passed, 47 total
+Snapshots:   0 total
+Time:        1.978 s
+Ran all test suites within paths "src/runtime/treasuryTerminalTransfer.integration.test.ts", "src/runtime/treasuryTerminalTransfer.test.ts", "src/runtime/marketActionArbiter.test.ts".

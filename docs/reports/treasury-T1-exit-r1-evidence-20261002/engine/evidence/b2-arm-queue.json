@@ -1,0 +1,5 @@
+{
+  "isolatedWorldOnly": true,
+  "tick": 650,
+  "expression": "const t=Memory.data.resourceControl.tasks[\"lab-exit-b2-H\"];Memory.runtime.__labArmResult=armTreasuryT1FirstLive(t.id,t.createdAt)"
+}

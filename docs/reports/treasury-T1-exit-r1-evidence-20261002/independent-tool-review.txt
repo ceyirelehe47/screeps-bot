@@ -1,0 +1,22 @@
+T1-EXIT-R1 发布工具独立复核
+日期：2026-10-02（Asia/Shanghai）
+
+结论：此前发布工具门禁发现已修复，当前工具范围未发现 P1/P2 阻塞。
+
+工具：scripts/deploy-frozen-t1-exit-r1.mjs
+工具 SHA-256：a3882af6232c8d7a3cb37f7ea0fce06ca9912bb8850abadaf4dd545f97c4f091
+候选 manifest 的 deployToolSha256 与实际文件完全一致。
+冻结产品源码：447ab5c45717ea73af026f60a5c4287080af703f
+冻结 main SHA-256：1bf02d8415f552239dd034865c4e62d5c6a00a978af36f78b64640ea05f6f061（独立重算，未改变）
+
+核对内容：
+1. HTTP 成功与 body.ok === 1 同时要求；完整 Memory 缺 data、坏 JSON 根、压缩解码异常拒绝。
+2. cfg/runtime/data/resourceControl/task 表根、主控制/镜像/quota/core 与任务 lease 门禁。
+3. legacy 检测全部 17 个字段逐项对齐 canonical kernel/store.ts，非空旧责任拒绝。
+4. account/target/当前生产字节标识、四 shard 完整 Memory 只读前检、源码与工具身份及冻结 commit/tree/tag/dirty、完整主产物及追加前 hash 绑定。
+5. apply 在上传前要求备份；POST 未知结果仅独立读回，无第二次 POST。
+
+独立执行：node --test docs/reports/treasury-T1-exit-r1-evidence-20261002/tools/deploy-guard.test.mjs
+结果：4 tests passed，0 failed。前轮两个漏项的反例与全部 legacy 字段回归均通过。
+
+限制：本次为只读源码/本地离线测试复核，未运行 --check/--apply，未访问生产或操作隔离引擎；不构成生产发布或首笔业务闭环结论。当前仓库需在发布前满足工具自己的 clean Git 门禁。A/B/C 最终引擎原始证据另行终审。

@@ -1,0 +1,10 @@
+{
+  "schema": "screeps-t1-first-live-lab-third-room/v1",
+  "tick": 677,
+  "isolatedWorldOnly": true,
+  "room": "W8N8",
+  "ownerUserId": "7dad41a4bfc9d96",
+  "controllerId": "34ae07720e89057",
+  "terminalId": "fcf6b7556c9e0a5",
+  "storageId": "12dab7556ca8f3a"
+}

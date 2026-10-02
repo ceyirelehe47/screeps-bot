@@ -1,0 +1,11 @@
+Id=screeps-treasury-t1.service
+ActiveState=inactive
+SubState=dead
+
+Id=dsh.service
+ActiveState=active
+SubState=running
+
+Id=nginx.service
+ActiveState=active
+SubState=running

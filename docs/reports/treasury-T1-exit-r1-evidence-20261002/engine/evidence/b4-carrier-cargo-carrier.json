@@ -1,0 +1,108 @@
+{
+  "isolatedWorldOnly": true,
+  "tick": 688,
+  "kind": "synthetic-already-carried-50-energy",
+  "before": {
+    "name": "lab-r2-carrier",
+    "x": 26,
+    "y": 24,
+    "room": "E4N58",
+    "type": "creep",
+    "user": "7dad41a4bfc9d96",
+    "body": [
+      {
+        "type": "carry",
+        "hits": 100
+      },
+      {
+        "type": "move",
+        "hits": 100
+      }
+    ],
+    "store": {
+      "energy": 0
+    },
+    "storeCapacity": 50,
+    "hits": 200,
+    "hitsMax": 200,
+    "spawning": false,
+    "fatigue": 0,
+    "notifyWhenAttacked": true,
+    "ageTime": 2008,
+    "_id": "f7add81659a2190",
+    "meta": {
+      "revision": 77,
+      "created": 1790422640027,
+      "version": 0,
+      "updated": 1790927617341
+    },
+    "$loki": 431,
+    "actionLog": {
+      "attacked": null,
+      "healed": null,
+      "attack": null,
+      "rangedAttack": null,
+      "rangedMassAttack": null,
+      "rangedHeal": null,
+      "harvest": null,
+      "heal": null,
+      "repair": null,
+      "build": null,
+      "say": null,
+      "upgradeController": null,
+      "reserveController": null
+    }
+  },
+  "after": {
+    "name": "lab-r2-carrier",
+    "x": 26,
+    "y": 24,
+    "room": "E4N58",
+    "type": "creep",
+    "user": "7dad41a4bfc9d96",
+    "body": [
+      {
+        "type": "carry",
+        "hits": 100
+      },
+      {
+        "type": "move",
+        "hits": 100
+      }
+    ],
+    "store": {
+      "energy": 50
+    },
+    "storeCapacity": 50,
+    "hits": 200,
+    "hitsMax": 200,
+    "spawning": false,
+    "fatigue": 0,
+    "notifyWhenAttacked": true,
+    "ageTime": 2188,
+    "_id": "f7add81659a2190",
+    "meta": {
+      "revision": 78,
+      "created": 1790422640027,
+      "version": 0,
+      "updated": 1790927621277
+    },
+    "$loki": 431,
+    "actionLog": {
+      "attacked": null,
+      "healed": null,
+      "attack": null,
+      "rangedAttack": null,
+      "rangedMassAttack": null,
+      "rangedHeal": null,
+      "harvest": null,
+      "heal": null,
+      "repair": null,
+      "build": null,
+      "say": null,
+      "upgradeController": null,
+      "reserveController": null
+    }
+  },
+  "targetTerminalId": "370f41dd18e91de"
+}

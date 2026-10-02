@@ -1,0 +1,5 @@
+{
+  "isolatedWorldOnly": true,
+  "tick": 671,
+  "expression": "Memory.cfg.treasuryTerminalTransferSlice0.mode=\"off\""
+}

@@ -1,0 +1,20 @@
+{
+  "schema": "screeps-t1-exit-r1-release/v1",
+  "target": "screeps.com/default/shard1",
+  "accountId": "634fe406347a7b69b28aeccb",
+  "accountName": "forster",
+  "sourceCommit": "447ab5c45717ea73af026f60a5c4287080af703f",
+  "sourceTree": "a4e59a5fa56461ae1d83f271db38e6fbf69841da",
+  "mainBytes": 3285061,
+  "mainSha256": "1bf02d8415f552239dd034865c4e62d5c6a00a978af36f78b64640ea05f6f061",
+  "buildTag": "2026.10.2-1+447ab5c@2026-10-02T06:10:35.260Z",
+  "deployBundleHash": "31d7862330a31f620544e07482933253e658806373f42def32ab51f27665c955",
+  "expectedLiveSha256": "bdfde69f6b79f3b3bd1a3e51d184d58ec4d0c6f25b94ebdc18233c61248d55a2",
+  "expectedLiveDeployTag": "2026.8.29-6+16c2ca4@2026-09-27T06:26:24.112Z",
+  "uploadModules": [
+    "main"
+  ],
+  "productionWritesPerformed": false,
+  "deployToolSha256": "a3882af6232c8d7a3cb37f7ea0fce06ca9912bb8850abadaf4dd545f97c4f091",
+  "deploymentToolUpdatedAfterBuild": true
+}

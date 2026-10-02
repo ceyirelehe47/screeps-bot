@@ -1,0 +1,54 @@
+{
+  "schema": "screeps-t1-exit-r1-build-environment/v1",
+  "sourceCommit": "447ab5c45717ea73af026f60a5c4287080af703f",
+  "sourceTree": "a4e59a5fa56461ae1d83f271db38e6fbf69841da",
+  "sourceParent": "22516cbf",
+  "baseline": "43b53daa81bdeb9fdafea97c2d4a1ad8936835cc",
+  "branch": "codex/treasury-t1-exit-r1",
+  "originFetch": "https://github.com/ceyirelehe47/screeps-bot.git",
+  "originPush": "https://github.com/ceyirelehe47/screeps-bot.git",
+  "allRemotes": [
+    "blueforst\thttps://github.com/blueforst/screeps-bot.git (fetch)",
+    "blueforst\thttps://github.com/blueforst/screeps-bot.git (push)",
+    "fork\thttps://github.com/ceyirelehe47/screeps-bot.git (fetch)",
+    "fork\thttps://github.com/ceyirelehe47/screeps-bot.git (push)",
+    "origin\thttps://github.com/ceyirelehe47/screeps-bot.git (fetch)",
+    "origin\thttps://github.com/ceyirelehe47/screeps-bot.git (push)"
+  ],
+  "packageLockSha256": "e4ec59ca8e515965375fc45c9c8661e164200715fe07391214422271668d2af1",
+  "runtimeMainRebuiltAfterFreeze": false,
+  "toolOnlyFixAfterFreeze": true,
+  "node": "v22.23.3",
+  "engineNode": "v22.22.1",
+  "engineVersion": "4.3.0",
+  "testResults": {
+    "combined": {
+      "suites": 19,
+      "tests": 107,
+      "exitCode": 0
+    },
+    "targeted": {
+      "suites": 3,
+      "tests": 47,
+      "exitCode": 0,
+      "scope": "本轮开发期中间版本；最终源码覆盖以19组合套件结果为准"
+    },
+    "typecheck": {
+      "exitCode": 0
+    },
+    "build": {
+      "exitCode": 0
+    },
+    "nodeDeployGuard": {
+      "tests": 4,
+      "exitCode": 0
+    }
+  },
+  "commands": [
+    "npm ci",
+    "PATH=/Users/forst/.nvm/versions/node/v22.23.3/bin:$PATH npm run typecheck",
+    "PATH=/Users/forst/.nvm/versions/node/v22.23.3/bin:$PATH npm run build",
+    "PATH=/Users/forst/.nvm/versions/node/v22.23.3/bin:$PATH npm run test -- --runInBand --runTestsByPath src/runtime/treasuryTerminalTransfer.integration.test.ts src/runtime/treasuryTerminalTransfer.test.ts src/runtime/marketActionArbiter.test.ts src/runtime/resourceControl.test.ts src/runtime/resourceControl.capacityRegression.test.ts src/runtime/resourceReservation.test.ts src/roles/carrier.test.ts src/runtime/carrierTaskBoard.test.ts src/runtime/carrierTaskBoard.revisionCache.test.ts src/runtime/marketSaleDirectAutomation.test.ts src/runtime/marketSaleDirectPending.test.ts src/runtime/marketSaleDirectShadow.test.ts src/runtime/marketSaleDirectPricing.test.ts src/runtime/marketSaleDirectEngineAssumptions.test.ts src/runtime/marketDirectContinuousAutomation.test.ts src/runtime/marketDirectContinuousLedger.test.ts src/runtime/marketDirectContinuousPolicy.test.ts src/runtime/marketDirectContinuousPlanner.test.ts src/main.test.ts",
+    "PATH=/Users/forst/.nvm/versions/node/v22.23.3/bin:$PATH node --test docs/reports/treasury-T1-exit-r1-evidence-20261002/tools/deploy-guard.test.mjs"
+  ]
+}

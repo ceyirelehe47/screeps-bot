@@ -1,0 +1,10 @@
+
+> screeps@2026.10.2-1 build
+> rollup -c
+
+No deployment target set. Build only.
+cleared:  /Users/forst/.codex/worktrees/treasury-t1-exit-r1/screeps/dist
+
+src/main.ts → dist/main.js...
+[deploy] bundle sha256: 31d7862330a31f62… (full in Memory.runtime.lastDeployBundleHash)
+created dist/main.js in 8.6s

@@ -20,10 +20,11 @@ async function get(path) {
 const capturedAtUtc = new Date().toISOString();
 const me = await get('/api/auth/me');
 if (me._id !== '634fe406347a7b69b28aeccb' || me.username !== 'forster') throw Error('account mismatch');
-const [code, memoryResponse, sourceObjects, targetObjects] = await Promise.all([
+const [code, memoryResponse, sourceObjects, targetObjects, successorObjects] = await Promise.all([
   get('/api/user/code?branch=default'), get('/api/user/memory?shard=shard1'),
   get('/api/game/room-objects?room=E3N59&shard=shard1'),
   get('/api/game/room-objects?room=E4N58&shard=shard1'),
+  get('/api/game/room-objects?room=E1N57&shard=shard1'),
 ]);
 let rawMemory = memoryResponse.data;
 if (typeof rawMemory !== 'string') throw Error('memory raw response missing');
@@ -38,14 +39,14 @@ const record = {
   code: {branch: code.branch, modules: Object.fromEntries(Object.entries(code.modules).map(([k,v]) => [k,{bytes:Buffer.byteLength(v),sha256:digest(v)}]))},
   memory: {sha256:digest(rawMemory), utf8Bytes:Buffer.byteLength(rawMemory), chars:rawMemory.length,
     latestTick: m.analytics?.production?.rooms ? Math.max(...Object.values(m.analytics.production.rooms).map(x=>x.updatedAt||0)) : m.runtime?.lastTick,
-    cfg: pick(m.cfg,['treasuryTerminalTransferSlice0','resourceControl','marketSaleAutomation','synthesis','hub']),
-    runtime: pick(m.runtime,['lastDeployTag','lastDeployBundleHash','treasuryT1FirstLiveControl','treasuryT1FirstLiveControlMirror','treasuryProductionT1Quota','treasuryCore','treasury','resourceReservations','resourceReservationsOwnerVersion','marketSaleAutomation','resourceControl','marketEgressR2']),
+    cfg: pick(m.cfg,['treasuryTerminalTransferSlice0','resourceControl','marketSaleAutomation','synthesis','synthesisControl','hub']),
+    runtime: pick(m.runtime,['lastDeployTag','lastDeployBundleHash','treasuryT1FirstLiveControl','treasuryT1FirstLiveControlMirror','treasuryProductionT1Quota','treasuryCore','treasury','resourceReservations','resourceReservationsOwnerVersion','marketSaleAutomation','resourceControl','synthesisControl','marketEgressR2','marketBaseResourceEgressTrialR2','marketBaseResourceEgressTrialR2Mirror']),
     data: pick(m.data,['resourceControl','marketSaleAutomation']),
     analytics: pick(m.analytics,['resourceControl','marketSaleAutomation','cpuMonitor','production','hub']),
     creeps: Object.fromEntries(Object.entries(m.creeps||{}).filter(([,c]) => JSON.stringify(c).includes('E3N59')||JSON.stringify(c).includes('E4N58'))),
   },
   canonicalTasks: {complete: true, count: Object.keys(tasks).length, records: tasks},
-  rooms: {E3N59: sourceObjects, E4N58: targetObjects},
+  rooms: {E3N59: sourceObjects, E4N58: targetObjects, E1N57: successorObjects},
 };
 await mkdir(privateAudit,{recursive:true,mode:0o700});
 await writeFile(`${privateAudit}/production-memory.json`,rawMemory,{flag:'wx',mode:0o600});

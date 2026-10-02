@@ -1,0 +1,81 @@
+
+> screeps@2026.10.2-1 test
+> jest --config jest.config.cjs --runInBand --runTestsByPath src/runtime/treasuryTerminalTransfer.integration.test.ts src/runtime/treasuryTerminalTransfer.test.ts src/runtime/marketActionArbiter.test.ts src/runtime/resourceControl.test.ts src/runtime/resourceControl.capacityRegression.test.ts src/runtime/resourceReservation.test.ts src/roles/carrier.test.ts src/runtime/carrierTaskBoard.test.ts src/runtime/carrierTaskBoard.revisionCache.test.ts src/runtime/marketSaleDirectAutomation.test.ts src/runtime/marketSaleDirectPending.test.ts src/runtime/marketSaleDirectShadow.test.ts src/runtime/marketSaleDirectPricing.test.ts src/runtime/marketSaleDirectEngineAssumptions.test.ts src/runtime/marketDirectContinuousAutomation.test.ts src/runtime/marketDirectContinuousLedger.test.ts src/runtime/marketDirectContinuousPolicy.test.ts src/runtime/marketDirectContinuousPlanner.test.ts src/main.test.ts
+
+PASS src/runtime/resourceControl.capacityRegression.test.ts
+PASS src/roles/carrier.test.ts
+PASS src/runtime/resourceControl.test.ts
+PASS src/runtime/carrierTaskBoard.test.ts
+PASS src/main.test.ts
+PASS src/runtime/marketDirectContinuousLedger.test.ts
+PASS src/runtime/marketSaleDirectAutomation.test.ts
+PASS src/runtime/marketDirectContinuousPlanner.test.ts
+PASS src/runtime/marketDirectContinuousAutomation.test.ts
+PASS src/runtime/marketDirectContinuousPolicy.test.ts
+PASS src/runtime/carrierTaskBoard.revisionCache.test.ts
+PASS src/runtime/marketSaleDirectPending.test.ts
+PASS src/runtime/resourceReservation.test.ts
+PASS src/runtime/marketSaleDirectPricing.test.ts
+PASS src/runtime/marketSaleDirectEngineAssumptions.test.ts
+PASS src/runtime/marketSaleDirectShadow.test.ts
+PASS src/runtime/treasuryTerminalTransfer.integration.test.ts
+  ● Console
+
+    console.log
+      {"kind":"treasury-production-T1","tick":100,"taskId":"existing-H-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransfer.ts:995:11)
+
+    console.log
+      {"kind":"treasury-production-T1","tick":100,"taskId":"existing-H-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransfer.ts:995:11)
+
+    console.log
+      {"kind":"treasury-production-T1","tick":100,"taskId":"existing-H-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransfer.ts:995:11)
+
+    console.log
+      {"kind":"treasury-production-T1","tick":100,"taskId":"existing-H-task","status":"dispatch_not_executed"}
+
+      at logDecision (src/runtime/treasuryTerminalTransfer.ts:995:11)
+
+    console.log
+      {"kind":"treasury-production-T1","tick":100,"taskId":"existing-H-task","status":"dispatch_unknown","reason":"unknown native result"}
+
+      at logDecision (src/runtime/treasuryTerminalTransfer.ts:995:11)
+
+    console.log
+      {"kind":"treasury-production-T1","tick":100,"taskId":"existing-H-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransfer.ts:995:11)
+
+    console.log
+      {"kind":"treasury-production-T1","tick":100,"taskId":"existing-H-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransfer.ts:995:11)
+
+    console.log
+      {"kind":"treasury-production-T1","tick":100,"taskId":"existing-H-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransfer.ts:995:11)
+
+    console.log
+      {"kind":"treasury-production-T1","tick":100,"taskId":"existing-H-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransfer.ts:995:11)
+
+    console.log
+      {"kind":"treasury-production-T1","tick":120,"taskId":"existing-H-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransfer.ts:995:11)
+
+PASS src/runtime/treasuryTerminalTransfer.test.ts
+PASS src/runtime/marketActionArbiter.test.ts
+
+Test Suites: 19 passed, 19 total
+Tests:       107 passed, 107 total
+Snapshots:   0 total
+Time:        3.943 s, estimated 4 s
+Ran all test suites within paths "src/runtime/treasuryTerminalTransfer.integration.test.ts", "src/runtime/treasuryTerminalTransfer.test.ts", "src/runtime/marketActionArbiter.test.ts", "src/runtime/resourceControl.test.ts", "src/runtime/resourceControl.capacityRegression.test.ts", "src/runtime/resourceReservation.test.ts", "src/roles/carrier.test.ts", "src/runtime/carrierTaskBoard.test.ts", "src/runtime/carrierTaskBoard.revisionCache.test.ts", "src/runtime/marketSaleDirectAutomation.test.ts", "src/runtime/marketSaleDirectPending.test.ts", "src/runtime/marketSaleDirectShadow.test.ts", "src/runtime/marketSaleDirectPricing.test.ts", "src/runtime/marketSaleDirectEngineAssumptions.test.ts", "src/runtime/marketDirectContinuousAutomation.test.ts", "src/runtime/marketDirectContinuousLedger.test.ts", "src/runtime/marketDirectContinuousPolicy.test.ts", "src/runtime/marketDirectContinuousPlanner.test.ts", "src/main.test.ts".

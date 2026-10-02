@@ -1,0 +1,5 @@
+{
+  "isolatedWorldOnly": true,
+  "tick": 687,
+  "expression": "global.__creepAssignmentState=global.__creepAssignmentState||Object.create(null);global.__creepAssignmentState[\"lab-r2-carrier\"]={synthesisCarrierPendingToId:Game.rooms.E4N58.terminal.id,synthesisCarrierPendingResource:\"energy\",synthesisCarrierPendingTaskType:\"terminal_feed\",carrierStorageOnlyMode:false}"
+}
