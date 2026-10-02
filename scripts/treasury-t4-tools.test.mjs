@@ -64,9 +64,18 @@ function mockedTool(name, action, scenario) {
   writeFileSync(manifestPath,JSON.stringify(manifest));
   writeFileSync(preload,`
 import {writeFileSync} from 'node:fs';
+import {gzipSync} from 'node:zlib';
+import vm from 'node:vm';
 const calls=[];let stored=null;let cleanup=false;
 const scenario=${JSON.stringify(scenario)},trace=${JSON.stringify(trace)},action=${JSON.stringify(action)};
 const manifest=${JSON.stringify(manifest)},bundle=${JSON.stringify(bundle)};
+const key='__codexTreasuryT4Result';
+const memory={runtime:{lastDeployTag:manifest.buildTag,lastDeployBundleHash:manifest.deployBundleHash},cfg:{},data:{resourceControl:{tasks:{}}}};
+const cargoSandbox={Memory:memory,Game:{time:123,shard:{name:'shard1'},creeps:{
+ source:{name:'source',room:{name:'E4N58'},store:{}},target:{name:'target',room:{name:'E1N57'},store:{}},
+ between:{name:'between',room:{name:'E9N59'},store:{OH:10}}}},
+ global:{__creepAssignmentState:{between:{synthesisCarrierPendingResource:'OH',synthesisCarrierPendingFromId:'source-terminal',synthesisCarrierPendingToId:'target-terminal'}}}};
+if(scenario==='prior-marker')stored={marker:'prior-owned-marker',status:'executing'};
 const record=()=>writeFileSync(trace,JSON.stringify(calls));
 const response=v=>({ok:true,status:200,json:async()=>v});
 globalThis.setTimeout=(callback)=>{queueMicrotask(callback);return 1;};
@@ -78,15 +87,22 @@ globalThis.fetch=async(input,init={})=>{
   if(path==='/api/user/code')return response({ok:1,branch:'default',modules:scenario==='empty-code'?{}:{main:scenario==='wrong-code'?'unexpected-running-bytes':bundle}});
   if(path==='/api/game/room-objects')return response({ok:1,objects:[]});
   if(path==='/api/user/memory'){
-    if(url.searchParams.has('path')){if(scenario==='missing-data'||scenario==='cleanup-missing-data'&&cleanup)return response({ok:1});return response({ok:1,data:stored?JSON.stringify(stored):'undefined'});}
-    return response({ok:1,data:JSON.stringify({runtime:{lastDeployTag:manifest.buildTag,lastDeployBundleHash:manifest.deployBundleHash},cfg:{},data:{resourceControl:{tasks:{}}}})});
+    if(url.searchParams.has('path')){if(scenario==='missing-data'||scenario==='path-missing-data'||scenario==='cleanup-missing-data'&&cleanup)return response({ok:1});return response({ok:1,data:stored?JSON.stringify(stored):'undefined'});}
+    if(scenario==='missing-data'||scenario==='cleanup-missing-data'&&cleanup)return response({ok:1});
+    if(scenario==='bad-root-null')return response({ok:1,data:'null'});
+    if(scenario==='bad-root-array')return response({ok:1,data:'[]'});
+    const whole={...memory,...(stored!==null?{[key]:stored}:{})};
+    if(stored===null)delete whole[key];
+    const raw=JSON.stringify(whole);
+    return response({ok:1,data:scenario==='gzip-full'?'gz:'+gzipSync(raw).toString('base64'):raw});
   }
   if(path==='/api/user/console'&&method==='POST'){
     const expression=JSON.parse(init.body).expression;
-    if(expression.includes('delete Memory.')){cleanup=true;if(scenario==='cleanup-missing-data'){record();throw Error('cleanup response lost and action not observed');}stored=null;record();return response({ok:1});}
+    if(expression.includes('delete Memory.')){cleanup=true;if(scenario==='cleanup-missing-data'){record();throw Error('cleanup response lost and action not observed');}if(scenario!=='cleanup-retained'){stored=null;delete memory[key];}record();return response({ok:1});}
     const match=expression.match(/marker\\s*:\\s*(\"[^\"]+\")/);
     if(!match)throw Error('mock could not extract action marker');
-    stored={marker:JSON.parse(match[1]),action,status:'returned',result:action==='inspect'?{tick:123,shard:'shard1',rooms:{},transactions:{}}:{entryResult:{ok:true,reason:'armed'},snapshot:{tick:123,shard:'shard1',rooms:{},transactions:{}}}};
+    if(action==='cargo'){vm.runInNewContext(expression,cargoSandbox,{timeout:1000});stored=memory[key];}
+    else stored={marker:JSON.parse(match[1]),action,status:'returned',result:action==='inspect'?{tick:123,shard:'shard1',rooms:{},transactions:{}}:{entryResult:{ok:true,reason:'armed'},snapshot:{tick:123,shard:'shard1',rooms:{},transactions:{}}}};
     if(scenario==='unknown-post')throw Error('mock response lost after server accepted action');
     return response({ok:1});
   }
@@ -95,14 +111,16 @@ globalThis.fetch=async(input,init={})=>{
 `);
   const tool=name==='capture-production.mjs'?fileURLToPath(new URL('../docs/reports/treasury-T2-first-production-evidence-20261002/tools/capture-production.mjs',import.meta.url)):fileURLToPath(new URL(`./${name}`,import.meta.url));
   const args=name==='capture-production.mjs'?[secret,join(root,'capture.json'),audit,'--all-shards']:
-    [action,secret,out,...(action==='inspect'?[]:[manifestPath,optionsPath])];
+    [action,secret,out,...(['inspect','cargo'].includes(action)?[]:[manifestPath,optionsPath])];
   const child=spawnSync(process.execPath,['--import',preload,tool,...args],{encoding:'utf8',timeout:5000,cwd,
     env:{...process.env,SCREEPS_TOKEN:''}});
   const calls=existsSync(trace)?JSON.parse(readFileSync(trace,'utf8')):[];
   const resultExists=existsSync(join(out,'result.json'));
+  const capturedResult=resultExists?JSON.parse(readFileSync(join(out,'result.json'),'utf8')):null;
+  const cleanupResult=existsSync(join(out,'cleanup.json'))?JSON.parse(readFileSync(join(out,'cleanup.json'),'utf8')):null;
   const fullBackupExists=existsSync(join(audit,'production-code.json'));
   rmSync(root,{recursive:true,force:true});
-  return {child,calls,resultExists,fullBackupExists};
+  return {child,calls,resultExists,capturedResult,cleanupResult,fullBackupExists};
 }
 
 test('写临时诊断键前须验证实际 account，而非只看 secret target', () => {
@@ -150,15 +168,52 @@ test('私有 audit 拒绝仓库中的 ..audit 子目录，不能把双点名字�
   assert.equal(fullBackupExists,false);
 });
 
-test('缺失 diagnostic data 不得解释为 absent 或开始动作', () => {
+test('完整Memory缺失data不得解释为 absent 或开始动作', () => {
  const {child,calls}=mockedTool('treasury-t4-production.mjs','inspect','missing-data');
  assert.notEqual(child.status,0);
  assert.equal(calls.some(c=>c.path==='/api/user/console'&&c.method==='POST'),false);
 });
-test('未知 cleanup 后缺失data不能宣称已清除', () => {
- const {child,calls,resultExists}=mockedTool('treasury-t4-production.mjs','inspect','cleanup-missing-data');
+test('未知cleanup后完整Memory缺失data不能宣称已清除', () => {
+ const {child,calls,resultExists,cleanupResult}=mockedTool('treasury-t4-production.mjs','inspect','cleanup-missing-data');
  assert.notEqual(child.status,0);
  assert.equal(resultExists,true);
  assert.equal(calls.filter(c=>c.path==='/api/user/console'&&c.method==='POST'&&!c.isCleanup).length,1);
  assert.equal(calls.some(c=>c.path==='/api/user/memory'&&c.cleanup),true);
+ assert.equal(cleanupResult,null);
+});
+
+test('完整Memory own marker确实缺席可开始，路径API缺data不访问', () => {
+ const {child,calls,resultExists}=mockedTool('treasury-t4-production.mjs','enable','path-missing-data');
+ assert.equal(child.status,0,child.stderr);assert.equal(resultExists,true);
+ assert.equal(calls.filter(c=>c.path==='/api/user/console'&&c.method==='POST'&&!c.isCleanup).length,1);
+ assert.equal(calls.some(c=>c.path==='/api/user/memory'&&new URLSearchParams(c.search).has('path')),false);
+});
+test('完整Memory已有own marker零POST', () => {
+ const {child,calls}=mockedTool('treasury-t4-production.mjs','enable','prior-marker');
+ assert.notEqual(child.status,0);assert.match(child.stderr,/prior diagnostic result exists/);
+ assert.equal(calls.some(c=>c.path==='/api/user/console'&&c.method==='POST'),false);
+});
+test('压缩的完整Memory支持原UUID结果与cleanup确认', () => {
+ const {child,cleanupResult}=mockedTool('treasury-t4-production.mjs','enable','gzip-full');
+ assert.equal(child.status,0,child.stderr);assert.equal(cleanupResult.cleared,true);
+});
+test('cleanup已接受但marker仍在必须clearedfalse和exit1', () => {
+ const {child,cleanupResult}=mockedTool('treasury-t4-production.mjs','inspect','cleanup-retained');
+ assert.equal(child.status,1);assert.equal(cleanupResult.cleared,false);
+});
+test('完整Memory null/array坏根零POST', () => {
+ for(const scenario of ['bad-root-null','bad-root-array']){
+  const {child,calls}=mockedTool('treasury-t4-production.mjs','inspect',scenario);
+  assert.notEqual(child.status,0);assert.match(child.stderr,/complete Memory root invalid/);
+  assert.equal(calls.some(c=>c.path==='/api/user/console'&&c.method==='POST'),false);
+ }
+});
+test('cargo执行完整expression捕获两端以外仍在途的己方creep', () => {
+ const {child,capturedResult}=mockedTool('treasury-t4-production.mjs','cargo','normal');
+ assert.equal(child.status,0,child.stderr);
+ assert.equal(capturedResult.status,'returned');
+ assert.equal(capturedResult.result.scope,'all-owned-creeps');
+ assert.equal(capturedResult.result.creepCount,3);assert.equal(capturedResult.result.creeps.length,3);
+ assert.deepEqual(capturedResult.result.creeps.find(c=>c.name==='between'),{name:'between',room:'E9N59',store:{OH:10},
+  assignment:{synthesisCarrierPendingResource:'OH',synthesisCarrierPendingFromId:'source-terminal',synthesisCarrierPendingToId:'target-terminal'}});
 });

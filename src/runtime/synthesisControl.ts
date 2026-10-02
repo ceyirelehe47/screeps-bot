@@ -28,6 +28,7 @@ import {
 } from "@/runtime/carrierTaskBoard";
 import { getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
 import { getCreepAssignmentState } from "@/runtime/creepAssignmentState";
+import { inspectTreasuryContinuousOHProcurement } from "@/runtime/treasuryContinuousOHControl";
 import { getReservedProductionAmountExcludingHolder } from "@/runtime/resourceReservation";
 import { getActivePowerBankBoostLabIds } from "@/runtime/powerBankBoostMemory";
 import { normalizeBoolean, normalizeNumber, normalizeRoomNameList } from "@/runtime/configNormalize";
@@ -636,6 +637,7 @@ function setBinding(bindings: SynthesisBindingStore, targetRoomName: string, res
 function selectDonor(
   targetRoom: Room,
   resource: ResourceConstant,
+  product: ResourceConstant,
   amount: number,
   donorRoomNames: string[],
   bindings: SynthesisBindingStore,
@@ -663,7 +665,8 @@ function selectDonor(
     }
 
     const terminalAmount = room.terminal.store.getUsedCapacity(resource);
-    const sendable = Math.min(exportable, terminalAmount);
+    const continuous = inspectTreasuryContinuousOHProcurement(room.name, targetRoom.name, resource, product, amount);
+    const sendable = Math.min(exportable, continuous.ownsRoute ? continuous.amount : terminalAmount);
     if (sendable <= 0) {
       continue;
     }
@@ -1366,6 +1369,7 @@ function maybeGenerateSupplyTasks(
     const donor = selectDonor(
       room,
       reagent,
+      reactionPlan.product,
       deficit,
       mergedDonors,
       runtime.bindings,

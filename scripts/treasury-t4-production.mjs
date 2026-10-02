@@ -1,4 +1,4 @@
-/** 固定产品入口；未知POST只读回不重发，临时结果在调用前写边界。 */
+/** 固定产品入口；完整Memory证明marker absence；未知POST只读回不重发。 */
 import {readFile,mkdir,writeFile} from 'node:fs/promises';
 import {gunzipSync} from 'node:zlib';
 import {randomUUID,createHash} from 'node:crypto';
@@ -13,17 +13,22 @@ async function req(path,init={}) {
  const v=await r.json();if(v.ok!==1)throw Error(`API not ok: ${JSON.stringify({ok:v.ok,error:v.error}).slice(0,300)}`);return v;
 }
 async function readResult() {
- const b=await req(`/api/user/memory?shard=shard1&path=${key}`);
- if(!Object.hasOwn(b,'data')||typeof b.data!=='string')throw Error('diagnostic Memory response missing or invalid data');
+ // 路径接口在key不存在时可能省略data；这不是可证明的空marker。
+ // 所有开始、UUID读回和cleanup判断统一读取完整Memory，再取自己的own key。
+ const b=await req('/api/user/memory?shard=shard1');
+ if(!Object.hasOwn(b,'data')||typeof b.data!=='string')throw Error('complete Memory response missing or invalid data');
  let raw=b.data;
- if(typeof raw==='string'&&raw.startsWith('gz:'))raw=gunzipSync(Buffer.from(raw.slice(3),'base64')).toString('utf8');
- return raw===undefined||raw==='undefined'?undefined:typeof raw==='string'?JSON.parse(raw):raw;
+ if(raw.startsWith('gz:'))raw=gunzipSync(Buffer.from(raw.slice(3),'base64')).toString('utf8');
+ const memory=JSON.parse(raw);
+ if(memory===null||typeof memory!=='object'||Array.isArray(memory)||
+   ![Object.prototype,null].includes(Object.getPrototypeOf(memory)))throw Error('complete Memory root invalid');
+ return Object.hasOwn(memory,key)?memory[key]:undefined;
 }
 const me=await req('/api/auth/me');
 if(me._id!=='634fe406347a7b69b28aeccb'||me.username!=='forster')throw Error('account mismatch');
 if(await readResult()!==undefined)throw Error('prior diagnostic result exists; inspect it before another action');
 let body=`({tick:Game.time,shard:Game.shard.name,ms:Date.now(),rooms:['E4N58','E1N57'].map(r=>{const t=Game.rooms[r].terminal;return {room:r,id:t.id,owner:t.owner.username,active:t.isActive(),cooldown:t.cooldown,store:t.store,free:t.store.getFreeCapacity()}}),labs:Game.rooms.E1N57.find(FIND_MY_STRUCTURES).filter(s=>s.structureType===STRUCTURE_LAB).map(s=>({id:s.id,store:s.store})),incoming:Game.market.incomingTransactions.slice(0,40),outgoing:Game.market.outgoingTransactions.slice(0,40)})`;
-if(action==='cargo') body=`({tick:Game.time,shard:Game.shard.name,creeps:Object.values(Game.creeps).filter(c=>['E4N58','E1N57'].includes(c.room.name)).map(c=>({name:c.name,room:c.room.name,store:c.store,assignment:global.__creepAssignmentState?.[c.name]})),board:global.__carrierTaskBoard})`;
+if(action==='cargo') body=`(()=>{const creeps=Object.values(Game.creeps);return {tick:Game.time,shard:Game.shard.name,scope:'all-owned-creeps',creepCount:creeps.length,creeps:creeps.map(c=>({name:c.name,room:c.room.name,store:c.store,assignment:global.__creepAssignmentState?.[c.name]})),board:global.__carrierTaskBoard}})()`;
 if(!['inspect','cargo'].includes(action)) {
  const [manifestPath,optionsPath]=args;
  if(!manifestPath)throw Error('frozen manifest required');

@@ -13,6 +13,9 @@ import { getCreepAssignmentState } from "@/runtime/creepAssignmentState";
 import { formatTreasuryTransactionId, formatTreasuryStableTransactionId } from "@/runtime/treasury/transactionId";
 import { hasTerminalActionClaim, hasTerminalSendEffectThisTick, hasTerminalCargoEffectThisTick } from "@/runtime/marketActionArbiter";
 import { hasTreasuryTerminalFence } from "@/runtime/treasuryTaskCommitmentBridge";
+import { buildTreasuryCommitmentIndex, isValidTreasuryTransferTaskForCommitment } from "@/runtime/treasury/commitments";
+import { buildTreasuryObservation } from "@/runtime/treasury/observation";
+import { inspectTreasuryCarrierProductionCommitment } from "@/runtime/treasuryT3LocationCommitments";
 import {
   checkTreasuryContinuousOHBudget, normalizeTreasuryContinuousOHPolicy, summarizeTreasuryContinuousOHBudget,
   type TreasuryContinuousOHPolicy,
@@ -226,6 +229,76 @@ export function continuousClosedWorkAcknowledged(workKey: string, attemptId?: st
 export function continuousSessionOwnsActivity(): boolean {
   const read = readTreasuryContinuousOHState();
   return read.status === "invalid" || read.status === "valid" && read.value.sessionStatus !== "stopped";
+}
+
+/**
+ * 只让已验收的固定路线借普通 synthesis producer 建单，再由自然 carrier 备货。
+ * ON 时完整接管此候选的建单权限：busy/预算/坏态不能回退 Terminal 增量合并，
+ * 否则会改变已签名 task 身份。此投影没有 native/额度/任务写入权限。
+ */
+export function inspectTreasuryContinuousOHProcurement(
+  sourceRoomName: string, targetRoomName: string, resource: ResourceConstant,
+  product: ResourceConstant, requestedAmount: number,
+): { readonly ownsRoute: boolean; readonly amount: number } {
+  const unmanaged = { ownsRoute: false, amount: 0 } as const;
+  const held = { ownsRoute: true, amount: 0 } as const;
+  if (sourceRoomName !== TREASURY_T4_LANE.sourceRoom || targetRoomName !== TREASURY_T4_LANE.targetRoom ||
+      resource !== TREASURY_T4_LANE.resource || product !== RESOURCE_UTRIUM_ACID) return unmanaged;
+  try {
+    const read = readTreasuryContinuousOHState();
+    if (read.status === "absent" || read.status === "valid" && read.value.sessionStatus === "stopped") {
+      return readTreasuryLaneResponsibility(TREASURY_T4_LANE).status === "clear" ? unmanaged : held;
+    }
+    if (read.status !== "valid") return held;
+    const state = read.value;
+    const clock = now();
+    if (!clock || !finiteNonNegative(requestedAmount) || requestedAmount < 1 ||
+        state.sessionStatus !== "running" || state.pilot.releasedAtTick === null ||
+        clock.tick <= state.pilot.releasedAtTick || state.currentCycle !== null || state.modeTransition !== null ||
+        rawMode() !== "canary" || fixedGateReason(state) !== null || !safeEnvironment() || !cargoQuiescent(state) ||
+        state.sequenceHighWater >= state.policy.maxPrepareCycles || !otherLanesClear() ||
+        !kernelIdleAndCertified(state) || readTreasuryLaneResponsibility(TREASURY_T4_LANE).status !== "clear") return held;
+    const tasks = taskStore();
+    if (!tasks || Object.entries(tasks).some(([id, task]) => task.id !== id ||
+        !isValidTreasuryTransferTaskForCommitment(task) || task.treasurySlice !== undefined ||
+        taskInScope(task) && task.status === "pending" && task.remainingAmount > 0)) return held;
+    // producer 已完成 canonical 初始化；此只读入口不迁移旧表或初始化 Memory。
+    if (Memory.data?.resourceControl?.taskSchemaVersion !== 2) return held;
+    const prospectId = "treasury-T4-procurement-prospect";
+    if (tasks[prospectId] !== undefined) return held;
+    const demand = inspectConfiguredSynthesisTransferDemand(targetRoomName, resource, product, prospectId);
+    if (demand.status !== "bounded" || !finiteNonNegative(demand.amount) || demand.amount < 1) return held;
+    const rooms = Object.values(Game.rooms).filter((room) => room.controller?.my === true);
+    const observation = buildTreasuryObservation({ scope: "market-fresh", epochSeq: 0, rooms });
+    const commitments = buildTreasuryCommitmentIndex({ tick: clock.tick, tasks,
+      reservations: Memory.runtime?.resourceReservations ?? {}, observation });
+    if (commitments.commitmentCompleteness(sourceRoomName, resource) !== "complete" ||
+        commitments.commitmentCompleteness(targetRoomName, resource) !== "complete" ||
+        !observation.locationExists(sourceRoomName, "storage")) return held;
+    const floor = Memory.cfg?.resourceControl?.rooms?.[sourceRoomName]?.mineralFloor?.[resource] ?? 0;
+    const stored = observation.amount(sourceRoomName, "storage", resource);
+    const terminal = observation.amount(sourceRoomName, "terminal", resource);
+    const outgoing = commitments.outgoing(sourceRoomName, resource);
+    const reserved = commitments.reservedProduction(sourceRoomName, resource);
+    const carried = inspectTreasuryCarrierProductionCommitment(sourceRoomName, resource);
+    if (![floor, stored, terminal, outgoing, reserved, carried].every(finiteNonNegative)) return held;
+    // 只计可转移的 Storage/Terminal 现货，不借 lab 或既有待出/生产/搬运责任。
+    // Terminal 已备好时仍可直接复用；kernel 已证实完全 idle。
+    const backing = stored + terminal - floor - outgoing - reserved - carried!;
+    if (!finiteNonNegative(backing) || backing < 1) return held;
+    const maximum = Math.min(requestedAmount, demand.amount, state.policy.sliceAmount, backing);
+    // 剩余预算允许小片就接小片；不为凑满默认10而停住真实1..9需求。
+    for (let amount = maximum; amount >= 1; amount -= 1) {
+      const fee = Game.market.calcTransactionCost(amount, sourceRoomName, targetRoomName);
+      if (!checkTreasuryContinuousOHBudget(state.policy, state.consumption, state.enabledAtMs,
+        clock.ms, clock.tick, amount, fee).ok) continue;
+      const prospect: ResourceTransferTask = { id: prospectId, resource, fromRoomName: sourceRoomName,
+        toRoomName: targetRoomName, amount, remainingAmount: amount, status: "pending", origin: "automatic",
+        reason: TREASURY_T4_LANE.requiredReason, createdAt: clock.tick, updatedAt: clock.tick, lastProgressAt: clock.tick };
+      if (inspectTreasuryResourceTransferPreparation(prospect, amount, fee).ok) return { ownsRoute: true, amount };
+    }
+    return held;
+  } catch { return held; }
 }
 
 function quotaIdentityEqual(left: TreasuryT1Quota, right: TreasuryT1Quota): boolean {

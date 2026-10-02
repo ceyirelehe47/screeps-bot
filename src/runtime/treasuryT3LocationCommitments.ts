@@ -23,7 +23,7 @@ const CARRIER_TYPES = new Set(["lab_supply", "lab_cleanup", "lab_product_unload"
 const CARRIER_SOURCE_KINDS = new Set(["lab", "terminal", "storage", "container", "factory", "power_spawn", "nuker"]);
 
 /** 与资源调度的生产运输保护一致，读取货运板，不初始化或修改任务。 */
-function carrierProductionCommitment(roomName: string, resource: string): number | null {
+export function inspectTreasuryCarrierProductionCommitment(roomName: string, resource: string): number | null {
   const board = (global as typeof global & { __carrierTaskBoard?: unknown }).__carrierTaskBoard;
   const snapshot = peekCarrierTasksByRoom(roomName);
   // peek 会跳过不能解释的记录；位置豁免必须额外证明没有漏读责任。
@@ -144,7 +144,7 @@ export function treasuryT3CommittedOutgoingForLocation(request: TreasuryLocation
     if (rawOutgoing - facts.amount !== roomCommittedOutgoing) return undefined;
     const stored = observation.amount(lane.sourceRoom, "storage", lane.resource);
     const reserved = commitments.reservedProduction(lane.sourceRoom, lane.resource);
-    const carried = carrierProductionCommitment(lane.sourceRoom, lane.resource);
+    const carried = inspectTreasuryCarrierProductionCommitment(lane.sourceRoom, lane.resource);
     const terminalOccupied = request.occupancyOutflow(lane.sourceRoom, "terminal", lane.resource);
     const storageOccupied = request.occupancyOutflow(lane.sourceRoom, "storage", lane.resource);
     if (![stored, reserved, carried, terminalOccupied, storageOccupied].every(integer)) return undefined;
