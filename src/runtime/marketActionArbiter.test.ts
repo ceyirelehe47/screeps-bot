@@ -117,6 +117,11 @@ describe("market action arbiter", () => {
     expect(executeTerminalAction("E6N59", "unrelated", "terminal_send", outsideAction)).toBe(OK);
     (Memory.runtime as unknown as { treasuryProductionT1Quota: { status: string } })
       .treasuryProductionT1Quota.status = "drained";
+    // A damaged quota cannot prove handback merely by changing its status.
+    expect(executeTerminalAction("E3N59", "legacy-source", "terminal_send", sourceAction)).toBe(ERR_BUSY);
+    expect(sourceAction).not.toHaveBeenCalled();
+    // Separate pristine OFF fixture, rather than repairing an unknown quota.
+    Memory.runtime = {} as Memory["runtime"];
     expect(executeTerminalAction("E3N59", "legacy-source", "terminal_send", sourceAction)).toBe(OK);
     expect(sourceAction).toHaveBeenCalledTimes(1);
   });

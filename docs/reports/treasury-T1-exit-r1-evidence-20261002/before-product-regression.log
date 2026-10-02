@@ -1,0 +1,41 @@
+
+> screeps@2026.8.29-6 test
+> jest --config jest.config.cjs --runInBand --runTestsByPath src/runtime/treasuryTerminalTransfer.integration.test.ts -t automatically hands
+
+FAIL src/runtime/treasuryTerminalTransfer.integration.test.ts
+  production Treasury T1 real facade task path
+    ✕ automatically hands an unused expired control back to the real ordinary writer (4 ms)
+    ○ skipped sends one existing task slice and reduces remaining only after confirmed arrival
+    ○ skipped closes a 100 to 0 task from lifecycle after reset without a second send
+    ○ skipped retains an unknown native attempt across a new service and OFF
+    ○ skipped reaches the same bounded native send through the production resourceControl entry
+    ○ skipped rejects T1 in the production entry after a third-room send toward E3N59
+    ○ skipped rejects T1 in the production entry after a third-room send toward E4N58
+    ○ skipped blocks third-room ingress to both endpoints after T1 admission and permits unrelated rooms
+    ○ skipped does not admit after its fixed lease or deadline and cannot rearm
+    ○ skipped keeps the original deadline through heartbeat and blocks identity or safety drift
+    ○ skipped does not enter native after the one-shot control mirror or CPU gate fails
+    ○ skipped keeps the 600 tick cutoff after reset even with a fresh wall-clock lease
+
+  ● production Treasury T1 real facade task path › automatically hands an unused expired control back to the real ordinary writer
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: false
+    Received: true
+
+      157 |       Game.time = 120;
+      158 |       // No operator close, heartbeat or status query drives this transition.
+    > 159 |       expect(beginTreasuryProductionTick()).toBe(false);
+          |                                             ^
+      160 |       expect(readTreasuryT1FirstLiveControl()).toMatchObject({
+      161 |         status: "valid", value: { status: "closed", closeReason: "control_lease_expired" },
+      162 |       });
+
+      at Object.<anonymous> (src/runtime/treasuryTerminalTransfer.integration.test.ts:159:45)
+
+Test Suites: 1 failed, 1 total
+Tests:       1 failed, 11 skipped, 12 total
+Snapshots:   0 total
+Time:        2.733 s
+Ran all test suites within paths "src/runtime/treasuryTerminalTransfer.integration.test.ts".

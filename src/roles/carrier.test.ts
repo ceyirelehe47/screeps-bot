@@ -11,7 +11,18 @@ import {
 } from "@/runtime/marketActionArbiter";
 import { clearMarketSaleExposureReservationsForTest } from "@/runtime/marketSaleExposure";
 import { clearLocalCarrierDestinationCapacityForTest } from "@/runtime/localCarrierDestinationCapacity";
-import { TREASURY_T1_RUN_ID } from "@/runtime/treasuryTaskCommitmentBridge";
+import { TREASURY_T1_RUN_ID, treasuryT1WorkKey } from "@/runtime/treasuryTaskCommitmentBridge";
+import { initializeTreasuryCoreStore } from "@/runtime/treasury/kernel/store";
+
+function installDrainedT1Fixture(): void {
+  expect(initializeTreasuryCoreStore(Game.time).initialized).toBe(true);
+  (Memory.runtime as unknown as Record<string, unknown>).treasuryProductionT1Quota = {
+    schemaVersion: 2, runId: TREASURY_T1_RUN_ID, status: "drained",
+    taskId: "carrier-fixture", taskCreatedAt: 0, taskAmount: 100,
+    workKey: treasuryT1WorkKey("carrier-fixture"), attemptId: "carrier-fixture-attempt",
+    amount: 100, reservedAtTick: 0,
+  };
+}
 
 jest.mock("@/roles/energyTargets", () => ({
   getEnergyStoreTarget: jest.fn(),
@@ -780,6 +791,8 @@ describe("carrierRole mineral hauling", () => {
 
     (Memory.runtime as unknown as { treasuryProductionT1Quota: { status: string } })
       .treasuryProductionT1Quota.status = "drained";
+    // 坏记录仅改 drained 不能解除保护；完整闭合是独立的角色单测装夹。
+    installDrainedT1Fixture();
     Game.time += 1;
     carrierRole().source?.(carrier);
     expect(carrier.withdraw).toHaveBeenCalledWith(terminal, RESOURCE_KEANIUM, 800);
@@ -847,6 +860,7 @@ describe("carrierRole mineral hauling", () => {
 
     (Memory.runtime as unknown as { treasuryProductionT1Quota: { status: string } })
       .treasuryProductionT1Quota.status = "drained";
+    installDrainedT1Fixture();
     Game.time += 1;
     carrierRole().target(carrier);
     expect(carrier.transfer).toHaveBeenCalledWith(terminal, RESOURCE_ENERGY);

@@ -1,0 +1,11 @@
+{
+  "status": "TASK_PACKAGE_INTEGRITY_VERIFIED",
+  "declaredPayloadFiles": 39,
+  "totalFiles": 41,
+  "preservedArchiveMembers": {
+    "screeps-sol-treasury-t1-first-live-2026-09-27.zip": 23,
+    "screeps-treasury-T1-review-43b53da-2026-09-27.zip": 15
+  },
+  "referenceSourceBlob": "11ecdc11447efa7138cc7e1372c1cb00fe803f94",
+  "productTestsPerformedByThisTool": false
+}

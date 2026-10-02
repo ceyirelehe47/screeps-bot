@@ -1,10 +1,12 @@
 import * as runtimeServices from "@/runtime/runtimeServices";
 import { BUILD_INFO } from "@/buildMeta";
 import { createTreasuryService, type TreasuryService } from "@/runtime/treasury/facade";
-import { treasuryTaskCommitmentView } from "@/runtime/treasuryTaskCommitmentBridge";
+import { resetTreasuryCoreLifecycleFactsForTest } from "@/runtime/treasury/kernel/kernel";
+import { hasTreasuryT1TerminalFence, treasuryTaskCommitmentView } from "@/runtime/treasuryTaskCommitmentBridge";
 import { ReceiverCapacityLedger } from "@/runtime/logistics/receiverCapacityLedger";
 import type { ResourceTransferTask } from "@/runtime/logistics/resourceTransferTasks";
-import { cleanupResourceTransferTaskStore } from "@/runtime/logistics/resourceTransferTasks";
+import { cancelResourceTransferTask, cleanupResourceTransferTaskStore } from "@/runtime/logistics/resourceTransferTasks";
+import { TREASURY_T1_RUN_ID, treasuryT1WorkKey } from "@/runtime/treasuryT1Facts";
 import {
   beginTreasuryProductionTick,
   endTreasuryProductionTick,
@@ -16,6 +18,8 @@ import {
   armTreasuryT1FirstLive,
   heartbeatTreasuryT1FirstLive,
   readTreasuryT1FirstLiveControl,
+  treasuryT1FirstLiveAllows,
+  treasuryT1SerializedBytes,
 } from "@/runtime/treasuryT1FirstLiveControl";
 import { runResourceControl } from "@/runtime/resourceControl";
 
@@ -102,6 +106,7 @@ describe("production Treasury T1 real facade task path", () => {
   });
 
   beforeEach(() => {
+    resetTreasuryCoreLifecycleFactsForTest();
     clearMarketActionArbiterForTest();
     (global as typeof global & { __DEPLOY_BUNDLE_HASH__?: string }).__DEPLOY_BUNDLE_HASH__ = "test-bundle";
     Game.time = 100;
@@ -142,6 +147,350 @@ describe("production Treasury T1 real facade task path", () => {
 
   afterEach(() => {
     serviceSpy.mockRestore();
+  });
+
+  it("automatically hands an unused expired control back to the real ordinary writer", () => {
+    const now = Date.now();
+    const clock = jest.spyOn(Date, "now").mockReturnValue(now);
+    try {
+      Memory.cfg = {
+        treasuryTerminalTransferSlice0: { mode: "off" },
+        resourceControl: { sampleInterval: 10, market: { enabled: false } },
+      } as unknown as Memory["cfg"];
+      expect(armTreasuryT1FirstLive(task.id, task.createdAt).ok).toBe(true);
+      clock.mockReturnValue(now + 60_000);
+      Game.time = 120;
+      // No operator close, heartbeat or status query drives this transition.
+      expect(beginTreasuryProductionTick()).toBe(false);
+      expect(readTreasuryT1FirstLiveControl()).toMatchObject({
+        status: "valid", value: { status: "closed", closeReason: "control_lease_expired" },
+      });
+      expect(serviceSpy).not.toHaveBeenCalled();
+      runResourceControl();
+      expect(source.terminal!.send).toHaveBeenCalledTimes(1);
+      expect((source.terminal!.send as jest.Mock).mock.calls[0]).toEqual([
+        RESOURCE_HYDROGEN, 250, targetName, `resourceControl:task:${task.id}`,
+      ]);
+      expect(Memory.data?.resourceControl?.tasks[task.id]).toMatchObject({ status: "done", remainingAmount: 0 });
+      expect((Memory.runtime as unknown as Record<string, unknown>).treasuryProductionT1Quota).toBeUndefined();
+      expect((Memory.runtime as unknown as Record<string, unknown>).treasuryCore).toBeUndefined();
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
+  it.each(["lease", "tick", "wall"])("closes exactly at the %s boundary without a task scan", (boundary) => {
+    const now = Date.now();
+    const clock = jest.spyOn(Date, "now").mockReturnValue(now);
+    try {
+      expect(armTreasuryT1FirstLive(task.id, task.createdAt).ok).toBe(true);
+      let cutoff = now + 60_000;
+      if (boundary === "tick") Game.time = 699;
+      if (boundary === "wall") {
+        for (let elapsed = 30_000; elapsed < 30 * 60_000; elapsed += 30_000) {
+          clock.mockReturnValue(now + elapsed);
+          expect(heartbeatTreasuryT1FirstLive().ok).toBe(true);
+        }
+        cutoff = now + 30 * 60_000;
+      }
+      clock.mockReturnValue(boundary === "tick" ? now + 1 : cutoff - 1);
+      expect(treasuryT1FirstLiveAllows(task, 100)).toBe(true);
+      if (boundary === "tick") Game.time = 700;
+      else clock.mockReturnValue(cutoff);
+      expect(treasuryT1FirstLiveAllows(task, 100)).toBe(false);
+      delete Memory.data!.resourceControl!.tasks[task.id];
+      expect(beginTreasuryProductionTick()).toBe(false);
+      expect(readTreasuryT1FirstLiveControl()).toMatchObject({ status: "valid", value: {
+        status: "closed", closeReason: boundary === "tick" ? "fixed_tick_deadline"
+          : boundary === "wall" ? "fixed_wall_deadline" : "control_lease_expired",
+      } });
+      expect(serviceSpy).not.toHaveBeenCalled();
+      expect(hasTreasuryT1TerminalFence()).toBe(false);
+      expect(heartbeatTreasuryT1FirstLive().ok).toBe(false);
+      expect(armTreasuryT1FirstLive(task.id, task.createdAt).ok).toBe(false);
+    } finally { clock.mockRestore(); }
+  });
+
+  it.each(["cancelled", "done", "failed", "removed", "reused"])(
+    "closes the unused control when its bound task is %s, before its deadline", (state) => {
+      expect(armTreasuryT1FirstLive(task.id, task.createdAt).ok).toBe(true);
+      if (state === "removed") delete Memory.data!.resourceControl!.tasks[task.id];
+      else if (state === "reused") task.createdAt += 1;
+      else task.status = state as ResourceTransferTask["status"];
+      expect(beginTreasuryProductionTick()).toBe(false);
+      expect(readTreasuryT1FirstLiveControl()).toMatchObject({ status: "valid", value: {
+        status: "closed", closeReason: "task_identity_changed",
+      } });
+      expect(hasTreasuryT1TerminalFence()).toBe(false);
+      expect(serviceSpy).not.toHaveBeenCalled();
+      expect(source.terminal!.send).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(["control", "quota", "kernel", "lease", "task-table"])(
+    "does not treat damaged %s state as no responsibility on expiry", (part) => {
+      const now = Date.now();
+      const clock = jest.spyOn(Date, "now").mockReturnValue(now);
+      try {
+        expect(armTreasuryT1FirstLive(task.id, task.createdAt).ok).toBe(true);
+        const runtime = Memory.runtime as unknown as Record<string, unknown>;
+        if (part === "control") runtime.treasuryT1FirstLiveControlMirror = {};
+        if (part === "quota") runtime.treasuryProductionT1Quota = {};
+        if (part === "kernel") runtime.treasuryCore = {};
+        if (part === "lease") task.treasurySlice = {} as ResourceTransferTask["treasurySlice"];
+        if (part === "task-table") Memory.data!.resourceControl!.tasks = [] as unknown as typeof Memory.data.resourceControl.tasks;
+        clock.mockReturnValue(now + 60_000);
+        beginTreasuryProductionTick();
+        expect(hasTreasuryT1TerminalFence()).toBe(true);
+        expect(runTreasuryTerminalTransferTask(task, makeLedger(target, task), true, jest.fn()).handled).toBe(true);
+        expect(source.terminal!.send).not.toHaveBeenCalled();
+        expect(armTreasuryT1FirstLive(task.id, task.createdAt).ok).toBe(false);
+        endTreasuryProductionTick();
+      } finally { clock.mockRestore(); }
+    },
+  );
+
+  it.each(["control", "mode"])("requires exact persistent %s writeback before handing back", (part) => {
+    const now = Date.now();
+    const clock = jest.spyOn(Date, "now").mockReturnValue(now);
+    try {
+      expect(armTreasuryT1FirstLive(task.id, task.createdAt).ok).toBe(true);
+      if (part === "control") {
+        const runtime = Memory.runtime as unknown as Record<string, unknown>;
+        const prior = runtime.treasuryT1FirstLiveControl;
+        Object.defineProperty(runtime, "treasuryT1FirstLiveControl", { enumerable: true, configurable: true,
+          get: () => prior, set: () => undefined });
+      } else {
+        const cfg = Memory.cfg as unknown as Record<string, unknown>;
+        const prior = cfg.treasuryTerminalTransferSlice0;
+        Object.defineProperty(cfg, "treasuryTerminalTransferSlice0", { enumerable: true, configurable: true,
+          get: () => prior, set: () => undefined });
+      }
+      clock.mockReturnValue(now + 60_000);
+      expect(beginTreasuryProductionTick()).toBe(false);
+      expect(runTreasuryTerminalTransferTask(task, makeLedger(target, task), true, jest.fn()).handled).toBe(true);
+      expect(serviceSpy).not.toHaveBeenCalled();
+      expect(source.terminal!.send).not.toHaveBeenCalled();
+    } finally { clock.mockRestore(); }
+  });
+
+  it("counts UTF-8 bytes and retries a safe close after Memory headroom recovers", () => {
+    const now = Date.now();
+    const clock = jest.spyOn(Date, "now").mockReturnValue(now);
+    try {
+      expect(treasuryT1SerializedBytes({text: "中文😀\ud800"})).toBe(Buffer.byteLength(JSON.stringify({text: "中文😀\ud800"}), "utf8"));
+      expect(armTreasuryT1FirstLive(task.id, task.createdAt).ok).toBe(true);
+      const runtime = Memory.runtime as unknown as Record<string, unknown>;
+      runtime.labPadding = "中".repeat(650_000);
+      expect(JSON.stringify(Memory).length).toBeLessThan(1_900_000);
+      expect(treasuryT1SerializedBytes(Memory)).toBeGreaterThan(1_900_000);
+      clock.mockReturnValue(now + 60_000);
+      expect(beginTreasuryProductionTick()).toBe(false);
+      expect(readTreasuryT1FirstLiveControl()).toMatchObject({ status: "valid", value: { status: "active" } });
+      expect(treasuryT1FirstLiveAllows(task, 100)).toBe(false);
+      delete runtime.labPadding;
+      Game.time += 1;
+      expect(beginTreasuryProductionTick()).toBe(false);
+      expect(readTreasuryT1FirstLiveControl()).toMatchObject({ status: "valid", value: { status: "closed" } });
+      expect(serviceSpy).not.toHaveBeenCalled();
+    } finally { clock.mockRestore(); }
+  });
+
+  it("cancels reserved work after reset using the original kernel boundary evidence", () => {
+    const now = Date.now();
+    const clock = jest.spyOn(Date, "now").mockReturnValue(now);
+    const dispatch = jest.spyOn(treasury, "executeAuthorizedDispatch").mockImplementation(() => {
+      throw Error("isolated reset before facade invocation");
+    });
+    try {
+      expect(armTreasuryT1FirstLive(task.id, task.createdAt).ok).toBe(true);
+      expect(beginTreasuryProductionTick()).toBe(true);
+      expect(() => runTreasuryTerminalTransferTask(task, makeLedger(target, task), true, jest.fn())).toThrow("isolated reset");
+      expect(treasury.kernelJournal().active[0]).toMatchObject({ phase: "pending" });
+      expect((Memory.runtime as unknown as { treasuryProductionT1Quota: { status: string } }).treasuryProductionT1Quota.status).toBe("reserved");
+      dispatch.mockRestore();
+      resetTreasuryCoreLifecycleFactsForTest();
+      clock.mockReturnValue(now + 60_000);
+      for (let i = 0; i < 8; i += 1) {
+        Game.time += 1;
+        beginTreasuryProductionTick();
+        endTreasuryProductionTick();
+      }
+      expect(source.terminal!.send).not.toHaveBeenCalled();
+      expect(Memory.data!.resourceControl!.tasks[task.id].remainingAmount).toBe(250);
+      expect((Memory.runtime as unknown as { treasuryProductionT1Quota: { status: string } }).treasuryProductionT1Quota.status).toBe("drained");
+      expect(hasTreasuryT1TerminalFence()).toBe(false);
+      expect(armTreasuryT1FirstLive(task.id, task.createdAt).ok).toBe(false);
+    } finally { dispatch.mockRestore(); clock.mockRestore(); }
+  });
+
+  it.each([
+    ["preparing", false], ["preparing", true],
+    ["admitted-before-quota", false], ["admitted-before-quota", true],
+  ])("closes the %s reset window without native (expired=%s)", (window, expired) => {
+    const now = Date.now();
+    const clock = jest.spyOn(Date, "now").mockReturnValue(now);
+    let admission: jest.SpyInstance | undefined;
+    try {
+      expect(armTreasuryT1FirstLive(task.id, task.createdAt).ok).toBe(true);
+      if (window === "preparing") {
+        task.treasurySlice = { schemaVersion: 1, runId: TREASURY_T1_RUN_ID,
+          workKey: treasuryT1WorkKey(task.id), attemptId: "", amount: 100, phase: "preparing" };
+      } else {
+        const original = treasury.authorizeTreasuryActionContract.bind(treasury);
+        admission = jest.spyOn(treasury, "authorizeTreasuryActionContract").mockImplementation((...args) => {
+          const result = original(...args);
+          expect(result.status).toBe("admitted");
+          throw Error("reset after admission, before task attach or quota");
+        });
+        expect(beginTreasuryProductionTick()).toBe(true);
+        expect(() => runTreasuryTerminalTransferTask(task, makeLedger(target, task), true, jest.fn())).toThrow("reset after admission");
+        expect(treasury.kernelJournal().active[0]).toMatchObject({ phase: "pending", invocationBoundary: null });
+        admission.mockRestore();
+      }
+      expect((Memory.runtime as unknown as Record<string, unknown>).treasuryProductionT1Quota).toBeUndefined();
+      resetTreasuryCoreLifecycleFactsForTest();
+      clock.mockReturnValue(now + (expired ? 60_000 : 1));
+      for (let i = 0; i < 8; i += 1) { Game.time += 1; beginTreasuryProductionTick(); endTreasuryProductionTick(); }
+      expect((Memory.data!.resourceControl!.tasks[task.id] as ResourceTransferTask).treasurySlice).toBeUndefined();
+      expect(hasTreasuryT1TerminalFence()).toBe(false);
+      expect(source.terminal!.send).not.toHaveBeenCalled();
+      expect(Memory.data!.resourceControl!.tasks[task.id].remainingAmount).toBe(250);
+      expect(armTreasuryT1FirstLive(task.id, task.createdAt).ok).toBe(false);
+      if (window === "preparing") {
+        expect(serviceSpy).not.toHaveBeenCalled();
+        expect((Memory.runtime as unknown as Record<string, unknown>).treasuryCore).toBeUndefined();
+      }
+    } finally { admission?.mockRestore(); clock.mockRestore(); }
+  });
+
+  it("settles exactly once after the public cancellation API, while preserving cancelled status", () => {
+    expect(armTreasuryT1FirstLive(task.id, task.createdAt).ok).toBe(true);
+    expect(beginTreasuryProductionTick()).toBe(true);
+    runTreasuryTerminalTransferTask(task, makeLedger(target, task), true, jest.fn());
+    const description = (source.terminal!.send as jest.Mock).mock.calls[0][3];
+    endTreasuryProductionTick();
+    cancelResourceTransferTask(task.id);
+    expect(Memory.data!.resourceControl!.tasks[task.id].status).toBe("cancelled");
+    (source.terminal!.store as unknown as {H: number; energy: number}).H -= 100;
+    (source.terminal!.store as unknown as {energy: number}).energy -= 10;
+    (target.terminal!.store as unknown as {H: number}).H += 100;
+    const tx = { transactionId: "cancelled-confirmed", time: 100, sender: {username: "forster"},
+      recipient: {username: "forster"}, from: sourceName, to: targetName, resourceType: RESOURCE_HYDROGEN,
+      amount: 100, description } as Transaction;
+    Game.market.incomingTransactions = [tx];
+    Game.market.outgoingTransactions = [tx];
+    for (let i = 0; i < 8; i += 1) { Game.time += 1; beginTreasuryProductionTick(); endTreasuryProductionTick(); }
+    expect(Memory.data!.resourceControl!.tasks[task.id]).toMatchObject({status: "cancelled", remainingAmount: 150});
+    expect((Memory.data!.resourceControl!.tasks[task.id] as ResourceTransferTask).treasurySlice).toBeUndefined();
+    expect(hasTreasuryT1TerminalFence()).toBe(false);
+    expect(source.terminal!.send).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not exclude or settle an old active slice against a reused task ID", () => {
+    expect(armTreasuryT1FirstLive(task.id, task.createdAt).ok).toBe(true);
+    expect(beginTreasuryProductionTick()).toBe(true);
+    runTreasuryTerminalTransferTask(task, makeLedger(target, task), true, jest.fn());
+    const records = treasury.kernelJournal().active;
+    const replacement = {...makeTask(), createdAt: 101};
+    Memory.data!.resourceControl!.tasks[task.id] = replacement;
+    expect(treasuryTaskCommitmentView({[replacement.id]: replacement}, records)[replacement.id].remainingAmount).toBe(250);
+    endTreasuryProductionTick();
+    Game.time += 1;
+    beginTreasuryProductionTick();
+    expect(replacement.remainingAmount).toBe(250);
+    expect(replacement.treasurySlice).toBeUndefined();
+    expect(hasTreasuryT1TerminalFence()).toBe(true);
+    expect(source.terminal!.send).toHaveBeenCalledTimes(1);
+    endTreasuryProductionTick();
+  });
+
+  it.each(["cpu", "control-write"])("retains pre-native evidence when %s prevents stopping after reset", (failure) => {
+    const original = treasury.authorizeTreasuryActionContract.bind(treasury);
+    const admission = jest.spyOn(treasury, "authorizeTreasuryActionContract").mockImplementation((...args) => {
+      original(...args);
+      throw Error("reset after admission");
+    });
+    expect(armTreasuryT1FirstLive(task.id, task.createdAt).ok).toBe(true);
+    beginTreasuryProductionTick();
+    expect(() => runTreasuryTerminalTransferTask(task, makeLedger(target, task), true, jest.fn())).toThrow("reset after admission");
+    admission.mockRestore();
+    const runtime = Memory.runtime as unknown as Record<string, unknown>;
+    const prior = runtime.treasuryT1FirstLiveControl;
+    if (failure === "cpu") Game.cpu = {...Game.cpu, bucket: 1_999};
+    else Object.defineProperty(runtime, "treasuryT1FirstLiveControl", {configurable: true, enumerable: true,
+      get: () => prior, set: () => undefined});
+    resetTreasuryCoreLifecycleFactsForTest();
+    Game.time += 1;
+    expect(beginTreasuryProductionTick()).toBe(false);
+    expect(treasury.kernelJournal().active[0]).toMatchObject({phase: "pending", invocationBoundary: null});
+    expect(treasury.kernelJournal().ring).toHaveLength(0);
+    expect(task.treasurySlice?.phase).toBe("preparing");
+    expect(runtime.treasuryProductionT1Quota).toBeUndefined();
+    Game.cpu = {...Game.cpu, bucket: 10_000};
+    if (failure === "control-write") Object.defineProperty(runtime, "treasuryT1FirstLiveControl", {
+      value: prior, writable: true, configurable: true, enumerable: true});
+    for (let i = 0; i < 8; i += 1) { Game.time += 1; beginTreasuryProductionTick(); endTreasuryProductionTick(); }
+    expect((Memory.data!.resourceControl!.tasks[task.id] as ResourceTransferTask).treasurySlice).toBeUndefined();
+    expect(hasTreasuryT1TerminalFence()).toBe(false);
+    expect(source.terminal!.send).not.toHaveBeenCalled();
+  });
+
+  it("keeps an unknown-version closing lease and its quota fenced", () => {
+    expect(armTreasuryT1FirstLive(task.id, task.createdAt).ok).toBe(true);
+    beginTreasuryProductionTick();
+    runTreasuryTerminalTransferTask(task, makeLedger(target, task), true, jest.fn());
+    const description = (source.terminal!.send as jest.Mock).mock.calls[0][3];
+    endTreasuryProductionTick();
+    (source.terminal!.store as unknown as {H: number; energy: number}).H -= 100;
+    (source.terminal!.store as unknown as {energy: number}).energy -= 10;
+    (target.terminal!.store as unknown as {H: number}).H += 100;
+    const tx = {transactionId: "closing-version", time: 100, sender: {username: "forster"},
+      recipient: {username: "forster"}, from: sourceName, to: targetName, resourceType: RESOURCE_HYDROGEN,
+      amount: 100, description} as Transaction;
+    Game.market.incomingTransactions = [tx]; Game.market.outgoingTransactions = [tx];
+    Game.time += 1; beginTreasuryProductionTick();
+    const lease = (Memory.data!.resourceControl!.tasks[task.id] as ResourceTransferTask).treasurySlice!;
+    expect(lease.phase).toBe("closing");
+    (lease as unknown as {schemaVersion: number}).schemaVersion = 999;
+    endTreasuryProductionTick();
+    for (let i = 0; i < 5; i += 1) { Game.time += 1; beginTreasuryProductionTick(); endTreasuryProductionTick(); }
+    expect((Memory.data!.resourceControl!.tasks[task.id] as ResourceTransferTask).treasurySlice).toBe(lease);
+    expect((Memory.runtime as unknown as {treasuryProductionT1Quota: {status: string}}).treasuryProductionT1Quota.status).toBe("dispatching");
+    expect(hasTreasuryT1TerminalFence()).toBe(true);
+    expect(Memory.data!.resourceControl!.tasks[task.id].remainingAmount).toBe(150);
+    expect(source.terminal!.send).toHaveBeenCalledTimes(1);
+  });
+
+  it("retains the original business row when a damaged quota claims drained", () => {
+    task.status = "cancelled";
+    (Memory.runtime as unknown as Record<string, unknown>).treasuryProductionT1Quota = {
+      status: "drained", taskId: task.id, runId: TREASURY_T1_RUN_ID,
+    };
+    expect(cleanupResourceTransferTaskStore(new Set([sourceName, targetName]), 0)).toBe(0);
+    expect(Memory.data!.resourceControl!.tasks[task.id]).toBe(task);
+    expect(hasTreasuryT1TerminalFence()).toBe(true);
+  });
+
+  it.each(["non-ok", "throw"])("never retries a %s native result after expiry and reset", (failure) => {
+    const send = source.terminal!.send as jest.Mock;
+    if (failure === "throw") send.mockImplementation(() => { throw Error("unknown native result"); });
+    else send.mockReturnValue(ERR_BUSY);
+    expect(armTreasuryT1FirstLive(task.id, task.createdAt).ok).toBe(true);
+    expect(beginTreasuryProductionTick()).toBe(true);
+    runTreasuryTerminalTransferTask(task, makeLedger(target, task), true, jest.fn());
+    endTreasuryProductionTick();
+    resetTreasuryCoreLifecycleFactsForTest();
+    for (let i = 0; i < 8; i += 1) {
+      Game.time += 1;
+      beginTreasuryProductionTick();
+      runTreasuryTerminalTransferTask(Memory.data!.resourceControl!.tasks[task.id] as ResourceTransferTask,
+        makeLedger(target, task), true, jest.fn());
+      endTreasuryProductionTick();
+    }
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(Memory.data!.resourceControl!.tasks[task.id].remainingAmount).toBe(250);
+    expect(armTreasuryT1FirstLive(task.id, task.createdAt).ok).toBe(false);
   });
 
   it("sends one existing task slice and reduces remaining only after confirmed arrival", () => {
@@ -187,7 +536,7 @@ describe("production Treasury T1 real facade task path", () => {
     expect(treasury.kernelJournal().active).toHaveLength(0);
     Memory.cfg = { treasuryTerminalTransferSlice0: { mode: "off" } } as unknown as Memory["cfg"];
     Game.time += 1;
-    expect(beginTreasuryProductionTick()).toBe(true);
+    expect(beginTreasuryProductionTick()).toBe(false);
     const currentTask = Memory.data!.resourceControl!.tasks[task.id] as ResourceTransferTask;
     expect(runTreasuryTerminalTransferTask(currentTask, ledger, true, scheduled)).toEqual({ handled: false });
     expect(currentTask.treasurySlice).toBeUndefined();
@@ -239,7 +588,8 @@ describe("production Treasury T1 real facade task path", () => {
     expect(Memory.data!.resourceControl!.tasks[task.id].remainingAmount).toBe(0);
     expect(source.terminal!.send).toHaveBeenCalledTimes(1);
     endTreasuryProductionTick();
-    expect(cleanupResourceTransferTaskStore(new Set([sourceName, targetName]), 0)).toBe(0);
+    expect((Memory.data!.resourceControl!.tasks[task.id] as ResourceTransferTask).treasurySlice).toBeUndefined();
+    expect((Memory.runtime as unknown as { treasuryProductionT1Quota: { status: string } }).treasuryProductionT1Quota.status).toBe("drained");
 
     Memory.cfg = { treasuryTerminalTransferSlice0: { mode: "off" } } as unknown as Memory["cfg"];
     const currentTask = () => Memory.data!.resourceControl!.tasks[task.id] as ResourceTransferTask;
@@ -359,9 +709,10 @@ describe("production Treasury T1 real facade task path", () => {
       expect(read.status).toBe("valid");
       clock.mockReturnValue(now + 60_001);
       expect(heartbeatTreasuryT1FirstLive()).toEqual({ ok: false, reason: "expired_or_consumed" });
-      expect(beginTreasuryProductionTick()).toBe(true);
+      expect(beginTreasuryProductionTick()).toBe(false);
       expect(runTreasuryTerminalTransferTask(task, makeLedger(target, task), true, jest.fn()))
-        .toEqual({ handled: true, status: "first_live_control_unavailable" });
+        .toEqual({ handled: false });
+      expect(readTreasuryT1FirstLiveControl()).toMatchObject({status: "valid", value: {status: "closed"}});
       expect(source.terminal!.send).not.toHaveBeenCalled();
       expect(armTreasuryT1FirstLive(task.id, task.createdAt)).toEqual({ ok: false, reason: "already_used_or_unsettled" });
       endTreasuryProductionTick();
@@ -385,9 +736,10 @@ describe("production Treasury T1 real facade task path", () => {
       expect(renewed.value.deadlineTick).toBe(initial.value.deadlineTick);
       expect(renewed.value.deadlineMs).toBe(initial.value.deadlineMs);
       task.remainingAmount -= 1;
-      expect(beginTreasuryProductionTick()).toBe(true);
+      expect(beginTreasuryProductionTick()).toBe(false);
       expect(runTreasuryTerminalTransferTask(task, makeLedger(target, task), true, jest.fn()))
-        .toEqual({ handled: true, status: "first_live_control_unavailable" });
+        .toEqual({ handled: false });
+      expect(readTreasuryT1FirstLiveControl()).toMatchObject({status: "valid", value: {status: "closed"}});
       expect(source.terminal!.send).not.toHaveBeenCalled();
       endTreasuryProductionTick();
     } finally {
@@ -414,9 +766,10 @@ describe("production Treasury T1 real facade task path", () => {
     expect(armTreasuryT1FirstLive(task.id, task.createdAt).ok).toBe(true);
     Game.time = 700;
     expect(heartbeatTreasuryT1FirstLive()).toEqual({ ok: false, reason: "expired_or_consumed" });
-    expect(beginTreasuryProductionTick()).toBe(true);
+    expect(beginTreasuryProductionTick()).toBe(false);
     expect(runTreasuryTerminalTransferTask(task, makeLedger(target, task), true, jest.fn()))
-      .toEqual({ handled: true, status: "first_live_control_unavailable" });
+      .toEqual({ handled: false });
+    expect(readTreasuryT1FirstLiveControl()).toMatchObject({status: "valid", value: {status: "closed", closeReason: "fixed_tick_deadline"}});
     expect(source.terminal!.send).not.toHaveBeenCalled();
     endTreasuryProductionTick();
   });

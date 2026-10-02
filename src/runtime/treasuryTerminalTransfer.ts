@@ -46,8 +46,16 @@ import {
 } from "@/runtime/treasuryT1Facts";
 import {
   closeTreasuryT1FirstLive,
+  normalizeTreasuryT1FirstLiveControl,
+  readTreasuryT1FirstLiveControl,
   treasuryT1FirstLiveAllows,
 } from "@/runtime/treasuryT1FirstLiveControl";
+import {
+  readTreasuryT1Quota as readQuota,
+  readTreasuryT1Responsibility,
+  type TreasuryT1Quota as T1Quota,
+} from "@/runtime/treasuryT1Responsibility";
+import { readTreasuryCoreStoreHealth } from "@/runtime/treasury/kernel/store";
 
 export { TREASURY_T1_SOURCE_ROOM, TREASURY_T1_TARGET_ROOM } from "@/runtime/treasuryT1Facts";
 const TREASURY_T1_MAX_HYDROGEN = 100;
@@ -75,19 +83,6 @@ interface TreasuryT1TransferArgs {
   readonly target: EndpointSnapshot;
 }
 
-interface T1Quota {
-  readonly schemaVersion: 2;
-  readonly runId: string;
-  readonly status: "reserved" | "dispatching" | "drained";
-  readonly taskId: string;
-  readonly taskCreatedAt: number;
-  readonly taskAmount: number;
-  readonly workKey: string;
-  readonly attemptId: string;
-  readonly amount: number;
-  readonly reservedAtTick: number;
-}
-
 interface DispatchContext {
   readonly taskId: string;
   readonly workKey: string;
@@ -104,8 +99,6 @@ interface LastNativeAttempt {
   readonly fee: number;
   readonly code: ScreepsReturnCode;
 }
-
-type QuotaRead = { readonly status: "absent" } | { readonly status: "valid"; readonly value: T1Quota } | { readonly status: "invalid" };
 
 let adapterRegistrationReady = false;
 let activeTreasuryService: TreasuryService | null = null;
@@ -207,7 +200,6 @@ function writeTaskProgress(
     return previous.amount === 0 && previous.outcome === outcome;
   }
   if (previous.amount !== amount || previous.phase !== "active") return false;
-  if (outcome === "committed" && task.status !== "pending") return false;
 
   let remainingAmount = task.remainingAmount;
   let nextStatus = task.status;
@@ -216,7 +208,7 @@ function writeTaskProgress(
   let blockedReason = task.blockedReason;
   let blockedSince = task.blockedSince;
   let lastError = task.lastError;
-  if (outcome === "committed" && task.status === "pending") {
+  if (outcome === "committed") {
     if (!isInteger(remainingAmount) || remainingAmount < amount) return false;
     remainingAmount -= amount;
     updatedAt = Game.time;
@@ -224,7 +216,7 @@ function writeTaskProgress(
     blockedReason = undefined;
     blockedSince = undefined;
     lastError = undefined;
-    if (remainingAmount === 0) nextStatus = "done";
+    if (remainingAmount === 0 && nextStatus === "pending") nextStatus = "done";
   }
   const next: ResourceTransferTask = {
     ...task,
@@ -248,21 +240,6 @@ function writeTaskProgress(
   store[taskId] = next;
   bumpTreasuryCommitmentRevision();
   return store[taskId] === next;
-}
-
-function readQuota(): QuotaRead {
-  const runtime = (Memory as unknown as { runtime?: Record<string, unknown> }).runtime;
-  const raw = runtime?.[TREASURY_T1_QUOTA_KEY];
-  if (raw === undefined) return { status: "absent" };
-  if (
-    !isPlainObject(raw) || raw.schemaVersion !== 2 || raw.runId !== TREASURY_T1_RUN_ID ||
-    (raw.status !== "reserved" && raw.status !== "dispatching" && raw.status !== "drained") ||
-    typeof raw.taskId !== "string" || typeof raw.workKey !== "string" ||
-    typeof raw.attemptId !== "string" || !isPositiveInteger(raw.amount) ||
-    !isInteger(raw.taskCreatedAt) || !isPositiveInteger(raw.taskAmount) ||
-    !isInteger(raw.reservedAtTick)
-  ) return { status: "invalid" };
-  return { status: "valid", value: raw as unknown as T1Quota };
 }
 
 function writeQuota(value: T1Quota): boolean {
@@ -672,6 +649,10 @@ function ensureTaskLeaseFromRecord(record: TreasuryCoreWorkRecord): boolean {
       quota.value.taskAmount !== task.amount || quota.value.workKey !== record.workKey ||
       quota.value.attemptId !== record.attemptId || quota.value.amount !== facts.amount) return false;
   const lease = taskLease(task);
+  if (lease?.phase === "preparing" && lease.schemaVersion === 1 && lease.runId === TREASURY_T1_RUN_ID &&
+      lease.workKey === record.workKey && lease.amount === facts.amount && lease.attemptId === "") {
+    return updateTaskLease(task, { ...lease, attemptId: record.attemptId, phase: "active" });
+  }
   if (lease) return lease.schemaVersion === 1 && lease.runId === TREASURY_T1_RUN_ID &&
     lease.workKey === record.workKey && lease.attemptId === record.attemptId &&
     (lease.amount === facts.amount || (lease.phase === "closing" && lease.amount === 0));
@@ -700,7 +681,6 @@ function applyFinalRecordOutcome(record: TreasuryCoreWorkRecord): boolean {
 }
 
 function applyRingOutcome(attemptId: string, workKey: string, terminalPhase: string): boolean {
-  if (terminalPhase !== "committed" && terminalPhase !== "not_executed") return false;
   const taskId = readTaskIdFromWorkKey(workKey);
   const task = taskId ? taskStore()?.[taskId] : undefined;
   const lease = task ? taskLease(task) : undefined;
@@ -710,7 +690,62 @@ function applyRingOutcome(attemptId: string, workKey: string, terminalPhase: str
       quota.value.taskId !== taskId || quota.value.taskCreatedAt !== task.createdAt ||
       quota.value.taskAmount !== task.amount || quota.value.workKey !== workKey ||
       quota.value.attemptId !== attemptId) return false;
-  return writeTaskProgress(taskId, workKey, attemptId, quota.value.amount, terminalPhase);
+  // abandoned alone is not a settlement conclusion. The exact closing lease
+  // must already contain the kernel's persisted pending-cancellation result.
+  const outcome = terminalPhase === "abandoned" && lease.phase === "closing" &&
+    lease.outcome === "not_executed" ? "not_executed" : terminalPhase;
+  if (outcome !== "committed" && outcome !== "not_executed") return false;
+  return writeTaskProgress(taskId, workKey, attemptId, quota.value.amount, outcome);
+}
+
+function closeUnadmittedPreparingLease(): void {
+  if (readQuota().status !== "absent") return;
+  const control = readTreasuryT1FirstLiveControl();
+  if (control.status !== "valid" || control.value.status !== "closed") return;
+  const health = readTreasuryCoreStoreHealth();
+  if (health.status !== "absent" && (health.status !== "healthy" || health.ringDegraded !== null ||
+      Object.values(health.memory.active).some((record) => record.identity.actionKind === TREASURY_T1_ACTION_KIND) ||
+      health.memory.ring.some((entry) => entry.workKey.startsWith(TREASURY_T1_WORK_KEY_PREFIX)))) return;
+  const value = control.value;
+  const task = taskStore()?.[value.taskId];
+  const lease = task?.treasurySlice;
+  if (task && task.id === value.taskId && task.createdAt === value.taskCreatedAt && task.amount === value.taskAmount &&
+      task.fromRoomName === TREASURY_T1_SOURCE_ROOM && task.toRoomName === TREASURY_T1_TARGET_ROOM &&
+      task.resource === RESOURCE_HYDROGEN && lease?.schemaVersion === 1 && lease.runId === TREASURY_T1_RUN_ID &&
+      lease.workKey === treasuryT1WorkKey(task.id) && lease.phase === "preparing" && lease.attemptId === "" &&
+      lease.amount === Math.min(value.taskRemainingAtArm, 100)) updateTaskLease(task, null);
+}
+
+function cancelUninvokedT1Work(service: TreasuryService): boolean {
+  const journal = service.kernelJournal();
+  if (journal.health.status !== "healthy") return true;
+  for (const record of journal.active) {
+    if (record.identity.actionKind !== TREASURY_T1_ACTION_KIND || record.phase !== "pending" ||
+        record.invocationBoundary !== null || record.invocation !== null) continue;
+    const facts = recordFacts(record);
+    const control = readTreasuryT1FirstLiveControl();
+    const task = facts ? taskStore()?.[facts.taskId] : undefined;
+    if (readQuota().status === "absent") {
+      // A reset can fall between kernel admission and quota publication. Bind
+      // the original admission before its safe cancellation, never a new run.
+      if (!facts || !task || control.status !== "valid" || control.value.status !== "closed" ||
+          control.value.taskId !== task.id || control.value.taskCreatedAt !== facts.taskCreatedAt ||
+          task.createdAt !== facts.taskCreatedAt || task.amount !== control.value.taskAmount ||
+          facts.amount !== Math.min(control.value.taskRemainingAtArm, 100) ||
+          record.workKey !== treasuryT1WorkKey(task.id) ||
+          !writeQuota({ schemaVersion: 2, runId: TREASURY_T1_RUN_ID, status: "reserved",
+            taskId: task.id, taskCreatedAt: task.createdAt, taskAmount: task.amount,
+            workKey: record.workKey, attemptId: record.attemptId, amount: facts.amount,
+            reservedAtTick: Game.time })) return false;
+    }
+    if (!facts || !ensureTaskLeaseFromRecord(record)) return false;
+    // Publish the task-side result while the original, validated pending work
+    // still proves that invocation has not started. A failed cancellation keeps
+    // the active work/fence; a reset after cancellation cannot lose this proof.
+    if (!writeTaskProgress(facts.taskId, record.workKey, record.attemptId, facts.amount, "not_executed")) return false;
+    if (service.cancelPendingWork({ attemptId: record.attemptId }).status !== "ok") return false;
+  }
+  return true;
 }
 
 function readServiceActive(service: TreasuryService): readonly TreasuryCoreWorkRecord[] {
@@ -778,35 +813,21 @@ function recoverT1Work(service: TreasuryService): void {
       const terminal = journal.ring.find((entry) => entry.workKey === lease.workKey && entry.attemptId === lease.attemptId);
       if (active) continue;
       if (terminal) {
-        const applied = applyRingOutcome(terminal.attemptId, terminal.workKey, terminal.terminalPhase);
-        if (!applied && quota.status === "valid" && quota.value.status === "reserved" &&
-            quota.value.attemptId === terminal.attemptId && quota.value.taskId === task.id) {
-          writeTaskProgress(task.id, lease.workKey, lease.attemptId, lease.amount, "not_executed");
-        }
+        applyRingOutcome(terminal.attemptId, terminal.workKey, terminal.terminalPhase);
         continue;
       }
       const latestLease = taskLease(task);
       if (!latestLease) continue;
       if (latestLease.phase === "preparing" && quota.status === "absent") {
         updateTaskLease(task, null);
-      } else if (quota.status === "valid" && quota.value.status === "reserved" &&
-          quota.value.taskId === task.id && quota.value.workKey === latestLease.workKey &&
-          (latestLease.attemptId === "" || quota.value.attemptId === latestLease.attemptId)) {
-        updateTaskLease(task, {
-          ...latestLease,
-          attemptId: quota.value.attemptId,
-          phase: "active",
-        });
-        writeTaskProgress(task.id, latestLease.workKey, quota.value.attemptId, latestLease.amount, "not_executed");
-      } else if (latestLease.phase === "active" && quota.status === "absent") {
-        writeTaskProgress(task.id, latestLease.workKey, latestLease.attemptId, latestLease.amount, "not_executed");
       }
     }
   }
 
   if (quota.status === "valid" && quota.value.status === "dispatching") {
     const task = taskStore()?.[quota.value.taskId];
-    if (task && taskLease(task) === undefined &&
+    if (task && task.id === quota.value.taskId && task.createdAt === quota.value.taskCreatedAt &&
+        task.amount === quota.value.taskAmount && taskLease(task) === undefined &&
         !journal.active.some((record) => record.attemptId === quota.value.attemptId) &&
         !journal.ring.some((entry) => entry.attemptId === quota.value.attemptId)) {
       updateTaskLease(task, {
@@ -825,10 +846,25 @@ export function beginTreasuryProductionTick(): boolean {
   activeTreasuryService = null;
   activeLifecycleTick = -1;
   lifecycleBlockReason = null;
+  const normalized = normalizeTreasuryT1FirstLiveControl();
+  if (!normalized.ok) lifecycleBlockReason = normalized.reason;
+  if (normalized.ok && (readMode() === "off" || readMode() === "drain")) {
+    closeUnadmittedPreparingLease();
+    normalizeTreasuryT1FirstLiveControl();
+  }
   const mode = readMode();
-  const quota = readQuota();
-  const hasRecoveryWork = hasAnyT1ActiveRecord() || hasAnyT1TaskLease() ||
-    (quota.status === "valid" && quota.value.status !== "drained");
+  const responsibility = readTreasuryT1Responsibility();
+  if (responsibility.status === "invalid") {
+    lifecycleBlockReason = responsibility.reason;
+    return false;
+  }
+  const hasRecoveryWork = responsibility.status === "held";
+  if (!normalized.ok && !hasRecoveryWork) return false;
+  if (!normalized.ok) {
+    const health = readTreasuryCoreStoreHealth();
+    if (health.status === "absent" || (health.status === "healthy" && Object.values(health.memory.active).some((record) =>
+        record.identity.actionKind === TREASURY_T1_ACTION_KIND && record.phase === "pending"))) return false;
+  }
   if (!hasRecoveryWork && mode !== "canary" && mode !== "drain") return false;
 
   const gate = ensureReservationSchemaActivated();
@@ -838,13 +874,17 @@ export function beginTreasuryProductionTick(): boolean {
   }
   try {
     const service = getTreasuryService();
+    if (!cancelUninvokedT1Work(service)) {
+      lifecycleBlockReason = "pre_native_closure_write_failed";
+      return false;
+    }
     service.beginTick();
     activeTreasuryService = service;
     activeLifecycleTick = Game.time;
     recoverT1Work(service);
     // Completed tasks are no longer visited by resourceControl's pending-only
     // dispatcher. Close their exact lease from the per-tick lifecycle instead.
-    if (mode === "off") {
+    if (mode === "off" || mode === "drain") {
       const tasks = taskStore();
       if (tasks) {
         for (const task of Object.values(tasks)) {
@@ -854,11 +894,14 @@ export function beginTreasuryProductionTick(): boolean {
         }
       }
     }
+    const afterRecovery = normalizeTreasuryT1FirstLiveControl();
+    if (!afterRecovery.ok) lifecycleBlockReason = afterRecovery.reason;
     return true;
   } catch (error) {
     lifecycleBlockReason = String(error instanceof Error ? error.message : error).slice(0, 120);
     activeTreasuryService = null;
     activeLifecycleTick = -1;
+    normalizeTreasuryT1FirstLiveControl();
     return false;
   }
 }
@@ -871,6 +914,7 @@ export function endTreasuryProductionTick(): void {
   } finally {
     activeTreasuryService = null;
     activeLifecycleTick = -1;
+    normalizeTreasuryT1FirstLiveControl();
   }
 }
 
@@ -887,14 +931,16 @@ function readModeAndTaskMatch(task: ResourceTransferTask): { mode: TreasuryProdu
 function clearFinishedLeaseWhenOff(task: ResourceTransferTask, service: TreasuryService | null): boolean {
   const lease = taskLease(task);
   if (!lease) return true;
-  if (lease.runId !== TREASURY_T1_RUN_ID || lease.phase !== "closing" || lease.amount !== 0 ||
+  if (lease.schemaVersion !== 1 || lease.runId !== TREASURY_T1_RUN_ID ||
+      lease.workKey !== treasuryT1WorkKey(task.id) || lease.phase !== "closing" || lease.amount !== 0 ||
       (lease.outcome !== "committed" && lease.outcome !== "not_executed")) return false;
   if (!service) return false;
   const journal = service.kernelJournal();
   if (journal.health.status !== "healthy") return false;
   const terminal = journal.ring.find((entry) =>
     entry.workKey === lease.workKey && entry.attemptId === lease.attemptId);
-  if (!terminal || terminal.terminalPhase !== lease.outcome) return false;
+  if (!terminal || (terminal.terminalPhase !== lease.outcome &&
+      !(terminal.terminalPhase === "abandoned" && lease.outcome === "not_executed"))) return false;
   const active = journal.active;
   if (active.some((record) => record.workKey === lease.workKey && record.attemptId === lease.attemptId)) return false;
   const rawActive = hasT1ActiveRecordForTask(task.id);
@@ -961,6 +1007,7 @@ export function runTreasuryTerminalTransferTask(
   if (!matches) return { handled: true, status: "task_identity_changed" };
 
   const service = serviceForCurrentTick();
+  if (lifecycleBlockReason) return { handled: true, status: lifecycleBlockReason };
   const lease = taskLease(task);
   const activeForTask = taskHasActiveT1Work(task, service);
   if (activeForTask) return { handled: true, status: "active_work_held" };
@@ -978,10 +1025,6 @@ export function runTreasuryTerminalTransferTask(
       return { handled: true, status: "preparing_held" };
     }
     if (lease.phase === "active") {
-      const quota = readQuota();
-      if (quota.status === "valid" && quota.value.status === "reserved" && quota.value.attemptId === lease.attemptId) {
-        writeTaskProgress(task.id, lease.workKey, lease.attemptId, lease.amount, "not_executed");
-      }
       return { handled: true, status: "active_held" };
     }
     if (mode === "off" && clearFinishedLeaseWhenOff(task, service)) return { handled: false };

@@ -1,0 +1,7 @@
+{
+  "status": "ARCHIVED_SOURCE_REPLAY_COMPLETED_NOT_PRODUCT_ACCEPTANCE",
+  "expiry": "EXPIRY_HANDOFF_GAP_REPRODUCED",
+  "guard": "GUARD_CASES_PASS_ONLY",
+  "sourceHead": "43b53daa81bdeb9fdafea97c2d4a1ad8936835cc",
+  "scope": "Old control-module bytes and lifecycle/dispatch excerpts with mocked dependencies; no full repository, engine or production actions."
+}

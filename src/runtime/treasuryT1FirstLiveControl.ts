@@ -5,7 +5,7 @@ import {
   hasTerminalActionClaim,
   hasTerminalSendEffectThisTick,
 } from "@/runtime/marketActionArbiter";
-import { hasTreasuryT1TerminalFence } from "@/runtime/treasuryTaskCommitmentBridge";
+import { readTreasuryT1Responsibility } from "@/runtime/treasuryT1Responsibility";
 import {
   TREASURY_T1_RUN_ID,
   TREASURY_T1_SOURCE_ROOM,
@@ -43,7 +43,8 @@ interface Control {
 
 type Payload = Omit<Control, "hash">;
 type Read =
-  | { status: "absent" | "invalid" }
+  | { status: "absent" }
+  | { status: "invalid" }
   | { status: "valid"; value: Control };
 
 function runtime(): Record<string, unknown> | undefined {
@@ -95,6 +96,7 @@ function valid(raw: unknown): raw is Control {
 }
 
 export function readTreasuryT1FirstLiveControl(): Read {
+  try {
   const state = runtime();
   const primary = state?.[PRIMARY];
   const mirror = state?.[MIRROR];
@@ -102,23 +104,59 @@ export function readTreasuryT1FirstLiveControl(): Read {
   if (!valid(primary) || !valid(mirror) ||
       JSON.stringify(primary) !== JSON.stringify(mirror)) return { status: "invalid" };
   return { status: "valid", value: primary };
+  } catch {
+    return { status: "invalid" };
+  }
+}
+
+/** Screeps 不依赖 Node Buffer/TextEncoder；JSON 的 UTF-8 保守字节口径。 */
+export function treasuryT1SerializedBytes(value: unknown): number {
+  const serialized = JSON.stringify(value);
+  let bytes = 0;
+  for (let i = 0; i < serialized.length; i += 1) {
+    const code = serialized.charCodeAt(i);
+    if (code < 0x80) bytes += 1;
+    else if (code < 0x800) bytes += 2;
+    else if (code >= 0xd800 && code <= 0xdbff && i + 1 < serialized.length &&
+        serialized.charCodeAt(i + 1) >= 0xdc00 && serialized.charCodeAt(i + 1) <= 0xdfff) {
+      bytes += 4;
+      i += 1;
+    } else bytes += 3;
+  }
+  return bytes;
 }
 
 function writeControl(payload: Payload): boolean {
+  const baseline = readTreasuryT1FirstLiveControl();
+  let destination: Record<string, unknown> | undefined;
+  let sealed: Control | undefined;
   try {
     const memory = Memory as unknown as { runtime?: Record<string, unknown> };
-    const sealed = seal(payload);
-    if (JSON.stringify(Memory).length + JSON.stringify(sealed).length * 2 + 512 > MAX_MEMORY_BYTES) {
+    sealed = seal(payload);
+    if (treasuryT1SerializedBytes(Memory) + treasuryT1SerializedBytes(sealed) * 2 + 512 > MAX_MEMORY_BYTES) {
       return false;
     }
     memory.runtime ??= {};
+    destination = memory.runtime;
     memory.runtime[PRIMARY] = { ...sealed };
     memory.runtime[MIRROR] = { ...sealed };
     const readback = readTreasuryT1FirstLiveControl();
-    return readback.status === "valid" && readback.value.hash === sealed.hash;
+    if (readback.status === "valid" && readback.value.hash === sealed.hash) return true;
   } catch {
-    return false;
+    // Only restore a known, signed baseline after our own partial publication.
   }
+  try {
+    if (baseline.status === "valid" && destination !== undefined && runtime() === destination && sealed !== undefined) {
+      const before = JSON.stringify(baseline.value);
+      const after = JSON.stringify(sealed);
+      const known = (raw: unknown) => [before, after].includes(JSON.stringify(raw));
+      if (known(destination[PRIMARY]) && known(destination[MIRROR])) {
+        destination[PRIMARY] = { ...baseline.value };
+        destination[MIRROR] = { ...baseline.value };
+      }
+    }
+  } catch { /* A failed rollback remains invalid and fenced. */ }
+  return false;
 }
 
 function safeCpuAndMemory(): boolean {
@@ -127,7 +165,7 @@ function safeCpuAndMemory(): boolean {
     const used = cpu.getUsed();
     return Number.isFinite(used) && Number.isFinite(cpu.tickLimit) &&
       Number.isFinite(cpu.bucket) && cpu.tickLimit - used >= MIN_CPU_REMAINING &&
-      cpu.bucket >= MIN_CPU_BUCKET && JSON.stringify(Memory).length + 4_096 < MAX_MEMORY_BYTES;
+      cpu.bucket >= MIN_CPU_BUCKET && treasuryT1SerializedBytes(Memory) + 4_096 < MAX_MEMORY_BYTES;
   } catch {
     return false;
   }
@@ -194,19 +232,25 @@ function rawMode(): unknown {
     ? (entry as Record<string, unknown>).mode : undefined;
 }
 
-function setMode(mode: "off" | "canary" | "drain"): void {
+function setMode(mode: "off" | "canary" | "drain"): boolean {
+  try {
+  if (rawMode() === mode) return true;
   const memory = Memory as unknown as { cfg?: Record<string, unknown> };
   memory.cfg ??= {};
   const prior = memory.cfg.treasuryTerminalTransferSlice0;
   memory.cfg.treasuryTerminalTransferSlice0 = {
     ...(prior && typeof prior === "object" && !Array.isArray(prior) ? prior : {}), mode,
   };
+  return rawMode() === mode;
+  } catch {
+    return false;
+  }
 }
 
 export function armTreasuryT1FirstLive(taskId: string, createdAt: number): { ok: boolean; reason: string } {
   if (readTreasuryT1FirstLiveControl().status !== "absent" ||
       runtime()?.treasuryProductionT1Quota !== undefined ||
-      hasTreasuryT1TerminalFence()) return { ok: false, reason: "already_used_or_unsettled" };
+      readTreasuryT1Responsibility().status !== "clear") return { ok: false, reason: "already_used_or_unsettled" };
   if (rawMode() !== undefined && rawMode() !== "off") return { ok: false, reason: "mode_not_off" };
   if (!deploymentMatches() || !safeCpuAndMemory()) return { ok: false, reason: "environment_gate" };
   if (endpointAlreadyTouchedThisTick()) return { ok: false, reason: "terminal_action_this_tick" };
@@ -243,7 +287,7 @@ export function armTreasuryT1FirstLive(taskId: string, createdAt: number): { ok:
     closeReason: "",
   };
   if (!writeControl(payload)) return { ok: false, reason: "control_write_failed" };
-  setMode("canary");
+  if (!setMode("canary")) return { ok: false, reason: "mode_write_failed" };
   return { ok: true, reason: "armed" };
 }
 
@@ -266,14 +310,56 @@ export function heartbeatTreasuryT1FirstLive(): { ok: boolean; reason: string } 
 export function closeTreasuryT1FirstLive(reason = "operator_stop"): { ok: boolean; reason: string } {
   const read = readTreasuryT1FirstLiveControl();
   if (read.status !== "valid") return { ok: false, reason: read.status };
+  const nextMode = readTreasuryT1Responsibility().status === "clear" ? "off" : "drain";
+  if (read.value.status === "closed" && rawMode() === nextMode) return { ok: true, reason: "closed" };
+  if (!safeCpuAndMemory()) return { ok: false, reason: "environment_gate" };
   if (read.value.status === "active") {
     const { hash: _hash, ...payload } = read.value;
     if (!writeControl({ ...payload, status: "closed", closeReason: reason.slice(0, 80) || "closed" })) {
       return { ok: false, reason: "control_write_failed" };
     }
   }
-  setMode(hasTreasuryT1TerminalFence() ? "drain" : "off");
+  if (!setMode(nextMode)) {
+    return { ok: false, reason: "mode_write_failed" };
+  }
   return { ok: true, reason: "closed" };
+}
+
+/** 每 tick、挑任务前执行；停止接纳与完成责任恢复分别处理。 */
+export function normalizeTreasuryT1FirstLiveControl(): { ok: boolean; reason: string } {
+  try {
+  const read = readTreasuryT1FirstLiveControl();
+  if (read.status === "absent") return { ok: true, reason: "absent" };
+  if (read.status === "invalid") {
+    if (safeCpuAndMemory()) setMode("drain");
+    return { ok: false, reason: "control_invalid" };
+  }
+  if (read.value.status === "closed") return closeTreasuryT1FirstLive();
+  const value = read.value;
+  const now = Date.now();
+  let reason = "";
+  if (Game.time >= value.deadlineTick) reason = "fixed_tick_deadline";
+  else if (now >= value.deadlineMs) reason = "fixed_wall_deadline";
+  else if (now >= value.controlUntilMs) reason = "control_lease_expired";
+  else if (now < value.startedAtMs || Game.time < value.startedAtTick) reason = "clock_regressed";
+  else if (!deploymentMatches() || value.deployTag !== BUILD_INFO.tag ||
+      value.deployBundleHash !== BUILD_INFO.bundleHash) reason = "deployment_changed";
+  else if (runtime()?.treasuryProductionT1Quota !== undefined) reason = "quota_consumed";
+  else if (rawMode() !== "canary") reason = "mode_stopped";
+  else {
+    const responsibility = readTreasuryT1Responsibility();
+    if (responsibility.status === "invalid") return { ok: false, reason: responsibility.reason };
+    const task = Memory.data?.resourceControl?.tasks?.[value.taskId];
+    const ids = endpointIds();
+    if (!task || !taskMatches(value, task, Math.min(task.remainingAmount, 100))) reason = "task_identity_changed";
+    else if (!ids || ids.source !== value.sourceTerminalId || ids.target !== value.targetTerminalId) {
+      reason = "endpoint_identity_changed";
+    } else if (responsibility.status === "held") reason = "pre_native_recovery";
+  }
+  return reason ? closeTreasuryT1FirstLive(reason) : { ok: true, reason: "active" };
+  } catch {
+    return { ok: false, reason: "control_normalization_failed" };
+  }
 }
 
 export function treasuryT1FirstLiveStatus(): unknown {
