@@ -60,7 +60,7 @@ B/B2/B3/C初次尝试为调度/驱动校准，未发生本次T1或租约已经�
 
 生产阶段分层结论：实现通过、真实入口回归通过、最终main隔离验证通过；本轮默认OFF修复尚未正式部署；原任务未就绪；生产native=0、生产唯一交易/业务扣减/责任交回均未发生，不能宣称首笔writer验收完成。
 
-`deploy-frozen-t1-exit-r1.mjs --check`为只读，校验干净后继HEAD、447祖先/非文档代码差异、工具自摘要、全模块、账号、旧main、四shard完整Memory及无T1责任、主shard标签/Memory/完整任务。`--apply`需要明确发布授权，只发送本冻结字节，先wx备份，单次POST后独立GET，不重试未知POST；不arm、不发送业务。授权前未执行--apply。
+`deploy-frozen-t1-exit-r1.mjs --check`为只读，校验干净后继HEAD、447祖先/非文档代码差异、工具自摘要、全模块、账号、旧main、四shard完整Memory及无T1责任、主shard标签/Memory/完整任务。`--apply`需要明确发布授权，只发送本冻结字节，先wx备份，单次POST后独立GET，不重试未知POST；不arm、不发送业务。授权前未执行--apply。末次只读--check在干净交付提交`374be97bcdc19e979c9e0cbd1c583d95ffd670ae`通过：四shard完整Memory均无T1责任，主shard23条完整任务、Memory UTF-8 1533215字节，候选/旧线上字节、账号、源码、工具及全部门禁匹配；记录在`release-readonly-check.json`，只读检查不是部署。
 
 ## 结束状态与唯一下一动作
 
