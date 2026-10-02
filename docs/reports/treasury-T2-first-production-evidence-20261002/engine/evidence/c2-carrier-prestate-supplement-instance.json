@@ -1,0 +1,16 @@
+{
+  "schema": "screeps-t2-carrier-trace-supplement-instance/v1",
+  "isolatedWorldOnly": true,
+  "createdAtUtc": "2026-10-02T11:35:51.768959+00:00",
+  "sourcePrivateDatabase": "/srv/screeps-treasury-t1/r6-t2-20261002/db-before-c2-unknown-restart.json",
+  "sourceDatabaseSha256": "04f12f6435e8dcfdc28b875c381269a16b71a0ce37a52c19d3340b337bc5b43e",
+  "sourceMemorySha256": "cf03f0a7aff09419eeccdb3193cc139cff15c3abfb83d9320afefd6bdedae1c4",
+  "mainSha256": "a33ca56e530060f0e719630324bfe3d55649786ff19525483fd04197d315653f",
+  "originalAttemptId": "tk1_2_563d0bd13dd4ea10",
+  "originalWorkKey": "biz:treasury-production-T2-2026-10-02:15fae331e6da76a6",
+  "originalNativeTransactionId": "ea82c5ad9941756",
+  "originalNativeAtTick": 765,
+  "replayBranchOnly": true,
+  "newNativeNotRequested": true,
+  "purpose": "仅补充真实role委托调用前标量与保护/交付，原C2连续恢复链保持独立原件"
+}

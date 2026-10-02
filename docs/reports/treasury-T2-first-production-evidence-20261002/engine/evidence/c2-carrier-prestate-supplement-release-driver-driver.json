@@ -1,0 +1,25 @@
+{
+  "schema": "screeps-t2-lab-driver/v1",
+  "isolatedWorldOnly": true,
+  "label": "c2-carrier-prestate-supplement-release-driver",
+  "kind": "ticks",
+  "arg": "5",
+  "startTick": 781,
+  "endTick": 786,
+  "startedAtUtc": "2026-10-02T11:36:03.300Z",
+  "endedAtUtc": "2026-10-02T11:36:12.462Z",
+  "observations": 315,
+  "matched": true,
+  "last": {
+    "tick": 786,
+    "quota": "drained",
+    "control": "closed",
+    "mode": "off",
+    "active": 0,
+    "arm": {
+      "ok": true,
+      "reason": "armed"
+    }
+  },
+  "paused": true
+}

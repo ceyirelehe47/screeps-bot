@@ -1,0 +1,25 @@
+{
+  "schema": "screeps-t2-lab-driver/v1",
+  "isolatedWorldOnly": true,
+  "label": "c2-native-driver",
+  "kind": "native",
+  "arg": "",
+  "startTick": 762,
+  "endTick": 765,
+  "startedAtUtc": "2026-10-02T11:23:20.273Z",
+  "endedAtUtc": "2026-10-02T11:23:27.345Z",
+  "observations": 236,
+  "matched": true,
+  "last": {
+    "tick": 765,
+    "quota": "dispatching",
+    "control": "closed",
+    "mode": "drain",
+    "active": 1,
+    "arm": {
+      "ok": true,
+      "reason": "armed"
+    }
+  },
+  "paused": true
+}

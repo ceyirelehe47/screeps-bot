@@ -1,0 +1,23 @@
+{
+  "schema": "screeps-t2-lab-driver/v1",
+  "isolatedWorldOnly": true,
+  "label": "c1-1715-r3-arm-executed",
+  "kind": "arm-observed",
+  "arg": "",
+  "startTick": 756,
+  "endTick": 756,
+  "startedAtUtc": "2026-10-02T11:14:45.959Z",
+  "endedAtUtc": "2026-10-02T11:14:47.768Z",
+  "observations": 47,
+  "matched": true,
+  "last": {
+    "tick": 756,
+    "mode": "off",
+    "active": 0,
+    "arm": {
+      "ok": false,
+      "reason": "terminal_action_this_tick"
+    }
+  },
+  "paused": true
+}

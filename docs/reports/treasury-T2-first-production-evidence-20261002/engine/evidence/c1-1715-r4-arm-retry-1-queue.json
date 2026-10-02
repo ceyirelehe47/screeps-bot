@@ -1,0 +1,5 @@
+{
+  "isolatedWorldOnly": true,
+  "tick": 756,
+  "expression": "Memory.runtime.__labT2ArmResult=armTreasuryT2FirstLive(\"lab-t2-c1-1715-r4-UH\",756);Memory.runtime.__labT2ArmResultTick=Game.time;Memory.runtime.__labT2ArmResultNonce=\"c1-1715-r4-arm-retry-1\""
+}

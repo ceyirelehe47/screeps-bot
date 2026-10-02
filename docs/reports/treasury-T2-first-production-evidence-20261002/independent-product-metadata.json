@@ -1,0 +1,38 @@
+{
+  "schema": "screeps-t2-independent-product-metadata-review/v1",
+  "reviewer": "product_review",
+  "capturedAtUtc": "2026-10-02T11:12:34.262744+00:00",
+  "sourceCommit": "a84275040d4f8f8bfea2135a8465608f97637c22",
+  "sourceTree": "08b6f7592451faa6832ea4719c5272ab40cb9199",
+  "mainSha256": "a33ca56e530060f0e719630324bfe3d55649786ff19525483fd04197d315653f",
+  "mainBytes": 3308853,
+  "buildTag": "2026.10.2-2+a842750@2026-10-02T10:56:13.388Z",
+  "deployBundleHash": "4528cc84f0ac0ee82fe74d58d0ff9cf8292acd4e4e803c64d6d0d7412ce7b1b3",
+  "packageLockSha256": "7c34b3cab2a00901d3abbe9a1a1aaad9bb4d4a95e19f87793cb21d29a8a06632",
+  "deployToolSha256": "741e9805323d8076d7134e7d757994b8f9aa934f94949621917b6ac825a028c4",
+  "lockedTests": {
+    "suites": 38,
+    "tests": 347,
+    "failed": 0,
+    "pending": 0
+  },
+  "verified": {
+    "mainSHABytes": true,
+    "embeddedBuildIdentity": true,
+    "bundlePayloadSHA": true,
+    "sourceTreeAndCurrentRuntimeFiles": true,
+    "lockedPackageAndDeployToolSHA": true,
+    "lockedTestJSON": true,
+    "typecheckAndBuildLogsRead": true,
+    "mainFacadeKernelSourceUnchanged": true
+  },
+  "inputs": {
+    "release-manifest-T2.json": "fb3ec313f4962f94803c646bd3a22bafcd2c024f4839bfc66f2d6ed4f701cd45",
+    "tests/locked-final-combination.json": "aee055a74ad745e01dbca434b1e9004676fedd3807bf30b0c74559681a8ebb92",
+    "tests/typecheck-locked-final.txt": "8520b16db9e8444575de63f8ab3703e95a38dd83a04dfa6dd964bb96056e217f",
+    "tests/build-final.txt": "47e9296272e3897e242ae84acf0ee856ca6e956b5e9f5686cc55e77a12e9c225"
+  },
+  "scope": "精确工程字节与产品回归身份；C1/C2/C3在最终review另签；不授予生产上线或arm权限",
+  "productionEligible": false,
+  "productionWritesPerformedByReviewer": false
+}

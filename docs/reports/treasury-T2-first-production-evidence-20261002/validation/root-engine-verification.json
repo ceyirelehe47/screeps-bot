@@ -1,0 +1,715 @@
+{
+  "schema": "screeps-t2-first-production-engine-verification/v1",
+  "passed": true,
+  "scope": "同一最终 main 的隔离引擎 C1/C2/C3；不据此宣称正式生产首片通过",
+  "mainSha256": "a33ca56e530060f0e719630324bfe3d55649786ff19525483fd04197d315653f",
+  "mainBytes": 3308853,
+  "labAccountId": "7dad41a4bfc9d96",
+  "labService": "screeps-treasury-t1.service",
+  "inputSnapshotCount": 29,
+  "verifiedScenarioSnapshotLabels": [
+    "c1-1715-r4-before-native",
+    "c1-1715-r4-real-native",
+    "c1-1715-r4-first-settlement",
+    "c1-1715-r4-recovered-no-rededuct",
+    "c1-1715-r4-ordinary-restored",
+    "c1-100-before-native",
+    "c1-100-real-native",
+    "c1-100-first-settlement",
+    "c1-100-recovered-no-rededuct",
+    "c2-ordinary-pre-baseline",
+    "c2-ordinary-pre-observed",
+    "c2-bound-after-ordinary-pre",
+    "c2-real-native",
+    "c2-unknown-off-held",
+    "c2-unrelated-native-while-unknown",
+    "c2-carrier-target-held",
+    "c2-carrier-source-held",
+    "c2-unknown-after-real-restart",
+    "c2-carrier-source-after-reset-held",
+    "c2-first-restored-settlement",
+    "c2-confirmed-ordinary-and-carrier-restored",
+    "c3-armed-bound-no-responsibility",
+    "c3-expired-ordinary-restored",
+    "c3-off-after-real-restart",
+    "c3-rearm-rejected",
+    "c2-carrier-prestate-supplement-before",
+    "c2-carrier-prestate-supplement-held",
+    "c2-carrier-prestate-supplement-settled",
+    "c2-carrier-prestate-supplement-released"
+  ],
+  "nonAdoptedSnapshots": [
+    {
+      "label": "c1-100-before-setup",
+      "capturedAtUtc": "2026-10-02T11:20:55.010Z",
+      "tick": 756,
+      "code": {
+        "sha256": "a33ca56e530060f0e719630324bfe3d55649786ff19525483fd04197d315653f",
+        "bytes": 3308853
+      },
+      "rawSha256": "967b1671d10098325820854b356424bb69cfc13515dfe4c9e9ef6fdeca067927",
+      "scope": "辅助独立实例启动身份读回；不作为 C 发送/结算/退出状态结果"
+    },
+    {
+      "label": "c1-100-completed-before-persistence",
+      "capturedAtUtc": "2026-10-02T11:21:16.578Z",
+      "tick": 765,
+      "code": {
+        "sha256": "a33ca56e530060f0e719630324bfe3d55649786ff19525483fd04197d315653f",
+        "bytes": 3308853
+      },
+      "rawSha256": "0118eb88e143a9ea6572ee770fb64839633441b49dbcda427db7baf99b67e73e",
+      "scope": "不作为 C 发送/结算/退出状态结果；辅助身份读取另按具体用途核验"
+    },
+    {
+      "label": "c1-1715-before-setup",
+      "capturedAtUtc": "2026-10-02T11:05:37.804Z",
+      "tick": 756,
+      "code": {
+        "sha256": "a33ca56e530060f0e719630324bfe3d55649786ff19525483fd04197d315653f",
+        "bytes": 3308853
+      },
+      "rawSha256": "fcbf093808a333eb30ea10ebbdb0e44b727e16805ffcffe0f4cef855acc17af6",
+      "scope": "不作为 C 发送/结算/退出状态结果；辅助身份读取另按具体用途核验"
+    },
+    {
+      "label": "c1-1715-calibration-after-arm",
+      "capturedAtUtc": "2026-10-02T11:06:21.429Z",
+      "tick": 772,
+      "code": {
+        "sha256": "a33ca56e530060f0e719630324bfe3d55649786ff19525483fd04197d315653f",
+        "bytes": 3308853
+      },
+      "rawSha256": "34ae0309078c2086af8136b30e4a439c28695f3da5654ef0f803d3df58401d0d",
+      "scope": "不作为 C 发送/结算/退出状态结果；辅助身份读取另按具体用途核验"
+    },
+    {
+      "label": "c1-1715-r2-before-setup",
+      "capturedAtUtc": "2026-10-02T11:08:44.944Z",
+      "tick": 756,
+      "code": {
+        "sha256": "a33ca56e530060f0e719630324bfe3d55649786ff19525483fd04197d315653f",
+        "bytes": 3308853
+      },
+      "rawSha256": "bcf29e0db89e3868ed61f111023f1204cf9e51accf4d0fa308544eca018291f2",
+      "scope": "不作为 C 发送/结算/退出状态结果；辅助身份读取另按具体用途核验"
+    },
+    {
+      "label": "c1-1715-r2-calibration-after-arm",
+      "capturedAtUtc": "2026-10-02T11:10:35.546Z",
+      "tick": 773,
+      "code": {
+        "sha256": "a33ca56e530060f0e719630324bfe3d55649786ff19525483fd04197d315653f",
+        "bytes": 3308853
+      },
+      "rawSha256": "78d449bfc259a2aa4d32d1a8c36a9da2553ea250399574026289efd8efb8981e",
+      "scope": "不作为 C 发送/结算/退出状态结果；辅助身份读取另按具体用途核验"
+    },
+    {
+      "label": "c1-1715-r3-before-setup",
+      "capturedAtUtc": "2026-10-02T11:14:45.318Z",
+      "tick": 756,
+      "code": {
+        "sha256": "a33ca56e530060f0e719630324bfe3d55649786ff19525483fd04197d315653f",
+        "bytes": 3308853
+      },
+      "rawSha256": "c7401a5e9d55934e8ff2edf829d3a76b18b9d798d7fbf6246fa2d023d8fd4847",
+      "scope": "不作为 C 发送/结算/退出状态结果；辅助身份读取另按具体用途核验"
+    },
+    {
+      "label": "c1-1715-r3-calibration-after-arm",
+      "capturedAtUtc": "2026-10-02T11:15:07.516Z",
+      "tick": 758,
+      "code": {
+        "sha256": "a33ca56e530060f0e719630324bfe3d55649786ff19525483fd04197d315653f",
+        "bytes": 3308853
+      },
+      "rawSha256": "40df77af85c3a779f74473351172d42241bc1d2a2ca7e1bf63876594b0ed9042",
+      "scope": "不作为 C 发送/结算/退出状态结果；辅助身份读取另按具体用途核验"
+    },
+    {
+      "label": "c1-1715-r4-before-setup",
+      "capturedAtUtc": "2026-10-02T11:18:48.948Z",
+      "tick": 756,
+      "code": {
+        "sha256": "a33ca56e530060f0e719630324bfe3d55649786ff19525483fd04197d315653f",
+        "bytes": 3308853
+      },
+      "rawSha256": "eb02145762d1039f807e213eaef98753fece7a81801b43cd9d16849b1367d1b1",
+      "scope": "辅助独立实例启动身份读回；不作为 C 发送/结算/退出状态结果"
+    },
+    {
+      "label": "c1-1715-r4-completed-before-persistence",
+      "capturedAtUtc": "2026-10-02T11:19:19.379Z",
+      "tick": 771,
+      "code": {
+        "sha256": "a33ca56e530060f0e719630324bfe3d55649786ff19525483fd04197d315653f",
+        "bytes": 3308853
+      },
+      "rawSha256": "480c6a9ff60a4d7845fac5672a7cb18bb91b03ec399608c8a20e238296082d23",
+      "scope": "不作为 C 发送/结算/退出状态结果；辅助身份读取另按具体用途核验"
+    },
+    {
+      "label": "c2-before-setup",
+      "capturedAtUtc": "2026-10-02T11:23:06.729Z",
+      "tick": 756,
+      "code": {
+        "sha256": "a33ca56e530060f0e719630324bfe3d55649786ff19525483fd04197d315653f",
+        "bytes": 3308853
+      },
+      "rawSha256": "77aa3c42944008e5683afe9582870cb9be8801343e06eea3f754fdade50ac038",
+      "scope": "辅助独立实例启动身份读回；不作为 C 发送/结算/退出状态结果"
+    },
+    {
+      "label": "c2-carrier-prestate-supplement-completed-before-persistence",
+      "capturedAtUtc": "2026-10-02T11:36:12.875Z",
+      "tick": 786,
+      "code": {
+        "sha256": "a33ca56e530060f0e719630324bfe3d55649786ff19525483fd04197d315653f",
+        "bytes": 3308853
+      },
+      "rawSha256": "2f6b06bae802388fcbe4afffafec28d26be752c15e776841d3d73d81fed2e0b9",
+      "scope": "不作为 C 发送/结算/退出状态结果；辅助身份读取另按具体用途核验"
+    },
+    {
+      "label": "c2-completed-before-persistence",
+      "capturedAtUtc": "2026-10-02T11:24:53.497Z",
+      "tick": 789,
+      "code": {
+        "sha256": "a33ca56e530060f0e719630324bfe3d55649786ff19525483fd04197d315653f",
+        "bytes": 3308853
+      },
+      "rawSha256": "8e52950db810d1eacf98fddea057f4b8c9e756b11e25296ebd1a1fe022188fb9",
+      "scope": "不作为 C 发送/结算/退出状态结果；辅助身份读取另按具体用途核验"
+    },
+    {
+      "label": "c2-unknown-restart-before-persistence",
+      "capturedAtUtc": "2026-10-02T11:24:22.447Z",
+      "tick": 776,
+      "code": {
+        "sha256": "a33ca56e530060f0e719630324bfe3d55649786ff19525483fd04197d315653f",
+        "bytes": 3308853
+      },
+      "rawSha256": "8d2c82f7166f92924470ff6ebb5a74eaa6b88157c5bcbd43b583ef145fafacb6",
+      "scope": "不作为 C 发送/结算/退出状态结果；辅助身份读取另按具体用途核验"
+    },
+    {
+      "label": "c3-before-setup",
+      "capturedAtUtc": "2026-10-02T11:32:37.865Z",
+      "tick": 756,
+      "code": {
+        "sha256": "a33ca56e530060f0e719630324bfe3d55649786ff19525483fd04197d315653f",
+        "bytes": 3308853
+      },
+      "rawSha256": "c9c4a2f8163dc32f21b139030089264892d229950ed5d18b7e37eec1f4dc9c60",
+      "scope": "辅助独立实例启动身份读回；不作为 C 发送/结算/退出状态结果"
+    },
+    {
+      "label": "c3-closed-restart-before-persistence",
+      "capturedAtUtc": "2026-10-02T11:33:51.271Z",
+      "tick": 761,
+      "code": {
+        "sha256": "a33ca56e530060f0e719630324bfe3d55649786ff19525483fd04197d315653f",
+        "bytes": 3308853
+      },
+      "rawSha256": "5ab4b4bfd44339785587e7f372a24472f7b33b11f997f299b1153984b8d19981",
+      "scope": "不作为 C 发送/结算/退出状态结果；辅助身份读取另按具体用途核验"
+    },
+    {
+      "label": "c3-completed-before-persistence",
+      "capturedAtUtc": "2026-10-02T11:34:11.149Z",
+      "tick": 766,
+      "code": {
+        "sha256": "a33ca56e530060f0e719630324bfe3d55649786ff19525483fd04197d315653f",
+        "bytes": 3308853
+      },
+      "rawSha256": "dc09b6ff0d2ab37c55cec4fef7a9c4385010016e71eedef9b032cd8015843b83",
+      "scope": "不作为 C 发送/结算/退出状态结果；辅助身份读取另按具体用途核验"
+    }
+  ],
+  "environment": {
+    "userId": "7dad41a4bfc9d96",
+    "username": "forster",
+    "databaseWorkingDirectory": "/srv/screeps-treasury-t1/server",
+    "service": "screeps-treasury-t1.service",
+    "loopbackBindings": [
+      "127.0.0.1:21025",
+      "127.0.0.1:21026",
+      "[::1]:21027"
+    ],
+    "node": "v22.22.1",
+    "packages": {
+      "screeps": "4.3.0",
+      "@screeps/engine": "4.3.0",
+      "@screeps/common": "2.16.0"
+    },
+    "initialInheritedMainSha256": "1bf02d8415f552239dd034865c4e62d5c6a00a978af36f78b64640ea05f6f061",
+    "endingLabService": "inactive"
+  },
+  "C1": {
+    "1715": {
+      "syntheticSetup": {
+        "artifact": "c1-1715-r4-setup-setup.json",
+        "kind": "明确合成的独立隔离任务",
+        "taskId": "lab-t2-c1-1715-r4-UH",
+        "amount": 1715,
+        "createdAt": 756,
+        "independentBaselineSha256": "c4fdf23d89f7c31a50c60b788cd52dc0456edaafe2e3a3083af55b86bdd25a2c",
+        "startedMicroseconds": "1790939927535360"
+      },
+      "synthesisPurpose": {
+        "product": "UH2O",
+        "targetAmount": 1715,
+        "actualLocalUH": 0,
+        "actualLocalUH2O": 0,
+        "actualReagentLabOH": 1715,
+        "reagentLabIds": [
+          "907ec1ebdfae530",
+          "3d45c1ebdfbcec9"
+        ]
+      },
+      "actualDrivers": [
+        {
+          "artifact": "c1-1715-r4-native-driver-driver.json",
+          "startTick": 758,
+          "endTick": 760
+        },
+        {
+          "artifact": "c1-1715-r4-settle-driver-driver.json",
+          "startTick": 761,
+          "endTick": 762
+        },
+        {
+          "artifact": "c1-1715-r4-repeat-recovery-driver-driver.json",
+          "startTick": 763,
+          "endTick": 765
+        },
+        {
+          "artifact": "c1-1715-r4-ordinary-driver-driver.json",
+          "startTick": 765,
+          "endTick": 770
+        }
+      ],
+      "attemptId": "tk1_2_0c04cd2ba07f525c",
+      "transactionId": "836ac56c2b64fb6",
+      "treasuryAmount": 100,
+      "actualEnergyFee": 10,
+      "remainingAfterFirstSettlement": 1615,
+      "nativeDelta": 1,
+      "settlementDelta": 1,
+      "repeatRecoveryNoRededuction": true,
+      "ordinaryTransactionId": "2041c570ef29e4d",
+      "ordinaryAmount": 1615,
+      "totalBusinessAmount": 1715,
+      "finalRemaining": 0,
+      "sourceEnergyChangeDuringOrdinaryHandoff": -254,
+      "energyScope": "国库本片费用由 native 原件严格重导；交回后的普通业务可伴随正常 carrier Energy 动作"
+    },
+    "100": {
+      "syntheticSetup": {
+        "artifact": "c1-100-setup-setup.json",
+        "kind": "明确合成的独立隔离任务",
+        "taskId": "lab-t2-c1-100-UH",
+        "amount": 100,
+        "createdAt": 756,
+        "independentBaselineSha256": "c4fdf23d89f7c31a50c60b788cd52dc0456edaafe2e3a3083af55b86bdd25a2c",
+        "startedMicroseconds": "1790940053351752"
+      },
+      "synthesisPurpose": {
+        "product": "UH2O",
+        "targetAmount": 100,
+        "actualLocalUH": 0,
+        "actualLocalUH2O": 0,
+        "actualReagentLabOH": 100,
+        "reagentLabIds": [
+          "907ec1ebdfae530",
+          "3d45c1ebdfbcec9"
+        ]
+      },
+      "actualDrivers": [
+        {
+          "artifact": "c1-100-native-driver-driver.json",
+          "startTick": 758,
+          "endTick": 760
+        },
+        {
+          "artifact": "c1-100-settle-driver-driver.json",
+          "startTick": 761,
+          "endTick": 762
+        },
+        {
+          "artifact": "c1-100-repeat-recovery-driver-driver.json",
+          "startTick": 763,
+          "endTick": 765
+        }
+      ],
+      "attemptId": "tk1_2_f22640028fddd63c",
+      "transactionId": "fc7cc58b31d1b34",
+      "treasuryAmount": 100,
+      "actualEnergyFee": 10,
+      "remainingAfterFirstSettlement": 0,
+      "nativeDelta": 1,
+      "settlementDelta": 1,
+      "repeatRecoveryNoRededuction": true,
+      "finalRemaining": 0
+    }
+  },
+  "C2": {
+    "syntheticSetup": {
+      "artifact": "c2-setup-setup.json",
+      "kind": "明确合成的独立隔离任务",
+      "taskId": "lab-t2-c2-UH",
+      "amount": 100,
+      "createdAt": 756,
+      "independentBaselineSha256": "c4fdf23d89f7c31a50c60b788cd52dc0456edaafe2e3a3083af55b86bdd25a2c",
+      "startedMicroseconds": "1790940185320653"
+    },
+    "synthesisPurpose": {
+      "product": "UH2O",
+      "targetAmount": 100,
+      "actualLocalUH": 0,
+      "actualLocalUH2O": 0,
+      "actualReagentLabOH": 100,
+      "reagentLabIds": [
+        "907ec1ebdfae530",
+        "3d45c1ebdfbcec9"
+      ]
+    },
+    "actualDrivers": [
+      {
+        "artifact": "c2-conflict-driver-driver.json",
+        "startTick": 756,
+        "endTick": 760
+      },
+      {
+        "artifact": "c2-native-driver-driver.json",
+        "startTick": 762,
+        "endTick": 765
+      },
+      {
+        "artifact": "c2-post-restart-driver-driver.json",
+        "startTick": 776,
+        "endTick": 778
+      },
+      {
+        "artifact": "c2-carrier-source-post-reset-driver-driver.json",
+        "startTick": 778,
+        "endTick": 780
+      },
+      {
+        "artifact": "c2-restored-settle-driver-driver.json",
+        "startTick": 780,
+        "endTick": 781
+      }
+    ],
+    "attemptId": "tk1_2_563d0bd13dd4ea10",
+    "transactionId": "ea82c5ad9941756",
+    "treasuryAmount": 100,
+    "actualEnergyFee": 10,
+    "ordinaryBeforeT2": [
+      "2b29c5ab0d1c4e9",
+      "3f79c5ab0d120ae"
+    ],
+    "unknownUnrelatedOrdinary": "1367c5afc1d4818",
+    "ordinaryAfterRelease": [
+      "fb4cc5c0e74f19e",
+      "4048c5c0e75e38b"
+    ],
+    "nativeDelta": 1,
+    "settlementDelta": 1,
+    "originalAttemptHeldAfterOffAndLoss": true,
+    "systemdRestart": {
+      "stoppedMicroseconds": "1790940264594887",
+      "startedMicroseconds": "1790940264614125"
+    },
+    "carrier": {
+      "kind": "两只独立合成已持货 50 H 的真实 creep",
+      "heldRooms": [
+        "E1N57",
+        "E4N58"
+      ],
+      "actualDeliveredRooms": [
+        "E1N57",
+        "E4N58"
+      ],
+      "deliveredAmountEach": 50,
+      "experimentBothPlansRestoredAfterReset": true,
+      "actualDelegatedWork": [
+        {
+          "name": "lab-t2-target-carrier",
+          "targetId": "5ca4c1b028a9b3b",
+          "planReadbackAtTick": 772,
+          "actualWorkTicks": [
+            773
+          ],
+          "driver": {
+            "artifact": "c2-carrier-target-driver-driver.json",
+            "startTick": 772,
+            "endTick": 774
+          },
+          "scope": "原连续链 .work 委托/持货；调用前 target 状态由独立补充分支证明"
+        },
+        {
+          "name": "lab-r2-carrier",
+          "targetId": "370f41dd18e91de",
+          "planReadbackAtTick": 774,
+          "actualWorkTicks": [
+            775
+          ],
+          "driver": {
+            "artifact": "c2-carrier-source-driver-driver.json",
+            "startTick": 774,
+            "endTick": 776
+          },
+          "scope": "原连续链 .work 委托/持货；调用前 target 状态由独立补充分支证明"
+        },
+        {
+          "name": "lab-t2-target-carrier",
+          "targetId": "5ca4c1b028a9b3b",
+          "planReadbackAtTick": 778,
+          "actualWorkTicks": [
+            779
+          ],
+          "driver": {
+            "artifact": "c2-carrier-source-post-reset-driver-driver.json",
+            "startTick": 778,
+            "endTick": 780
+          },
+          "scope": "原连续链 .work 委托/持货；调用前 target 状态由独立补充分支证明"
+        },
+        {
+          "name": "lab-r2-carrier",
+          "targetId": "370f41dd18e91de",
+          "planReadbackAtTick": 778,
+          "actualWorkTicks": [
+            779
+          ],
+          "driver": {
+            "artifact": "c2-carrier-source-post-reset-driver-driver.json",
+            "startTick": 778,
+            "endTick": 780
+          },
+          "scope": "原连续链 .work 委托/持货；调用前 target 状态由独立补充分支证明"
+        }
+      ],
+      "limitation": "只证明合成持货保护与解除交付；不证明自然 spawn/pickup 或 global 计划跨 reset 持久性"
+    }
+  },
+  "C3": {
+    "syntheticSetup": {
+      "artifact": "c3-setup-setup.json",
+      "kind": "明确合成的独立隔离任务",
+      "taskId": "lab-t2-c3-UH",
+      "amount": 100,
+      "createdAt": 756,
+      "independentBaselineSha256": "c4fdf23d89f7c31a50c60b788cd52dc0456edaafe2e3a3083af55b86bdd25a2c",
+      "startedMicroseconds": "1790940756206964"
+    },
+    "synthesisPurpose": {
+      "product": "UH2O",
+      "targetAmount": 100,
+      "actualLocalUH": 0,
+      "actualLocalUH2O": 0,
+      "actualReagentLabOH": 100,
+      "reagentLabIds": [
+        "907ec1ebdfae530",
+        "3d45c1ebdfbcec9"
+      ]
+    },
+    "actualDrivers": [
+      {
+        "artifact": "c3-expired-ordinary-driver-driver.json",
+        "startTick": 757,
+        "endTick": 760
+      },
+      {
+        "artifact": "c3-restart-driver-driver.json",
+        "startTick": 761,
+        "endTick": 765
+      },
+      {
+        "artifact": "c3-rearm-rejected-driver-driver.json",
+        "startTick": 765,
+        "endTick": 766
+      }
+    ],
+    "ordinaryTransactionId": "55acc645cbab976",
+    "nativeT2": 0,
+    "observedLossSeconds": 69.303,
+    "closeReason": "control_lease_expired",
+    "automaticClosedOff": true,
+    "operatorCloseOrModeWrite": false,
+    "systemdRestart": {
+      "stoppedMicroseconds": "1790940838726741",
+      "startedMicroseconds": "1790940838743040"
+    },
+    "closedRestartNoResend": true,
+    "sameIdentityRearmRejected": {
+      "ok": false,
+      "reason": "already_used_or_unsettled"
+    }
+  },
+  "carrierPrestateSupplement": {
+    "scope": "原 C2 实际未知 DB 的独立补充分支；不合并为原连续世界，不叠加 native/结算数量",
+    "sourceDatabaseSha256": "04f12f6435e8dcfdc28b875c381269a16b71a0ce37a52c19d3340b337bc5b43e",
+    "originalAttemptId": "tk1_2_563d0bd13dd4ea10",
+    "originalNativeTransactionId": "ea82c5ad9941756",
+    "newTreasuryNative": 0,
+    "actualHeldTargetWork": [
+      {
+        "name": "lab-r2-carrier",
+        "targetId": "370f41dd18e91de",
+        "planReadbackAtTick": 776,
+        "actualWorkTicks": [
+          777,
+          778
+        ],
+        "driver": {
+          "artifact": "c2-carrier-prestate-supplement-held-driver-driver.json",
+          "startTick": 776,
+          "endTick": 779
+        },
+        "scope": "v2 调用前标量证明真实 target 执行点"
+      },
+      {
+        "name": "lab-t2-target-carrier",
+        "targetId": "5ca4c1b028a9b3b",
+        "planReadbackAtTick": 776,
+        "actualWorkTicks": [
+          777,
+          778
+        ],
+        "driver": {
+          "artifact": "c2-carrier-prestate-supplement-held-driver-driver.json",
+          "startTick": 776,
+          "endTick": 779
+        },
+        "scope": "v2 调用前标量证明真实 target 执行点"
+      }
+    ],
+    "actualReleaseWork": [
+      {
+        "name": "lab-r2-carrier",
+        "actualWorkTicks": [
+          779,
+          780
+        ],
+        "scope": "v2 调用前 role 状态；成功清 plan 后 toId 可空，实际目的地由 H Store 差值证明"
+      },
+      {
+        "name": "lab-t2-target-carrier",
+        "actualWorkTicks": [
+          779,
+          780
+        ],
+        "scope": "v2 调用前 role 状态；成功清 plan 后 toId 可空，实际目的地由 H Store 差值证明"
+      }
+    ],
+    "actualDrivers": [
+      {
+        "artifact": "c2-carrier-prestate-supplement-settle-driver-driver.json",
+        "startTick": 779,
+        "endTick": 780
+      },
+      {
+        "artifact": "c2-carrier-prestate-supplement-release-driver-driver.json",
+        "startTick": 781,
+        "endTick": 786
+      }
+    ],
+    "actualHDeliveredEach": 50
+  },
+  "inheritedHDrainedFactsPreserved": {
+    "runId": "treasury-production-T1-2026-09-24",
+    "attemptId": "tk1_1_9992ef348b720174",
+    "status": "drained",
+    "snapshotCount": 29
+  },
+  "rawInputSha256": {
+    "engine/candidate/manifest.json": "856e680b155edae37dc20af0af8d068598a7b2b18e8fc83f958bf907b3a0db7c",
+    "engine/evidence/c1-100-before-native-snapshot.json": "5ab762e200738f30712abecea629156eb5ea6877ebb942201467dd580d878559",
+    "engine/evidence/c1-100-first-settlement-snapshot.json": "07313fe31d7f72dddd6a89d71ad6460e74b6cdb17432373863f2ec7c4e6aba85",
+    "engine/evidence/c1-100-real-native-snapshot.json": "12a8510767ff0607c4cd1de39e93dc84e5b2b6728dc39927cbcdbb5e6043ef20",
+    "engine/evidence/c1-100-recovered-no-rededuct-snapshot.json": "617884d9efce319c1242399302dbeb52837e8eae19178400eac394350434ef08",
+    "engine/evidence/c1-1715-r4-before-native-snapshot.json": "86e6c040c2388a84d6f25fa118ed47fb3d578bc0051dc0d94991b94265457e58",
+    "engine/evidence/c1-1715-r4-first-settlement-snapshot.json": "b6ed45d477bdf8cdbd9029dd59253bde4f8487eaa304ed9872e1e98730018188",
+    "engine/evidence/c1-1715-r4-ordinary-restored-snapshot.json": "294f82a2e78b73c247441c5cc85dcfdb47207d12de61dbec117d4298a5f3cb47",
+    "engine/evidence/c1-1715-r4-real-native-snapshot.json": "113084af446bb7f18c557ff9850602e9bbcaba8a86b4165473cf41baefa8d33d",
+    "engine/evidence/c1-1715-r4-recovered-no-rededuct-snapshot.json": "733bd8d11d2c2f1c463b4e64c91516dbfe44bb679f43ba95cbe2afa05f0d1fd8",
+    "engine/evidence/c2-bound-after-ordinary-pre-snapshot.json": "ae3ad4b0ea8d1c7b6f621573ef3731730309dd8d4f88b093f982226ee802f1f9",
+    "engine/evidence/c2-carrier-prestate-supplement-before-snapshot.json": "bdd578f2dd04d7a7d5686988efd64647b54cf671c1612b7137775651b87d3425",
+    "engine/evidence/c2-carrier-prestate-supplement-held-snapshot.json": "b39b4bae8863ddf794ad629a204607109221067930f5fd8bb0cc91de930da71e",
+    "engine/evidence/c2-carrier-prestate-supplement-released-snapshot.json": "167297007b3447cdb0b83fe3028a31d1ab3bdff75e0002f4d59b52089d805019",
+    "engine/evidence/c2-carrier-prestate-supplement-settled-snapshot.json": "9dad2c4a8804727235baa6e44fc1a895daa2bd4545fdbe58338725e13fb7d2d9",
+    "engine/evidence/c2-carrier-source-after-reset-held-snapshot.json": "b7162a8b57fa0ef09c10d54186bd38367ca9afc63ca50440360aa2b2a3eaea09",
+    "engine/evidence/c2-carrier-source-held-snapshot.json": "75ed09610fff2af9e46fb620d2233776ea8cd3ae484c220177af2b04c6ce8752",
+    "engine/evidence/c2-carrier-target-held-snapshot.json": "4184862d4f2a1f7dd2a71179093134acd5fe97320436237e869273c7220b47fc",
+    "engine/evidence/c2-confirmed-ordinary-and-carrier-restored-snapshot.json": "fbc6fe509a0ec9a86b38a14ad9d114ae19a52409cbed9871cc306f726a7107f9",
+    "engine/evidence/c2-first-restored-settlement-snapshot.json": "a0d9885b7d68e63d7d7ee8630858da7631108db8e8f9dc5a98e4bfa9b7b713e8",
+    "engine/evidence/c2-ordinary-pre-baseline-snapshot.json": "9501bcc6bf9e59c511c18303a23a0ab65f20824cc8712b5950b752704b90ef44",
+    "engine/evidence/c2-ordinary-pre-observed-snapshot.json": "a4373202f648d82ecbdd2e457d5e94330edfa5241289713817cff7f2cf5abb0e",
+    "engine/evidence/c2-real-native-snapshot.json": "57c32968057fa6abec15ab426f64b89eecc271296e14601d30a596cf59c0c494",
+    "engine/evidence/c2-unknown-after-real-restart-snapshot.json": "d7ac248bcee5b8348641644116ac7329f798df53cc089992050991eb8048e7d9",
+    "engine/evidence/c2-unknown-off-held-snapshot.json": "daebbadfbd8c7ef8e5e785ff66b896fc0c0b458d756d5135a984783cebd248bb",
+    "engine/evidence/c2-unrelated-native-while-unknown-snapshot.json": "89c0898d74e3b4c906367eacfc3998a453354a89129a46e0b69c6c76bf2873d0",
+    "engine/evidence/c3-armed-bound-no-responsibility-snapshot.json": "b00a27c17fb61050de5e7bab9a3b82d35339dcca8e524a8db78ab1568534f8de",
+    "engine/evidence/c3-expired-ordinary-restored-snapshot.json": "399a544ca38f3390b5acfa4dcfe648438cdab60c5a921c35c5ad9d37ff0cd4e5",
+    "engine/evidence/c3-off-after-real-restart-snapshot.json": "2c91bee3276cc9718912149ed35a905aed8a892063f99e8863fea1e95e9bd116",
+    "engine/evidence/c3-rearm-rejected-snapshot.json": "546116ace43a4ca18bbdc80e1cd16b388158108e42d50e90a8732b1ba7d3c9a0",
+    "engine/service-journal-original.jsonl": "3cc13d841ba2b0b5433920958128f24867b7632777b1306e73dbd4576b9cd9ca",
+    "engine/evidence/c1-1715-r4-setup-setup.json": "cbcaa616a79ddf233b86742966e399dc0f4b783ed604d80c844cebe811933e03",
+    "engine/evidence/c1-1715-r4-independent-instance.json": "f3f6fb4d221b4cd00909717d0a18a117d730648983462e185c7442b3e23a9319",
+    "engine/evidence/c1-1715-r4-before-setup-snapshot.json": "eb02145762d1039f807e213eaef98753fece7a81801b43cd9d16849b1367d1b1",
+    "engine/evidence/c1-1715-r4-native-driver-driver.json": "0efeb1a2c64f60b40d5eb70378ff25790ce20a1c85d36135cd244a543576c939",
+    "engine/evidence/c1-1715-r4-settle-driver-driver.json": "d052f76d4f43551022d46ac1844dddd5db1df0f7282a7c75bcd7b2e75cb38b0a",
+    "engine/evidence/c1-1715-r4-repeat-recovery-driver-driver.json": "837f88f642f9e266782cd271022f3cdd49110ff13841d710a60b20914271e499",
+    "engine/evidence/c1-1715-r4-ordinary-driver-driver.json": "a05f729b59679b6a7db54f01d1d78c42377761ef47abc90241c6f2e75ab78b0a",
+    "engine/evidence/c1-100-setup-setup.json": "5a29b2050696bab050c9d30628b20e3d49797f735c782553b0b61ef1083c1e52",
+    "engine/evidence/c1-100-independent-instance.json": "47d5c74bbe95c54d345f096fdcae7117f00ccf8d73405c818cb2fbe85ae3a330",
+    "engine/evidence/c1-100-before-setup-snapshot.json": "967b1671d10098325820854b356424bb69cfc13515dfe4c9e9ef6fdeca067927",
+    "engine/evidence/c1-100-native-driver-driver.json": "af24a48b3295124b32bc8a6b6214fd2c31d61af4756f133a59db03d0ca86407e",
+    "engine/evidence/c1-100-settle-driver-driver.json": "f54ffce1aa91e0622df1a2aca79e9ad07824705da1b179c92e94f69d7be13733",
+    "engine/evidence/c1-100-repeat-recovery-driver-driver.json": "ead26aeb9d5a00f73044322a71930011b832a461fe7764dd42d5d4ab4b6d5c58",
+    "engine/evidence/c2-setup-setup.json": "9e734801ef2837a4306747c65dc554e2881e535c4c3085d8bc7539bcb860b0ba",
+    "engine/evidence/c2-independent-instance.json": "cd5e6bbcf388ec666e59493b1c541568a5a81025e4db8a1b96e77f101a4fa419",
+    "engine/evidence/c2-before-setup-snapshot.json": "77aa3c42944008e5683afe9582870cb9be8801343e06eea3f754fdade50ac038",
+    "engine/evidence/c2-pre-source-ordinary.json": "83693a183e90cc6e11dd27816fefc292e8f38a13fab632710af1b33df97be8a4",
+    "engine/evidence/c2-pre-target-ordinary.json": "64fb789a70312c53a74f0a7e282fdfb06b9091b96b860b78dc47c4760e26ad20",
+    "engine/evidence/c2-conflict-driver-driver.json": "21bb2f180da8119ac92e1d4273ba3d888053f9eb720fa2caacf328b371f04c8d",
+    "engine/evidence/c2-native-driver-driver.json": "81c87dd1732b33c23ef742c04da002878b2d25864ab5656e2b1ff513b1588b67",
+    "engine/evidence/c2-inject-contradiction-fault.json": "c582b0eed1b60d47d14712345a25d2390c0801395631b57ca0eb6adc219c321a",
+    "engine/evidence/c2-restore-true-store-restore.json": "1c269b64fae056fe905b1fc6fc5bae7b244f177cd83f0da3081bed0684375e84",
+    "engine/evidence/c2-block-source-ordinary.json": "71a5181a3e7eacedc74a41ab5f6d0b83c8a8529e9cef8349961492d3d72613d8",
+    "engine/evidence/c2-block-target-ordinary.json": "3453f284a488899c69ab13b825be025aa260809133e7c40ef1b0161c289e086e",
+    "engine/evidence/c2-request-off-queue.json": "c83a0d62038a0d703ae1b996cc93083078573d226eb40470d01220aa4fc5b9c7",
+    "engine/evidence/c2-unrelated-ordinary.json": "7c71ad40ebae7fdde1887750a5038ded782268488591af3756fe7951fe13fa0e",
+    "engine/evidence/c2-carrier-target-carrier.json": "56558c323825a70c423a35056ca39dc44df442e74dbbe35d8c2d95f7d9c6ff44",
+    "engine/evidence/c2-carrier-target-plan-queue.json": "5d8778026b77859bf7f32e853a81c84a86976b5163c8f49d4e079d8a2bea7921",
+    "engine/evidence/c2-carrier-target-driver-driver.json": "09ebe9c66caafa6f3d44bd631787eeca768fa32764f5fc9962ff07c56b37f6e0",
+    "engine/evidence/c2-carrier-source-carrier.json": "ec7c1409af0b37be8a04684855fb2935fb463059def3b7cb42cbb69b6a40c4c9",
+    "engine/evidence/c2-carrier-source-plan-queue.json": "72021c5b8f32438117d4bc2d0711861c67e76f2e0b862f4b85c483f6e73396b6",
+    "engine/evidence/c2-carrier-source-driver-driver.json": "d4c2bd47e2ee2ad9a461b1a938f5c0130470c4a43dcf5787d3e650c8f5cb2a15",
+    "engine/evidence/c2-post-restart-driver-driver.json": "e34743f40d96133c6b6116da25583a7bff93ee84898dffc5e11e74b58b6662ba",
+    "engine/evidence/c2-carrier-source-post-reset-driver-driver.json": "da96bad95980c60f57bbf796dae1aa638e677d787070f415a63df019f0663fb9",
+    "engine/evidence/c2-carrier-source-plan-after-reset-queue.json": "38a7c779a0608ebc8a2d45f53cd41105082186bd3b790c74d014f6b1f5a723a6",
+    "engine/evidence/c2-restored-settle-driver-driver.json": "f481a7b50dd5e3f6719fbf4f39c567f44d6ea3d35f2e04943de7577c2b52bb81",
+    "engine/evidence/c3-setup-setup.json": "4aa2f17893d2c1b8af8dd5e8e43247393119c5bf1d8b052f7dbe22310bd183f0",
+    "engine/evidence/c3-independent-instance.json": "52b4b2320908d39e7c747513bd775ef35b0562dced6b5775a7c604d63176bb83",
+    "engine/evidence/c3-before-setup-snapshot.json": "c9c4a2f8163dc32f21b139030089264892d229950ed5d18b7e37eec1f4dc9c60",
+    "engine/evidence/c3-enable-ordinary-queue.json": "3774328d634f3e0459e5b9d296511e5c603993271aa17c9b5e59b51acc7de889",
+    "engine/evidence/c3-arm-queue.json": "1c1479e5825ce589869246169c0e97b1416418bf5720f930f0b38b80573e3393",
+    "engine/evidence/c3-rearm-after-close-queue.json": "7033916d011441d7f0c689b23f1b29ca6202149b29600ca68012459e95c7d0c6",
+    "engine/evidence/c3-expired-ordinary-driver-driver.json": "a54c2bd19c8cf7e221ebbff0946a713802ea5d4e856f69177a7412cb3f1a59a3",
+    "engine/evidence/c3-restart-driver-driver.json": "a47ced87e29ced7118ddc582e5bc8c5b57eabf86be5f3792b74a7b73e33598f2",
+    "engine/evidence/c3-rearm-rejected-driver-driver.json": "c68142b27c5ab2a1d8094c21063d5993fc1ac05b0db0d75ecc532fd0a6ad4201",
+    "engine/evidence/c2-carrier-prestate-supplement-instance.json": "778104e0a3a11b296da64e5efff53aebe4729a705b3b3a6bee784374029b989b",
+    "engine/evidence/c2-unknown-restart-before-persistence-snapshot.json": "8d2c82f7166f92924470ff6ebb5a74eaa6b88157c5bcbd43b583ef145fafacb6",
+    "engine/evidence/c2-carrier-prestate-supplement-held-driver-driver.json": "06617545d240cc03038b05a2a80cdb673a07bd81d67aaa219464aaf5814916c8",
+    "engine/evidence/c2-carrier-prestate-supplement-restore-restore.json": "785bcccde1a34be96efd83d86061628a3002f870818a69dd37d34b905c616d6b",
+    "engine/evidence/c2-carrier-prestate-supplement-settle-driver-driver.json": "852ccb6b8f10f91dd245c528967b0f9abacc41f8592e1e478600c8726aff75c1",
+    "engine/evidence/c2-carrier-prestate-supplement-release-driver-driver.json": "b679f86157aad3aa54a2a3aaea70c38be3ee7060411c1f85dfc6719bb739e384",
+    "engine/evidence/initial-environment.json": "49ca93ac01eedb896a6613224a9d41ca92088c56e6087d676c1acbb459260234",
+    "engine/environment-check-original.txt": "84002e35306bd9c7d2a44c19a478a5cbbe82ec7d813073c66535c407be6efb5a",
+    "engine/service-ending.txt": "afd771375c4aecc49616b4ec7620f2639c4e3d3e5aa054b1988a240a5f4c7ab9"
+  }
+}

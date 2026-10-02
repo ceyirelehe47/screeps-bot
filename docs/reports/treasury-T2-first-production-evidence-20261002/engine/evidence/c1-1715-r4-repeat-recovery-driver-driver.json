@@ -1,0 +1,25 @@
+{
+  "schema": "screeps-t2-lab-driver/v1",
+  "isolatedWorldOnly": true,
+  "label": "c1-1715-r4-repeat-recovery-driver",
+  "kind": "ticks",
+  "arg": "2",
+  "startTick": 763,
+  "endTick": 765,
+  "startedAtUtc": "2026-10-02T11:19:04.362Z",
+  "endedAtUtc": "2026-10-02T11:19:08.992Z",
+  "observations": 150,
+  "matched": true,
+  "last": {
+    "tick": 765,
+    "quota": "drained",
+    "control": "closed",
+    "mode": "off",
+    "active": 0,
+    "arm": {
+      "ok": true,
+      "reason": "armed"
+    }
+  },
+  "paused": true
+}

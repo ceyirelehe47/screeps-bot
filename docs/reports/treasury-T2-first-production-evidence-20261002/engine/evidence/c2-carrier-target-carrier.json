@@ -1,0 +1,107 @@
+{
+  "isolatedWorldOnly": true,
+  "tick": 772,
+  "kind": "synthetic-already-carried-50-H",
+  "resource": "H",
+  "name": "lab-t2-target-carrier",
+  "before": {
+    "name": "lab-t2-target-carrier",
+    "x": 26,
+    "y": 24,
+    "room": "E4N58",
+    "type": "creep",
+    "user": "7dad41a4bfc9d96",
+    "body": [
+      {
+        "type": "carry",
+        "hits": 100
+      },
+      {
+        "type": "move",
+        "hits": 100
+      }
+    ],
+    "store": {},
+    "storeCapacity": 50,
+    "hits": 200,
+    "hitsMax": 200,
+    "spawning": false,
+    "fatigue": 0,
+    "notifyWhenAttacked": true,
+    "ageTime": 2272,
+    "actionLog": {
+      "attacked": null,
+      "healed": null,
+      "attack": null,
+      "rangedAttack": null,
+      "rangedMassAttack": null,
+      "rangedHeal": null,
+      "harvest": null,
+      "heal": null,
+      "repair": null,
+      "build": null,
+      "say": null,
+      "upgradeController": null,
+      "reserveController": null
+    },
+    "_id": "4389c5b0988de7e",
+    "meta": {
+      "revision": 0,
+      "created": 1790940219784,
+      "version": 0
+    },
+    "$loki": 461
+  },
+  "after": {
+    "name": "lab-t2-target-carrier",
+    "x": 26,
+    "y": 24,
+    "room": "E1N57",
+    "type": "creep",
+    "user": "7dad41a4bfc9d96",
+    "body": [
+      {
+        "type": "carry",
+        "hits": 100
+      },
+      {
+        "type": "move",
+        "hits": 100
+      }
+    ],
+    "store": {
+      "H": 50
+    },
+    "storeCapacity": 50,
+    "hits": 200,
+    "hitsMax": 200,
+    "spawning": false,
+    "fatigue": 0,
+    "notifyWhenAttacked": true,
+    "ageTime": 2272,
+    "actionLog": {
+      "attacked": null,
+      "healed": null,
+      "attack": null,
+      "rangedAttack": null,
+      "rangedMassAttack": null,
+      "rangedHeal": null,
+      "harvest": null,
+      "heal": null,
+      "repair": null,
+      "build": null,
+      "say": null,
+      "upgradeController": null,
+      "reserveController": null
+    },
+    "_id": "4389c5b0988de7e",
+    "meta": {
+      "revision": 1,
+      "created": 1790940219784,
+      "version": 0,
+      "updated": 1790940219791
+    },
+    "$loki": 461
+  },
+  "targetTerminalId": "5ca4c1b028a9b3b"
+}

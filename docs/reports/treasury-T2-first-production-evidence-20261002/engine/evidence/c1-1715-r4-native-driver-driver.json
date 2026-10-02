@@ -1,0 +1,25 @@
+{
+  "schema": "screeps-t2-lab-driver/v1",
+  "isolatedWorldOnly": true,
+  "label": "c1-1715-r4-native-driver",
+  "kind": "native",
+  "arg": "",
+  "startTick": 758,
+  "endTick": 760,
+  "startedAtUtc": "2026-10-02T11:18:53.921Z",
+  "endedAtUtc": "2026-10-02T11:18:59.437Z",
+  "observations": 180,
+  "matched": true,
+  "last": {
+    "tick": 760,
+    "quota": "dispatching",
+    "control": "closed",
+    "mode": "drain",
+    "active": 1,
+    "arm": {
+      "ok": true,
+      "reason": "armed"
+    }
+  },
+  "paused": true
+}

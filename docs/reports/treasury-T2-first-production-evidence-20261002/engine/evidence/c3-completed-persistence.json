@@ -1,0 +1,11 @@
+{
+  "schema": "screeps-t2-paused-database-persistence/v1",
+  "isolatedWorldOnly": true,
+  "capturedAtUtc": "2026-10-02T11:34:19.317838+00:00",
+  "snapshotLabel": "c3-completed-before-persistence",
+  "databaseSha256": "c9935c89546081af4b9d216e31ac6fe0416c4c57cbf757a4ec8bdeffb372f302",
+  "memorySha256": "a51918119cd8318234003807a414f7bb19c6b836ec472bb3de93763456ea3017",
+  "codeSha256": "a33ca56e530060f0e719630324bfe3d55649786ff19525483fd04197d315653f",
+  "transactions": 30,
+  "tick": 766
+}

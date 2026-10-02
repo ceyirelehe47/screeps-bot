@@ -83,7 +83,8 @@ const summary=m=>({control:m.runtime?.treasuryT2FirstLiveControl?.status,closeRe
   // 每个用例由停态 pre-T2 DB 副本启动；绝不在同一世界清已消费T2额度再开。
   // 旧 H control/quota/kernel closed facts 原样保留。
   m.cfg.treasuryTerminalTransferSlice0={mode:'off'};m.cfg.treasuryTerminalTransferT2={mode:'off'};
-  m.cfg.resourceControl={enabled:spec.enabled!==false,sampleInterval:1,taskMaxPerRun:5,market:{enabled:false},capacityBalancing:{enabled:false}};
+  assert.ok([2,5].includes(spec.taskMaxPerRun||5));
+  m.cfg.resourceControl={enabled:spec.enabled!==false,sampleInterval:1,taskMaxPerRun:spec.taskMaxPerRun||5,market:{enabled:false},capacityBalancing:{enabled:false}};
   m.runtime ||= {};delete m.runtime.__labT2ArmResult;
   m.data.resourceControl.tasks={};const taskId='lab-t2-'+spec.case+'-UH';
   m.data.resourceControl.tasks[taskId]={id:taskId,resource:'UH',fromRoomName:'E4N58',toRoomName:'E1N57',amount:spec.amount,remainingAmount:spec.amount,status:'pending',origin:'automatic',reason:'synthesis:E1N57:UH2O',createdAt:tick,updatedAt:tick,lastProgressAt:tick};
@@ -98,7 +99,8 @@ const summary=m=>({control:m.runtime?.treasuryT2FirstLiveControl?.status,closeRe
   await db['rooms.objects'].update({_id:targetStorage._id},{$set:{store:{energy:100000}}});
   for(const room of ['E3N59','E4N58','E1N57','W9N8','W8N8']){
    const terminal=await db['rooms.objects'].findOne({room,type:'terminal',user:uid});assert.ok(terminal);
-   await db['rooms.objects'].update({_id:terminal._id},{$set:{store:{UH:room==='E1N57'?0:5000,H:1000,energy:100000},cooldownTime:tick}});
+   const ordinaryHStock=spec.case==='c2'?10000:1000;
+   await db['rooms.objects'].update({_id:terminal._id},{$set:{store:{UH:room==='E1N57'?0:5000,H:ordinaryHStock,energy:100000},cooldownTime:tick}});
   }
   for(const name of ['lab-r2-carrier','lab-t2-target-carrier']){
    const creep=await db['rooms.objects'].findOne({type:'creep',name,user:uid});
@@ -106,7 +108,7 @@ const summary=m=>({control:m.runtime?.treasuryT2FirstLiveControl?.status,closeRe
   }
   record('setup',{isolatedWorldOnly:true,tick,spec,taskId,beforeMemorySha256:sha(raw),beforeRawMemory:raw,afterRawMemory:JSON.stringify(m)});
  }else if(op==='queue'){
-  assert.ok(arg.length<2000);await db['users.console'].insert({user:uid,expression:arg,hidden:true});
+  assert.ok(arg.length<3000);await db['users.console'].insert({user:uid,expression:arg,hidden:true});
   record('queue',{isolatedWorldOnly:true,tick,expression:arg});console.log(JSON.stringify({op,label,tick,queued:true}));return;
  }else if(op==='ordinary'){
   const [destination,sender='W9N8',resource='H']=arg.split(',');

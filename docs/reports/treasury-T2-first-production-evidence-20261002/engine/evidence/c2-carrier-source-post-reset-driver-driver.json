@@ -1,0 +1,25 @@
+{
+  "schema": "screeps-t2-lab-driver/v1",
+  "isolatedWorldOnly": true,
+  "label": "c2-carrier-source-post-reset-driver",
+  "kind": "ticks",
+  "arg": "2",
+  "startTick": 778,
+  "endTick": 780,
+  "startedAtUtc": "2026-10-02T11:24:31.244Z",
+  "endedAtUtc": "2026-10-02T11:24:35.106Z",
+  "observations": 122,
+  "matched": true,
+  "last": {
+    "tick": 780,
+    "quota": "dispatching",
+    "control": "closed",
+    "mode": "drain",
+    "active": 1,
+    "arm": {
+      "ok": true,
+      "reason": "armed"
+    }
+  },
+  "paused": true
+}

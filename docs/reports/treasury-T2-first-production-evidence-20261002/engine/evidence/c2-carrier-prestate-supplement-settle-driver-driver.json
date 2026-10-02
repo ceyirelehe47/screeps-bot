@@ -1,0 +1,25 @@
+{
+  "schema": "screeps-t2-lab-driver/v1",
+  "isolatedWorldOnly": true,
+  "label": "c2-carrier-prestate-supplement-settle-driver",
+  "kind": "settled",
+  "arg": "",
+  "startTick": 779,
+  "endTick": 780,
+  "startedAtUtc": "2026-10-02T11:35:59.642Z",
+  "endedAtUtc": "2026-10-02T11:36:02.894Z",
+  "observations": 98,
+  "matched": true,
+  "last": {
+    "tick": 780,
+    "quota": "drained",
+    "control": "closed",
+    "mode": "off",
+    "active": 0,
+    "arm": {
+      "ok": true,
+      "reason": "armed"
+    }
+  },
+  "paused": true
+}

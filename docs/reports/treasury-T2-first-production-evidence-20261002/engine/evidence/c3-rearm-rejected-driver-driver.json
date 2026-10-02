@@ -1,0 +1,24 @@
+{
+  "schema": "screeps-t2-lab-driver/v1",
+  "isolatedWorldOnly": true,
+  "label": "c3-rearm-rejected-driver",
+  "kind": "ticks",
+  "arg": "1",
+  "startTick": 765,
+  "endTick": 766,
+  "startedAtUtc": "2026-10-02T11:34:08.316Z",
+  "endedAtUtc": "2026-10-02T11:34:10.726Z",
+  "observations": 68,
+  "matched": true,
+  "last": {
+    "tick": 766,
+    "control": "closed",
+    "mode": "off",
+    "active": 0,
+    "arm": {
+      "ok": true,
+      "reason": "armed"
+    }
+  },
+  "paused": true
+}

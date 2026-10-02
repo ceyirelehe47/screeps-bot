@@ -1,0 +1,25 @@
+{
+  "schema": "screeps-t2-lab-driver/v1",
+  "isolatedWorldOnly": true,
+  "label": "c2-restored-target-driver",
+  "kind": "task-done",
+  "arg": "lab-t2-c2-block-target-ordinary",
+  "startTick": 786,
+  "endTick": 786,
+  "startedAtUtc": "2026-10-02T11:24:46.617Z",
+  "endedAtUtc": "2026-10-02T11:24:47.122Z",
+  "observations": 1,
+  "matched": true,
+  "last": {
+    "tick": 786,
+    "quota": "drained",
+    "control": "closed",
+    "mode": "off",
+    "active": 0,
+    "arm": {
+      "ok": true,
+      "reason": "armed"
+    }
+  },
+  "paused": true
+}

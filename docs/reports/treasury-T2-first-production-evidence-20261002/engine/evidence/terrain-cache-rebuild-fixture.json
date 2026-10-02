@@ -1,0 +1,11 @@
+{
+  "schema": "screeps-t2-lab-terrain-rebuild/v1",
+  "isolatedWorldOnly": true,
+  "atUtc": "2026-10-02T11:08:43.342801+00:00",
+  "officialAlgorithm": "@screeps/backend/lib/cli/map.js:updateTerrainData",
+  "beforeDatabaseSha256": "6348cf4b38b5b5bc4015ecec14c249ede7403cf511983e4d10a1cdc122cf4fd9",
+  "afterDatabaseSha256": "c4fdf23d89f7c31a50c60b788cd52dc0456edaafe2e3a3083af55b86bdd25a2c",
+  "terrainDataSha256": "55e2ea3b9c4f8b105003f42c21f72929b980a4c23064655eff02d65756ff8147",
+  "terrainRoomCount": 151,
+  "includesE1N57": true
+}

@@ -1,0 +1,24 @@
+{
+  "schema": "screeps-t2-lab-driver/v1",
+  "isolatedWorldOnly": true,
+  "label": "c1-1715-r4-arm-retry-1-executed",
+  "kind": "arm-observed",
+  "arg": "c1-1715-r4-arm-retry-1",
+  "startTick": 756,
+  "endTick": 757,
+  "startedAtUtc": "2026-10-02T11:18:51.923Z",
+  "endedAtUtc": "2026-10-02T11:18:53.486Z",
+  "observations": 38,
+  "matched": true,
+  "last": {
+    "tick": 757,
+    "control": "active",
+    "mode": "canary",
+    "active": 0,
+    "arm": {
+      "ok": true,
+      "reason": "armed"
+    }
+  },
+  "paused": true
+}

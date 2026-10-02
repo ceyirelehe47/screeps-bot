@@ -1,0 +1,13 @@
+
+> screeps@2026.10.2-2 build
+> rollup -c
+
+No deployment target set. Build only.
+
+src/main.ts → dist/main.js...
+[deploy] bundle sha256: 4528cc84f0ac0ee8… (full in Memory.runtime.lastDeployBundleHash)
+(!) Circular dependencies
+src/runtime/synthesisControl.ts -> src/runtime/synthesisCompatibilityPlanning.ts -> src/runtime/resourceControl.ts -> src/runtime/synthesisControl.ts
+src/runtime/resourceControl.ts -> src/runtime/treasuryTerminalTransfer.ts -> src/runtime/treasuryT1FirstLiveControl.ts -> src/runtime/treasuryFirstLiveControl.ts -> src/runtime/resourceControl.ts
+src/runtime/resourceControl.ts -> src/runtime/treasuryTerminalTransfer.ts -> src/runtime/treasuryTerminalTransferLane.ts -> src/runtime/resourceControl.ts
+created dist/main.js in 8.2s

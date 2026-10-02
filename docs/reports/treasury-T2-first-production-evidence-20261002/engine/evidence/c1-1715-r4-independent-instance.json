@@ -1,0 +1,88 @@
+{
+  "schema": "screeps-t2-independent-lab-instance/v1",
+  "isolatedWorldOnly": true,
+  "case": "c1-1715-r4",
+  "restoredAtUtc": "2026-10-02T11:18:47.508174+00:00",
+  "baselineFile": "/srv/screeps-treasury-t1/r6-t2-20261002/db-frozen-pre-t2.json",
+  "baselineSha256": "c4fdf23d89f7c31a50c60b788cd52dc0456edaafe2e3a3083af55b86bdd25a2c",
+  "mainSha256": "a33ca56e530060f0e719630324bfe3d55649786ff19525483fd04197d315653f",
+  "mainBytes": 3308853,
+  "baselineTick": 756,
+  "oldHControl": {
+    "schemaVersion": 1,
+    "runId": "treasury-t1-first-live-2026-09-27",
+    "status": "closed",
+    "startedAtTick": 716,
+    "deadlineTick": 1316,
+    "startedAtMs": 1790929297938,
+    "deadlineMs": 1790931097938,
+    "lastHeartbeatAtMs": 1790929297938,
+    "controlUntilMs": 1790929357938,
+    "taskId": "lab-exit-c2-H",
+    "taskCreatedAt": 716,
+    "taskAmount": 100,
+    "taskRemainingAtArm": 100,
+    "sourceTerminalId": "a67d41dd18b97eb",
+    "targetTerminalId": "370f41dd18e91de",
+    "deployTag": "2026.10.2-1+447ab5c@2026-10-02T06:10:35.260Z",
+    "deployBundleHash": "31d7862330a31f620544e07482933253e658806373f42def32ab51f27665c955",
+    "closeReason": "native_attempt",
+    "hash": "csh1:f13071e8dd82088783d3f4965ecd633b"
+  },
+  "oldHQuota": {
+    "schemaVersion": 2,
+    "runId": "treasury-production-T1-2026-09-24",
+    "status": "drained",
+    "taskId": "lab-exit-c2-H",
+    "taskCreatedAt": 716,
+    "taskAmount": 100,
+    "workKey": "biz:treasury-production-T1-2026-09-24:fe69fe6671db25fc",
+    "attemptId": "tk1_1_9992ef348b720174",
+    "amount": 100,
+    "reservedAtTick": 730
+  },
+  "oldKernel": {
+    "version": 3,
+    "installEpochId": "1fdc7fe5f513dc72",
+    "issuance": {
+      "frontier": 1,
+      "burned": 0
+    },
+    "lifecycle": {
+      "lastBeginTick": 732,
+      "lastEndTick": 732
+    },
+    "recovery": {
+      "sweepCursor": 0,
+      "cleanupCursor": 0,
+      "budgetTick": 732,
+      "budgetUsed": 1
+    },
+    "active": {},
+    "ring": [
+      {
+        "attemptId": "tk1_1_9992ef348b720174",
+        "workKey": "biz:treasury-production-T1-2026-09-24:fe69fe6671db25fc",
+        "generation": 1,
+        "terminalPhase": "committed",
+        "closedAtTick": 732
+      }
+    ],
+    "ringCursor": 1,
+    "counters": {
+      "admitted": 1,
+      "dispatched": 1,
+      "settledCommitted": 1,
+      "settledNotExecuted": 0,
+      "unknown": 1,
+      "rearmings": 0,
+      "rejectedAdmissions": 0,
+      "recoveryAdvances": 0,
+      "cleanupFailures": 0
+    }
+  },
+  "t2QuotaAbsent": true,
+  "t2ControlAbsent": true,
+  "t2RingAbsent": true,
+  "paused": true
+}

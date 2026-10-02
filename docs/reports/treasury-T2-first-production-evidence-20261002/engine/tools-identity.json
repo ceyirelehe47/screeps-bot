@@ -1,0 +1,15 @@
+{
+  "schema": "screeps-t2-engine-tool-identity/v1",
+  "frozenMainSha256": "a33ca56e530060f0e719630324bfe3d55649786ff19525483fd04197d315653f",
+  "mainBytes": 3308853,
+  "sourceCommit": "a84275040d4f8f8bfea2135a8465608f97637c22",
+  "labRunDirectory": "/srv/screeps-treasury-t1/r6-t2-20261002",
+  "toolChangesAfterProductFreezeOnly": "夹具/驱动/观测/原件验证；没有修改main字节或产品依赖",
+  "files": {
+    "tools/carrier-supplement.py": "8c70d39fa4439df8d58784472a55dc9e0d5738a4008624cfbe2261d3c5b871e3",
+    "tools/lab.cjs": "dee4cf7e741a4c7fe6130c4b0ef495efde46dd40ef94af8dce9146d22bad3e71",
+    "tools/run-scenarios.py": "3e4e3484fc5f0e2bd875c05ba7ce2e83871655295565d74fa1d06262dfe260f7",
+    "tools/run-until.cjs": "87ac6c31369d885ded5a356ad5ec4053e6d8f7d30a49aa6a111729de1259fadc",
+    "tools/verify-evidence.py": "a186672229456771f042deaaf5d97e00f61157c245c28e87a99f6ae6390ff441"
+  }
+}

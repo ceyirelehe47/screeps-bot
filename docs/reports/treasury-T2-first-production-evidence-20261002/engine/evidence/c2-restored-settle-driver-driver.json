@@ -1,0 +1,25 @@
+{
+  "schema": "screeps-t2-lab-driver/v1",
+  "isolatedWorldOnly": true,
+  "label": "c2-restored-settle-driver",
+  "kind": "settled",
+  "arg": "",
+  "startTick": 780,
+  "endTick": 781,
+  "startedAtUtc": "2026-10-02T11:24:35.702Z",
+  "endedAtUtc": "2026-10-02T11:24:38.969Z",
+  "observations": 100,
+  "matched": true,
+  "last": {
+    "tick": 781,
+    "quota": "drained",
+    "control": "closed",
+    "mode": "off",
+    "active": 0,
+    "arm": {
+      "ok": true,
+      "reason": "armed"
+    }
+  },
+  "paused": true
+}

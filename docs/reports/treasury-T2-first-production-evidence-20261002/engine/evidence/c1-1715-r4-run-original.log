@@ -1,0 +1,43 @@
+Running as unit: screeps-treasury-t1.service; invocation ID: aa41bf1ad8e540388cddbd24c3790fc6
+实验步骤: capture c1-1715-r4-before-setup
+Connecting to storage
+{"label":"c1-1715-r4-before-setup","tick":756,"active":0,"tasks":[{"id":"lab-exit-c2-H","status":"done","remaining":0},{"id":"lab-exit-c2-pre-source-ordinary","status":"done","remaining":0},{"id":"lab-exit-c2-pre-target-ordinary","status":"done","remaining":0}],"transactions":29}
+实验步骤: setup c1-1715-r4-setup
+Connecting to storage
+{"op":"setup","label":"c1-1715-r4-setup","tick":756,"mode":"off","active":0,"tasks":[{"id":"lab-t2-c1-1715-r4-UH","status":"pending","remaining":1715}],"isolatedWorldOnly":true}
+实验步骤: queue c1-1715-r4-arm
+Connecting to storage
+{"op":"queue","label":"c1-1715-r4-arm","tick":756,"queued":true}
+Connecting to storage
+{"schema":"screeps-t2-lab-driver/v1","isolatedWorldOnly":true,"label":"c1-1715-r4-arm-executed","kind":"arm-observed","arg":"c1-1715-r4-arm","startTick":756,"endTick":756,"startedAtUtc":"2026-10-02T11:18:49.618Z","endedAtUtc":"2026-10-02T11:18:51.444Z","observations":47,"matched":true,"last":{"tick":756,"mode":"off","active":0,"arm":{"ok":false,"reason":"terminal_action_this_tick"}},"paused":true}
+实验步骤: queue c1-1715-r4-arm-retry-1
+Connecting to storage
+{"op":"queue","label":"c1-1715-r4-arm-retry-1","tick":756,"queued":true}
+Connecting to storage
+{"schema":"screeps-t2-lab-driver/v1","isolatedWorldOnly":true,"label":"c1-1715-r4-arm-retry-1-executed","kind":"arm-observed","arg":"c1-1715-r4-arm-retry-1","startTick":756,"endTick":757,"startedAtUtc":"2026-10-02T11:18:51.923Z","endedAtUtc":"2026-10-02T11:18:53.486Z","observations":38,"matched":true,"last":{"tick":757,"control":"active","mode":"canary","active":0,"arm":{"ok":true,"reason":"armed"}},"paused":true}
+实验步骤: capture c1-1715-r4-before-native
+Connecting to storage
+{"label":"c1-1715-r4-before-native","tick":757,"control":"active","closeReason":"","mode":"canary","active":0,"tasks":[{"id":"lab-t2-c1-1715-r4-UH","status":"pending","remaining":1715}],"transactions":29}
+Connecting to storage
+{"schema":"screeps-t2-lab-driver/v1","isolatedWorldOnly":true,"label":"c1-1715-r4-native-driver","kind":"native","arg":"","startTick":758,"endTick":760,"startedAtUtc":"2026-10-02T11:18:53.921Z","endedAtUtc":"2026-10-02T11:18:59.437Z","observations":180,"matched":true,"last":{"tick":760,"quota":"dispatching","control":"closed","mode":"drain","active":1,"arm":{"ok":true,"reason":"armed"}},"paused":true}
+实验步骤: capture c1-1715-r4-real-native
+Connecting to storage
+{"label":"c1-1715-r4-real-native","tick":761,"control":"closed","closeReason":"native_attempt","mode":"drain","quota":"dispatching","active":1,"tasks":[{"id":"lab-t2-c1-1715-r4-UH","status":"pending","remaining":1715,"lease":"active"}],"transactions":30}
+Connecting to storage
+{"schema":"screeps-t2-lab-driver/v1","isolatedWorldOnly":true,"label":"c1-1715-r4-settle-driver","kind":"settled","arg":"","startTick":761,"endTick":762,"startedAtUtc":"2026-10-02T11:18:59.866Z","endedAtUtc":"2026-10-02T11:19:03.949Z","observations":131,"matched":true,"last":{"tick":762,"quota":"drained","control":"closed","mode":"off","active":0,"arm":{"ok":true,"reason":"armed"}},"paused":true}
+实验步骤: capture c1-1715-r4-first-settlement
+Connecting to storage
+{"label":"c1-1715-r4-first-settlement","tick":762,"control":"closed","closeReason":"native_attempt","mode":"off","quota":"drained","active":0,"tasks":[{"id":"lab-t2-c1-1715-r4-UH","status":"pending","remaining":1615}],"transactions":30}
+Connecting to storage
+{"schema":"screeps-t2-lab-driver/v1","isolatedWorldOnly":true,"label":"c1-1715-r4-repeat-recovery-driver","kind":"ticks","arg":"2","startTick":763,"endTick":765,"startedAtUtc":"2026-10-02T11:19:04.362Z","endedAtUtc":"2026-10-02T11:19:08.992Z","observations":150,"matched":true,"last":{"tick":765,"quota":"drained","control":"closed","mode":"off","active":0,"arm":{"ok":true,"reason":"armed"}},"paused":true}
+实验步骤: capture c1-1715-r4-recovered-no-rededuct
+Connecting to storage
+{"label":"c1-1715-r4-recovered-no-rededuct","tick":765,"control":"closed","closeReason":"native_attempt","mode":"off","quota":"drained","active":0,"tasks":[{"id":"lab-t2-c1-1715-r4-UH","status":"pending","remaining":1615}],"transactions":30}
+Connecting to storage
+{"schema":"screeps-t2-lab-driver/v1","isolatedWorldOnly":true,"label":"c1-1715-r4-ordinary-driver","kind":"task-done","arg":"lab-t2-c1-1715-r4-UH","startTick":765,"endTick":770,"startedAtUtc":"2026-10-02T11:19:09.394Z","endedAtUtc":"2026-10-02T11:19:18.969Z","observations":330,"matched":true,"last":{"tick":770,"quota":"drained","control":"closed","mode":"off","active":0,"arm":{"ok":true,"reason":"armed"}},"paused":true}
+实验步骤: capture c1-1715-r4-ordinary-restored
+Connecting to storage
+{"label":"c1-1715-r4-ordinary-restored","tick":771,"control":"closed","closeReason":"native_attempt","mode":"off","quota":"drained","active":0,"tasks":[{"id":"lab-t2-c1-1715-r4-UH","status":"done","remaining":0}],"transactions":31}
+实验步骤: capture c1-1715-r4-completed-before-persistence
+Connecting to storage
+{"label":"c1-1715-r4-completed-before-persistence","tick":771,"control":"closed","closeReason":"native_attempt","mode":"off","quota":"drained","active":0,"tasks":[{"id":"lab-t2-c1-1715-r4-UH","status":"done","remaining":0}],"transactions":31}

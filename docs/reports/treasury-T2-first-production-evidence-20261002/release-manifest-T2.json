@@ -1,0 +1,28 @@
+{
+  "schema": "screeps-t2-first-production-release/v1",
+  "target": "screeps.com/default/shard1",
+  "accountId": "634fe406347a7b69b28aeccb",
+  "accountName": "forster",
+  "sourceCommit": "a84275040d4f8f8bfea2135a8465608f97637c22",
+  "sourceTree": "08b6f7592451faa6832ea4719c5272ab40cb9199",
+  "buildTag": "2026.10.2-2+a842750@2026-10-02T10:56:13.388Z",
+  "mainSha256": "a33ca56e530060f0e719630324bfe3d55649786ff19525483fd04197d315653f",
+  "mainBytes": 3308853,
+  "deployBundleHash": "4528cc84f0ac0ee82fe74d58d0ff9cf8292acd4e4e803c64d6d0d7412ce7b1b3",
+  "deployToolSha256": "741e9805323d8076d7134e7d757994b8f9aa934f94949621917b6ac825a028c4",
+  "expectedLiveSha256": "1bf02d8415f552239dd034865c4e62d5c6a00a978af36f78b64640ea05f6f061",
+  "expectedLiveDeployTag": "2026.10.2-1+447ab5c@2026-10-02T06:10:35.260Z",
+  "modules": [
+    "main"
+  ],
+  "productionWritesPerformed": false,
+  "productionEligible": false,
+  "businessStopReason": "当前 UH 新补料需求为 0；不重复纯 OFF 发布。",
+  "frozenGitStatus": "",
+  "packageLockSha256": "7c34b3cab2a00901d3abbe9a1a1aaad9bb4d4a95e19f87793cb21d29a8a06632",
+  "nodeVersion": "v22.23.3",
+  "productionWritesPerformedScope": "代码发布与Treasury业务；不包含已清理的临时诊断结果键",
+  "productionCodeUploaded": false,
+  "treasuryBusinessWritten": false,
+  "temporaryDiagnosticMemoryWritesPerformed": true
+}

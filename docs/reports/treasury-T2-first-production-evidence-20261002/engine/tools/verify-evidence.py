@@ -25,6 +25,20 @@ SOURCE = "E4N58"
 TARGET = "E1N57"
 RESOURCE = "UH"
 MASK32 = 0xffffffff
+FROZEN_MAIN_SHA = "a33ca56e530060f0e719630324bfe3d55649786ff19525483fd04197d315653f"
+FROZEN_MAIN_BYTES = 3308853
+FINAL_LABELS = (["c1-1715-" + suffix for suffix in
+                 ("before-native", "real-native", "first-settlement", "recovered-no-rededuct", "ordinary-restored")]
+                + ["c1-100-" + suffix for suffix in
+                   ("before-native", "real-native", "first-settlement", "recovered-no-rededuct")]
+                + ["c2-" + suffix for suffix in
+                   ("ordinary-pre-baseline", "ordinary-pre-observed", "bound-after-ordinary-pre", "real-native", "unknown-off-held",
+                    "unrelated-native-while-unknown", "carrier-target-held", "carrier-source-held",
+                    "unknown-after-real-restart", "carrier-source-after-reset-held",
+                    "first-restored-settlement", "confirmed-ordinary-and-carrier-restored")]
+                + ["c3-" + suffix for suffix in
+                   ("armed-bound-no-responsibility", "expired-ordinary-restored", "off-after-real-restart", "rearm-rejected")]
+                + ["c2-carrier-prestate-supplement-" + suffix for suffix in ("before", "held", "settled", "released")])
 
 
 def require(condition, message):
@@ -96,26 +110,46 @@ def fee(amount, source, target):
 
 
 class Evidence:
-    def __init__(self, root, candidate, manifest_path, schema, lab_account, service):
+    def __init__(self, root, candidate, manifest_path, schema, lab_account, service, labels=None):
         self.root = root
         self.directory = root / "engine/evidence"
+        self.labels = list(labels or FINAL_LABELS)
         self.manifest = load(manifest_path)
-        self.main = (candidate / "main.js").read_bytes()
+        main_path = candidate / "main.js" if candidate.is_dir() else candidate
+        self.main = main_path.read_bytes()
         self.sha = hashlib.sha256(self.main).hexdigest()
         require(self.sha == self.manifest["mainSha256"], "候选 main SHA 与冻结清单不符")
         require(len(self.main) == self.manifest["mainBytes"] < 5_000_000,
                 "候选 main 大小与冻结清单不符")
-        if (candidate / "manifest.json").exists():
-            require(load(candidate / "manifest.json") == self.manifest, "候选清单与冻结清单不符")
+        require(self.sha == FROZEN_MAIN_SHA and len(self.main) == FROZEN_MAIN_BYTES, "候选不是本轮批准的精确最终构建")
+        self.candidate_manifest = self.manifest
+        candidate_manifest_path = main_path.parent / "manifest.json"
+        if candidate_manifest_path.exists():
+            self.candidate_manifest = load(candidate_manifest_path)
+            require(all(self.candidate_manifest[key] == self.manifest[key] for key in
+                        ("mainSha256", "mainBytes", "buildTag", "deployBundleHash", "sourceCommit", "accountId")),
+                    "候选身份清单与冻结清单不符")
         self.lab_account = lab_account
         require(lab_account != self.manifest["accountId"], "隔离账号不能是生产账号")
         self.service = service
         self.snapshots = {}
-        self.inputs = {}
+        try:
+            manifest_label = str(manifest_path.relative_to(root))
+        except ValueError:
+            manifest_label = str(manifest_path)
+        self.inputs = {manifest_label: hashlib.sha256(manifest_path.read_bytes()).hexdigest()}
+        self.non_adopted_snapshots = []
+        self.independent_baseline_sha = None
         for path in sorted(self.directory.glob("*-snapshot.json")):
             raw = path.read_bytes()
             snapshot = json.loads(raw)
             label = path.stem.removesuffix("-snapshot")
+            if label not in self.labels:
+                self.non_adopted_snapshots.append({"label": label, "capturedAtUtc": snapshot.get("capturedAtUtc"),
+                    "tick": snapshot.get("tick"), "code": snapshot.get("code"),
+                    "rawSha256": hashlib.sha256(raw).hexdigest(),
+                    "scope": "不作为 C 发送/结算/退出状态结果；辅助身份读取另按具体用途核验"})
+                continue
             require(snapshot["schema"] == schema, f"{label} snapshot schema 不符")
             require(snapshot["label"] == label, f"{label} 标签与文件名不符")
             require(snapshot["paused"] is True, f"{label} 未暂停采集")
@@ -132,7 +166,8 @@ class Evidence:
             snapshot["m"] = json.loads(snapshot["rawMemory"])
             self.snapshots[label] = snapshot
             self.inputs[str(path.relative_to(root))] = hashlib.sha256(raw).hexdigest()
-        require(self.snapshots, "没有原始 snapshot")
+        require(set(self.snapshots) == set(self.labels), "缺少指定 C1/C2/C3 原始 snapshot：" +
+                ",".join(sorted(set(self.labels) - set(self.snapshots))))
         journal_path = root / "engine/service-journal-original.jsonl"
         self.journal = [json.loads(line) for line in journal_path.read_text().splitlines() if line.strip()]
         self.inputs[str(journal_path.relative_to(root))] = hashlib.sha256(journal_path.read_bytes()).hexdigest()
@@ -156,8 +191,64 @@ class Evidence:
                 "setup 前 Memory 原件 SHA 不符")
         before, after = json.loads(raw), json.loads(artifact["afterRawMemory"])
         require(not before["runtime"]["treasuryCore"]["active"], "合成独立用例开始前有未知责任")
-        previous_quota = before["runtime"].get(QUOTA_KEY)
-        require(previous_quota is None or previous_quota["status"] == "drained", "装夹重置了未结 T2 额度")
+        require(all(key not in before["runtime"] for key in (QUOTA_KEY, CONTROL_KEY, MIRROR_KEY)) and
+                not any(entry["workKey"].startswith("biz:treasury-production-T2-")
+                        for entry in before["runtime"]["treasuryCore"]["ring"]),
+                "装夹前 T2 已消费/控制事实存在，不能清掉后称作独立新实例")
+        instance = self.artifact(artifact["spec"]["case"] + "-independent-instance.json")
+        require(instance["schema"] == "screeps-t2-independent-lab-instance/v1" and
+                instance["isolatedWorldOnly"] is True and instance["case"] == artifact["spec"]["case"], "独立实例原件身份不符")
+        require(instance["mainSha256"] == self.sha and instance["mainBytes"] == len(self.main), "独立副本非同一最终 main")
+        kernel_facts = lambda kernel: {key: value for key, value in kernel.items() if key not in ("lifecycle", "recovery")}
+        require(instance["oldHControl"] == before["runtime"]["treasuryT1FirstLiveControl"] and
+                instance["oldHQuota"] == before["runtime"]["treasuryProductionT1Quota"] and
+                kernel_facts(instance["oldKernel"]) == kernel_facts(before["runtime"]["treasuryCore"]),
+                "独立副本原持久核心与 setup 前 Memory 不符（仅允许真实对齐tick bookkeeping）")
+        baseline_sha = instance["baselineSha256"]
+        require(re.fullmatch(r"[a-f0-9]{64}", baseline_sha) is not None, "独立 DB 基线 SHA 非法")
+        if self.independent_baseline_sha is None:
+            self.independent_baseline_sha = baseline_sha
+        require(baseline_sha == self.independent_baseline_sha and int(instance["baselineTick"]) <= artifact["tick"],
+                "独立用例不是同一 pre-T2 冻结 DB 副本")
+        restore_at = datetime.fromisoformat(instance["restoredAtUtc"].replace("Z", "+00:00")).timestamp()
+        first_snapshot_path = self.directory / (artifact["spec"]["case"] + "-before-setup-snapshot.json")
+        first_snapshot = self.artifact(first_snapshot_path.name)
+        for record in self.non_adopted_snapshots:
+            if record["label"] == artifact["spec"]["case"] + "-before-setup":
+                record["scope"] = "辅助独立实例启动身份读回；不作为 C 发送/结算/退出状态结果"
+        require(first_snapshot["code"] == {"sha256": self.sha, "bytes": len(self.main)} and
+                first_snapshot["user"]["_id"] == self.lab_account and first_snapshot["paused"] is True,
+                "独立副本首次读回非同一冻结字节/实验账号/停态")
+        require(first_snapshot["tick"] == int(instance["baselineTick"]) and
+                first_snapshot["memoryUtf8Bytes"] == len(first_snapshot["rawMemory"].encode("utf-8")),
+                "独立 DB 首次停态读回 tick/Memory 字节与基线不符")
+        first_memory = json.loads(first_snapshot["rawMemory"])
+        require(first_memory["runtime"]["treasuryCore"] == instance["oldKernel"], "首次停态读回核心不是原始 pre-T2 副本")
+        if first_snapshot["tick"] % 5:
+            require(first_snapshot["rawMemory"] == raw and artifact["tick"] == first_snapshot["tick"],
+                    "无需对齐时 setup 前 Memory/tick 发生未声明改变")
+        else:
+            first_state = min((snapshot for label, snapshot in self.snapshots.items()
+                               if label.startswith(artifact["spec"]["case"] + "-")), key=timestamp)
+            # setup 原件直接读 tick 但没有 UTC 字段；后续首次状态 capture 给出推进时间上界。
+            aligned = {"tick": artifact["tick"], "capturedAtUtc": first_state["capturedAtUtc"]}
+            self.driver_between(artifact["spec"]["case"] + "-align-driver.json", first_snapshot, aligned, 1, kind="ticks")
+            require(artifact["tick"] <= first_snapshot["tick"] + 2, "对齐推进超过有界一次tick机会")
+            before_kernel = before["runtime"]["treasuryCore"]
+            for section in ("lifecycle", "recovery"):
+                original_section, later_section = instance["oldKernel"][section], before_kernel[section]
+                require(set(original_section) == set(later_section), "对齐 tick 新增/删除 kernel bookkeeping 字段")
+                for key in original_section:
+                    if section == "lifecycle" or key == "budgetTick":
+                        value = later_section[key]
+                        require(value == original_section[key] or safe_integer(value) and
+                                first_snapshot["tick"] <= value <= artifact["tick"], "对齐 kernel tick 字段越界/倒退")
+                    else:
+                        require(later_section[key] == original_section[key], "无 active 对齐 tick 改变 recovery 责任 bookkeeping")
+        starts = [event for event in self.journal if event.get("_PID") == "1" and
+                  event.get("MESSAGE", "").startswith("Started " + self.service) and
+                  restore_at < int(event["__REALTIME_TIMESTAMP"]) / 1_000_000 < timestamp(first_snapshot)]
+        require(len(starts) == 1, "独立 DB 副本恢复后没有唯一真实服务 start")
         for key in ("treasuryProductionT1Quota", "treasuryT1FirstLiveControl", "treasuryT1FirstLiveControlMirror", "treasuryCore"):
             require(before["runtime"][key] == after["runtime"][key], f"合成装夹改变旧持久事实：{key}")
         require(all(key not in after["runtime"] for key in (QUOTA_KEY, CONTROL_KEY, MIRROR_KEY)),
@@ -171,7 +262,83 @@ class Evidence:
                 (SOURCE, TARGET, RESOURCE, "automatic", "synthesis:E1N57:UH2O"), "合成任务非等价正式业务语义")
         require("treasurySlice" not in task, "装夹手造 task lease")
         return {"artifact": name, "kind": "明确合成的独立隔离任务", "taskId": identifier,
-                "amount": amount, "createdAt": task["createdAt"]}
+                "amount": amount, "createdAt": task["createdAt"], "independentBaselineSha256": baseline_sha,
+                "startedMicroseconds": starts[0]["__REALTIME_TIMESTAMP"]}
+
+    def driver_between(self, name, before, after, minimum_ticks=1, kind=None):
+        driver = self.artifact(name)
+        require(driver["schema"] == "screeps-t2-lab-driver/v1" and driver["isolatedWorldOnly"] is True,
+                "引擎推进原件身份不符")
+        require(driver["label"] == name.removesuffix("-driver.json") and (kind is None or driver["kind"] == kind),
+                "引擎推进文件/运行标签/操作不符")
+        require(safe_integer(driver["startTick"]) and safe_integer(driver["endTick"]) and
+                before["tick"] <= driver["startTick"] <= before["tick"] + 1 and
+                driver["endTick"] <= after["tick"] <= driver["endTick"] + 1 and
+                driver["endTick"] - driver["startTick"] >= minimum_ticks and after["tick"] > before["tick"],
+                "阶段未由真实引擎推进所需 tick")
+        start = datetime.fromisoformat(driver["startedAtUtc"].replace("Z", "+00:00")).timestamp()
+        end = datetime.fromisoformat(driver["endedAtUtc"].replace("Z", "+00:00")).timestamp()
+        require(timestamp(before) <= start <= end <= timestamp(after), "引擎推进/capture 原始时间顺序不符")
+        # matched/last 等已派生字段不是通过依据；只用直接读出的 tick 与原始时间。
+        return {"artifact": name, "startTick": driver["startTick"], "endTick": driver["endTick"]}
+
+    def synthesis_purpose(self, snapshot, amount):
+        configuration = snapshot["m"]["cfg"]["synthesisControl"]
+        room_config = configuration["rooms"][TARGET]
+        state = self.runtime(snapshot)["synthesisControl"]["rooms"][TARGET]
+        require(configuration["enabled"] is True and room_config["enabled"] is True and
+                room_config["batchSize"] == amount and room_config["donorRoomNames"] == [SOURCE], "等价 UH2O 配置目标/供给房不符")
+        reactions = room_config["reactions"]
+        require(len(reactions) == 1 and reactions[0]["product"] == "UH2O" and
+                reactions[0]["targetAmount"] == reactions[0]["batchSize"] == amount and
+                reactions[0]["donorRoomNames"] == [SOURCE], "等价 UH2O 生产计划不符")
+        require((state["stage"], state["activeProduct"], state["reagentA"], state["reagentB"],
+                 state["targetAmount"], state["batchSize"]) == ("loading", "UH2O", "UH", "OH", amount, amount),
+                "等价 UH2O 当前加载状态不符")
+        require(room_config["reagentLabIds"] == state["reagentLabIds"] and len(state["reagentLabIds"]) == 2,
+                "等价 UH2O reagent lab 绑定不符")
+        labs = [self.obj(snapshot, identifier) for identifier in state["reagentLabIds"]]
+        require(all((lab["type"], lab["room"], lab["user"]) == ("lab", TARGET, self.lab_account) for lab in labs),
+                "等价用途没有真实自有 reagent labs")
+        require(self.store(labs[1], "OH") == amount and self.store(labs[0], RESOURCE) == 0,
+                "等价用途 OH 实货/缺 UH 事实不符")
+        target_objects = [obj for obj in snapshot["objects"] if obj["room"] == TARGET and obj.get("user") == self.lab_account]
+        require(sum(self.store(obj, RESOURCE) for obj in target_objects) == 0 and
+                sum(self.store(obj, "UH2O") for obj in target_objects) == 0,
+                "等价测试目标已有 UH/UH2O，需求不是声明的完整原始缺口")
+        return {"product": "UH2O", "targetAmount": amount, "actualLocalUH": 0, "actualLocalUH2O": 0,
+                "actualReagentLabOH": amount, "reagentLabIds": state["reagentLabIds"]}
+
+    def carrier_held_trace(self, before, after, artifact, driver_name, require_prestate=True, minimum_ticks=2):
+        driver = self.driver_between(driver_name, before, after, minimum_ticks, kind="ticks")
+        name, target = artifact["name"], artifact["targetTerminalId"]
+        readbacks = self.runtime(after)["__labT2CarrierPlanReadbacks"]
+        relevant = [item for item in readbacks if item["name"] == name and
+                    before["tick"] <= item["atTick"] < after["tick"] and item["targetId"] == target]
+        require(relevant, "carrier 实验 plan 未有实际执行读回")
+        latest = max(relevant, key=lambda item: item["atTick"])
+        require(latest["resource"] == "H" and latest["storeH"] == 50 and
+                latest["plan"] == {"synthesisCarrierPendingToId": target, "synthesisCarrierPendingResource": "H",
+                    "synthesisCarrierPendingTaskType": "terminal_feed", "carrierStorageOnlyMode": False},
+                "实际 carrier plan/readback/持货不符")
+        events = [item for item in self.runtime(after)["__labT2CarrierWork"] if item["name"] == name and
+                  latest["atTick"] <= item["tick"] < after["tick"] and item.get("toId") == target and
+                  item.get("resource") == "H"]
+        require(events, "真实 main 没有委托该 carrier 原 .work 的实际记录")
+        for item in events:
+            require(item["beforeH"] == item["afterH"] == 50 and "throwError" in item and item["throwError"] is None,
+                    "carrier 原 .work 异常/持货扰动，不能作为正常保护证据")
+        eligible = events
+        if require_prestate:
+            eligible = [item for item in events if item.get("traceSchemaVersion") == 2 and
+                        item.get("role") == "carrier" and item.get("ready") is True and
+                        item.get("working") is True and item.get("spawnYield", "missing") is None and
+                        item.get("configName", "missing") is None]
+            require(eligible, "carrier .work 没有 v2 真实调用前可执行 target 状态，不能排除提前返回")
+        return {"name": name, "targetId": target, "planReadbackAtTick": latest["atTick"],
+                "actualWorkTicks": sorted({item["tick"] for item in eligible}), "driver": driver,
+                "scope": "v2 调用前标量证明真实 target 执行点" if require_prestate else
+                         "原连续链 .work 委托/持货；调用前 target 状态由独立补充分支证明"}
 
     @staticmethod
     def runtime(snapshot):
@@ -265,7 +432,7 @@ class Evidence:
         require(self.store(right1, "energy") == self.store(right0, "energy"), "目标 Energy 外来扰动")
         return actual_fee
 
-    def transaction_store_deltas(self, before, after, transactions, cargo_credits=None):
+    def transaction_store_deltas(self, before, after, transactions, cargo_credits=None, checked_resources=None):
         expected = {}
         for transaction in transactions:
             source, target = transaction["from"], transaction["to"]
@@ -282,6 +449,8 @@ class Evidence:
             left, right = self.terminal(before, room), self.terminal(after, room)
             require(left["_id"] == right["_id"], f"{room} terminal 身份漂移")
             resources = set(left.get("store", {})) | set(right.get("store", {})) | {resource for name, resource in expected if name == room}
+            if checked_resources is not None:
+                resources &= set(checked_resources)
             for resource in resources:
                 require(self.store(right, resource) - self.store(left, resource) == expected.get((room, resource), 0),
                         f"{room} {resource} Store 差值不能由真实交易/明确 carrier cargo 重导")
@@ -432,10 +601,55 @@ class Evidence:
             require({key: runtime[key] for key in keys} == reference, "新 T2 用例重置/改变旧 H 持久身份")
             require([item for item in runtime["treasuryCore"]["ring"]
                      if item["attemptId"] == quota["attemptId"]] == original_ring, "旧 H ring 事实漂移")
-            require(snapshot["m"]["cfg"]["treasuryTerminalTransferSlice0"]["mode"] == "off",
-                    "本轮意外重新开启旧 H 切片")
+            require(snapshot["m"]["cfg"]["treasuryTerminalTransferSlice0"]["mode"] in ("off", "drain"),
+                    "本轮意外重新 arm 旧 H 切片")
         return {"runId": quota["runId"], "attemptId": quota["attemptId"], "status": quota["status"],
                 "snapshotCount": len(ordered)}
+
+    def environment(self):
+        initial = self.artifact("initial-environment.json")
+        require(initial["schema"] == "screeps-t2-lab-environment/v1" and initial["isolatedWorldOnly"] is True and
+                initial["userId"] == self.lab_account and initial["username"] == self.manifest["accountName"] and
+                initial["paused"] is True, "初始隔离世界身份/停态原件不符")
+        require(initial["root"] == "/srv/screeps-treasury-t1" and
+                initial["run"] == "/srv/screeps-treasury-t1/r6-t2-20261002", "隔离数据库运行目录身份不符")
+        packages = {item["name"]: item["version"] for item in initial["packages"]}
+        require(packages == {"screeps": "4.3.0", "@screeps/engine": "4.3.0", "@screeps/common": "2.16.0"} and
+                initial["node"] == "v22.22.1", "隔离引擎/运行时版本原件不符")
+        require(initial["code"]["sha256"] == self.candidate_manifest.get("expectedLabSha256", self.manifest["expectedLiveSha256"]),
+                "初始实验代码不是声明继承的旧构建")
+        previous = initial["previousT1"]
+        require(previous["control"]["status"] == "closed" and previous["quota"]["status"] == "drained" and
+                previous["activeCount"] == 0, "开始时旧 H 持久责任未结")
+        first = min(self.snapshots.values(), key=timestamp)
+        require(previous["control"] == self.runtime(first)["treasuryT1FirstLiveControl"] and
+                previous["quota"] == self.runtime(first)["treasuryProductionT1Quota"], "旧 H 初始原件与新实验没有持久连续性")
+        path = self.root / "engine/environment-check-original.txt"
+        raw = path.read_bytes()
+        self.inputs[str(path.relative_to(self.root))] = hashlib.sha256(raw).hexdigest()
+        original = raw.decode("utf-8")
+        require("Id=" + self.service + "\nActiveState=active" in original and
+                "WorkingDirectory=/srv/screeps-treasury-t1/server" in original,
+                "实验 systemd 服务/数据库工作目录原件不符")
+        require("Id=dsh.service\nActiveState=active" in original and "Id=nginx.service\nActiveState=active" in original,
+                "原件未证实 dsh/nginx 正常状态")
+        bindings = {line.split()[3] for line in original.splitlines() if line.startswith("LISTEN ")}
+        require(bindings == {"127.0.0.1:21025", "127.0.0.1:21026", "[::1]:21027"}, "隔离 web/CLI/storage 非声明的回环监听")
+        require(re.search(r"[a-f0-9]{64}  /srv/screeps-treasury-t1/r6-t2-20261002/db-before\.json", original) is not None,
+                "初始停态数据库备份路径/SHA 原件缺失")
+        result = {"userId": self.lab_account, "username": initial["username"], "databaseWorkingDirectory": "/srv/screeps-treasury-t1/server",
+                  "service": self.service, "loopbackBindings": sorted(bindings), "node": initial["node"], "packages": packages,
+                  "initialInheritedMainSha256": initial["code"]["sha256"]}
+        ending = self.root / "engine/service-ending.txt"
+        if ending.exists():
+            ending_raw = ending.read_bytes()
+            self.inputs[str(ending.relative_to(self.root))] = hashlib.sha256(ending_raw).hexdigest()
+            text = ending_raw.decode("utf-8")
+            require("Id=dsh.service\nActiveState=active" in text and "Id=nginx.service\nActiveState=active" in text,
+                    "收尾原件未证实 dsh/nginx 保持 active")
+            require("Id=" + self.service + "\nActiveState=inactive" in text, "实验服务收尾未停止")
+            result["endingLabService"] = "inactive"
+        return result
 
 
 def verify_c1(evidence, case):
@@ -446,6 +660,10 @@ def verify_c1(evidence, case):
     for snapshot in (before, native, confirmed, recovered):
         require(snapshot["m"]["cfg"]["resourceControl"]["enabled"] is True,
                 "C1 未通过已启用的普通 production 入口运行")
+    purpose = evidence.synthesis_purpose(before, amount)
+    native_driver = evidence.driver_between(case["prefix"] + "-native-driver-driver.json", before, native, kind="native")
+    settle_driver = evidence.driver_between(case["prefix"] + "-settle-driver-driver.json", native, confirmed, kind="settled")
+    repeat_driver = evidence.driver_between(case["prefix"] + "-repeat-recovery-driver-driver.json", confirmed, recovered, 2, kind="ticks")
     quota, transaction, actual_fee = evidence.native(before, native, identifier, amount)
     committed_entry = evidence.committed(confirmed, identifier, amount, quota, before)
     require(evidence.new_transactions(native, confirmed) == [], "首次确认时段有其它真实交易")
@@ -453,17 +671,20 @@ def verify_c1(evidence, case):
             "重复恢复修改原 attempt 唯一终态")
     require(evidence.new_transactions(confirmed, recovered) == [], "重复恢复重发/推进普通业务")
     require(evidence.control(confirmed) == evidence.control(recovered), "重复恢复重新打开授权")
-    result = {"syntheticSetup": setup, "attemptId": quota["attemptId"], "transactionId": transaction["_id"],
+    result = {"syntheticSetup": setup, "synthesisPurpose": purpose,
+              "actualDrivers": [native_driver, settle_driver, repeat_driver],
+              "attemptId": quota["attemptId"], "transactionId": transaction["_id"],
               "treasuryAmount": 100, "actualEnergyFee": actual_fee, "remainingAfterFirstSettlement": amount - 100,
               "nativeDelta": 1, "settlementDelta": 1, "repeatRecoveryNoRededuction": True}
     if amount > 100:
         final = evidence.snap(case["ordinary"])
+        result["actualDrivers"].append(evidence.driver_between(case["prefix"] + "-ordinary-driver-driver.json", recovered, final, kind="task-done"))
         ordinary_transactions = evidence.new_transactions(recovered, final)
         require(len(ordinary_transactions) == 1, "C1 余量交回时段并非唯一普通交易")
         ordinary = ordinary_transactions[0]
         evidence.ordinary(ordinary, identifier, amount - 100, SOURCE, TARGET)
         require(ordinary["time"] > transaction["time"], "普通余量交易未在 T2 后接续")
-        evidence.transaction_store_deltas(recovered, final, ordinary_transactions)
+        evidence.transaction_store_deltas(recovered, final, ordinary_transactions, checked_resources={RESOURCE})
         task = evidence.task(final, identifier)
         require(task["status"] == "done" and task["remainingAmount"] == 0 and "treasurySlice" not in task,
                 "旧普通路径未完成交回余量")
@@ -476,7 +697,10 @@ def verify_c1(evidence, case):
         require(len([item for item in evidence.new_transactions(before, final) if item["description"].startswith(PREFIX)]) == 1,
                 "国库总量不是唯一 100 UH")
         result.update({"ordinaryTransactionId": ordinary["_id"], "ordinaryAmount": amount - 100,
-                       "totalBusinessAmount": amount, "finalRemaining": 0})
+                       "totalBusinessAmount": amount, "finalRemaining": 0,
+                       "sourceEnergyChangeDuringOrdinaryHandoff": evidence.store(evidence.terminal(final, SOURCE), "energy") -
+                           evidence.store(evidence.terminal(recovered, SOURCE), "energy"),
+                       "energyScope": "国库本片费用由 native 原件严格重导；交回后的普通业务可伴随正常 carrier Energy 动作"})
     else:
         result["finalRemaining"] = 0
     return result
@@ -487,6 +711,7 @@ def verify_c2(evidence):
     setup = evidence.synthetic_setup("c2-setup-setup.json", identifier, 100)
     baseline = evidence.snap("c2-ordinary-pre-baseline")
     observed = evidence.snap("c2-ordinary-pre-observed")
+    bound = evidence.snap("c2-bound-after-ordinary-pre")
     native = evidence.snap("c2-real-native")
     first_settlement = evidence.snap("c2-first-restored-settlement")
     final = evidence.snap("c2-confirmed-ordinary-and-carrier-restored")
@@ -501,14 +726,20 @@ def verify_c2(evidence):
         evidence.ordinary(matches[0], artifact["id"], 100, artifact["sender"], artifact["destination"], artifact["resource"])
         task = evidence.task(observed, artifact["id"])
         require(task["status"] == "done" and task["remainingAmount"] == 0, "ordinary-pre 业务未完成")
-    evidence.transaction_store_deltas(baseline, observed, pre_transactions)
-    require(evidence.control(observed)["status"] == "active", "ordinary 先行后 T2 活动未保留")
+    evidence.transaction_store_deltas(baseline, observed, pre_transactions, checked_resources={"H"})
+    require(all(key not in evidence.runtime(observed) for key in (CONTROL_KEY, MIRROR_KEY)), "ordinary-pre 时已先绑定 T2 活动")
+    pre_driver = evidence.driver_between("c2-conflict-driver-driver.json", baseline, observed, kind="pre-inbound")
+    require(evidence.control(bound)["status"] == "active", "ordinary 先行后未通过正式 arm 新鲜绑定")
+    require(evidence.new_transactions(observed, bound) == [], "ordinary-pre 与正式绑定之间又发生 native")
     require(QUOTA_KEY not in evidence.runtime(observed) and not evidence.runtime(observed)["treasuryCore"]["active"],
             "ordinary 先行时 T2 提前接纳/消费额度")
     t2_task = evidence.task(observed, identifier)
     require(t2_task["status"] == "pending" and t2_task["remainingAmount"] == 100 and "treasurySlice" not in t2_task,
             "ordinary 先行时 T2 任务被提前推进")
-    quota, transaction, actual_fee = evidence.native(observed, native, identifier, 100)
+    require(QUOTA_KEY not in evidence.runtime(bound) and not evidence.runtime(bound)["treasuryCore"]["active"], "绑定后 native 前已接纳责任")
+    quota, transaction, actual_fee = evidence.native(bound, native, identifier, 100)
+    purpose = evidence.synthesis_purpose(observed, 100)
+    native_driver = evidence.driver_between("c2-native-driver-driver.json", bound, native, kind="native")
     require(transaction["time"] > max(item["time"] for item in pre_transactions), "T2 未在真实两端 ordinary-pre 后接纳")
     fault = evidence.artifact("c2-inject-contradiction-fault.json")
     restore = evidence.artifact("c2-restore-true-store-restore.json")
@@ -527,6 +758,8 @@ def verify_c2(evidence):
         evidence.held(snapshot, identifier, 100, quota, native)
         require(evidence.store(evidence.terminal(snapshot, TARGET), RESOURCE) == fault["readbackUH"],
                 "未知阶段故障未保留/被手改成确认实货")
+        require(evidence.store(evidence.terminal(snapshot, SOURCE), RESOURCE) ==
+                evidence.store(evidence.terminal(native, SOURCE), RESOURCE), "未知 fence 期间源 UH 发生外来改变")
         for artifact in blocked_artifacts:
             task = evidence.task(snapshot, artifact["id"])
             require(task["status"] == "pending" and task["remainingAmount"] == 100 and task["lastError"] == "send_code_-4",
@@ -552,6 +785,7 @@ def verify_c2(evidence):
     require(unrelated_task["status"] == "done" and unrelated_task["remainingAmount"] == 0, "无关旧 H 端点普通业务被误锁")
     # 两端各有独立合成已持 H 的真实 creep；克隆/装夹不是自然 pickup 或 spawn 证据。
     carrier_artifacts = {}
+    carrier_traces = []
     for endpoint, room, snapshot in (("target", TARGET, held_snapshots[2]), ("source", SOURCE, held_snapshots[3])):
         artifact = evidence.artifact("c2-carrier-" + endpoint + "-carrier.json")
         carrier_artifacts[endpoint] = artifact
@@ -573,9 +807,14 @@ def verify_c2(evidence):
         require(f"Game.rooms.{room}.terminal.id" in plan["expression"] and
                 'synthesisCarrierPendingResource:"H"' in plan["expression"] and
                 'synthesisCarrierPendingTaskType:"terminal_feed"' in plan["expression"], "carrier 实验交付计划原件不符")
+        previous = unrelated if endpoint == "target" else held_snapshots[2]
+        carrier_traces.append(evidence.carrier_held_trace(previous, snapshot, artifact,
+                              "c2-carrier-" + endpoint + "-driver-driver.json", require_prestate=False))
     carrier_ids = {endpoint: artifact["after"]["_id"] for endpoint, artifact in carrier_artifacts.items()}
     require(len(set(carrier_ids.values())) == 2, "两端 carrier 不是两只独立声明 creep")
     restarted, after_reset_held = held_snapshots[4], held_snapshots[5]
+    restart_driver = evidence.driver_between("c2-post-restart-driver-driver.json", held_snapshots[3], restarted, 2, kind="ticks")
+    post_reset_driver = evidence.driver_between("c2-carrier-source-post-reset-driver-driver.json", restarted, after_reset_held, 2, kind="ticks")
     require(timestamp(restarted) * 1000 > evidence.control(native)["controlUntilMs"], "未知责任没有真实超过 60 秒失联")
     restart = evidence.real_restart(held_snapshots[3], restarted)
     require(evidence.new_transactions(held_snapshots[3], restarted) == [], "未知真实重启发生新 native")
@@ -584,20 +823,24 @@ def verify_c2(evidence):
     source_plan = evidence.artifact("c2-carrier-source-plan-queue.json")
     target_plan = evidence.artifact("c2-carrier-target-plan-queue.json")
     reset_plan = evidence.artifact("c2-carrier-source-plan-after-reset-queue.json")
-    require(reset_plan["expression"] == source_plan["expression"] + ";" + target_plan["expression"].split(";", 1)[1],
-            "reset 后恢复的不是同一实验两端 plan")
+    require(all(f'global.__creepAssignmentState["{artifact["name"]}"]=' in reset_plan["expression"]
+                for artifact in carrier_artifacts.values()), "reset 后没有重建原两只 carrier 实验计划")
     for carrier_id in carrier_ids.values():
         require(evidence.store(evidence.obj(after_reset_held, carrier_id), "H") == 50,
                 "reset 后 fence 未继续保持 cargo/原 attempt")
     require(evidence.new_transactions(restarted, after_reset_held) == [], "reset 后 fence 期间发生新 native")
+    for artifact in carrier_artifacts.values():
+        carrier_traces.append(evidence.carrier_held_trace(restarted, after_reset_held, artifact,
+                              "c2-carrier-source-post-reset-driver-driver.json", require_prestate=False))
     require(restore["isolatedWorldOnly"] is True and restore["kind"] == fault["kind"] and
             restore["terminalId"] == fault["terminalId"] and
             restore["beforeUH"] == fault["readbackUH"] and restore["afterUH"] == restore["readbackUH"] == fault["beforeUH"],
             "没有只撤除真实实验 Store 故障")
     require(restore["rawMemory"] == after_reset_held["rawMemory"] and
             restore["transactionCount"] == len(after_reset_held["transactions"]), "撤故障前持久责任/交易原件漂移")
-    first_entry = evidence.committed(first_settlement, identifier, 100, quota, observed)
-    require(evidence.committed(final, identifier, 100, quota, observed) == first_entry, "恢复后原 attempt 再结算")
+    first_entry = evidence.committed(first_settlement, identifier, 100, quota, bound)
+    settle_driver = evidence.driver_between("c2-restored-settle-driver-driver.json", after_reset_held, first_settlement, kind="settled")
+    require(evidence.committed(final, identifier, 100, quota, bound) == first_entry, "恢复后原 attempt 再结算")
     restored_transactions = evidence.new_transactions(after_reset_held, final)
     require(len(restored_transactions) == 2, "fence 交回后相关普通业务不是两笔真实交易")
     for artifact in blocked_artifacts:
@@ -609,17 +852,98 @@ def verify_c2(evidence):
     for carrier_id in carrier_ids.values():
         require(evidence.store(evidence.obj(final, carrier_id), "H") == 0, "fence 交回后 carrier 未交付 50 H 实货")
     evidence.transaction_store_deltas(after_reset_held, final, restored_transactions,
-                                     {(SOURCE, "H"): 50, (TARGET, "H"): 50, (TARGET, RESOURCE): -1})
-    require(len([item for item in evidence.new_transactions(observed, final) if item["description"].startswith(PREFIX)]) == 1,
+                                     {(SOURCE, "H"): 50, (TARGET, "H"): 50}, checked_resources={"H"})
+    require(len([item for item in evidence.new_transactions(bound, final) if item["description"].startswith(PREFIX)]) == 1,
             "C2 原 attempt 非唯一真实 T2 native")
-    return {"syntheticSetup": setup, "attemptId": quota["attemptId"], "transactionId": transaction["_id"],
+    require(final["m"]["cfg"]["treasuryTerminalTransferSlice0"]["mode"] == "off", "C2最终未交回旧 H OFF")
+    return {"syntheticSetup": setup, "synthesisPurpose": purpose,
+            "actualDrivers": [pre_driver, native_driver, restart_driver, post_reset_driver, settle_driver],
+            "attemptId": quota["attemptId"], "transactionId": transaction["_id"],
             "treasuryAmount": 100, "actualEnergyFee": actual_fee, "ordinaryBeforeT2": [item["_id"] for item in pre_transactions],
             "unknownUnrelatedOrdinary": unrelated_transaction["_id"], "ordinaryAfterRelease": [item["_id"] for item in restored_transactions],
             "nativeDelta": 1, "settlementDelta": 1, "originalAttemptHeldAfterOffAndLoss": True,
             "systemdRestart": restart, "carrier": {"kind": "两只独立合成已持货 50 H 的真实 creep",
                 "heldRooms": [TARGET, SOURCE], "actualDeliveredRooms": [TARGET, SOURCE], "deliveredAmountEach": 50,
                 "experimentBothPlansRestoredAfterReset": True,
+                "actualDelegatedWork": carrier_traces,
                 "limitation": "只证明合成持货保护与解除交付；不证明自然 spawn/pickup 或 global 计划跨 reset 持久性"}}
+
+
+def verify_carrier_supplement(evidence):
+    branch = "c2-carrier-prestate-supplement"
+    before, held, settled, released = [evidence.snap(branch + "-" + suffix)
+                                      for suffix in ("before", "held", "settled", "released")]
+    instance = evidence.artifact(branch + "-instance.json")
+    require(instance["schema"] == "screeps-t2-carrier-trace-supplement-instance/v1" and
+            instance["isolatedWorldOnly"] is True and instance["mainSha256"] == evidence.sha,
+            "carrier 补充分支实例/最终 main 身份不符")
+    native = evidence.snap("c2-real-native")
+    bound = evidence.snap("c2-bound-after-ordinary-pre")
+    quota = evidence.runtime(native)[QUOTA_KEY]
+    primary_source = evidence.artifact("c2-unknown-restart-before-persistence-snapshot.json")
+    require(primary_source["code"] == {"sha256": evidence.sha, "bytes": len(evidence.main)} and
+            primary_source["user"]["_id"] == evidence.lab_account and primary_source["paused"] is True,
+            "补充分支源快照不是原 C2 同构建实验状态")
+    require(hashlib.sha256(primary_source["rawMemory"].encode()).hexdigest() == instance["sourceMemorySha256"] ==
+            hashlib.sha256(before["rawMemory"].encode()).hexdigest(), "补充分支不是原 C2 实际未知 Memory 副本")
+    require(instance["sourcePrivateDatabase"] == "/srv/screeps-treasury-t1/r6-t2-20261002/db-before-c2-unknown-restart.json" and
+            re.fullmatch(r"[a-f0-9]{64}", instance["sourceDatabaseSha256"]) is not None,
+            "补充分支没有标明真实未知期私有数据库身份")
+    native_transactions = [item for item in native["transactions"] if item["description"] == PREFIX + quota["attemptId"]]
+    require(len(native_transactions) == 1, "原 C2 native 交易不唯一")
+    transaction = native_transactions[0]
+    require((instance["originalAttemptId"], instance["originalWorkKey"], instance["originalNativeTransactionId"], instance["originalNativeAtTick"]) ==
+            (quota["attemptId"], quota["workKey"], transaction["_id"], transaction["time"]), "补充分支不是同一原 attempt/真实交易")
+    require(evidence.new_transactions(primary_source, before) == [], "补充分支复制期间改变原交易")
+    source_objects = {item["_id"]: item for item in primary_source["objects"] if item.get("user") == evidence.lab_account}
+    before_objects = {item["_id"]: item for item in before["objects"] if item.get("user") == evidence.lab_account}
+    require(source_objects.keys() == before_objects.keys() and
+            all(source_objects[identifier].get("store") == before_objects[identifier].get("store")
+                for identifier in source_objects), "补充分支启动时实货不是原 C2 数据库副本")
+    for snapshot in (before, held):
+        evidence.held(snapshot, "lab-t2-c2-UH", 100, quota, native)
+        require(evidence.store(evidence.terminal(snapshot, TARGET), RESOURCE) == 101,
+                "补充分支没有保留真实 target UH +1 未知故障")
+    require(evidence.new_transactions(before, held) == [], "v2 持货保护补证期间产生 native")
+    traces = []
+    carrier_artifacts = [evidence.artifact("c2-carrier-" + endpoint + "-carrier.json") for endpoint in ("source", "target")]
+    for artifact in carrier_artifacts:
+        traces.append(evidence.carrier_held_trace(before, held, artifact, branch + "-held-driver-driver.json", minimum_ticks=3))
+        require(evidence.store(evidence.obj(before, artifact["after"]["_id"]), "H") ==
+                evidence.store(evidence.obj(held, artifact["after"]["_id"]), "H") == 50,
+                "v2 补证时原物理 H 持货丢失")
+    for room in (SOURCE, TARGET):
+        require(evidence.store(evidence.terminal(before, room), "H") == evidence.store(evidence.terminal(held, room), "H"),
+                "v2 受保护真实执行点泄漏 H cargo")
+    restore = evidence.artifact(branch + "-restore-restore.json")
+    require(restore["kind"] == "target-UH-contradiction" and restore["beforeUH"] == 101 and
+            restore["afterUH"] == restore["readbackUH"] == 100 and restore["rawMemory"] == held["rawMemory"],
+            "补充分支未只撤除原实验 Store 故障")
+    settle_driver = evidence.driver_between(branch + "-settle-driver-driver.json", held, settled, kind="settled")
+    release_driver = evidence.driver_between(branch + "-release-driver-driver.json", settled, released, 5, kind="ticks")
+    first_entry = evidence.committed(settled, "lab-t2-c2-UH", 100, quota, bound)
+    require(evidence.committed(released, "lab-t2-c2-UH", 100, quota, bound) == first_entry, "补充分支重扣原 attempt")
+    new_transactions = evidence.new_transactions(before, released)
+    require(not [item for item in new_transactions if item["description"].startswith(PREFIX)], "补充分支重发国库 native")
+    require(all(item["description"].startswith("resourceControl:task:") for item in new_transactions), "补充分支有未解释外来交易")
+    release_work = []
+    for artifact in carrier_artifacts:
+        require(evidence.store(evidence.obj(released, artifact["after"]["_id"]), "H") == 0, "补充分支解除后原 H cargo 未交付")
+        events = [item for item in evidence.runtime(released)["__labT2CarrierWork"] if item["name"] == artifact["name"] and
+                  held["tick"] <= item["tick"] < released["tick"] and item.get("traceSchemaVersion") == 2 and
+                  item.get("role") == "carrier" and item.get("ready") is True and item.get("working") is True and
+                  item.get("spawnYield", "missing") is None and item.get("configName", "missing") is None and
+                  item.get("throwError", "missing") is None and item["beforeH"] == 50]
+        require(events, "解除后没有 v2 真实调用前 carrier target 状态记录")
+        release_work.append({"name": artifact["name"], "actualWorkTicks": sorted({item["tick"] for item in events}),
+                             "scope": "v2 调用前 role 状态；成功清 plan 后 toId 可空，实际目的地由 H Store 差值证明"})
+    evidence.transaction_store_deltas(before, released, new_transactions,
+                                     {(SOURCE, "H"): 50, (TARGET, "H"): 50}, checked_resources={"H"})
+    return {"scope": "原 C2 实际未知 DB 的独立补充分支；不合并为原连续世界，不叠加 native/结算数量",
+            "sourceDatabaseSha256": instance["sourceDatabaseSha256"], "originalAttemptId": quota["attemptId"],
+            "originalNativeTransactionId": transaction["_id"], "newTreasuryNative": 0,
+            "actualHeldTargetWork": traces, "actualReleaseWork": release_work,
+            "actualDrivers": [settle_driver, release_driver], "actualHDeliveredEach": 50}
 
 
 def verify_c3(evidence):
@@ -627,7 +951,9 @@ def verify_c3(evidence):
     setup = evidence.synthetic_setup("c3-setup-setup.json", identifier, 100)
     armed, expired, restarted = [evidence.snap(label) for label in
                                  ("c3-armed-bound-no-responsibility", "c3-expired-ordinary-restored", "c3-off-after-real-restart")]
+    rearmed = evidence.snap("c3-rearm-rejected")
     initial_control = evidence.control(armed)
+    purpose = evidence.synthesis_purpose(armed, 100)
     require(initial_control["status"] == "active" and initial_control["taskId"] == identifier and
             armed["m"]["cfg"]["resourceControl"]["enabled"] is False, "C3 非已绑定尚未接纳活动")
     require(evidence.task(armed, identifier)["status"] == "pending" and evidence.task(armed, identifier)["remainingAmount"] == 100,
@@ -635,7 +961,7 @@ def verify_c3(evidence):
     require(timestamp(armed) * 1000 < initial_control["controlUntilMs"], "C3 初始 capture 已过期")
     require(timestamp(expired) * 1000 > initial_control["lastHeartbeatAtMs"] + 60_000 and
             timestamp(expired) - timestamp(armed) > 60, "C3 没有真实超过 60 秒失联原件")
-    for snapshot in (armed, expired, restarted):
+    for snapshot in (armed, expired, restarted, rearmed):
         require(QUOTA_KEY not in evidence.runtime(snapshot) and not evidence.runtime(snapshot)["treasuryCore"]["active"] and
                 "treasurySlice" not in evidence.task(snapshot, identifier), "C3 存在接纳/未结责任")
     ending_control = evidence.control(expired)
@@ -661,59 +987,75 @@ def verify_c3(evidence):
         require(task["status"] == "done" and task["remainingAmount"] == 0 and
                 snapshot["m"]["cfg"][CONFIG_KEY]["mode"] == "off", "C3 普通完成/默认 OFF 未保留")
     restart = evidence.real_restart(expired, restarted)
+    ordinary_driver = evidence.driver_between("c3-expired-ordinary-driver-driver.json", armed, expired, kind="task-done")
+    restart_driver = evidence.driver_between("c3-restart-driver-driver.json", expired, restarted, 4, kind="ticks")
     require(evidence.new_transactions(expired, restarted) == [] and evidence.control(restarted) == ending_control,
             "C3 真实重启重新开活动/发送")
-    before_counters, after_counters = [evidence.runtime(snapshot)["treasuryCore"]["counters"] for snapshot in (armed, restarted)]
+    rearm_queue = evidence.artifact("c3-rearm-after-close-queue.json")
+    require(rearm_queue["expression"] == f'Memory.runtime.__labT2RearmResult=armTreasuryT2FirstLive("{identifier}",{setup["createdAt"]})',
+            "闭合后重开检验不是同一官方 arm 身份入口")
+    rearm_driver = evidence.driver_between("c3-rearm-rejected-driver-driver.json", restarted, rearmed, kind="ticks")
+    rearm_return = evidence.runtime(rearmed)["__labT2RearmResult"]
+    require(rearm_return == {"ok": False, "reason": "already_used_or_unsettled"}, "已关闭授权没有拒绝重开")
+    require(evidence.control(rearmed) == ending_control and rearmed["m"]["cfg"][CONFIG_KEY]["mode"] == "off" and
+            evidence.task(rearmed, identifier) == evidence.task(restarted, identifier) and
+            evidence.new_transactions(restarted, rearmed) == [], "拒绝重开后原闭合事实/任务/交易改变")
+    before_counters, after_counters = [evidence.runtime(snapshot)["treasuryCore"]["counters"] for snapshot in (armed, rearmed)]
     require(all(before_counters[key] == after_counters[key] for key in ("dispatched", "settledCommitted")),
             "C3 无责任退出仍推进 kernel native/结算")
-    return {"syntheticSetup": setup, "ordinaryTransactionId": ordinary_transaction["_id"], "nativeT2": 0,
+    return {"syntheticSetup": setup, "synthesisPurpose": purpose, "actualDrivers": [ordinary_driver, restart_driver, rearm_driver],
+            "ordinaryTransactionId": ordinary_transaction["_id"], "nativeT2": 0,
             "observedLossSeconds": round(timestamp(expired) - timestamp(armed), 3),
             "closeReason": ending_control["closeReason"], "automaticClosedOff": True,
-            "operatorCloseOrModeWrite": False, "systemdRestart": restart, "closedRestartNoResend": True}
+            "operatorCloseOrModeWrite": False, "systemdRestart": restart, "closedRestartNoResend": True,
+            "sameIdentityRearmRejected": rearm_return}
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--candidate", type=Path, required=True)
+    main_input = parser.add_mutually_exclusive_group(required=True)
+    main_input.add_argument("--candidate", type=Path, help="包含最终 main.js 的候选目录")
+    main_input.add_argument("--main-path", type=Path, help="最终 main.js 的绝对路径；ZIP 可只保留根 candidate 一份")
     parser.add_argument("--manifest", type=Path)
     parser.add_argument("--output", type=Path)
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[2])
     parser.add_argument("--snapshot-schema", default="screeps-t2-first-production-engine-snapshot/v1")
     parser.add_argument("--lab-account", default="7dad41a4bfc9d96")
     parser.add_argument("--service", default="screeps-treasury-t1.service")
+    parser.add_argument("--c1-1715-prefix", default="c1-1715-r4", help="明确采用的1715独立实例标签；校准/失败原件不计通过")
+    parser.add_argument("--c1-100-prefix", default="c1-100", help="明确采用的100独立实例标签；校准/失败原件不计通过")
     args = parser.parse_args()
-    evidence = Evidence(args.root, args.candidate, args.manifest or args.root / "engine/candidate/manifest.json",
-                        args.snapshot_schema, args.lab_account, args.service)
+    for prefix, expected in ((args.c1_1715_prefix, "c1-1715"), (args.c1_100_prefix, "c1-100")):
+        require(re.fullmatch(re.escape(expected) + r"(?:-r[2-9][0-9]*)?", prefix) is not None,
+                "C1 标签不是指定独立实例类型/重试边界")
+    labels = [label.replace("c1-1715-", args.c1_1715_prefix + "-", 1) if label.startswith("c1-1715-") else
+              label.replace("c1-100-", args.c1_100_prefix + "-", 1) if label.startswith("c1-100-") else label
+              for label in FINAL_LABELS]
+    evidence = Evidence(args.root, args.main_path or args.candidate, args.manifest or args.root / "release-manifest-T2.json",
+                        args.snapshot_schema, args.lab_account, args.service, labels)
     def c1_case(prefix, amount):
-        result = {"taskId": "lab-t2-" + prefix + "-UH", "amount": amount,
+        result = {"prefix": prefix, "taskId": "lab-t2-" + prefix + "-UH", "amount": amount,
                   "setup": prefix + "-setup-setup.json", "before": prefix + "-before-native",
                   "native": prefix + "-real-native", "confirmed": prefix + "-first-settlement",
                   "recovered": prefix + "-recovered-no-rededuct"}
         if amount > 100:
             result["ordinary"] = prefix + "-ordinary-restored"
         return result
-    c1 = {"1715": verify_c1(evidence, c1_case("c1-1715", 1715)),
-          "100": verify_c1(evidence, c1_case("c1-100", 100))}
+    c1 = {"1715": verify_c1(evidence, c1_case(args.c1_1715_prefix, 1715)),
+          "100": verify_c1(evidence, c1_case(args.c1_100_prefix, 100))}
     c2 = verify_c2(evidence)
     c3 = verify_c3(evidence)
+    carrier_supplement = verify_carrier_supplement(evidence)
     legacy = evidence.legacy_preserved()
-    verified_labels = ["c1-1715-" + suffix for suffix in
-                       ("before-native", "real-native", "first-settlement", "recovered-no-rededuct", "ordinary-restored")]
-    verified_labels += ["c1-100-" + suffix for suffix in
-                        ("before-native", "real-native", "first-settlement", "recovered-no-rededuct")]
-    verified_labels += ["c2-" + suffix for suffix in
-                        ("ordinary-pre-baseline", "ordinary-pre-observed", "real-native", "unknown-off-held",
-                         "unrelated-native-while-unknown", "carrier-target-held", "carrier-source-held",
-                         "unknown-after-real-restart", "carrier-source-after-reset-held",
-                         "first-restored-settlement", "confirmed-ordinary-and-carrier-restored")]
-    verified_labels += ["c3-" + suffix for suffix in
-                        ("armed-bound-no-responsibility", "expired-ordinary-restored", "off-after-real-restart")]
+    environment = evidence.environment()
     result = {"schema": "screeps-t2-first-production-engine-verification/v1", "passed": True,
               "scope": "同一最终 main 的隔离引擎 C1/C2/C3；不据此宣称正式生产首片通过",
               "mainSha256": evidence.sha, "mainBytes": len(evidence.main),
               "labAccountId": evidence.lab_account, "labService": evidence.service,
-              "inputSnapshotCount": len(evidence.snapshots), "verifiedScenarioSnapshotLabels": verified_labels,
-              "C1": c1, "C2": c2, "C3": c3, "inheritedHDrainedFactsPreserved": legacy,
+              "inputSnapshotCount": len(evidence.snapshots), "verifiedScenarioSnapshotLabels": evidence.labels,
+              "nonAdoptedSnapshots": evidence.non_adopted_snapshots, "environment": environment,
+              "C1": c1, "C2": c2, "C3": c3, "carrierPrestateSupplement": carrier_supplement,
+              "inheritedHDrainedFactsPreserved": legacy,
               "rawInputSha256": evidence.inputs}
     rendered = json.dumps(result, ensure_ascii=False, indent=2) + "\n"
     if args.output:

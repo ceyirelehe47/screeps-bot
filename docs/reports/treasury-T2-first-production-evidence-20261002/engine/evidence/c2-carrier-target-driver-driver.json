@@ -1,0 +1,25 @@
+{
+  "schema": "screeps-t2-lab-driver/v1",
+  "isolatedWorldOnly": true,
+  "label": "c2-carrier-target-driver",
+  "kind": "ticks",
+  "arg": "2",
+  "startTick": 772,
+  "endTick": 774,
+  "startedAtUtc": "2026-10-02T11:23:40.194Z",
+  "endedAtUtc": "2026-10-02T11:23:44.360Z",
+  "observations": 130,
+  "matched": true,
+  "last": {
+    "tick": 774,
+    "quota": "dispatching",
+    "control": "closed",
+    "mode": "drain",
+    "active": 1,
+    "arm": {
+      "ok": true,
+      "reason": "armed"
+    }
+  },
+  "paused": true
+}

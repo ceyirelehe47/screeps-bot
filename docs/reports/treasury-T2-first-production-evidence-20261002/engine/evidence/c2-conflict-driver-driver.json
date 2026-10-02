@@ -1,0 +1,19 @@
+{
+  "schema": "screeps-t2-lab-driver/v1",
+  "isolatedWorldOnly": true,
+  "label": "c2-conflict-driver",
+  "kind": "pre-inbound",
+  "arg": "lab-t2-c2-pre-source-ordinary,lab-t2-c2-pre-target-ordinary",
+  "startTick": 756,
+  "endTick": 760,
+  "startedAtUtc": "2026-10-02T11:23:07.821Z",
+  "endedAtUtc": "2026-10-02T11:23:16.896Z",
+  "observations": 301,
+  "matched": true,
+  "last": {
+    "tick": 760,
+    "mode": "off",
+    "active": 0
+  },
+  "paused": true
+}

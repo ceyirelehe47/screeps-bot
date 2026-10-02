@@ -1,0 +1,118 @@
+Running as unit: screeps-treasury-t1.service; invocation ID: 9433baddade4440cb5c29bb3ea136b95
+实验步骤: capture c2-before-setup
+Connecting to storage
+{"label":"c2-before-setup","tick":756,"active":0,"tasks":[{"id":"lab-exit-c2-H","status":"done","remaining":0},{"id":"lab-exit-c2-pre-source-ordinary","status":"done","remaining":0},{"id":"lab-exit-c2-pre-target-ordinary","status":"done","remaining":0}],"transactions":29}
+实验步骤: setup c2-setup
+Connecting to storage
+{"op":"setup","label":"c2-setup","tick":756,"mode":"off","active":0,"tasks":[{"id":"lab-t2-c2-UH","status":"pending","remaining":100}],"isolatedWorldOnly":true}
+实验步骤: ordinary c2-pre-source
+Connecting to storage
+{"op":"ordinary","label":"c2-pre-source","tick":756,"mode":"off","active":0,"tasks":[{"id":"lab-t2-c2-UH","status":"pending","remaining":100},{"id":"lab-t2-c2-pre-source-ordinary","status":"pending","remaining":100}],"isolatedWorldOnly":true}
+实验步骤: ordinary c2-pre-target
+Connecting to storage
+{"op":"ordinary","label":"c2-pre-target","tick":756,"mode":"off","active":0,"tasks":[{"id":"lab-t2-c2-UH","status":"pending","remaining":100},{"id":"lab-t2-c2-pre-source-ordinary","status":"pending","remaining":100},{"id":"lab-t2-c2-pre-target-ordinary","status":"pending","remaining":100}],"isolatedWorldOnly":true}
+实验步骤: capture c2-ordinary-pre-baseline
+Connecting to storage
+{"label":"c2-ordinary-pre-baseline","tick":756,"mode":"off","active":0,"tasks":[{"id":"lab-t2-c2-UH","status":"pending","remaining":100},{"id":"lab-t2-c2-pre-source-ordinary","status":"pending","remaining":100},{"id":"lab-t2-c2-pre-target-ordinary","status":"pending","remaining":100}],"transactions":29}
+Connecting to storage
+{"schema":"screeps-t2-lab-driver/v1","isolatedWorldOnly":true,"label":"c2-conflict-driver","kind":"pre-inbound","arg":"lab-t2-c2-pre-source-ordinary,lab-t2-c2-pre-target-ordinary","startTick":756,"endTick":760,"startedAtUtc":"2026-10-02T11:23:07.821Z","endedAtUtc":"2026-10-02T11:23:16.896Z","observations":301,"matched":true,"last":{"tick":760,"mode":"off","active":0},"paused":true}
+实验步骤: capture c2-ordinary-pre-observed
+Connecting to storage
+{"label":"c2-ordinary-pre-observed","tick":760,"mode":"off","active":0,"tasks":[{"id":"lab-t2-c2-UH","status":"pending","remaining":100},{"id":"lab-t2-c2-pre-source-ordinary","status":"done","remaining":0},{"id":"lab-t2-c2-pre-target-ordinary","status":"done","remaining":0}],"transactions":31}
+实验步骤: queue c2-arm
+Connecting to storage
+{"op":"queue","label":"c2-arm","tick":761,"queued":true}
+Connecting to storage
+{"schema":"screeps-t2-lab-driver/v1","isolatedWorldOnly":true,"label":"c2-arm-executed","kind":"arm-observed","arg":"c2-arm","startTick":761,"endTick":761,"startedAtUtc":"2026-10-02T11:23:17.646Z","endedAtUtc":"2026-10-02T11:23:19.831Z","observations":60,"matched":true,"last":{"tick":761,"control":"active","mode":"canary","active":0,"arm":{"ok":true,"reason":"armed"}},"paused":true}
+实验步骤: capture c2-bound-after-ordinary-pre
+Connecting to storage
+{"label":"c2-bound-after-ordinary-pre","tick":761,"control":"active","closeReason":"","mode":"canary","active":0,"tasks":[{"id":"lab-t2-c2-UH","status":"pending","remaining":100},{"id":"lab-t2-c2-pre-source-ordinary","status":"done","remaining":0},{"id":"lab-t2-c2-pre-target-ordinary","status":"done","remaining":0}],"transactions":31}
+Connecting to storage
+{"schema":"screeps-t2-lab-driver/v1","isolatedWorldOnly":true,"label":"c2-native-driver","kind":"native","arg":"","startTick":762,"endTick":765,"startedAtUtc":"2026-10-02T11:23:20.273Z","endedAtUtc":"2026-10-02T11:23:27.345Z","observations":236,"matched":true,"last":{"tick":765,"quota":"dispatching","control":"closed","mode":"drain","active":1,"arm":{"ok":true,"reason":"armed"}},"paused":true}
+实验步骤: capture c2-real-native
+Connecting to storage
+{"label":"c2-real-native","tick":765,"control":"closed","closeReason":"native_attempt","mode":"drain","quota":"dispatching","active":1,"tasks":[{"id":"lab-t2-c2-UH","status":"pending","remaining":100,"lease":"active"},{"id":"lab-t2-c2-pre-source-ordinary","status":"done","remaining":0},{"id":"lab-t2-c2-pre-target-ordinary","status":"done","remaining":0}],"transactions":32}
+实验步骤: fault c2-inject-contradiction
+Connecting to storage
+{"op":"fault","label":"c2-inject-contradiction","tick":766,"beforeUH":100,"afterUH":101}
+实验步骤: ordinary c2-block-source
+Connecting to storage
+{"op":"ordinary","label":"c2-block-source","tick":766,"control":"closed","closeReason":"native_attempt","mode":"drain","quota":"dispatching","active":1,"tasks":[{"id":"lab-t2-c2-UH","status":"pending","remaining":100,"lease":"active"},{"id":"lab-t2-c2-pre-source-ordinary","status":"done","remaining":0},{"id":"lab-t2-c2-pre-target-ordinary","status":"done","remaining":0},{"id":"lab-t2-c2-block-source-ordinary","status":"pending","remaining":100}],"isolatedWorldOnly":true}
+实验步骤: ordinary c2-block-target
+Connecting to storage
+{"op":"ordinary","label":"c2-block-target","tick":766,"control":"closed","closeReason":"native_attempt","mode":"drain","quota":"dispatching","active":1,"tasks":[{"id":"lab-t2-c2-UH","status":"pending","remaining":100,"lease":"active"},{"id":"lab-t2-c2-pre-source-ordinary","status":"done","remaining":0},{"id":"lab-t2-c2-pre-target-ordinary","status":"done","remaining":0},{"id":"lab-t2-c2-block-source-ordinary","status":"pending","remaining":100},{"id":"lab-t2-c2-block-target-ordinary","status":"pending","remaining":100}],"isolatedWorldOnly":true}
+实验步骤: ordinary c2-unrelated
+Connecting to storage
+{"op":"ordinary","label":"c2-unrelated","tick":766,"control":"closed","closeReason":"native_attempt","mode":"drain","quota":"dispatching","active":1,"tasks":[{"id":"lab-t2-c2-UH","status":"pending","remaining":100,"lease":"active"},{"id":"lab-t2-c2-pre-source-ordinary","status":"done","remaining":0},{"id":"lab-t2-c2-pre-target-ordinary","status":"done","remaining":0},{"id":"lab-t2-c2-block-source-ordinary","status":"pending","remaining":100},{"id":"lab-t2-c2-block-target-ordinary","status":"pending","remaining":100},{"id":"lab-t2-c2-unrelated-ordinary","status":"pending","remaining":100}],"isolatedWorldOnly":true}
+实验步骤: queue c2-request-off
+Connecting to storage
+{"op":"queue","label":"c2-request-off","tick":766,"queued":true}
+Connecting to storage
+{"schema":"screeps-t2-lab-driver/v1","isolatedWorldOnly":true,"label":"c2-unknown-off-driver","kind":"ticks","arg":"6","startTick":766,"endTick":772,"startedAtUtc":"2026-10-02T11:23:28.897Z","endedAtUtc":"2026-10-02T11:23:38.409Z","observations":314,"matched":true,"last":{"tick":772,"quota":"dispatching","control":"closed","mode":"drain","active":1,"arm":{"ok":true,"reason":"armed"}},"paused":true}
+实验步骤: capture c2-unknown-off-held
+Connecting to storage
+{"label":"c2-unknown-off-held","tick":772,"control":"closed","closeReason":"native_attempt","mode":"drain","quota":"dispatching","active":1,"tasks":[{"id":"lab-t2-c2-UH","status":"pending","remaining":100,"lease":"active"},{"id":"lab-t2-c2-pre-source-ordinary","status":"done","remaining":0},{"id":"lab-t2-c2-pre-target-ordinary","status":"done","remaining":0},{"id":"lab-t2-c2-block-source-ordinary","status":"pending","remaining":100,"error":"send_code_-4"},{"id":"lab-t2-c2-block-target-ordinary","status":"pending","remaining":100,"error":"send_code_-4"},{"id":"lab-t2-c2-unrelated-ordinary","status":"done","remaining":0}],"transactions":33}
+Connecting to storage
+{"schema":"screeps-t2-lab-driver/v1","isolatedWorldOnly":true,"label":"c2-unrelated-driver","kind":"task-done","arg":"lab-t2-c2-unrelated-ordinary","startTick":772,"endTick":772,"startedAtUtc":"2026-10-02T11:23:38.858Z","endedAtUtc":"2026-10-02T11:23:39.363Z","observations":1,"matched":true,"last":{"tick":772,"quota":"dispatching","control":"closed","mode":"drain","active":1,"arm":{"ok":true,"reason":"armed"}},"paused":true}
+实验步骤: capture c2-unrelated-native-while-unknown
+Connecting to storage
+{"label":"c2-unrelated-native-while-unknown","tick":772,"control":"closed","closeReason":"native_attempt","mode":"drain","quota":"dispatching","active":1,"tasks":[{"id":"lab-t2-c2-UH","status":"pending","remaining":100,"lease":"active"},{"id":"lab-t2-c2-pre-source-ordinary","status":"done","remaining":0},{"id":"lab-t2-c2-pre-target-ordinary","status":"done","remaining":0},{"id":"lab-t2-c2-block-source-ordinary","status":"pending","remaining":100,"error":"send_code_-4"},{"id":"lab-t2-c2-block-target-ordinary","status":"pending","remaining":100,"error":"send_code_-4"},{"id":"lab-t2-c2-unrelated-ordinary","status":"done","remaining":0}],"transactions":33}
+实验步骤: carrier c2-carrier-target
+Connecting to storage
+{"op":"carrier","label":"c2-carrier-target","tick":772,"control":"closed","closeReason":"native_attempt","mode":"drain","quota":"dispatching","active":1,"tasks":[{"id":"lab-t2-c2-UH","status":"pending","remaining":100,"lease":"active"},{"id":"lab-t2-c2-pre-source-ordinary","status":"done","remaining":0},{"id":"lab-t2-c2-pre-target-ordinary","status":"done","remaining":0},{"id":"lab-t2-c2-block-source-ordinary","status":"pending","remaining":100,"error":"send_code_-4"},{"id":"lab-t2-c2-block-target-ordinary","status":"pending","remaining":100,"error":"send_code_-4"},{"id":"lab-t2-c2-unrelated-ordinary","status":"done","remaining":0}],"isolatedWorldOnly":true}
+实验步骤: queue c2-carrier-target-plan
+Connecting to storage
+{"op":"queue","label":"c2-carrier-target-plan","tick":772,"queued":true}
+Connecting to storage
+{"schema":"screeps-t2-lab-driver/v1","isolatedWorldOnly":true,"label":"c2-carrier-target-driver","kind":"ticks","arg":"2","startTick":772,"endTick":774,"startedAtUtc":"2026-10-02T11:23:40.194Z","endedAtUtc":"2026-10-02T11:23:44.360Z","observations":130,"matched":true,"last":{"tick":774,"quota":"dispatching","control":"closed","mode":"drain","active":1,"arm":{"ok":true,"reason":"armed"}},"paused":true}
+实验步骤: capture c2-carrier-target-held
+Connecting to storage
+{"label":"c2-carrier-target-held","tick":774,"control":"closed","closeReason":"native_attempt","mode":"drain","quota":"dispatching","active":1,"tasks":[{"id":"lab-t2-c2-UH","status":"pending","remaining":100,"lease":"active"},{"id":"lab-t2-c2-pre-source-ordinary","status":"done","remaining":0},{"id":"lab-t2-c2-pre-target-ordinary","status":"done","remaining":0},{"id":"lab-t2-c2-block-source-ordinary","status":"pending","remaining":100,"error":"send_code_-4"},{"id":"lab-t2-c2-block-target-ordinary","status":"pending","remaining":100,"error":"send_code_-4"},{"id":"lab-t2-c2-unrelated-ordinary","status":"done","remaining":0}],"transactions":33}
+实验步骤: carrier c2-carrier-source
+Connecting to storage
+{"op":"carrier","label":"c2-carrier-source","tick":774,"control":"closed","closeReason":"native_attempt","mode":"drain","quota":"dispatching","active":1,"tasks":[{"id":"lab-t2-c2-UH","status":"pending","remaining":100,"lease":"active"},{"id":"lab-t2-c2-pre-source-ordinary","status":"done","remaining":0},{"id":"lab-t2-c2-pre-target-ordinary","status":"done","remaining":0},{"id":"lab-t2-c2-block-source-ordinary","status":"pending","remaining":100,"error":"send_code_-4"},{"id":"lab-t2-c2-block-target-ordinary","status":"pending","remaining":100,"error":"send_code_-4"},{"id":"lab-t2-c2-unrelated-ordinary","status":"done","remaining":0}],"isolatedWorldOnly":true}
+实验步骤: queue c2-carrier-source-plan
+Connecting to storage
+{"op":"queue","label":"c2-carrier-source-plan","tick":774,"queued":true}
+Connecting to storage
+{"schema":"screeps-t2-lab-driver/v1","isolatedWorldOnly":true,"label":"c2-carrier-source-driver","kind":"ticks","arg":"2","startTick":774,"endTick":776,"startedAtUtc":"2026-10-02T11:23:45.138Z","endedAtUtc":"2026-10-02T11:23:49.126Z","observations":126,"matched":true,"last":{"tick":776,"quota":"dispatching","control":"closed","mode":"drain","active":1,"arm":{"ok":true,"reason":"armed"}},"paused":true}
+实验步骤: capture c2-carrier-source-held
+Connecting to storage
+{"label":"c2-carrier-source-held","tick":776,"control":"closed","closeReason":"native_attempt","mode":"drain","quota":"dispatching","active":1,"tasks":[{"id":"lab-t2-c2-UH","status":"pending","remaining":100,"lease":"active"},{"id":"lab-t2-c2-pre-source-ordinary","status":"done","remaining":0},{"id":"lab-t2-c2-pre-target-ordinary","status":"done","remaining":0},{"id":"lab-t2-c2-block-source-ordinary","status":"pending","remaining":100,"error":"send_code_-4"},{"id":"lab-t2-c2-block-target-ordinary","status":"pending","remaining":100,"error":"send_code_-4"},{"id":"lab-t2-c2-unrelated-ordinary","status":"done","remaining":0}],"transactions":33}
+实验步骤: capture c2-unknown-restart-before-persistence
+Connecting to storage
+{"label":"c2-unknown-restart-before-persistence","tick":776,"control":"closed","closeReason":"native_attempt","mode":"drain","quota":"dispatching","active":1,"tasks":[{"id":"lab-t2-c2-UH","status":"pending","remaining":100,"lease":"active"},{"id":"lab-t2-c2-pre-source-ordinary","status":"done","remaining":0},{"id":"lab-t2-c2-pre-target-ordinary","status":"done","remaining":0},{"id":"lab-t2-c2-block-source-ordinary","status":"pending","remaining":100,"error":"send_code_-4"},{"id":"lab-t2-c2-block-target-ordinary","status":"pending","remaining":100,"error":"send_code_-4"},{"id":"lab-t2-c2-unrelated-ordinary","status":"done","remaining":0}],"transactions":33}
+Running as unit: screeps-treasury-t1.service; invocation ID: cd2272046b4849e89bf7c6ed33e3990b
+Connecting to storage
+{"schema":"screeps-t2-lab-driver/v1","isolatedWorldOnly":true,"label":"c2-post-restart-driver","kind":"ticks","arg":"2","startTick":776,"endTick":778,"startedAtUtc":"2026-10-02T11:24:26.268Z","endedAtUtc":"2026-10-02T11:24:30.625Z","observations":139,"matched":true,"last":{"tick":778,"quota":"dispatching","control":"closed","mode":"drain","active":1,"arm":{"ok":true,"reason":"armed"}},"paused":true}
+实验步骤: capture c2-unknown-after-real-restart
+Connecting to storage
+{"label":"c2-unknown-after-real-restart","tick":778,"control":"closed","closeReason":"native_attempt","mode":"drain","quota":"dispatching","active":1,"tasks":[{"id":"lab-t2-c2-UH","status":"pending","remaining":100,"lease":"active"},{"id":"lab-t2-c2-pre-source-ordinary","status":"done","remaining":0},{"id":"lab-t2-c2-pre-target-ordinary","status":"done","remaining":0},{"id":"lab-t2-c2-block-source-ordinary","status":"pending","remaining":100,"error":"send_code_-4"},{"id":"lab-t2-c2-block-target-ordinary","status":"pending","remaining":100,"error":"send_code_-4"},{"id":"lab-t2-c2-unrelated-ordinary","status":"done","remaining":0}],"transactions":33}
+实验步骤: queue c2-carrier-source-plan-after-reset
+Connecting to storage
+{"op":"queue","label":"c2-carrier-source-plan-after-reset","tick":778,"queued":true}
+Connecting to storage
+{"schema":"screeps-t2-lab-driver/v1","isolatedWorldOnly":true,"label":"c2-carrier-source-post-reset-driver","kind":"ticks","arg":"2","startTick":778,"endTick":780,"startedAtUtc":"2026-10-02T11:24:31.244Z","endedAtUtc":"2026-10-02T11:24:35.106Z","observations":122,"matched":true,"last":{"tick":780,"quota":"dispatching","control":"closed","mode":"drain","active":1,"arm":{"ok":true,"reason":"armed"}},"paused":true}
+实验步骤: capture c2-carrier-source-after-reset-held
+Connecting to storage
+{"label":"c2-carrier-source-after-reset-held","tick":780,"control":"closed","closeReason":"native_attempt","mode":"drain","quota":"dispatching","active":1,"tasks":[{"id":"lab-t2-c2-UH","status":"pending","remaining":100,"lease":"active"},{"id":"lab-t2-c2-pre-source-ordinary","status":"done","remaining":0},{"id":"lab-t2-c2-pre-target-ordinary","status":"done","remaining":0},{"id":"lab-t2-c2-block-source-ordinary","status":"pending","remaining":100,"error":"send_code_-4"},{"id":"lab-t2-c2-block-target-ordinary","status":"pending","remaining":100,"error":"send_code_-4"},{"id":"lab-t2-c2-unrelated-ordinary","status":"done","remaining":0}],"transactions":33}
+实验步骤: restore c2-restore-true-store
+Connecting to storage
+{"op":"restore","label":"c2-restore-true-store","tick":780,"beforeUH":101,"afterUH":100}
+Connecting to storage
+{"schema":"screeps-t2-lab-driver/v1","isolatedWorldOnly":true,"label":"c2-restored-settle-driver","kind":"settled","arg":"","startTick":780,"endTick":781,"startedAtUtc":"2026-10-02T11:24:35.702Z","endedAtUtc":"2026-10-02T11:24:38.969Z","observations":100,"matched":true,"last":{"tick":781,"quota":"drained","control":"closed","mode":"off","active":0,"arm":{"ok":true,"reason":"armed"}},"paused":true}
+实验步骤: capture c2-first-restored-settlement
+Connecting to storage
+{"label":"c2-first-restored-settlement","tick":781,"control":"closed","closeReason":"native_attempt","mode":"off","quota":"drained","active":0,"tasks":[{"id":"lab-t2-c2-UH","status":"done","remaining":0},{"id":"lab-t2-c2-pre-source-ordinary","status":"done","remaining":0},{"id":"lab-t2-c2-pre-target-ordinary","status":"done","remaining":0},{"id":"lab-t2-c2-block-source-ordinary","status":"pending","remaining":100,"error":"send_code_-4"},{"id":"lab-t2-c2-block-target-ordinary","status":"pending","remaining":100,"error":"send_code_-4"},{"id":"lab-t2-c2-unrelated-ordinary","status":"done","remaining":0}],"transactions":33}
+Connecting to storage
+{"schema":"screeps-t2-lab-driver/v1","isolatedWorldOnly":true,"label":"c2-restored-source-driver","kind":"task-done","arg":"lab-t2-c2-block-source-ordinary","startTick":782,"endTick":785,"startedAtUtc":"2026-10-02T11:24:39.547Z","endedAtUtc":"2026-10-02T11:24:46.428Z","observations":231,"matched":true,"last":{"tick":785,"quota":"drained","control":"closed","mode":"off","active":0,"arm":{"ok":true,"reason":"armed"}},"paused":true}
+Connecting to storage
+{"schema":"screeps-t2-lab-driver/v1","isolatedWorldOnly":true,"label":"c2-restored-target-driver","kind":"task-done","arg":"lab-t2-c2-block-target-ordinary","startTick":786,"endTick":786,"startedAtUtc":"2026-10-02T11:24:46.617Z","endedAtUtc":"2026-10-02T11:24:47.122Z","observations":1,"matched":true,"last":{"tick":786,"quota":"drained","control":"closed","mode":"off","active":0,"arm":{"ok":true,"reason":"armed"}},"paused":true}
+Connecting to storage
+{"schema":"screeps-t2-lab-driver/v1","isolatedWorldOnly":true,"label":"c2-carrier-restored-driver","kind":"ticks","arg":"3","startTick":786,"endTick":789,"startedAtUtc":"2026-10-02T11:24:47.308Z","endedAtUtc":"2026-10-02T11:24:53.089Z","observations":191,"matched":true,"last":{"tick":789,"quota":"drained","control":"closed","mode":"off","active":0,"arm":{"ok":true,"reason":"armed"}},"paused":true}
+实验步骤: capture c2-confirmed-ordinary-and-carrier-restored
+Connecting to storage
+{"label":"c2-confirmed-ordinary-and-carrier-restored","tick":789,"control":"closed","closeReason":"native_attempt","mode":"off","quota":"drained","active":0,"tasks":[{"id":"lab-t2-c2-UH","status":"done","remaining":0},{"id":"lab-t2-c2-pre-source-ordinary","status":"done","remaining":0},{"id":"lab-t2-c2-pre-target-ordinary","status":"done","remaining":0},{"id":"lab-t2-c2-block-source-ordinary","status":"done","remaining":0},{"id":"lab-t2-c2-block-target-ordinary","status":"done","remaining":0},{"id":"lab-t2-c2-unrelated-ordinary","status":"done","remaining":0},{"id":"785:1:UH:E4N58->E1N57","status":"pending","remaining":50}],"transactions":35}
+实验步骤: capture c2-completed-before-persistence
+Connecting to storage
+{"label":"c2-completed-before-persistence","tick":789,"control":"closed","closeReason":"native_attempt","mode":"off","quota":"drained","active":0,"tasks":[{"id":"lab-t2-c2-UH","status":"done","remaining":0},{"id":"lab-t2-c2-pre-source-ordinary","status":"done","remaining":0},{"id":"lab-t2-c2-pre-target-ordinary","status":"done","remaining":0},{"id":"lab-t2-c2-block-source-ordinary","status":"done","remaining":0},{"id":"lab-t2-c2-block-target-ordinary","status":"done","remaining":0},{"id":"lab-t2-c2-unrelated-ordinary","status":"done","remaining":0},{"id":"785:1:UH:E4N58->E1N57","status":"pending","remaining":50}],"transactions":35}

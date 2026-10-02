@@ -6,7 +6,7 @@ const crypto=require('node:crypto');
 const {createRequire}=require('node:module');
 const root='/srv/screeps-treasury-t1',run=root+'/r6-t2-20261002',uid='7dad41a4bfc9d96';
 const [label,kind,arg]=process.argv.slice(2);assert.match(label||'',/^[a-z0-9-]{1,64}$/);
-const allowed=['ticks','native','settled','conflict','armed','task-done'];assert.ok(allowed.includes(kind));
+const allowed=['ticks','native','settled','conflict','pre-inbound','armed','arm-observed','task-done'];assert.ok(allowed.includes(kind));
 process.env.STORAGE_HOST='::1';process.env.STORAGE_PORT='21027';
 const common=createRequire(root+'/server/package.json')('@screeps/common');
 const sha=x=>crypto.createHash('sha256').update(x).digest('hex');
@@ -31,9 +31,12 @@ const sleep=ms=>new Promise(r=>setTimeout(r,ms));
    if(kind==='native')matched=m.runtime?.treasuryProductionT2Quota?.status==='dispatching';
    if(kind==='settled')matched=m.runtime?.treasuryProductionT2Quota?.status==='drained' && last.active===0;
    if(kind==='armed')matched=m.runtime?.treasuryT2FirstLiveControl?.status==='active' && m.runtime?.__labT2ArmResult?.ok===true;
+   if(kind==='arm-observed')matched=m.runtime?.__labT2ArmResult!==undefined && m.runtime.__labT2ArmResultNonce===arg;
    if(kind==='task-done')matched=m.data?.resourceControl?.tasks[arg]?.status==='done';
    if(kind==='conflict')matched=m.runtime?.treasuryProductionT2Quota===undefined && m.runtime?.treasuryT2FirstLiveControl?.status==='active' &&
     arg.split(',').every(id=>m.data?.resourceControl?.tasks[id]?.status==='done');
+   if(kind==='pre-inbound')matched=m.runtime?.treasuryProductionT2Quota===undefined && m.runtime?.treasuryT2FirstLiveControl===undefined &&
+    arg.split(',').every(id=>m.data?.resourceControl?.tasks[id]?.status==='done') && m.data?.resourceControl?.tasks['lab-t2-c2-UH']?.status==='pending';
    if(matched){await env.set(env.keys.MAIN_LOOP_PAUSED,'1');await sleep(500);break;}
    await sleep(25);
   }

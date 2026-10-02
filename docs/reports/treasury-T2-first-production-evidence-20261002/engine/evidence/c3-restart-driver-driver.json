@@ -1,0 +1,24 @@
+{
+  "schema": "screeps-t2-lab-driver/v1",
+  "isolatedWorldOnly": true,
+  "label": "c3-restart-driver",
+  "kind": "ticks",
+  "arg": "4",
+  "startTick": 761,
+  "endTick": 765,
+  "startedAtUtc": "2026-10-02T11:34:00.140Z",
+  "endedAtUtc": "2026-10-02T11:34:07.701Z",
+  "observations": 254,
+  "matched": true,
+  "last": {
+    "tick": 765,
+    "control": "closed",
+    "mode": "off",
+    "active": 0,
+    "arm": {
+      "ok": true,
+      "reason": "armed"
+    }
+  },
+  "paused": true
+}
