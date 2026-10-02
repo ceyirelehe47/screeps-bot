@@ -305,22 +305,19 @@ export function validTreasuryContinuousOHState(raw: unknown): raw is TreasuryCon
   } catch { return false; }
 }
 
-let validationGame: Game | undefined;
-let validationMemory: Memory | undefined;
-const validatedData = new Map<string, boolean>();
+const validatedData = new Set<string>();
 
-/** 只记忆完整字节对应的纯数学/签名结论；每次读取仍遍历两本全部 descriptor 和值。 */
+/** 完整字节的纯数学/签名成功证明可跨 Game/Memory 归属复用；它不提供 authority 或当前时钟证据。
+ * false/数学异常不记忆；每次读取仍独立证明两本数据树与字节一致性，动态权限和观察时钟由各自 owner 判断。 */
 function validToken(raw: unknown, token: string): boolean {
-  if (validationGame !== Game || validationMemory !== Memory) {
-    validationGame = Game; validationMemory = Memory; validatedData.clear();
-  }
-  const cached = validatedData.get(token);
-  if (cached !== undefined) {
-    validatedData.delete(token); validatedData.set(token, cached); return cached;
+  if (validatedData.has(token)) {
+    validatedData.delete(token); validatedData.add(token); return true;
   }
   const valid = validTreasuryContinuousOHState(raw);
-  validatedData.set(token, valid);
-  while (validatedData.size > 4) validatedData.delete(validatedData.keys().next().value!);
+  if (valid) {
+    validatedData.add(token);
+    while (validatedData.size > 4) validatedData.delete(validatedData.values().next().value!);
+  }
   return valid;
 }
 

@@ -1,7 +1,8 @@
 import * as canonicalHash from "@/runtime/marketDirectContinuousPolicy";
 import { getTreasuryService } from "@/runtime/runtimeServices";
 import { enableTreasuryContinuousOH, normalizeTreasuryContinuousOHControl } from "@/runtime/treasuryContinuousOHControl";
-import { readTreasuryContinuousOHState, treasuryContinuousOHStatePayload, writeTreasuryContinuousOHState } from "@/runtime/treasuryContinuousOHState";
+import { readTreasuryContinuousOHState, sealTreasuryContinuousOHState, treasuryContinuousOHStatePayload,
+  writeTreasuryContinuousOHState } from "@/runtime/treasuryContinuousOHState";
 import { treasuryContinuousOHDataToken, treasuryContinuousOHJSONBytes } from "@/runtime/treasuryContinuousOHDataTree";
 import { treasuryT1SerializedBytes } from "@/runtime/treasuryFirstLiveState";
 import { hasTreasuryTerminalFence } from "@/runtime/treasuryTaskCommitmentBridge";
@@ -51,25 +52,37 @@ describe("T4完整数据指纹只复用纯valid结论", () => {
     const replacement = JSON.parse(JSON.stringify(runtime[key])); runtime[key] = replacement;
     return replacement;
   }
+  function replaceOwners() {
+    (global as any).Game = { ...Game };
+    (global as any).Memory = JSON.parse(JSON.stringify(Memory));
+  }
 
-  it("一次完整校验供同字节主镜像与重复读取复用，换Game/Memory归属必须重验", () => {
+  it("完整字节的纯数学证明跨Game/Memory归属复用，恢复数据树仍逐字段重新检查", () => {
     completePilot();
     (global as any).Memory = JSON.parse(JSON.stringify(Memory));
+    const rows = new Set<object>((Memory.runtime as any).treasuryContinuousOH.consumption);
+    const descriptor = Object.getOwnPropertyDescriptor;
+    let restoredDescriptorReads = 0;
+    jest.spyOn(Object, "getOwnPropertyDescriptor").mockImplementation((value, key) => {
+      if (rows.has(value)) restoredDescriptorReads += 1;
+      return descriptor(value, key);
+    });
     const hash = jest.spyOn(canonicalHash, "canonicalStableHashV1");
     expect(readTreasuryContinuousOHState().status).toBe("valid");
-    expect(hash).toHaveBeenCalledTimes(1);
+    expect(hash).not.toHaveBeenCalled(); expect(restoredDescriptorReads).toBeGreaterThan(0);
     for (let n = 0; n < 20; n += 1) expect(readTreasuryContinuousOHState().status).toBe("valid");
     Game.time += 1; expect(readTreasuryContinuousOHState().status).toBe("valid");
-    expect(hash).toHaveBeenCalledTimes(1);
+    expect(hash).not.toHaveBeenCalled();
     (global as any).Game = { ...Game };
-    expect(readTreasuryContinuousOHState().status).toBe("valid"); expect(hash).toHaveBeenCalledTimes(2);
+    expect(readTreasuryContinuousOHState().status).toBe("valid"); expect(hash).not.toHaveBeenCalled();
     (global as any).Memory = JSON.parse(JSON.stringify(Memory));
-    expect(readTreasuryContinuousOHState().status).toBe("valid"); expect(hash).toHaveBeenCalledTimes(3);
+    expect(readTreasuryContinuousOHState().status).toBe("valid"); expect(hash).not.toHaveBeenCalled();
   });
 
   it.each([false, true])("同tick暖缓存后%s侧新root历史改值立刻invalid，不能凭旧proof发布", (mirror) => {
     completePilot(); const before = state();
     expect(hasTreasuryTerminalFence(T4_SOURCE)).toBe(false);
+    replaceOwners();
     rawBook(mirror).consumption[0].amount += 1;
     const damaged = JSON.stringify(Memory);
     expect(readTreasuryContinuousOHState().status).toBe("invalid");
@@ -79,8 +92,9 @@ describe("T4完整数据指纹只复用纯valid结论", () => {
   });
 
   it.each(["nonenum_extra", "nonenum_known", "nonenum_index", "getter", "symbol", "array_extra", "hole", "cycle", "prototype", "toJSON"])(
-    "暖valid/cache clear后%s非JSON变更即时held且不调用getter或toJSON", (kind) => {
+    "暖valid跨Game/Memory换代后%s非JSON变更即时held且不调用getter或toJSON", (kind) => {
       completePilot(); state(); expect(hasTreasuryTerminalFence(T4_SOURCE)).toBe(false);
+      replaceOwners();
       const book = rawBook(true); const callback = jest.fn(() => book.policy.sliceAmount);
       const json = JSON.stringify(book);
       if (kind === "nonenum_extra") Object.defineProperty(book.consumption[0], "hidden", { value: 1, enumerable: false });
@@ -102,6 +116,7 @@ describe("T4完整数据指纹只复用纯valid结论", () => {
 
   it("两本等长原地改同一历史值也不能复用旧hash/length/ref，fresh native保持零调用", () => {
     enable(); state();
+    replaceOwners();
     for (const mirror of [false, true]) rawBook(mirror).policy.lifetimeOH -= 1;
     expect(readTreasuryContinuousOHState().status).toBe("invalid");
     expect(tick(100).handled).toBe(true);
@@ -196,13 +211,70 @@ describe("T4完整数据指纹只复用纯valid结论", () => {
     expect(state().deadlineMs).toBe(afterFirst.deadlineMs); expect(state().consumption).toEqual(afterFirst.consumption);
   });
 
-  it("warm immutable书的root accessor也属于bad形状，不能调用getter或复用clear", () => {
+  it("跨Game/Memory换代后root accessor也属于bad形状，不能调用getter或复用clear", () => {
     completePilot(); expect(hasTreasuryTerminalFence(T4_SOURCE)).toBe(false);
+    replaceOwners();
     const runtime = Memory.runtime as unknown as Record<string, any>;
     const good = runtime.treasuryContinuousOHMirror; const getter = jest.fn(() => good);
     Object.defineProperty(runtime, "treasuryContinuousOHMirror", { get: getter, enumerable: true, configurable: true });
     expect(readTreasuryContinuousOHState().status).toBe("invalid");
     expect(hasTreasuryTerminalFence(T4_SOURCE)).toBe(true); expect(getter).not.toHaveBeenCalled();
+  });
+
+  it("未暖成功token的暂时摘要异常不长期记作invalid，同字节恢复后重新完整验签", () => {
+    enable();
+    const candidate = sealTreasuryContinuousOHState({ ...treasuryContinuousOHStatePayload(state()),
+      lastObservedAtTick: 101, lastObservedAtMs: startMs + 1_000 });
+    const runtime = Memory.runtime as unknown as Record<string, any>;
+    runtime.treasuryContinuousOH = { ...candidate }; runtime.treasuryContinuousOHMirror = { ...candidate };
+    const before = JSON.stringify(Memory);
+    // 只注入数学摘要故障；它不是生产异常或 native 验收证据。
+    const hash = jest.spyOn(canonicalHash, "canonicalStableHashV1").mockImplementationOnce(() => {
+      throw Error("暂时摘要不可用");
+    });
+    expect(readTreasuryContinuousOHState().status).toBe("invalid");
+    expect(JSON.stringify(Memory)).toBe(before);
+    expect(readTreasuryContinuousOHState().status).toBe("valid");
+    expect(hash).toHaveBeenCalledTimes(2); expect(JSON.stringify(Memory)).toBe(before);
+    replaceOwners();
+    expect(readTreasuryContinuousOHState().status).toBe("valid");
+    expect(hash).toHaveBeenCalledTimes(2); expect(JSON.stringify(Memory)).toBe(before);
+  });
+
+  it("跨owner相同成功字节仍不提供部署authority，实时tag漂移拒绝Treasury native", () => {
+    enable(); state(); replaceOwners();
+    const runtime = Memory.runtime as unknown as Record<string, any>;
+    runtime.lastDeployTag += ":changed-owner-deploy";
+    expect(readTreasuryContinuousOHState().status).toBe("valid");
+    tick(100);
+    expect(context.source.terminal!.send).not.toHaveBeenCalled();
+    expect(state().stopReason).toBe("deployment_changed"); expect(state().consumption).toEqual([]);
+  });
+
+  it("跨owner相同成功字节仍不提供当前时钟证据，耐久高水位回退拒绝Treasury native", () => {
+    enable(); Game.time = 101; clock.mockReturnValue(startMs + 1_000);
+    expect(normalizeTreasuryContinuousOHControl().ok).toBe(true);
+    const before = state(); replaceOwners();
+    Game.time = 100; clock.mockReturnValue(startMs);
+    expect(readTreasuryContinuousOHState().status).toBe("valid");
+    tick(100);
+    expect(context.source.terminal!.send).not.toHaveBeenCalled();
+    expect(state().stopReason).toBe("clock_regressed");
+    expect(state().lastObservedAtTick).toBeGreaterThanOrEqual(before.lastObservedAtTick);
+    expect(state().lastObservedAtMs).toBeGreaterThanOrEqual(before.lastObservedAtMs);
+    expect(state().deadlineTick).toBe(before.deadlineTick); expect(state().deadlineMs).toBe(before.deadlineMs);
+  });
+
+  it("跨owner相同成功字节不缓存foreign quota责任，fresh坏quota拒绝Treasury native", () => {
+    enable();
+    expect(normalizeTreasuryContinuousOHControl().ok).toBe(true);
+    expect(normalizeTreasuryContinuousOHControl().ok).toBe(true);
+    expect(state().currentCycle?.status).toBe("active");
+    replaceOwners(); (Memory.runtime as any).treasuryProductionT2Quota = { schemaVersion: -1 };
+    expect(readTreasuryContinuousOHState().status).toBe("valid");
+    expect(hasTreasuryTerminalFence(T4_SOURCE)).toBe(true);
+    tick(100);
+    expect(context.source.terminal!.send).not.toHaveBeenCalled(); expect(state().consumption).toEqual([]);
   });
 
   it("真实unknown原责任在wall不变的新tick仍发布tick高水位，cold reset回退tick被拒", () => {
