@@ -610,6 +610,8 @@ declare global {
     transitDangerRooms?: Record<string, number>;
     /** Power bank scout hostile-owned or hostile-reserved transit rooms. */
     powerBankPermanentDangerRooms?: Record<string, true>;
+    /** 原生视野确认的敌方所有权；失去视野保留，再次确认无主/己方后删除。 */
+    powerBankOwnedRoomIntel?: Record<string, { owner: string; lastSeenAt: number }>;
   }
 }
 

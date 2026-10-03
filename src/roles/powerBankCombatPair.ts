@@ -334,6 +334,12 @@ function pairExitDirection(pair: PowerBankPairContext, nextRoom: string | undefi
 function alignPairAtExit(pair: PowerBankPairContext, direction: DirectionConstant): boolean {
   const redDestination = getMoveIntentDestination(pair.attacker.pos, direction);
   const greenDestination = getMoveIntentDestination(pair.healer.pos, direction);
+  if (redDestination?.roomName !== pair.attacker.room.name && redDestination &&
+      !isPowerBankTransitRoomAllowed(redDestination.roomName)) {
+    holdPairMember(pair.attacker);
+    holdPairMember(pair.healer);
+    return true;
+  }
   if (redDestination && greenDestination && redDestination.roomName === greenDestination.roomName &&
       !samePairPosition(redDestination, greenDestination) &&
       Math.max(Math.abs(redDestination.x - greenDestination.x), Math.abs(redDestination.y - greenDestination.y)) <= 1) {

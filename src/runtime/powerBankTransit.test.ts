@@ -1,11 +1,34 @@
 jest.mock("@/runtime/powerBankObserver", () => ({ requestCombatObservation: jest.fn(() => true) }));
 
-import { isPowerBankTransitRoomAllowed, powerBankTransitOptions } from "@/runtime/powerBankTransit";
+import { getPowerBankOwnedAvoidRooms, isPowerBankTransitRoomAllowed, powerBankTransitOptions } from "@/runtime/powerBankTransit";
 import { requestCombatObservation } from "@/runtime/powerBankObserver";
 
 beforeEach(() => {
   jest.clearAllMocks();
   Game.rooms = {};
+  Memory.runtime = {};
+});
+
+it("W2N58 已确认有主后丢失视野，规划仍避开它，重新确认无主才解除", () => {
+  Game.rooms.W2N58 = { name: "W2N58", controller: { owner: { username: "enemy" }, my: false } } as Room;
+  expect(getPowerBankOwnedAvoidRooms()).toContain("W2N58");
+  expect(Memory.runtime?.powerBankOwnedRoomIntel?.W2N58).toEqual({ owner: "enemy", lastSeenAt: Game.time });
+  Game.time += 1;
+  delete Game.rooms.W2N58;
+  expect(getPowerBankOwnedAvoidRooms()).toContain("W2N58");
+  expect(powerBankTransitOptions({ room: { name: "W2N57" } } as Creep).avoidRooms).toContain("W2N58");
+  expect(isPowerBankTransitRoomAllowed("W2N58")).toBe(false);
+  Game.time += 1;
+  Game.rooms.W2N58 = { name: "W2N58", controller: {} } as Room;
+  expect(getPowerBankOwnedAvoidRooms()).not.toContain("W2N58");
+  expect(isPowerBankTransitRoomAllowed("W2N58")).toBe(true);
+});
+
+it("再次取得己方所有权的原生视野后允许返仓", () => {
+  Memory.runtime!.powerBankOwnedRoomIntel = { W2N58: { owner: "enemy", lastSeenAt: Game.time - 1 } };
+  Game.rooms.W2N58 = { name: "W2N58", controller: { owner: { username: "me" }, my: true } } as Room;
+  expect(getPowerBankOwnedAvoidRooms()).not.toContain("W2N58");
+  expect(isPowerBankTransitRoomAllowed("W2N58")).toBe(true);
 });
 
 it("未知下一房先申请观察，不把固定路线当成安全证据", () => {

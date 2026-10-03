@@ -1,4 +1,5 @@
-import { moveToTargetRoom, clearRoutingCachesForTest } from "@/movement/routing";
+import { getNextTravelRoom, moveToTargetRoom, clearRoutingCachesForTest } from "@/movement/routing";
+import { getPowerBankOwnedAvoidRooms, powerBankTransitOptions } from "@/runtime/powerBankTransit";
 import { moveToTarget, buildRoomMovementMatrix, getRoomStaticMatrix, clearRoomBaseCostMatrixCacheForTest } from "@/movement/pathing";
 import { clearCreepMovementStateForTest, ensureCreepMovementState, getCreepMovementState } from "@/movement/creepState";
 import { MockRoomPosition, createRoom, createCreep, resetRuntimeServices, setupRoomPositionGlobal, setupPathFinderGlobal, setDefaultMapMocks } from "@mock/movement";
@@ -86,6 +87,26 @@ describe("外出 creep 与常驻 creep 的统一房内寻路", () => {
     const { creep, choose, search } = traveler(); choose.mockReturnValue(null);
     expect(moveToTargetRoom(creep, "W0N1", "W1N1|W0N1")).toBe(ERR_NO_PATH);
     expect(creep.move).not.toHaveBeenCalled(); expect(search).not.toHaveBeenCalled();
+  });
+
+  it("已观察到有主房后失去视野，双人路线选择和实际行军仍一致地改走安全出口", () => {
+    const { creep, room, choose } = traveler("powerBankAttacker");
+    Game.rooms.W0N1 = { name: "W0N1", controller: { owner: { username: "enemy" }, my: false } } as Room;
+    expect(getPowerBankOwnedAvoidRooms()).toContain("W0N1");
+    delete Game.rooms.W0N1;
+    Game.time += 1;
+    const route = "W1N1|W0N1|W3N1";
+    Game.map.findRoute = jest.fn((_from, _to, options) => {
+      expect(options?.routeCallback?.("W0N1", "W1N1")).toBe(Infinity);
+      return [{ exit: TOP, room: "W1N2" }, { exit: TOP, room: "W3N1" }];
+    });
+    const options = powerBankTransitOptions(creep);
+    expect(getNextTravelRoom(room.name, "W3N1", route, options.avoidRooms)).toBe("W1N2");
+    room.findExitTo = jest.fn(() => TOP);
+    choose.mockReturnValue(new MockRoomPosition(10, 0, room.name) as unknown as RoomPosition);
+    expect(moveToTargetRoom(creep, "W3N1", route, options)).toBe(OK);
+    expect(room.findExitTo).toHaveBeenCalledWith("W1N2");
+    expect(getPowerBankOwnedAvoidRooms()).toContain("W0N1");
   });
 
   it("同房路径、缓存命中和出口过房都执行当帧业务下一步安全门", () => {
