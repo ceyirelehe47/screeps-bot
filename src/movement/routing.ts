@@ -78,6 +78,20 @@ export function getCurrentScoutRoute(targetRoom: string, fallbackEncodedRoute?: 
   return routeRooms.join("|");
 }
 
+/** 行军协调器与单体执行器共享房间选择；有效的有序路线不重复调用原生findRoute。 */
+export function getNextTravelRoom(currentRoom: string, targetRoom: string, encodedRouteRooms?: string, avoidRooms?: string[]): string | null {
+  if (currentRoom === targetRoom) return currentRoom;
+  const routeRooms = parseEncodedRouteRooms(encodedRouteRooms);
+  const dangerousRooms = getDangerousRoomsForTarget(targetRoom, avoidRooms);
+  if (routeRooms.length > 0) {
+    const next = findOrderedRouteNextRoom(currentRoom, targetRoom, routeRooms, dangerousRooms)
+      ?? findStrictRouteNextRoom(currentRoom, targetRoom, routeRooms, dangerousRooms)
+      ?? findAdjacentAllowedRoom(currentRoom, targetRoom, routeRooms, dangerousRooms);
+    if (next) return next;
+  }
+  return findDynamicNextRoom(currentRoom, targetRoom, getForwardPreferredRooms(currentRoom, routeRooms, targetRoom), dangerousRooms);
+}
+
 export function moveToTargetRoom(
   creep: Creep,
   targetRoom: string,
@@ -121,10 +135,9 @@ export function moveToTargetRoom(
   if (hasFixedRoute) {
     const forwardPreferredRooms = getForwardPreferredRooms(creep.room.name, routeRooms, targetRoom);
     const orderedNextRoom = findOrderedRouteNextRoom(creep.room.name, targetRoom, routeRooms, dangerousRooms);
-    const strictNextRoom = findStrictRouteNextRoom(creep.room.name, targetRoom, routeRooms, dangerousRooms);
     nextRoom =
       orderedNextRoom ??
-      strictNextRoom ??
+      findStrictRouteNextRoom(creep.room.name, targetRoom, routeRooms, dangerousRooms) ??
       findAdjacentAllowedRoom(creep.room.name, targetRoom, routeRooms, dangerousRooms) ??
       creep.room.name;
     if (nextRoom === creep.room.name) {

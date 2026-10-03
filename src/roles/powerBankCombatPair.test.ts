@@ -1,7 +1,7 @@
 jest.mock("@/roles/shared", () => ({
   clearMovementState: jest.fn(), moveToTarget: jest.fn(), moveToTargetRoom: jest.fn(),
 }));
-jest.mock("@/movement/routing", () => ({ getCachedStaticTravelMatrix: jest.fn() }));
+jest.mock("@/movement/routing", () => ({ getCachedStaticTravelMatrix: jest.fn(), getNextTravelRoom: jest.fn() }));
 jest.mock("@/runtime/runtimeServices", () => ({ getTickContextService: jest.fn() }));
 jest.mock("@/runtime/cpuPhaseProfiler", () => ({ measureCreepIntent: (fn: () => unknown) => fn() }));
 jest.mock("@/runtime/powerBankObserver", () => ({ requestCombatObservation: jest.fn(() => true) }));
@@ -10,7 +10,7 @@ import { powerBankAttackerRole } from "@/roles/powerBankAttacker";
 import { powerBankHealerRole } from "@/roles/powerBankHealer";
 import { clearCreepMovementStateForTest, clearCreepMovementState, ensureCreepMovementState, getCreepMovementState } from "@/movement/creepState";
 import { getMoveIntentReceipt, issueMove, isBlockerActivelyMoving } from "@/movement/traffic";
-import { getCachedStaticTravelMatrix } from "@/movement/routing";
+import { getCachedStaticTravelMatrix, getNextTravelRoom } from "@/movement/routing";
 import { getTickContextService } from "@/runtime/runtimeServices";
 import { createMockPowerBankCreep, createMockPowerBank } from "@mock/powerBank";
 import { clearMovementState, moveToTarget, moveToTargetRoom } from "@/roles/shared";
@@ -94,6 +94,7 @@ beforeEach(() => {
     getRoomTerrain: jest.fn(() => ({ get: () => 0 })),
   } });
   walls = new Set(); pending = new Map(); routeDirection = RIGHT; targetDirection = RIGHT;
+  (getNextTravelRoom as jest.Mock).mockImplementation((from: string, to: string, encoded?: string) => encoded?.split("|")[1] ?? Game.map.describeExits(from)?.[routeDirection] ?? to);
   (getCachedStaticTravelMatrix as jest.Mock).mockImplementation((room: string) => ({
     get: (x: number, y: number) => walls.has(`${room}:${x}:${y}`) ? 255 : 0,
   }));
@@ -277,6 +278,31 @@ describe("PowerBank same-frame pair movement", () => {
     expect(attacker.pos.isNearTo(healer.pos)).toBe(true);
   });
 
+  it.each(["attacker-first", "healer-first"] as const)("出口前两格都是墙时沿边重新排位，两人同步跨过合法出口：%s", (order) => {
+    const north = "W0N1";
+    const task = Memory.data!.powerBankHarvest![TASK];
+    task.targetRoom = north;
+    task.routeRooms = [SOURCE, north];
+    Game.rooms[north] = { name: north, lookForAt: jest.fn(() => []) } as unknown as Room;
+    Game.map.describeExits = jest.fn((room: string) => room === SOURCE ? { [TOP]: north } : { [BOTTOM]: SOURCE });
+    place(attacker, 32, 1); place(healer, 31, 1);
+    for (let x = 1; x <= 32; x++) {
+      walls.add(`${SOURCE}:${x}:0`);
+      walls.add(`${north}:${x}:49`);
+    }
+    routeDirection = TOP;
+    for (let frame = 0; frame < 4 && attacker.room.name === SOURCE; frame++) {
+      calls(order);
+      commitFrame();
+      expect(attacker.room.name).toBe(healer.room.name);
+      expect(attacker.pos.isNearTo(healer.pos)).toBe(true);
+    }
+    expect(attacker.room.name).toBe(north);
+    expect(healer.room.name).toBe(north);
+    expect(attacker.pos.x).toBeGreaterThanOrEqual(33);
+    expect(healer.pos.x).toBeGreaterThanOrEqual(33);
+  });
+
   it("moves both inside after landing, rather than bouncing the follower into the previous room", () => {
     place(attacker, 48, 25); place(healer, 48, 26);
     calls("healer-first"); commitFrame();
@@ -342,15 +368,26 @@ describe("PowerBank same-frame pair movement", () => {
       const blocker = createMockPowerBankCreep("worker", { id: "blocker", name: "blocker" });
       place(blocker, 0, 26, TARGET); Game.creeps.blocker = blocker;
     }
-    calls("attacker-first"); expect(pending.size).toBe(0);
-    expect(attacker.cancelOrder).toHaveBeenCalledWith("move"); expect(healer.move).not.toHaveBeenCalled();
+    calls("attacker-first");
+    expect(pending.get(attacker)).not.toBe(RIGHT);
+    expect(pending.get(healer)).not.toBe(RIGHT);
+    commitFrame();
+    expect(attacker.room.name).toBe(SOURCE); expect(healer.room.name).toBe(SOURCE);
+    expect(attacker.pos.isNearTo(healer.pos)).toBe(true);
+    calls("healer-first"); commitFrame();
+    expect(attacker.room.name).toBe(TARGET); expect(healer.room.name).toBe(TARGET);
+    expect(healer.pos.y).not.toBe(26);
   });
 
   it("checks the follower's original-room exit tile as well as the migrated landing tile", () => {
     place(attacker, 48, 25); place(healer, 48, 26); walls.add(`${SOURCE}:49:26`);
     calls("attacker-first");
-    expect(pending.size).toBe(0); expect(healer.move).not.toHaveBeenCalled();
-    expect(attacker.cancelOrder).toHaveBeenCalledWith("move");
+    expect(pending.get(attacker)).not.toBe(RIGHT); expect(pending.get(healer)).not.toBe(RIGHT);
+    commitFrame();
+    expect(attacker.room.name).toBe(SOURCE); expect(healer.room.name).toBe(SOURCE);
+    calls("healer-first"); commitFrame();
+    expect(attacker.room.name).toBe(TARGET); expect(healer.room.name).toBe(TARGET);
+    expect(healer.pos.y).not.toBe(26);
   });
 
   it("rejects an unproven corner crossing", () => {

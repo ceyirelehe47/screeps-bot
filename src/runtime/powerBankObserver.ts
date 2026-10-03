@@ -43,6 +43,15 @@ let scheduled: {
   remoteSlots: number;
 } | undefined;
 
+// 活跃结构与地图距离来自同一帧原生快照；请求、覆盖和调度共享一次查询。
+let observerSnapshot: {
+  game: Game;
+  tick: number;
+  context: ReturnType<typeof getTickContextService>;
+  observers: StructureObserver[];
+  reachability: Map<string, boolean>;
+} | undefined;
+
 function getRuntimeState(): PowerBankObserverRuntime {
   const runtime = getMemoryService().ensureRuntime();
   runtime.powerBankObserver ??= {
@@ -55,21 +64,29 @@ function getRuntimeState(): PowerBankObserverRuntime {
 }
 
 function getActiveObservers(): StructureObserver[] {
-  const observers: StructureObserver[] = [];
   const tickContext = getTickContextService();
+  if (observerSnapshot?.game === Game && observerSnapshot.tick === Game.time && observerSnapshot.context === tickContext) return observerSnapshot.observers;
+  const observers: StructureObserver[] = [];
   for (const room of tickContext.getMyRooms()) {
-    const roomObservers = tickContext.getRoomContext(room)?.getMyStructures().filter(
+    const roomObservers = tickContext.getRoomContext(room)?.getMyStructuresByType(STRUCTURE_OBSERVER).filter(
       (structure): structure is StructureObserver => structure.structureType === STRUCTURE_OBSERVER &&
         (typeof structure.isActive !== "function" || structure.isActive()),
     ) ?? [];
     observers.push(...roomObservers);
   }
-  return observers.sort((left, right) => left.id.localeCompare(right.id));
+  observers.sort((left, right) => left.id.localeCompare(right.id));
+  observerSnapshot = { game: Game, tick: Game.time, context: tickContext, observers, reachability: new Map() };
+  return observers;
 }
 
 function canObserve(observer: StructureObserver, roomName: string): boolean {
+  const key = `${observer.room.name}:${roomName}`;
+  const cached = observerSnapshot?.reachability.get(key);
+  if (cached !== undefined) return cached;
   const distance = Game.map.getRoomLinearDistance(observer.room.name, roomName);
-  return Number.isFinite(distance) && distance >= 0 && distance <= POWER_BANK_SEARCH_RADIUS;
+  const result = Number.isFinite(distance) && distance >= 0 && distance <= POWER_BANK_SEARCH_RADIUS;
+  observerSnapshot?.reachability.set(key, result);
+  return result;
 }
 
 function worldSizeLimit(): number | undefined {
@@ -146,6 +163,7 @@ export function requestRemoteObservation(roomName: string): boolean {
 }
 
 function scanVisibleSearchRooms(): void {
+  const tickContext = getTickContextService();
   for (const room of Object.values(Game.rooms)) {
     if (!isPowerBankSearchRoom(room.name)) continue;
     if (getPowerBankRoomThreat(room)) {
@@ -153,10 +171,11 @@ function scanVisibleSearchRooms(): void {
       runtime.transitDangerRooms ??= {};
       runtime.transitDangerRooms[room.name] = Game.time + TRANSIT_DANGER_TTL;
     }
-    for (const bank of room.find(FIND_STRUCTURES).filter(
+    const context = tickContext.getRoomContext(room);
+    for (const bank of (context?.getStructuresByType(STRUCTURE_POWER_BANK) ?? []).filter(
       (structure): structure is StructurePowerBank => structure.structureType === STRUCTURE_POWER_BANK,
     )) recordPowerBankDiscovery(bank);
-    for (const deposit of room.find(FIND_DEPOSITS)) recordDepositDiscovery(deposit);
+    for (const deposit of context?.getDeposits() ?? []) recordDepositDiscovery(deposit);
   }
 }
 

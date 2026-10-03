@@ -613,6 +613,28 @@ describe("powerBankHarvest", () => {
     }
   });
 
+  it("主队可在当前寿命内打完时，增援准备时间不能触发第二队", () => {
+    Game.time = 400;
+    setupSourceRoom();
+    const pair = setupOwnedCombatPair({ taskId: "pb-single-enough", ticksToLive: 400 });
+    const bank = createMockPowerBank({ id: "bank-single-enough", hits: 500_000, ticksToDecay: 5000 });
+    mockObjects(pair.attacker, pair.healer, bank);
+    addTask(makeTask({
+      id: "pb-single-enough", status: POWER_BANK_STATUS.ATTACKING,
+      sourceRoom: SOURCE_ROOM, bankId: bank.id, tier: 8,
+      attackerId: pair.attacker.id, healerId: pair.healer.id,
+      activeGeneration: 0, activeIndex: 0, combatReady: true,
+      routeDistance: 2, lastBankHits: bank.hits,
+      lastBankProgressAt: Game.time, stageEnteredAt: Game.time,
+      bankExpiresAt: Game.time + 5000,
+    }));
+
+    runPowerBankHarvest();
+
+    expect(getTask("pb-single-enough")?.reinforcement).toBeUndefined();
+    expect(Object.keys(Memory.data?.creepConfigs ?? {}).some((name) => name.includes(":attacker:1:") || name.includes(":healer:1:"))).toBe(false);
+  });
+
   it("requests recovery at 100 idle ticks and fails closed after the 250-tick progress deadline", () => {
     Game.time = 400;
     setupSourceRoom();

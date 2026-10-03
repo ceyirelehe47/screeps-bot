@@ -1602,9 +1602,12 @@ function maybeRequestReinforcement(
     pair.healer.ticksToLive ?? CREEP_LIFE_TIME,
   );
   const remainingAttackTicks = estimateRemainingAttackTicks(task, bank);
+  // 主队能独立完成时无需接班队，不能把接班队的准备时间加到击破寿命门。
+  if (!force && pairTtl > remainingAttackTicks + REINFORCEMENT_TTL_BUFFER) return;
   const leadTicks = estimateReinforcementLeadTicks(task);
   if (!Number.isFinite(remainingAttackTicks) || !Number.isFinite(leadTicks)) return;
-  if (!force && pairTtl > remainingAttackTicks + leadTicks + REINFORCEMENT_TTL_BUFFER) return;
+  // 确需接班时按现役剩余寿命预留孵化/强化/行军提前量。
+  if (!force && pairTtl > leadTicks + REINFORCEMENT_TTL_BUFFER) return;
 
   const generation = (task.activeGeneration ?? 0) + 1;
   task.reinforcement = {

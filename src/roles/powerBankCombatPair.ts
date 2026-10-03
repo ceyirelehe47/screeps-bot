@@ -1,7 +1,7 @@
 import { clearMovementState, moveToTarget, moveToTargetRoom } from "@/roles/shared";
 import { ensureCreepMovementState, getCreepMovementState } from "@/movement/creepState";
 import { isExitTile } from "@/movement/common";
-import { getCachedStaticTravelMatrix } from "@/movement/routing";
+import { getCachedStaticTravelMatrix, getNextTravelRoom } from "@/movement/routing";
 import { getPowerBankOwnedAvoidRooms, isPowerBankTransitRoomAllowed, powerBankTransitOptions } from "@/runtime/powerBankTransit";
 import {
   cancelMoveIntent, getMoveIntentAttemptedPosition, getMoveIntentDestination, getMoveIntentReceipt, issueMove, moveToAdjacentPosition,
@@ -213,6 +213,8 @@ const PAIR_DIRECTIONS: readonly DirectionConstant[] = [TOP, TOP_RIGHT, RIGHT, BO
 let pairMovementGame: typeof Game | undefined;
 let pairMovementTick = -1;
 let pairMovementCalls = new WeakMap<Creep, { task: RuntimePowerBankTask; healer: Creep; generation?: number }>();
+let pairTileChecks = new WeakMap<Creep, { healer: Creep; values: Map<string, boolean> }>();
+let pairOccupants: AnyCreep[] = [];
 
 type PairPosition = Readonly<{ x: number; y: number; roomName: string }>;
 
@@ -238,18 +240,28 @@ function holdPairMember(creep: Creep): void {
 /** 共享静态矩阵保留地形/自然物/结构校验，动态占位仍每次读取。 */
 function isPairTileOpen(pos: PairPosition, pair: PowerBankPairContext): boolean {
   if (pos.roomName !== pair.attacker.room.name && !isPowerBankTransitRoomAllowed(pos.roomName)) return false;
-  if (getCachedStaticTravelMatrix(pos.roomName).get(pos.x, pos.y) >= 255) return false;
-  const occupants: AnyCreep[] = [
-    ...Object.values(Game.creeps),
-    ...Object.values(Game.powerCreeps || {}).filter((creep) => creep.ticksToLive != null),
-  ];
+  let cache = pairTileChecks.get(pair.attacker);
+  if (!cache || cache.healer !== pair.healer) {
+    cache = { healer: pair.healer, values: new Map() };
+    pairTileChecks.set(pair.attacker, cache);
+  }
+  const key = `${pos.roomName}:${pos.x}:${pos.y}`;
+  const cached = cache.values.get(key);
+  if (cached !== undefined) return cached;
+  if (getCachedStaticTravelMatrix(pos.roomName).get(pos.x, pos.y) >= 255) {
+    cache.values.set(key, false);
+    return false;
+  }
+  const occupants = [...pairOccupants];
   const room = Game.rooms[pos.roomName];
   if (room && typeof room.lookForAt === "function") {
     occupants.push(...room.lookForAt(LOOK_CREEPS, pos.x, pos.y));
     occupants.push(...room.lookForAt(LOOK_POWER_CREEPS, pos.x, pos.y));
   }
-  return !occupants.some((creep) =>
+  const open = !occupants.some((creep) =>
     creep !== pair.attacker && creep !== pair.healer && samePairPosition(creep.pos, pos));
+  cache.values.set(key, open);
+  return open;
 }
 
 function markPairMoving(pair: PowerBankPairContext): void {
@@ -304,17 +316,7 @@ function completePairStep(
 
 function nextPairRouteRoom(pair: PowerBankPairContext, fallback?: string): string | undefined {
   const encoded = getPowerBankEncodedRouteBetween(pair.task, pair.attacker.room.name, pair.task.targetRoom, fallback);
-  const next = encoded?.split("|")[1];
-  if (next) return next;
-  const avoids = new Set(getPowerBankAvoidRooms(pair.task));
-  if (typeof Game.map.findRoute === "function") {
-    const route = Game.map.findRoute(pair.attacker.room.name, pair.task.targetRoom, {
-      routeCallback: (name) => name !== pair.attacker.room.name && avoids.has(name) ? Infinity : 1,
-    });
-    return Array.isArray(route) ? route[0]?.room : undefined;
-  }
-  const exit = pair.attacker.room.findExitTo?.(pair.task.targetRoom);
-  return exit && exit > 0 ? Game.map.describeExits(pair.attacker.room.name)?.[exit as ExitConstant] : undefined;
+  return getNextTravelRoom(pair.attacker.room.name, pair.task.targetRoom, encoded, getPowerBankAvoidRooms(pair.task)) ?? undefined;
 }
 
 function pairExitDirection(pair: PowerBankPairContext, nextRoom: string | undefined): DirectionConstant | undefined {
@@ -334,7 +336,43 @@ function alignPairAtExit(pair: PowerBankPairContext, direction: DirectionConstan
   const greenDestination = getMoveIntentDestination(pair.healer.pos, direction);
   if (redDestination && greenDestination && redDestination.roomName === greenDestination.roomName &&
       !samePairPosition(redDestination, greenDestination) &&
-      Math.max(Math.abs(redDestination.x - greenDestination.x), Math.abs(redDestination.y - greenDestination.y)) <= 1) return false;
+      Math.max(Math.abs(redDestination.x - greenDestination.x), Math.abs(redDestination.y - greenDestination.y)) <= 1) {
+    const redAttempted = getMoveIntentAttemptedPosition(pair.attacker.pos, direction);
+    const greenAttempted = getMoveIntentAttemptedPosition(pair.healer.pos, direction);
+    if (redAttempted && greenAttempted && [redAttempted, greenAttempted, redDestination, greenDestination].every((pos) => isPairTileOpen(pos, pair))) return false;
+    // 几何相邻不等于出口可走。整对沿1/48排位线移向最近的双格出口，
+    // 不反复提交同一个撞墙跨房意图，也不让绿单独进入0/49等待。
+    const horizontal = direction === TOP || direction === BOTTOM;
+    const axis = direction === LEFT || direction === TOP ? 1 : 48;
+    if ((horizontal ? pair.attacker.pos.y : pair.attacker.pos.x) === axis &&
+        (horizontal ? pair.healer.pos.y : pair.healer.pos.x) === axis) {
+      for (let distance = 1; distance < 48; distance++) for (const sign of [-1, 1]) {
+        const offset = distance * sign;
+        const coordinates = [pair.attacker, pair.healer].map((member) => ({
+          x: member.pos.x + (horizontal ? offset : 0), y: member.pos.y + (horizontal ? 0 : offset), roomName: member.room.name }));
+        if (!coordinates.every((pos) => pos.x >= 1 && pos.x <= 48 && pos.y >= 1 && pos.y <= 48)) continue;
+        const shifted = coordinates.map((pos) => new RoomPosition(pos.x, pos.y, pos.roomName));
+        if (!shifted.every((pos) => isPairTileOpen(pos, pair))) continue;
+        if (!shifted.every((pos) => {
+          const attempted = getMoveIntentAttemptedPosition(pos, direction);
+          const landing = getMoveIntentDestination(pos, direction);
+          return attempted && landing && landing.roomName !== pos.roomName && isPairTileOpen(attempted, pair) && isPairTileOpen(landing, pair);
+        })) continue;
+        const slide = horizontal ? (sign < 0 ? LEFT : RIGHT) : (sign < 0 ? TOP : BOTTOM);
+        const destinations = [pair.attacker, pair.healer].map((member) => getMoveIntentDestination(member.pos, slide));
+        if (!destinations.every((pos) => pos && pos.roomName === pair.attacker.room.name && isPairTileOpen(pos, pair))) continue;
+        markPairMoving(pair);
+        if (issueMove(pair.attacker, slide) === OK) {
+          const receipt = getMoveIntentReceipt(pair.attacker);
+          if (receipt) completePairStep(pair, receipt, destinations[1]!, slide);
+        }
+        return true;
+      }
+      holdPairMember(pair.attacker);
+      holdPairMember(pair.healer);
+      return true;
+    }
+  }
   const axis = direction === LEFT ? 1 : direction === RIGHT ? 48 : direction === TOP ? 1 : 48;
   const candidates = direction === LEFT || direction === RIGHT
     ? [{ x: axis, y: pair.attacker.pos.y - 1 }, { x: axis, y: pair.attacker.pos.y + 1 }]
@@ -392,6 +430,8 @@ export function coordinatePowerBankPairMovement(pair: PowerBankPairContext, fall
     pairMovementGame = Game;
     pairMovementTick = Game.time;
     pairMovementCalls = new WeakMap();
+    pairTileChecks = new WeakMap();
+    pairOccupants = [...Object.values(Game.creeps), ...Object.values(Game.powerCreeps || {}).filter((creep) => creep.ticksToLive != null)];
   }
   const previous = pairMovementCalls.get(pair.attacker);
   if (previous?.task === pair.task && previous.healer === pair.healer && previous.generation === pair.generation) {
