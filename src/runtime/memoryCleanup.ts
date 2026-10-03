@@ -321,7 +321,14 @@ function cleanupPowerBankBoostMemory(): number {
     return 0;
   }
 
-  const activeTaskIds = new Set(Object.keys(Memory.data?.powerBankHarvest || {}));
+  const powerBankTasks = Memory.data?.powerBankHarvest || {};
+  const activeTaskIds = new Set(Object.keys(powerBankTasks));
+  // 预留按世代归属；creep args 只有目标和路线，不能据此判定世代 owner 已消失。
+  // 只保留任务明确引用的 owner，避免同一 Bank 的退役世代通过前缀匹配被误保留。
+  for (const task of Object.values(powerBankTasks)) {
+    if (task.primaryBoostOwnerId) activeTaskIds.add(task.primaryBoostOwnerId);
+    if (task.reinforcement?.boostOwnerId) activeTaskIds.add(task.reinforcement.boostOwnerId);
+  }
   for (const config of Object.values(Memory.data?.creepConfigs || {})) {
     for (const arg of config.args || []) {
       if (typeof arg === "string") activeTaskIds.add(arg);

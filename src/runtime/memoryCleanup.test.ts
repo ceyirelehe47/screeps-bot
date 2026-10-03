@@ -329,6 +329,58 @@ describe("runMemoryCleanup", () => {
     expect(spawn.memory.spawnList).toEqual(queue);
   });
 
+  it("keeps exact primary and reinforcement boost owners across cleanup cadences, then collects released generations", () => {
+    const primary = "pb-live:primary:g2";
+    const reinforcement = "pb-live:reinforcement:g3";
+    const retired = "pb-live:reinforcement:g1";
+    const owners = [primary, reinforcement, retired, "pb-ghost"];
+    Memory.data = {
+      powerBankHarvest: {
+        "pb-live": {
+          id: "pb-live", sourceRoom: "W1N1", status: "attacking",
+          primaryBoostOwnerId: primary,
+          reinforcement: { stage: "boosting", boostOwnerId: reinforcement },
+        },
+      },
+    } as unknown as Memory["data"];
+    Memory.runtime = {
+      powerBankBoost: Object.fromEntries(owners.map((taskId) => [taskId, {
+        taskId, sourceRoomName: "W1N1", labs: {},
+      }])),
+      synthesisControl: {
+        rooms: { W1N1: { stage: "idle", boostPause: {
+          reason: "powerBankBoost", taskId: retired, taskIds: owners,
+          createdTick: 1, pausedPlan: null, pausedStage: "synthesizing",
+        } } },
+        bindings: {},
+      },
+    } as unknown as Memory["runtime"];
+
+    for (const tick of [17, 34]) {
+      Game.time = tick;
+      resetRuntimeServices();
+      runMemoryCleanup();
+      expect(Object.keys(Memory.runtime!.powerBankBoost!)).toEqual([primary, reinforcement]);
+      expect(Memory.runtime!.synthesisControl!.rooms.W1N1.boostPause).toMatchObject({
+        taskId: primary, taskIds: [primary, reinforcement], createdTick: 1,
+      });
+    }
+
+    delete Memory.data!.powerBankHarvest!["pb-live"].reinforcement;
+    Game.time = 51;
+    resetRuntimeServices();
+    runMemoryCleanup();
+    expect(Object.keys(Memory.runtime!.powerBankBoost!)).toEqual([primary]);
+    expect(Memory.runtime!.synthesisControl!.rooms.W1N1.boostPause!.taskIds).toEqual([primary]);
+
+    delete Memory.data!.powerBankHarvest!["pb-live"];
+    Game.time = 68;
+    resetRuntimeServices();
+    runMemoryCleanup();
+    expect(Memory.runtime!.powerBankBoost).toBeUndefined();
+    expect(Memory.runtime!.synthesisControl!.rooms.W1N1.boostPause).toBeUndefined();
+  });
+
   it("collects expired reservations, stale recovery entries, and orphaned power-bank boost state", () => {
     reserveProductionResource("W1N1", "energy" as ResourceConstant, 500, "expiredCarrier");
     Memory.runtime!.resourceReservations!["W1N1:energy:expiredCarrier"].expiresAt = Game.time - 1;

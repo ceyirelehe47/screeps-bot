@@ -21,6 +21,7 @@ import { limitActionLog } from "@/runtime/actionLog";
 import { runSynthesisTaskPlanningCompatibility } from "@/runtime/synthesisCompatibilityPlanning";
 import { recordFixedCpuAction } from "@/runtime/cpuPhaseProfiler";
 import {
+  listCarrierTasksByRoom,
   pruneCarrierTasksForProducer,
   replaceCarrierTasksForProducerRoom,
   type CarrierTaskDraft,
@@ -1959,6 +1960,22 @@ export function isSynthesisPaused(roomName: string): boolean {
   return !!roomState?.boostPause;
 }
 
+/** 接管 lab 的当帧撤销旧合成步骤，保留未预留 lab 的残留清理。 */
+export function withdrawSynthesisCarrierTasksForBoost(roomName: string): void {
+  const reservedLabIds = getActivePowerBankBoostLabIds(roomName);
+  if (reservedLabIds.size === 0) return;
+  const tasks = listCarrierTasksByRoom(roomName).filter((task) => task.producer === SYNTHESIS_CARRIER_TASK_PRODUCER);
+  if (!tasks.some((task) => task.steps.some((step) => reservedLabIds.has(step.fromId) || reservedLabIds.has(step.toId)))) return;
+  const drafts: CarrierTaskDraft[] = tasks.map((task) => ({
+    id: task.id,
+    type: task.type,
+    priority: task.priority,
+    dispatchClass: task.dispatchClass,
+    steps: task.steps.filter((step) => !reservedLabIds.has(step.fromId) && !reservedLabIds.has(step.toId)),
+  })).filter((task) => task.steps.length > 0);
+  replaceCarrierTasksForProducerRoom(SYNTHESIS_CARRIER_TASK_PRODUCER, roomName, drafts);
+}
+
 export function pauseSynthesisForBoost(roomName: string, taskId: string): boolean {
   const runtime = getRuntimeState();
   if (!Game.rooms[roomName]) {
@@ -1991,6 +2008,9 @@ export function pauseSynthesisForBoost(roomName: string, taskId: string): boolea
     pausedPlan,
     pausedStage: roomState.stage,
   };
+
+  // 合成在 tick 中先于 boost 调度，不能让先前发布的装载/清理继续执行到下一帧。
+  replaceCarrierTasksForProducerRoom(SYNTHESIS_CARRIER_TASK_PRODUCER, roomName, []);
 
   // Clear active production — this triggers reagent cleanup on next tick
   roomState.stage = "idle";

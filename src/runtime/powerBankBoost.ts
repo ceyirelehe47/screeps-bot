@@ -2,6 +2,7 @@ import { POWER_BANK_BODY_TIERS, POWER_BANK_BOOST_REQUIREMENTS } from "@/runtime/
 import {
   pauseSynthesisForBoost,
   resumeSynthesisAfterBoost,
+  withdrawSynthesisCarrierTasksForBoost,
 } from "@/runtime/synthesisControl";
 import {
   cancelResourceTransferTask,
@@ -389,6 +390,8 @@ export function prepareBoosts(
     taskId,
     sourceRoomName,
   };
+
+  withdrawSynthesisCarrierTasksForBoost(sourceRoomName);
 
   replaceCarrierTasksForProducerRoom(
     `${POWER_BANK_BOOST_PRODUCER}:${taskId}`,

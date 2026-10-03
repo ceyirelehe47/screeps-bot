@@ -12,7 +12,7 @@ import {
   ensureResourceTransferTaskStore,
 } from "@/runtime/logistics/resourceTransferTasks";
 import { createMockStore, MockPos } from "@mock/powerBank";
-import { clearCarrierTaskBoardForTest, listCarrierTasksByRoom } from "@/runtime/carrierTaskBoard";
+import { clearCarrierTaskBoardForTest, listCarrierTasksByRoom, replaceCarrierTasksForProducerRoom } from "@/runtime/carrierTaskBoard";
 
 type RuntimeGlobal = typeof global & {
   __runtimeServices?: unknown;
@@ -152,6 +152,44 @@ describe("powerBankBoost", () => {
   });
 
   describe("prepareBoosts", () => {
+
+    it("withdraws old synthesis work as soon as boost preparation pauses production", () => {
+      const compound = RESOURCE_CATALYZED_UTRIUM_ACID;
+      const lab = createLabWithCompound("boost-lab", SOURCE_ROOM, compound, 60, 2000);
+      Game.rooms[SOURCE_ROOM] = createRoomWithInfrastructure({ name: SOURCE_ROOM, labs: [lab] });
+      (Game.getObjectById as jest.Mock).mockImplementation((id) => id === lab.id ? lab : null);
+      setActiveSynthesisPlan(SOURCE_ROOM);
+      replaceCarrierTasksForProducerRoom("synthesisControl", SOURCE_ROOM, [{
+        id: "old-synthesis-cleanup", type: "lab_cleanup", priority: 200,
+        steps: [{ id: "old-step", resource: compound, fromId: lab.id, fromKind: "lab",
+          toId: `${SOURCE_ROOM}-storage`, toKind: "storage", amount: 60 }],
+      }]);
+
+      expect(prepareBoosts("pb-owner", SOURCE_ROOM, 0, new Map([[compound, 60]])).status).toBe("ready");
+      expect(listCarrierTasksByRoom(SOURCE_ROOM).filter((task) => task.producer === "synthesisControl")).toEqual([]);
+      expect(isSynthesisPaused(SOURCE_ROOM)).toBe(true);
+    });
+
+    it("removes newly conflicting synthesis steps while retaining cleanup of unreserved labs", () => {
+      const compound = RESOURCE_CATALYZED_UTRIUM_ACID;
+      const lab = createLabWithCompound("boost-lab", SOURCE_ROOM, compound, 60, 2000);
+      Game.rooms[SOURCE_ROOM] = createRoomWithInfrastructure({ name: SOURCE_ROOM, labs: [lab] });
+      (Game.getObjectById as jest.Mock).mockImplementation((id) => id === lab.id ? lab : null);
+      setActiveSynthesisPlan(SOURCE_ROOM);
+      const required = new Map<ResourceConstant, number>([[compound, 60]]);
+      prepareBoosts("pb-owner", SOURCE_ROOM, 0, required);
+      const ordinaryStep = { id: "ordinary-step", resource: RESOURCE_HYDROXIDE,
+        fromId: "ordinary-lab", fromKind: "lab" as const,
+        toId: `${SOURCE_ROOM}-storage`, toKind: "storage" as const, amount: 50 };
+      replaceCarrierTasksForProducerRoom("synthesisControl", SOURCE_ROOM, [{
+        id: "paused-cleanup", type: "lab_cleanup", priority: 190,
+        steps: [{ id: "conflicting-step", resource: compound, fromId: lab.id, fromKind: "lab",
+          toId: `${SOURCE_ROOM}-storage`, toKind: "storage", amount: 60 }, ordinaryStep],
+      }]);
+
+      expect(prepareBoosts("pb-owner", SOURCE_ROOM, 0, required).status).toBe("ready");
+      expect(listCarrierTasksByRoom(SOURCE_ROOM).find((task) => task.id === "paused-cleanup")?.steps).toEqual([ordinaryStep]);
+    });
 
     describe("with local stock sufficient", () => {
 
