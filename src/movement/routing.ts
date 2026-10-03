@@ -1,11 +1,11 @@
-import { measureCreepIntent, measureCreepPathing } from "@/runtime/cpuPhaseProfiler";
+import { measureCreepPathing } from "@/runtime/cpuPhaseProfiler";
 import { ensureCreepMovementState } from "@/movement/creepState";
 import { getTickContextService } from "@/runtime/runtimeServices";
 import { getRoomTopologyRevision } from "@/movement/roomTopologyRevision";
 import { getPosKey, isExitTile, parseEncodedRouteRooms } from "@/movement/common";
 import { recordMovementMetric } from "@/movement/metrics";
 import { moveToTarget } from "@/movement/pathing";
-import { moveOffExit, moveToAdjacentPosition } from "@/movement/traffic";
+import { issueMove, moveOffExit, moveToAdjacentPosition } from "@/movement/traffic";
 import {
   TERRAIN_ONLY_ROOM_MATRIX_SOURCES,
   buildStaticRoomCostMatrix,
@@ -300,7 +300,7 @@ export function moveToTargetRoom(
         if (multiRoomSegment) {
           const transition = getMultiRoomSegmentTransition(creep, multiRoomSegment, nextRoom);
           if (transition?.exitDirection === exitDirection) {
-            const segmentResult = measureCreepIntent(() => creep.move(transition.moveDirection));
+            const segmentResult = issueMove(creep, transition.moveDirection);
             if (isReusableSegmentMoveResult(segmentResult)) {
               recordMovementMetric("multiRoomSegmentHits", creep.room.name);
               renewMultiRoomSegment(multiRoomSegment);
@@ -314,7 +314,7 @@ export function moveToTargetRoom(
           invalidateMultiRoomSegment(travelState, creep.room.name);
           multiRoomSegment = null;
         }
-        result = measureCreepIntent(() => creep.move(exitDirection as DirectionConstant));
+        result = issueMove(creep, exitDirection as DirectionConstant);
         updateTravelState(creep, travelState);
         return result;
       }
@@ -667,7 +667,7 @@ function followStoredTravelStep(creep: Creep, nextStep: StoredRoomPosition): Scr
     if (!transition) {
       return ERR_NO_PATH;
     }
-    return measureCreepIntent(() => creep.move(transition.moveDirection));
+    return issueMove(creep, transition.moveDirection);
   }
 
   const nextPos = new RoomPosition(nextStep.x, nextStep.y, nextStep.roomName);

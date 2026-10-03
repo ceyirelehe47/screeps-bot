@@ -1,3 +1,4 @@
+import { issueMove } from "@/movement/traffic";
 import { roleRegistry } from "@/roles";
 import { clearMovementState } from "@/roles/shared";
 import { decodeCrossShardTravelerName } from "@/runtime/crossShardNaming";
@@ -204,7 +205,7 @@ export function mountCreep(): void {
     if (spawnYield) {
       delete this.memory._spawnYield;
       if (Game.time - spawnYield.tick >= 0 && Game.time - spawnYield.tick <= 2) {
-        this.move(spawnYield.dir);
+        issueMove(this, spawnYield.dir);
         return;
       }
     }

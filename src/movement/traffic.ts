@@ -109,11 +109,96 @@ export function moveToAdjacentPosition(creep: AnyCreep, nextPos: RoomPosition): 
   return ERR_BUSY;
 }
 
-function issueMove(creep: AnyCreep, direction: DirectionConstant): CreepMoveReturnCode {
-  if (isStandardCreep(creep)) {
-    return measureCreepIntent(() => creep.move(direction));
+export interface MoveIntentReceipt {
+  readonly tick: number;
+  readonly actorId: string;
+  readonly direction: DirectionConstant;
+  readonly from: Readonly<{ x: number; y: number; roomName: string }>;
+  /** Engine movement.add clamp 后的原房目的格。 */
+  readonly attempted: Readonly<{ x: number; y: number; roomName: string }> | null;
+  /** 可达出口迁房后的预期格；仅证明提交，实际碰撞/accessibleRooms 仍以下 tick 为准。 */
+  readonly to: Readonly<{ x: number; y: number; roomName: string }> | null;
+}
+
+// 每个 Game/tick 仅保留每个 actor 最后一次成功 move，不写 Memory。
+let receiptGame: typeof Game | undefined;
+let receiptTick = -1;
+let moveReceipts = new WeakMap<AnyCreep, MoveIntentReceipt>();
+
+function currentMoveReceipts(): WeakMap<AnyCreep, MoveIntentReceipt> {
+  if (receiptGame !== Game || receiptTick !== Game.time) {
+    receiptGame = Game;
+    receiptTick = Game.time;
+    moveReceipts = new WeakMap<AnyCreep, MoveIntentReceipt>();
   }
-  return creep.move(direction);
+  return moveReceipts;
+}
+
+const MOVE_RECEIPT_OFFSETS: Record<DirectionConstant, readonly [number, number]> = {
+  [TOP]: [0, -1], [TOP_RIGHT]: [1, -1], [RIGHT]: [1, 0], [BOTTOM_RIGHT]: [1, 1],
+  [BOTTOM]: [0, 1], [BOTTOM_LEFT]: [-1, 1], [LEFT]: [-1, 0], [TOP_LEFT]: [-1, -1],
+};
+
+export function getMoveIntentAttemptedPosition(
+  pos: Pick<RoomPosition, "x" | "y" | "roomName">,
+  direction: DirectionConstant,
+): Readonly<{ x: number; y: number; roomName: string }> | null {
+  const offset = MOVE_RECEIPT_OFFSETS[direction];
+  if (!offset) return null;
+  // Engine 4.3 movement.add 对越界坐标 clamp；creeps/tick 在 movement.execute
+  // 后立即处理边缘。因此 48→49 本帧已迁房，入口 0→同列也可能退回原房。
+  return Object.freeze({
+    x: Math.max(0, Math.min(49, pos.x + offset[0])),
+    y: Math.max(0, Math.min(49, pos.y + offset[1])),
+    roomName: pos.roomName,
+  });
+}
+
+export function getMoveIntentDestination(
+  pos: Pick<RoomPosition, "x" | "y" | "roomName">,
+  direction: DirectionConstant,
+): Readonly<{ x: number; y: number; roomName: string }> | null {
+  const attempted = getMoveIntentAttemptedPosition(pos, direction);
+  if (!attempted) return null;
+  const { x, y, roomName } = attempted;
+  const edgeX = x === 0 || x === 49;
+  const edgeY = y === 0 || y === 49;
+  // 角点存在双轴出口；协调器不把一个单轴 map 关系当成完整跨房证明。
+  if (edgeX && edgeY) return null;
+  if (!edgeX && !edgeY) return attempted;
+  const exit = edgeX ? (x === 0 ? LEFT : RIGHT) : (y === 0 ? TOP : BOTTOM);
+  const nextRoom = Game.map?.describeExits?.(roomName)?.[exit];
+  if (!nextRoom || Game.map.getRoomStatus?.(nextRoom)?.status === "closed") return null;
+  return Object.freeze({ x: edgeX ? (x === 0 ? 49 : 0) : x, y: edgeY ? (y === 0 ? 49 : 0) : y, roomName: nextRoom });
+}
+
+export function getMoveIntentReceipt(creep: AnyCreep): MoveIntentReceipt | undefined {
+  return currentMoveReceipts().get(creep);
+}
+
+/** 与原 native 调用、Profiler、返回值一致；失败尝试不覆盖先前成功意图。 */
+export function issueMove(creep: AnyCreep, direction: DirectionConstant): CreepMoveReturnCode {
+  const from = Object.freeze({ x: creep.pos.x, y: creep.pos.y, roomName: creep.pos.roomName });
+  const code = isStandardCreep(creep)
+    ? measureCreepIntent(() => creep.move(direction))
+    : creep.move(direction);
+  if (code === OK) {
+    currentMoveReceipts().set(creep, Object.freeze({
+      tick: Game.time, actorId: creep.id ?? creep.name, direction, from,
+      attempted: getMoveIntentAttemptedPosition(from, direction),
+      to: getMoveIntentDestination(from, direction),
+    }));
+  }
+  return code;
+}
+
+/** 只撤销调用者持有的当前成功意图，不碰此前其它调用者的意图。 */
+export function cancelMoveIntent(creep: Creep, receipt: MoveIntentReceipt): boolean {
+  const receipts = currentMoveReceipts();
+  if (receipts.get(creep) !== receipt || typeof creep.cancelOrder !== "function") return false;
+  if (creep.cancelOrder("move") !== OK) return false;
+  receipts.delete(creep);
+  return true;
 }
 
 function isHeadOnWarDuoSwap(attacker: AnyCreep, healer: AnyCreep): boolean {
@@ -316,7 +401,11 @@ function isYieldTileWalkable(pos: RoomPosition, blocker: AnyCreep): boolean {
 
 // ─── Exit recovery ────────────────────────────────────────────────────────────
 
-export function moveOffExit(creep: AnyCreep, avoidSwamp = true): ScreepsReturnCode {
+export function moveOffExit(
+  creep: AnyCreep,
+  avoidSwamp = true,
+  acceptStep?: (direction: DirectionConstant, pos: RoomPosition) => boolean,
+): ScreepsReturnCode {
   let swampDirection: DirectionConstant | undefined;
 
   for (const direction of [TOP, RIGHT, BOTTOM, LEFT, TOP_RIGHT, BOTTOM_RIGHT, BOTTOM_LEFT, TOP_LEFT] as DirectionConstant[]) {
@@ -327,6 +416,8 @@ export function moveOffExit(creep: AnyCreep, avoidSwamp = true): ScreepsReturnCo
     if (findMyOwnedUnitAt(pos, creep)) {
       continue;
     }
+
+    if (acceptStep && !acceptStep(direction, pos)) continue;
 
     const terrain = Game.map.getRoomTerrain(pos.roomName).get(pos.x, pos.y);
     if (avoidSwamp && terrain === TERRAIN_MASK_SWAMP) {

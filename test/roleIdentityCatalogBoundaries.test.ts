@@ -34,6 +34,7 @@ const EXPECTED_ROLE_STATUSES = {
   powerBankAttacker: "active",
   powerBankHealer: "active",
   powerBankHauler: "active",
+  depositHarvester: "active",
   remoteMiningReserver: "active",
   remoteWorker: "active",
   remoteDefender: "active",

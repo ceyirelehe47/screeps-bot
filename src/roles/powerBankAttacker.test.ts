@@ -1,3 +1,5 @@
+jest.mock("@/runtime/runtimeServices", () => ({ getTickContextService: jest.fn() }));
+jest.mock("@/movement/routing", () => ({ getCachedStaticTravelMatrix: jest.fn(() => ({ get: () => 0 })) }));
 jest.mock("@/roles/shared", () => ({
   clearMovementState: jest.fn(),
   moveToTarget: jest.fn(() => OK),
@@ -14,6 +16,7 @@ import { clearCreepMovementStateForTest, getCreepMovementState } from "@/movemen
 import {
   createMockPowerBankCreep,
   createMockPowerBank,
+  MockPos,
   type MockCreepConfig,
 } from "@mock/powerBank";
 
@@ -22,6 +25,8 @@ const { clearMovementState, moveToTarget, moveToTargetRoom } = jest.requireMock(
   moveToTarget: jest.Mock;
   moveToTargetRoom: jest.Mock;
 };
+
+const { getTickContextService } = jest.requireMock("@/runtime/runtimeServices") as { getTickContextService: jest.Mock };
 
 const TARGET_ROOM = "E3N60";
 const TASK_ID = "task-0";
@@ -124,8 +129,17 @@ describe("powerBankAttackerRole", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     clearCreepMovementStateForTest();
+    Object.assign(global, { RoomPosition: MockPos });
     Game.time = 1000;
     Game.creeps = {} as Record<string, Creep>;
+    getTickContextService.mockReturnValue({ getRoomContext: (owner: Room | string) => {
+      const name = typeof owner === "string" ? owner : owner.name;
+      return {
+        room: typeof owner === "string" ? { name } : owner,
+        getMyCreeps: () => Object.values(Game.creeps).filter((creep) => creep.room.name === name),
+        getStructures: () => [], getConstructionSites: () => [], getSources: () => [], getMinerals: () => [], getDeposits: () => [],
+      };
+    } });
     (Memory as any).data = {};
     (Memory as any).runtime = {};
   });
@@ -152,16 +166,18 @@ describe("powerBankAttackerRole", () => {
     expect(attacker.attack).not.toHaveBeenCalled();
   });
 
-  it("waits after crossing a room boundary until the healer catches up", () => {
+  it("moves inward and brings the exact follower through a proven split room boundary", () => {
     setupTask({ status: "travelling", attackerReady: true, healerReady: true });
-    const { attacker } = setupPair(
-      { roomName: "W1N2", x: 0, y: 25 },
-      { roomName: "W1N1", x: 49, y: 25 },
+    const { attacker, healer } = setupPair(
+      { roomName: "E0N0", x: 0, y: 25 },
+      { roomName: "W0N0", x: 48, y: 25 },
     );
+    (Game as any).map = { getRoomTerrain: jest.fn(() => ({ get: () => 0 })), describeExits: jest.fn((name: string) => name === "W0N0" ? { [RIGHT]: "E0N0" } : { [LEFT]: "W0N0" }) };
 
     powerBankAttackerRole(TARGET_ROOM).target(attacker);
 
     expect(attacker.move).toHaveBeenCalledWith(RIGHT);
+    expect(healer.move).toHaveBeenCalledWith(RIGHT);
     expect(getCreepMovementState(attacker)?.pathingRequestedAt).toBe(Game.time);
     expect(moveToTargetRoom).not.toHaveBeenCalled();
     expect(attacker.attack).not.toHaveBeenCalled();

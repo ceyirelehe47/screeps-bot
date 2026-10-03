@@ -36,8 +36,13 @@ function activeBody(creep: Creep): BodyPartConstant[] {
   return creep.body.filter((part) => part.hits > 0 || (part.type !== MOVE && part.type !== CARRY)).map((p) => p.type);
 }
 function stop(creep: Creep, task: DepositHarvestTask | undefined, reason: string): void {
-  memory(creep).depositReturning = true;
-  if (task && !isDepositTerminal(task)) { task.status = "returning"; task.stopReason ??= reason; }
+  const mem = memory(creep);
+  mem.depositReturning = true;
+  if (task && !isDepositTerminal(task)) {
+    // 同 tick 再次 mounted 调用仍在等 transfer 对账，不能降回 returning。
+    if (!mem.depositPendingTransfer) task.status = "returning";
+    task.stopReason ??= reason;
+  }
 }
 function confirmPreviousActions(creep: Creep, task: DepositHarvestTask | undefined): void {
   const mem = memory(creep);

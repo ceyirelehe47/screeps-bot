@@ -245,6 +245,8 @@ export function runPowerBankObserver(): void {
   // 请求总量受 64 上限约束，reachability 在本次调度中复用。先保留当前
   // Observer 独占覆盖的实际房间，不能只按后续还能服务的类别数量预留。
   const uniqueRequest = (observer: StructureObserver, later: readonly StructureObserver[]): { roomName: string; kind: RequestKind } | undefined => {
+    // 最后一格没有后续覆盖可丢，继续原类别预留；积压 combat 不能抢走 remote 的末格。
+    if (later.length === 0) return undefined;
     let choice: { roomName: string; kind: RequestKind } | undefined;
     let earliest = Infinity;
     for (let offset = 0; offset < REQUEST_KINDS.length; offset += 1) {

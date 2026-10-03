@@ -35,6 +35,7 @@ describe("main loop phase ordering", () => {
     ["warControl", "runWarControl"],
     ["powerBankObserver", "runPowerBankObserver"],
     ["powerBankHarvest", "runPowerBankHarvest"],
+    ["depositHarvest", "runDepositHarvest"],
     ["powerCreepControl", "runPowerCreepControl"],
     ["powerSpawnControl", "runPowerSpawnControl"],
     ["roomPlannerConstruction", "runRoomPlannerConstruction"],

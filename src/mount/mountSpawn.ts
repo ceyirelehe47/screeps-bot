@@ -1,3 +1,4 @@
+import { issueMove } from "@/movement/traffic";
 import { isSpawnActive } from "@/runtime/tickContext";
 import { getHarvesterBody, spawnProfiles } from "@/config/spawnProfiles";
 import { recordFixedCpuAction } from "@/runtime/cpuPhaseProfiler";
@@ -153,7 +154,7 @@ function directBlockingCreepsOffSpawn(spawn: StructureSpawn): void {
     });
     if (exit) {
       blocker.memory._spawnYield = { dir: exit, tick: Game.time };
-      blocker.move(exit);
+      issueMove(blocker, exit);
     }
   }
 }

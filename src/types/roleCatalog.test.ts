@@ -77,7 +77,7 @@ describe("roleCatalog", () => {
     expect(activeRoles).toEqual(
       EXPECTED_ROLES.filter((role) => role !== "hubUpgrader").sort(),
     );
-    expect(activeRoles).toHaveLength(26);
+    expect(activeRoles).toHaveLength(27);
     expect(legacyRoles).toEqual(["hubUpgrader"]);
     expect(Object.isFrozen(ROLE_CATALOG)).toBe(true);
   });

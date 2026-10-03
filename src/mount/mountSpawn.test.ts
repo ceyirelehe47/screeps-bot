@@ -5,6 +5,7 @@ jest.mock("@/runtime/tickContext", () => ({
 
 jest.mock("@/runtime/cpuPhaseProfiler", () => ({
   recordFixedCpuAction: jest.fn(),
+  measureCreepIntent: (fn: () => unknown) => fn(),
 }));
 
 import { mountSpawn } from "@/mount/mountSpawn";

@@ -171,27 +171,63 @@ describe("runFlagHaulingByFlag", () => {
     expect(Object.keys(getCreepConfigService().list()).every((name) => name.startsWith("W1N1:"))).toBe(true);
   });
 
-  it("INVADER 四 Keeper 逐只覆盖取货位，必须有近距本方战斗 escort", () => {
+  it("INVADER 无 escort 的安全位仍派遣，四 Keeper 各自距离 5 都阻止取货", () => {
     const world = salvageFixture();
     world.objects.hostiles.push(...[10, 20, 30, 40].map((x) => ({ owner: { username: "Source Keeper" },
       pos: position(x, 10) } as Creep)));
     const drop = { amount: 50, resourceType: RESOURCE_ENERGY, pos: position(44, 16) } as Resource;
     world.objects.drops.push(drop);
     runFlagHaulingByFlag();
-    expect(getCreepConfigService().list()).toEqual({});
-    const escort = { pos: drop.pos, getActiveBodyparts: (part: BodyPartConstant) => part === ATTACK ? 25 : 0 } as Creep;
-    world.objects.escorts.push(escort);
+    expect(world.objects.escorts).toEqual([]);
+    expect(Object.keys(getCreepConfigService().list())).toHaveLength(3);
+    expect(getCreepConfigService().get(world.configName)?.roomName).toBe("W1N1");
     Game.time += 1;
     runFlagHaulingByFlag();
     expect(getCreepConfigService().get(world.configName)?.roomName).toBe("W1N1");
     for (const keeper of world.objects.hostiles) {
-      Object.assign(drop, { pos: position(keeper.pos.x + 5, keeper.pos.y + 5) });
-      Object.assign(escort, { pos: drop.pos });
+      Object.assign(drop, { pos: position(keeper.pos.x, keeper.pos.y + 5) });
       Game.time += 1;
       runFlagHaulingByFlag();
       expect(getCreepConfigService().get(world.configName)?.roomName).toBeUndefined();
       expect(world.flag.remove).not.toHaveBeenCalled();
     }
+    Object.assign(drop, { pos: position(44, 16) });
+    Game.time += 1;
+    runFlagHaulingByFlag();
+    expect(world.objects.escorts).toEqual([]);
+    expect(getCreepConfigService().get(world.configName)?.roomName).toBe("W1N1");
+    expect(world.flag.remove).not.toHaveBeenCalled();
+  });
+
+  it("INVADER 无当前 Keeper 仍逐只避开 KeeperLair，距离 5 拒绝而距离 6 无 escort 可派遣", () => {
+    const world = salvageFixture();
+    const lairs = [10, 20, 30, 40].map((x) => ({ structureType: STRUCTURE_KEEPER_LAIR,
+      pos: position(x, 10) } as StructureKeeperLair));
+    world.objects.structures.push(...lairs);
+    const drop = { amount: 50, resourceType: RESOURCE_ENERGY, pos: position(40, 15) } as Resource;
+    world.objects.drops.push(drop);
+    runFlagHaulingByFlag();
+    expect(world.objects.hostiles).toEqual([]);
+    expect(world.objects.escorts).toEqual([]);
+    expect(getCreepConfigService().list()).toEqual({});
+    expect(world.flag.remove).not.toHaveBeenCalled();
+    Object.assign(drop, { pos: position(44, 16) });
+    Game.time += 1;
+    runFlagHaulingByFlag();
+    expect(Object.keys(getCreepConfigService().list())).toHaveLength(3);
+    expect(getCreepConfigService().get(world.configName)?.roomName).toBe("W1N1");
+    for (const lair of lairs) {
+      Object.assign(drop, { pos: position(lair.pos.x, lair.pos.y + 5) });
+      Game.time += 1;
+      runFlagHaulingByFlag();
+      expect(getCreepConfigService().get(world.configName)?.roomName).toBeUndefined();
+      expect(world.flag.remove).not.toHaveBeenCalled();
+    }
+    Object.assign(drop, { pos: position(44, 16) });
+    Game.time += 1;
+    runFlagHaulingByFlag();
+    expect(getCreepConfigService().get(world.configName)?.roomName).toBe("W1N1");
+    expect(world.flag.remove).not.toHaveBeenCalled();
   });
 
   it("INVADER 必须跨 tick 再见空场且实际货物已归仓，才删除 flag/config", () => {

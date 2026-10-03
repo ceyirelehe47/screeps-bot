@@ -74,8 +74,10 @@ describe("Deposit mounted source/target闭环", () => {
     c.work(); c.work();
     expect(c.transfer).toHaveBeenCalledTimes(1); expect(task.deliveredAmount).toBe(0);
     expect(task.status).toBe("unloading"); expect(c.suicide).not.toHaveBeenCalled();
+    expect(c.memory.depositPendingTransfer).toMatchObject({ tick: Game.time, before: 500, amount: 500 });
     amount = 0; Game.time += 1; c.work();
     expect(task.deliveredAmount).toBe(500); expect(task.status).toBe("complete");
+    expect(c.memory.depositPendingTransfer).toBeUndefined();
     expect(c.suicide).toHaveBeenCalledTimes(1); expect(c.harvest).toHaveBeenCalledTimes(1);
   });
   it("pending完整返程证据只等待，不调用harvest", () => {

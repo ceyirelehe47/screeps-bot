@@ -1,3 +1,5 @@
+jest.mock("@/runtime/powerBankObserver", () => ({ ...jest.requireActual("@/runtime/powerBankObserver"), requestCombatObservation: jest.fn(() => true) }));
+
 import { runWarControl, startWarRoom, stopWarRoom } from "@/runtime/warControl";
 import * as combatBoosts from "@/runtime/powerBankBoost";
 import * as combatObserver from "@/runtime/powerBankObserver";

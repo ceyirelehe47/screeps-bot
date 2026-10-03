@@ -1,5 +1,6 @@
 import { clearCreepMovementStateForTest } from "@/movement/creepState";
 import { moveToTargetRoom } from "@/movement/routing";
+import { getMoveIntentReceipt } from "@/movement/traffic";
 
 jest.mock("@/runtime/roomPlannerConstruction", () => ({
   getSourceContainerPositionsForRoom: jest.fn(() => []),
@@ -116,6 +117,11 @@ describe("moveToTargetRoom", () => {
 
     expect(result).toBe(OK);
     expect(move).toHaveBeenCalledWith(RIGHT);
+    expect(getMoveIntentReceipt(creep)).toEqual(expect.objectContaining({
+      direction: RIGHT,
+      from: { x: 49, y: 25, roomName: "W1N1" },
+      to: { x: 0, y: 25, roomName: "W1N2" },
+    }));
     expect(moveTo).not.toHaveBeenCalled();
   });
 
