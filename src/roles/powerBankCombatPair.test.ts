@@ -338,15 +338,17 @@ describe("PowerBank same-frame pair movement", () => {
     expect(attacker.pos.isNearTo(healer.pos)).toBe(true);
   });
 
-  it("stages from the actual canonical exit when a legacy dynamic route differs from findExitTo", () => {
+  it("stages from the shared route exit when the room's legacy findExitTo disagrees", () => {
     delete Memory.data!.powerBankHarvest![TASK].routeRooms;
     place(attacker, 48, 25); place(healer, 47, 25);
     attacker.room.findExitTo = jest.fn(() => TOP);
     Game.map.describeExits = jest.fn((room: string) => room === SOURCE ? { [RIGHT]: TARGET, [TOP]: "W0N1" } : { [LEFT]: SOURCE });
     const redLegacy = powerBankAttackerRole(TARGET), greenLegacy = powerBankHealerRole(TARGET);
     greenLegacy.target(healer); redLegacy.target(attacker);
-    expect(attacker.cancelOrder).toHaveBeenCalledWith("move");
+    expect(attacker.move).not.toHaveBeenCalled();
+    expect(attacker.cancelOrder).not.toHaveBeenCalled();
     expect(pending.has(attacker)).toBe(false); expect(pending.has(healer)).toBe(true);
+    expect(pending.get(healer)).not.toBe(TOP);
     commitFrame();
     expect(attacker.pos.roomName).toBe(SOURCE); expect(healer.pos.x).toBe(48);
     redLegacy.target(attacker); greenLegacy.target(healer); commitFrame();
