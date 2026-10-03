@@ -266,6 +266,17 @@ describe("PowerBank same-frame pair movement", () => {
     expect(pending.size).toBe(0);
   });
 
+  it("红误入敌方出口时不把绿拉进去，红回到原房后再集合", () => {
+    place(attacker, 0, 25, TARGET); place(healer, 48, 25, SOURCE);
+    Game.rooms[TARGET].controller = { my: false, owner: { username: "enemy" } } as StructureController;
+    calls("healer-first");
+    expect(pending.has(healer)).toBe(false);
+    commitFrame();
+    expect(attacker.room.name).toBe(SOURCE);
+    expect(healer.room.name).toBe(SOURCE);
+    expect(attacker.pos.isNearTo(healer.pos)).toBe(true);
+  });
+
   it("moves both inside after landing, rather than bouncing the follower into the previous room", () => {
     place(attacker, 48, 25); place(healer, 48, 26);
     calls("healer-first"); commitFrame();

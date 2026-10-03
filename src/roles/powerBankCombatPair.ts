@@ -281,6 +281,12 @@ function completePairStep(
   followerDirection?: DirectionConstant,
 ): void {
   const leaderTo = leaderReceipt.to;
+  // 分队重聚也逐成员检查：红已经误入敌房不能成为把绿带进去的许可。
+  if ((leaderTo && leaderTo.roomName !== pair.attacker.room.name && !isPowerBankTransitRoomAllowed(leaderTo.roomName)) ||
+      (followerDestination.roomName !== pair.healer.room.name && !isPowerBankTransitRoomAllowed(followerDestination.roomName))) {
+    cancelPairAdvance(pair, leaderReceipt);
+    return;
+  }
   const direction = followerDirection ?? pair.healer.pos.getDirectionTo(new RoomPosition(followerDestination.x, followerDestination.y, followerDestination.roomName));
   const followerAttempted = getMoveIntentAttemptedPosition(pair.healer.pos, direction);
   if (!leaderTo || !leaderReceipt.attempted || !followerAttempted ||
