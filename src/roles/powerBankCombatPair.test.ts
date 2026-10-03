@@ -96,8 +96,8 @@ beforeEach(() => {
   (getCachedStaticTravelMatrix as jest.Mock).mockImplementation((room: string) => ({
     get: (x: number, y: number) => walls.has(`${room}:${x}:${y}`) ? 255 : 0,
   }));
-  attacker = createMockPowerBankCreep("powerBankAttacker", { id: "red", name: "red", memory: { taskId: TASK, pairGeneration: 1 } });
-  healer = createMockPowerBankCreep("powerBankHealer", { id: "green", name: "green", memory: { taskId: TASK, pairGeneration: 1 } });
+  attacker = createMockPowerBankCreep("powerBankAttacker", { id: "red", name: "red", memory: { taskId: TASK, pairGeneration: 1 } as Partial<PowerBankAttackerMemory> });
+  healer = createMockPowerBankCreep("powerBankHealer", { id: "green", name: "green", memory: { taskId: TASK, pairGeneration: 1 } as Partial<PowerBankHealerMemory> });
   place(attacker, 10, 10); place(healer, 9, 10);
   for (const creep of [attacker, healer]) {
     (creep.move as jest.Mock).mockImplementation((direction: DirectionConstant) => { pending.set(creep, direction); return OK; });
@@ -352,7 +352,7 @@ describe("PowerBank same-frame pair movement", () => {
   });
 
   it("does not bind a replacement generation while coordinating from the other role", () => {
-    healer.memory.pairGeneration = 2;
+    (healer.memory as PowerBankHealerMemory).pairGeneration = 2;
     calls("attacker-first"); expect(pending.size).toBe(0);
   });
 });

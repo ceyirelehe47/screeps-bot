@@ -53,7 +53,7 @@ function pair(outside = false, structures: Structure[] = [tower("tower")]): { at
 function deferredEngineFrame(actors: Creep[]): () => void {
   const pending = new Map<Creep, DirectionConstant>();
   const offsets: Record<number, [number, number]> = { 1: [0, -1], 2: [1, -1], 3: [1, 0], 4: [1, 1], 5: [0, 1], 6: [-1, 1], 7: [-1, 0], 8: [-1, -1] };
-  for (const actor of actors) actor.move = jest.fn((direction: DirectionConstant) => { pending.set(actor, direction); return OK; }) as Creep["move"];
+  for (const actor of actors) actor.move = jest.fn((direction: DirectionConstant) => { pending.set(actor, direction); return OK; }) as unknown as Creep["move"];
   moveToTarget.mockImplementation((actor: Creep, target: RoomPosition | { pos: RoomPosition }) => {
     const destination = "pos" in target ? target.pos : target;
     const direction = actor.pos.getDirectionTo(destination);
