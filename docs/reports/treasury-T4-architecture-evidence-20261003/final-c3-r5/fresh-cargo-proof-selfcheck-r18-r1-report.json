@@ -1,0 +1,374 @@
+{
+  "schema": "screeps-r18-fresh-cargo-algorithm-selfcheck/v1",
+  "capturedAtUtc": "2026-10-03T03:29:48.406020+00:00",
+  "outcome": "FAIL",
+  "passed": 29,
+  "total": 31,
+  "skipped": 0,
+  "syntheticAlgorithmOnly": true,
+  "candidateAcceptanceClaimed": false,
+  "realFreshCaseAcceptanceClaimed": false,
+  "freshCaseClaimCreated": false,
+  "worldModified": false,
+  "formalApiAccessed": false,
+  "originalFilesUnchangedAfterRun": true,
+  "selfcheckSource": {
+    "path": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/selfcheck-fresh-cargo-proof-r18-r1.py",
+    "sha256": "f41c21a9f9882e2c025a737fd49ff296f1ef1840d26a1af30024f59bef074d35"
+  },
+  "proofSource": {
+    "path": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/c2-c3-cargo-drain-proof-r18-r2.py",
+    "sha256": "bfd52e843e839408d106a5cd3b7fff4a8a100620ea54bd1a47723763c1257497"
+  },
+  "syntheticInputs": {
+    "path": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/fresh-cargo-proof-selfcheck-r18-r1-synthetic-inputs.json",
+    "sha256": "2e1ec231c0b7721a0da2ff2a0f5506655697609b384b7598b0303e5f1455fb6e",
+    "bytes": 43426439
+  },
+  "actualOriginalSources": {
+    "baselineDatabase": {
+      "path": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/db-frozen-pre-t4.json",
+      "sha256": "bf23559afdc92989d715d2ef2219acdd7f97f5bf60c32b0787af6874bf0cc2c3",
+      "bytes": 4258774,
+      "pinnedSha256": "bf23559afdc92989d715d2ef2219acdd7f97f5bf60c32b0787af6874bf0cc2c3",
+      "originalFileModified": false
+    },
+    "beforeSetup801": {
+      "path": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c1-natural-before-setup-snapshot.json",
+      "sha256": "1955ca5a32c56da4b9273293c3a0754716ac2670c599ff25bde4d38141a8c82f",
+      "bytes": 123489,
+      "pinnedSha256": null,
+      "originalFileModified": false
+    },
+    "afterAlign803": {
+      "path": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c1-natural-cargo-drain-before-snapshot.json",
+      "sha256": "8f41bc72ab569d5e3e1b2d8d74758745422651c25c7c5fce966877d014e17f6a",
+      "bytes": 119744,
+      "pinnedSha256": "8f41bc72ab569d5e3e1b2d8d74758745422651c25c7c5fce966877d014e17f6a",
+      "originalFileModified": false
+    },
+    "afterDrain805": {
+      "path": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c1-natural-before-setup-after-real-drain-snapshot.json",
+      "sha256": "0f3ad5a21ea2bb0fb23bc55bbadfec3f18ea465ffdd12857a54a423a47529976",
+      "bytes": 119903,
+      "pinnedSha256": "0f3ad5a21ea2bb0fb23bc55bbadfec3f18ea465ffdd12857a54a423a47529976",
+      "originalFileModified": false
+    },
+    "drainDriver144": {
+      "path": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c1-natural-cargo-drain-driver.json",
+      "sha256": "631cc2a2e319af4e2e91563baffbf57c870e121e401e3664e2d18def830383c7",
+      "bytes": 21737294,
+      "pinnedSha256": "631cc2a2e319af4e2e91563baffbf57c870e121e401e3664e2d18def830383c7",
+      "originalFileModified": false
+    },
+    "warmupDriver": {
+      "path": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c1-natural-warmup-driver.json",
+      "sha256": "ea625b81c0b9d77dea5d3c8af3e07eaafb270d94dc1dca2dbf108a0de59df9b3",
+      "bytes": 20417,
+      "pinnedSha256": null,
+      "originalFileModified": false
+    },
+    "claim": {
+      "path": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c1-natural-independent-instance.json",
+      "sha256": "d5cfde35e7323740aacb1ea4d5158ccc3f6bffaa1aec90430da0e427cd0a13bd",
+      "bytes": 5949,
+      "pinnedSha256": "d5cfde35e7323740aacb1ea4d5158ccc3f6bffaa1aec90430da0e427cd0a13bd",
+      "originalFileModified": false
+    },
+    "reactionRecord": {
+      "path": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/native-lab-reaction-source-contract-r18-r1.json",
+      "sha256": "560c3d9b45d66e1a13d20578cb4b5fccfa3ca04771fb319258847cddb7653955",
+      "bytes": 50470,
+      "pinnedSha256": "560c3d9b45d66e1a13d20578cb4b5fccfa3ca04771fb319258847cddb7653955",
+      "originalFileModified": false
+    },
+    "synthesisSource": {
+      "path": "/srv/screeps-treasury-build/t4-architecture-r8-20261003/candidate/src/runtime/synthesisControl.ts",
+      "sha256": "19e5d4c6ac25cfefb0af28d71c71d20f623a5cbe1b3d1b7cabb81e447aa58c7f",
+      "bytes": 76107,
+      "pinnedSha256": "19e5d4c6ac25cfefb0af28d71c71d20f623a5cbe1b3d1b7cabb81e447aa58c7f",
+      "originalFileModified": false
+    },
+    "originalDriverSource": {
+      "path": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/run-until-t4.cjs",
+      "sha256": "d4811fca14d69a81c0a3653252d8628337fe9c3453aed3b74445bac5d19532ba",
+      "bytes": 8203,
+      "pinnedSha256": "d4811fca14d69a81c0a3653252d8628337fe9c3453aed3b74445bac5d19532ba",
+      "originalFileModified": false
+    },
+    "freshDriverSource": {
+      "path": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/run-until-fresh-cargo-zero-r18-r1.cjs",
+      "sha256": "2818c2bbbd3b6540d0137de735dafd937afb399219f35c4786ec9be3caf43832",
+      "bytes": 11295,
+      "pinnedSha256": "2818c2bbbd3b6540d0137de735dafd937afb399219f35c4786ec9be3caf43832",
+      "originalFileModified": false
+    },
+    "runnerSource": {
+      "path": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/run-t4-scenarios-r18-physical-cold-r1.py",
+      "sha256": "4905f4909b58c705763392a0004cb3da5c8d3b2643041bde2fc080b58247d988",
+      "bytes": 31957,
+      "pinnedSha256": "4905f4909b58c705763392a0004cb3da5c8d3b2643041bde2fc080b58247d988",
+      "originalFileModified": false
+    },
+    "helperSource": {
+      "path": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/lab-t4-r18-physical-uh-r1.cjs",
+      "sha256": "52f8eb2101e07e33101da26e2f0437559972178a79c8bdc43852a80075a1813c",
+      "bytes": 18667,
+      "pinnedSha256": "52f8eb2101e07e33101da26e2f0437559972178a79c8bdc43852a80075a1813c",
+      "originalFileModified": false
+    },
+    "candidateManifest": {
+      "path": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/candidate/manifest.json",
+      "sha256": "6b2b73e71b4ede5f912cfbe14f52ee8c8cc8f803f4af5dacf3602ed31c4e97a9",
+      "bytes": 2376,
+      "pinnedSha256": "6b2b73e71b4ede5f912cfbe14f52ee8c8cc8f803f4af5dacf3602ed31c4e97a9",
+      "originalFileModified": false
+    }
+  },
+  "tests": [
+    {
+      "name": "drain_synthetic_positive_deterministic",
+      "expected": "PASS",
+      "outcome": "FAIL",
+      "error": "energy并非两原creep到固定同room storage"
+    },
+    {
+      "name": "observe-zero_synthetic_positive_deterministic",
+      "expected": "PASS",
+      "outcome": "FAIL",
+      "error": "energy并非两原creep到固定同room storage"
+    },
+    {
+      "name": "wrong_frozen_driver_source",
+      "expected": "REJECT",
+      "outcome": "PASS",
+      "actual": "REJECT",
+      "rejectionReason": "caller冻结当前源/原baseline身份不符",
+      "declaredHashesRecomputed": true
+    },
+    {
+      "name": "wrong_case_claim",
+      "expected": "REJECT",
+      "outcome": "PASS",
+      "actual": "REJECT",
+      "rejectionReason": "独立freshcase claim未绑定原801/当前main/未发行",
+      "declaredHashesRecomputed": true
+    },
+    {
+      "name": "raw_transaction_sender_change",
+      "expected": "REJECT",
+      "outcome": "PASS",
+      "actual": "REJECT",
+      "rejectionReason": "energy并非两原creep到固定同room storage",
+      "declaredHashesRecomputed": true
+    },
+    {
+      "name": "raw_transaction_metadata_change",
+      "expected": "REJECT",
+      "outcome": "PASS",
+      "actual": "REJECT",
+      "rejectionReason": "energy并非两原creep到固定同room storage",
+      "declaredHashesRecomputed": true
+    },
+    {
+      "name": "old_fiscal_ring_change",
+      "expected": "REJECT",
+      "outcome": "PASS",
+      "actual": "REJECT",
+      "rejectionReason": "energy并非两原creep到固定同room storage",
+      "declaredHashesRecomputed": true
+    },
+    {
+      "name": "cfg_change",
+      "expected": "REJECT",
+      "outcome": "PASS",
+      "actual": "REJECT",
+      "rejectionReason": "energy并非两原creep到固定同room storage",
+      "declaredHashesRecomputed": true
+    },
+    {
+      "name": "rc_task_change",
+      "expected": "REJECT",
+      "outcome": "PASS",
+      "actual": "REJECT",
+      "rejectionReason": "energy并非两原creep到固定同room storage",
+      "declaredHashesRecomputed": true
+    },
+    {
+      "name": "cargo_nonzero_at_final",
+      "expected": "REJECT",
+      "outcome": "PASS",
+      "actual": "REJECT",
+      "rejectionReason": "energy并非两原creep到固定同room storage",
+      "declaredHashesRecomputed": true
+    },
+    {
+      "name": "energy100_delivery_deficit",
+      "expected": "REJECT",
+      "outcome": "PASS",
+      "actual": "REJECT",
+      "rejectionReason": "energy并非两原creep到固定同room storage",
+      "declaredHashesRecomputed": true
+    },
+    {
+      "name": "lab_product_amount4",
+      "expected": "REJECT",
+      "outcome": "PASS",
+      "actual": "REJECT",
+      "rejectionReason": "energy并非两原creep到固定同room storage",
+      "declaredHashesRecomputed": true
+    },
+    {
+      "name": "lab_cooldown6",
+      "expected": "REJECT",
+      "outcome": "PASS",
+      "actual": "REJECT",
+      "rejectionReason": "energy并非两原creep到固定同room storage",
+      "declaredHashesRecomputed": true
+    },
+    {
+      "name": "raw_middle_lab_cooldown_outside_endpoints",
+      "expected": "REJECT",
+      "outcome": "PASS",
+      "actual": "REJECT",
+      "rejectionReason": "energy并非两原creep到固定同room storage",
+      "declaredHashesRecomputed": true
+    },
+    {
+      "name": "raw_middle_creep_energy49",
+      "expected": "REJECT",
+      "outcome": "PASS",
+      "actual": "REJECT",
+      "rejectionReason": "energy并非两原creep到固定同room storage",
+      "declaredHashesRecomputed": true
+    },
+    {
+      "name": "unbacked_power_effect",
+      "expected": "REJECT",
+      "outcome": "PASS",
+      "actual": "REJECT",
+      "rejectionReason": "energy并非两原creep到固定同room storage",
+      "declaredHashesRecomputed": true
+    },
+    {
+      "name": "nonlab_resource_change",
+      "expected": "REJECT",
+      "outcome": "PASS",
+      "actual": "REJECT",
+      "rejectionReason": "energy并非两原creep到固定同room storage",
+      "declaredHashesRecomputed": true
+    },
+    {
+      "name": "actual_main_delta9",
+      "expected": "REJECT",
+      "outcome": "PASS",
+      "actual": "REJECT",
+      "rejectionReason": "energy并非两原creep到固定同room storage",
+      "declaredHashesRecomputed": true
+    },
+    {
+      "name": "environment_delta9",
+      "expected": "REJECT",
+      "outcome": "PASS",
+      "actual": "REJECT",
+      "rejectionReason": "energy并非两原creep到固定同room storage",
+      "declaredHashesRecomputed": true
+    },
+    {
+      "name": "raw_sample_missing_keep_original_ordinals",
+      "expected": "REJECT",
+      "outcome": "PASS",
+      "actual": "REJECT",
+      "rejectionReason": "energy并非两原creep到固定同room storage",
+      "declaredHashesRecomputed": true
+    },
+    {
+      "name": "raw_sample_duplicate_original_ordinal",
+      "expected": "REJECT",
+      "outcome": "PASS",
+      "actual": "REJECT",
+      "rejectionReason": "energy并非两原creep到固定同room storage",
+      "declaredHashesRecomputed": true
+    },
+    {
+      "name": "barrier_less_than10_seconds",
+      "expected": "REJECT",
+      "outcome": "PASS",
+      "actual": "REJECT",
+      "rejectionReason": "energy并非两原creep到固定同room storage",
+      "declaredHashesRecomputed": true
+    },
+    {
+      "name": "raw_memory_object_missing",
+      "expected": "REJECT",
+      "outcome": "PASS",
+      "actual": "REJECT",
+      "rejectionReason": "energy并非两原creep到固定同room storage",
+      "declaredHashesRecomputed": true
+    },
+    {
+      "name": "raw_transaction_array36",
+      "expected": "REJECT",
+      "outcome": "PASS",
+      "actual": "REJECT",
+      "rejectionReason": "energy并非两原creep到固定同room storage",
+      "declaredHashesRecomputed": true
+    },
+    {
+      "name": "initial_incoherent",
+      "expected": "REJECT",
+      "outcome": "PASS",
+      "actual": "REJECT",
+      "rejectionReason": "energy并非两原creep到固定同room storage",
+      "declaredHashesRecomputed": true
+    },
+    {
+      "name": "baseline_tick_changed",
+      "expected": "REJECT",
+      "outcome": "PASS",
+      "actual": "REJECT",
+      "rejectionReason": "原baseline801 full50到beforeSetup801不是同一完整原件",
+      "declaredHashesRecomputed": true
+    },
+    {
+      "name": "wrong_case_six_parameters",
+      "expected": "REJECT",
+      "outcome": "PASS",
+      "actual": "REJECT",
+      "rejectionReason": "case原六setup参数不符",
+      "declaredHashesRecomputed": true
+    },
+    {
+      "name": "official_record_original_utf8_changed",
+      "expected": "REJECT",
+      "outcome": "PASS",
+      "actual": "REJECT",
+      "rejectionReason": "原官方 record 或冻结产品 synthesisControl UTF-8 SHA 不符",
+      "declaredHashesRecomputed": true
+    },
+    {
+      "name": "carrier_role_changed",
+      "expected": "REJECT",
+      "outcome": "PASS",
+      "actual": "REJECT",
+      "rejectionReason": "原 carrier 身份/Store/role 不符",
+      "declaredHashesRecomputed": true
+    },
+    {
+      "name": "zero_mode_resume_progress",
+      "expected": "REJECT",
+      "outcome": "PASS",
+      "actual": "REJECT",
+      "rejectionReason": "energy并非两原creep到固定同room storage",
+      "declaredHashesRecomputed": true
+    },
+    {
+      "name": "zero_mode_main_advanced",
+      "expected": "REJECT",
+      "outcome": "PASS",
+      "actual": "REJECT",
+      "rejectionReason": "energy并非两原creep到固定同room storage",
+      "declaredHashesRecomputed": true
+    }
+  ]
+}

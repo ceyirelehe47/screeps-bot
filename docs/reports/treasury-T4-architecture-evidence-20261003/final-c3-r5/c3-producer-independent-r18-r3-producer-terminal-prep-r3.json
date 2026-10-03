@@ -1,0 +1,13 @@
+{
+  "schema": "screeps-r18-fresh-preparation-independent-verification/v1",
+  "passed": false,
+  "case": "t4-c3-producer-budget",
+  "isolatedWorldOnly": true,
+  "formalApiAccessed": false,
+  "worldModified": false,
+  "sceneReplayed": false,
+  "completeT4Acceptance": false,
+  "error": "fresh prep 不是独立恢复/align/setup 各一次后的真实完成结果",
+  "outerWrapperSha256": "ecaf301ddec88c505b142400535836caff71792d5b3edb2170ba4d1a9c7bfd77",
+  "originalAdapterSha256": "891092a42583ba24b1da99a17366e821591ae82a476171b28e6c5bd7e6675c9e"
+}

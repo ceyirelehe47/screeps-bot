@@ -1,0 +1,20 @@
+{
+  "schema": "screeps-r17-c4-independent-failure/v1",
+  "passed": false,
+  "isolatedWorldOnly": true,
+  "verifiedScope": "complete",
+  "originalVerifierResult": {
+    "schema": "screeps-t4-semantic-verification/v1",
+    "passed": false,
+    "error": "C4实际整段原主循环暖态成本超过Game CPU.limit"
+  },
+  "verifierExitStatus": 1,
+  "originalVerifierOutputSha256": "696e6a797ef3b0ef128cb4bbda50b0ea2b035d1b642d5f5605c6c6eca0cfd31c",
+  "verifierSha256": "e4357be83d19305f3fccb67d080c80294b56562f7b12c54714c0b8a4fcc4d34f",
+  "originalPlanSha256": "271cd65f0947db65d7bbc757a906f3c587e0ff898f66ffe05d2bef74e03504d5",
+  "failureOriginalsPlanSha256": "55b89abf830dc4681aae936e11fac0a83e1785c8db3dcce2f056c10856026338",
+  "mainSha256": "3fc244cdce34b7717b6496e1fc29c9d232100bf33091ee2631a2f7cfa4091838",
+  "manifestSha256": "941c0a14c398d5992ea9a034f53d2cf121aef1f44ec5a9c51fc678a00a6018bb",
+  "allSemanticCpuAndBusinessGatesUnchanged": true,
+  "failureWorldNotReplayed": true
+}

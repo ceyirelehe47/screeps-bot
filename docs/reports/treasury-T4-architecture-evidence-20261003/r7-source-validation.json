@@ -1,0 +1,459 @@
+{
+  "schema": "screeps-isolated-t4-architecture-r7-validation/v1",
+  "startedAtUtc": "2026-10-02T23:01:03.494966+00:00",
+  "sourceCommit": "53bb7e705343fc9961a3a3e3b8a85a3faebe92a7",
+  "sourceTree": "9bfa395dcdad80a1fd364d63eb8a8dfc03719eba",
+  "baselineCommit": "9fb64f2e37266f749b09737e66af445ba415b827",
+  "formalApiAccessed": false,
+  "credentialsRead": false,
+  "productionWritten": false,
+  "engineServiceModified": false,
+  "allHeavyTasksOnServer": true,
+  "sourceBundle": "/srv/screeps-treasury-build/t4-architecture-r7-20261003/source.bundle",
+  "stages": [
+    {
+      "name": "candidate-clone",
+      "argv": [
+        "git",
+        "clone",
+        "--no-hardlinks",
+        "--no-checkout",
+        "/srv/screeps-treasury-build/t4-architecture-20261003/candidate",
+        "/srv/screeps-treasury-build/t4-architecture-r7-20261003/candidate"
+      ],
+      "cwd": "/srv/screeps-treasury-build/t4-architecture-r7-20261003",
+      "startedAtUtc": "2026-10-02T23:01:04.291542+00:00",
+      "engineInactiveBefore": {
+        "LoadState": "not-found",
+        "ActiveState": "inactive",
+        "SubState": "dead",
+        "MainPID": "0"
+      },
+      "log": "/srv/screeps-treasury-build/t4-architecture-r7-20261003/logs/candidate-clone.log",
+      "endedAtUtc": "2026-10-02T23:01:04.366401+00:00",
+      "durationSeconds": 0.06612000602763146,
+      "exitCode": 0,
+      "engineInactiveAfter": {
+        "LoadState": "not-found",
+        "ActiveState": "inactive",
+        "SubState": "dead",
+        "MainPID": "0"
+      }
+    },
+    {
+      "name": "candidate-bundle-verify",
+      "argv": [
+        "git",
+        "bundle",
+        "verify",
+        "/srv/screeps-treasury-build/t4-architecture-r7-20261003/source.bundle"
+      ],
+      "cwd": "/srv/screeps-treasury-build/t4-architecture-r7-20261003/candidate",
+      "startedAtUtc": "2026-10-02T23:01:04.374699+00:00",
+      "engineInactiveBefore": {
+        "LoadState": "not-found",
+        "ActiveState": "inactive",
+        "SubState": "dead",
+        "MainPID": "0"
+      },
+      "log": "/srv/screeps-treasury-build/t4-architecture-r7-20261003/logs/candidate-bundle-verify.log",
+      "endedAtUtc": "2026-10-02T23:01:04.388065+00:00",
+      "durationSeconds": 0.005630874074995518,
+      "exitCode": 0,
+      "engineInactiveAfter": {
+        "LoadState": "not-found",
+        "ActiveState": "inactive",
+        "SubState": "dead",
+        "MainPID": "0"
+      }
+    },
+    {
+      "name": "candidate-fetch-bundle",
+      "argv": [
+        "git",
+        "fetch",
+        "/srv/screeps-treasury-build/t4-architecture-r7-20261003/source.bundle",
+        "HEAD"
+      ],
+      "cwd": "/srv/screeps-treasury-build/t4-architecture-r7-20261003/candidate",
+      "startedAtUtc": "2026-10-02T23:01:04.395816+00:00",
+      "engineInactiveBefore": {
+        "LoadState": "not-found",
+        "ActiveState": "inactive",
+        "SubState": "dead",
+        "MainPID": "0"
+      },
+      "log": "/srv/screeps-treasury-build/t4-architecture-r7-20261003/logs/candidate-fetch-bundle.log",
+      "endedAtUtc": "2026-10-02T23:01:04.437572+00:00",
+      "durationSeconds": 0.034218264976516366,
+      "exitCode": 0,
+      "engineInactiveAfter": {
+        "LoadState": "not-found",
+        "ActiveState": "inactive",
+        "SubState": "dead",
+        "MainPID": "0"
+      }
+    },
+    {
+      "name": "candidate-checkout",
+      "argv": [
+        "git",
+        "checkout",
+        "--detach",
+        "53bb7e705343fc9961a3a3e3b8a85a3faebe92a7"
+      ],
+      "cwd": "/srv/screeps-treasury-build/t4-architecture-r7-20261003/candidate",
+      "startedAtUtc": "2026-10-02T23:01:04.446274+00:00",
+      "engineInactiveBefore": {
+        "LoadState": "not-found",
+        "ActiveState": "inactive",
+        "SubState": "dead",
+        "MainPID": "0"
+      },
+      "log": "/srv/screeps-treasury-build/t4-architecture-r7-20261003/logs/candidate-checkout.log",
+      "endedAtUtc": "2026-10-02T23:01:04.636810+00:00",
+      "durationSeconds": 0.18242472899146378,
+      "exitCode": 0,
+      "engineInactiveAfter": {
+        "LoadState": "not-found",
+        "ActiveState": "inactive",
+        "SubState": "dead",
+        "MainPID": "0"
+      }
+    },
+    {
+      "name": "candidate-typecheck",
+      "argv": [
+        "npm",
+        "run",
+        "typecheck"
+      ],
+      "cwd": "/srv/screeps-treasury-build/t4-architecture-r7-20261003/candidate",
+      "startedAtUtc": "2026-10-02T23:01:15.788795+00:00",
+      "engineInactiveBefore": {
+        "LoadState": "not-found",
+        "ActiveState": "inactive",
+        "SubState": "dead",
+        "MainPID": "0"
+      },
+      "log": "/srv/screeps-treasury-build/t4-architecture-r7-20261003/logs/candidate-typecheck.log",
+      "endedAtUtc": "2026-10-02T23:01:53.607761+00:00",
+      "durationSeconds": 37.810249072965235,
+      "exitCode": 0,
+      "engineInactiveAfter": {
+        "LoadState": "not-found",
+        "ActiveState": "inactive",
+        "SubState": "dead",
+        "MainPID": "0"
+      }
+    },
+    {
+      "name": "candidate-jest",
+      "argv": [
+        "npm",
+        "run",
+        "test",
+        "--",
+        "--runInBand",
+        "--runTestsByPath",
+        "src/runtime/marketBaseResourceAutomation.test.ts",
+        "src/runtime/logistics/resourceTransferTasks.test.ts",
+        "src/runtime/treasuryTerminalTransfer.integration.test.ts",
+        "src/runtime/treasuryT2Lifecycle.integration.test.ts",
+        "src/runtime/treasuryT2Binding.integration.test.ts",
+        "src/runtime/synthesisControl.test.ts",
+        "src/runtime/treasuryT3Binding.integration.test.ts",
+        "src/runtime/treasuryT2Concurrency.test.ts",
+        "src/runtime/marketSaleAutomation.test.ts",
+        "src/runtime/treasuryT2LegacyCargo.test.ts",
+        "src/runtime/powerCreepControl.test.ts",
+        "src/main.test.ts",
+        "src/runtime/treasuryT2PowerCargo.test.ts",
+        "src/runtime/treasuryT3Lifecycle.integration.test.ts",
+        "src/roles/remoteMiningCarrier.test.ts",
+        "src/runtime/synthesisControlStateMachine.test.ts",
+        "src/runtime/marketSaleDirectAutomation.test.ts",
+        "src/runtime/treasuryT3Preparing.integration.test.ts",
+        "src/roles/energyTargets.test.ts",
+        "src/runtime/marketDirectContinuousAutomation.test.ts",
+        "src/runtime/treasuryTerminalTransfer.test.ts",
+        "src/runtime/marketActionArbiter.test.ts",
+        "src/roles/powerBankHauler.test.ts",
+        "src/runtime/carrierTaskBoard.revisionCache.test.ts",
+        "src/runtime/marketSaleDirectPending.test.ts",
+        "src/runtime/taskSystem/adapters/carrierLogistics.test.ts",
+        "src/runtime/logistics/receiverCapacityLedger.test.ts",
+        "src/roles/remoteCarrier.test.ts",
+        "src/runtime/creepAssignmentState.test.ts",
+        "src/runtime/energyPickupReservation.test.ts",
+        "src/runtime/resourceReservation.test.ts",
+        "src/runtime/treasuryT3Facts.test.ts",
+        "src/runtime/treasuryT2Facts.test.ts",
+        "src/runtime/treasuryT2LegacyRoot.test.ts",
+        "src/runtime/marketSaleDirectShadow.test.ts",
+        "src/runtime/marketWriteArchitecture.test.ts",
+        "src/runtime/treasuryT2Binding.red.test.ts",
+        "src/runtime/treasuryT4Budget.test.ts",
+        "src/runtime/treasuryT4Continuous.integration.test.ts",
+        "src/runtime/treasuryT2FenceCache.test.ts",
+        "src/runtime/synthesisTransferDemand.test.ts",
+        "src/roles/carrier.terminalFeedBound.test.ts",
+        "src/runtime/resourceControl.capacityRegression.test.ts",
+        "src/runtime/resourceControl.test.ts",
+        "src/roles/carrier.test.ts",
+        "src/roles/carrier.bestCandidate.test.ts",
+        "src/runtime/carrierTaskBoard.test.ts",
+        "src/runtime/treasuryT4Facts.test.ts",
+        "src/runtime/localCarrierDestinationCapacity.test.ts",
+        "src/runtime/treasuryT4ProducerBridge.integration.test.ts",
+        "src/runtime/treasuryT4ValidationCache.test.ts",
+        "src/runtime/treasuryT4BudgetCache.test.ts",
+        "src/runtime/treasuryT4StopBoundary.test.ts",
+        "src/runtime/treasuryT4LegacyFenceCache.test.ts",
+        "--json",
+        "--outputFile=/srv/screeps-treasury-build/t4-architecture-r7-20261003/logs/candidate-jest-result.json"
+      ],
+      "cwd": "/srv/screeps-treasury-build/t4-architecture-r7-20261003/candidate",
+      "startedAtUtc": "2026-10-02T23:01:53.616775+00:00",
+      "engineInactiveBefore": {
+        "LoadState": "not-found",
+        "ActiveState": "inactive",
+        "SubState": "dead",
+        "MainPID": "0"
+      },
+      "log": "/srv/screeps-treasury-build/t4-architecture-r7-20261003/logs/candidate-jest.log",
+      "endedAtUtc": "2026-10-02T23:04:47.077227+00:00",
+      "durationSeconds": 173.45263720408548,
+      "exitCode": 0,
+      "engineInactiveAfter": {
+        "LoadState": "not-found",
+        "ActiveState": "inactive",
+        "SubState": "dead",
+        "MainPID": "0"
+      }
+    },
+    {
+      "name": "candidate-tools",
+      "argv": [
+        "node",
+        "--test",
+        "scripts/treasury-t4-tools.test.mjs"
+      ],
+      "cwd": "/srv/screeps-treasury-build/t4-architecture-r7-20261003/candidate",
+      "startedAtUtc": "2026-10-02T23:04:47.091984+00:00",
+      "engineInactiveBefore": {
+        "LoadState": "not-found",
+        "ActiveState": "inactive",
+        "SubState": "dead",
+        "MainPID": "0"
+      },
+      "log": "/srv/screeps-treasury-build/t4-architecture-r7-20261003/logs/candidate-tools.log",
+      "endedAtUtc": "2026-10-02T23:04:51.783973+00:00",
+      "durationSeconds": 4.684136976022273,
+      "exitCode": 0,
+      "engineInactiveAfter": {
+        "LoadState": "not-found",
+        "ActiveState": "inactive",
+        "SubState": "dead",
+        "MainPID": "0"
+      }
+    },
+    {
+      "name": "candidate-build-only",
+      "argv": [
+        "npm",
+        "run",
+        "build"
+      ],
+      "cwd": "/srv/screeps-treasury-build/t4-architecture-r7-20261003/candidate",
+      "startedAtUtc": "2026-10-02T23:04:52.346028+00:00",
+      "engineInactiveBefore": {
+        "LoadState": "not-found",
+        "ActiveState": "inactive",
+        "SubState": "dead",
+        "MainPID": "0"
+      },
+      "log": "/srv/screeps-treasury-build/t4-architecture-r7-20261003/logs/candidate-build-only.log",
+      "endedAtUtc": "2026-10-02T23:05:35.743588+00:00",
+      "durationSeconds": 43.38932564097922,
+      "exitCode": 0,
+      "engineInactiveAfter": {
+        "LoadState": "not-found",
+        "ActiveState": "inactive",
+        "SubState": "dead",
+        "MainPID": "0"
+      }
+    }
+  ],
+  "baselineStopBoundaryNotRepeated": true,
+  "baselineStopBoundaryEvidence": "/srv/screeps-treasury-build/t4-architecture-20261003/logs/baseline-red-result.json",
+  "host": "VM-0-7-ubuntu",
+  "environment": {
+    "node": "v22.22.1",
+    "npm": "9.2.0",
+    "python": "3.14.4 (main, Aug 20 2026, 10:41:58) [GCC 15.2.0]",
+    "deployTarget": "",
+    "engineInactiveInitial": {
+      "LoadState": "not-found",
+      "ActiveState": "inactive",
+      "SubState": "dead",
+      "MainPID": "0"
+    }
+  },
+  "originalCheckoutBefore": {
+    "head": "9fb64f2e37266f749b09737e66af445ba415b827",
+    "tree": "c7dc0f7890f8b15763a2e8bbc45d6ff762a16bbb",
+    "porcelain": ""
+  },
+  "sourceBundleSha256": "c03ddf839f8d15f9d0d7fa55a9d2053b6a4cd72f3994d4cdc414c6abc6d6e7a8",
+  "scriptSha256": "7ec46cbccee6f947a23bc991279abb0b4098407caef4dfa3df2135b83b315b34",
+  "priorValidationReport": {
+    "path": "/srv/screeps-treasury-build/t4-architecture-20261003/report.json",
+    "sha256": "4b4cdea669da5e139a8521fe2ee41d9e79012f0ba86ebf9bd61eef4c744b5788",
+    "scopeSuiteCount": 53,
+    "candidateTests": {
+      "numTotalTests": 654,
+      "numPassedTests": 654,
+      "numFailedTests": 0,
+      "numPendingTests": 0,
+      "numTodoTests": 0,
+      "numTotalTestSuites": 53,
+      "numPassedTestSuites": 53,
+      "numFailedTestSuites": 0,
+      "numPendingTestSuites": 0,
+      "success": true
+    }
+  },
+  "baselineStopBoundaryEvidenceSha256": "d77b83daea466ead80d275ae52524685f6632a7582e05e5f9ef4222d4305c166",
+  "r6ActualFailurePreserved": {
+    "path": "/srv/screeps-treasury-build/t4-architecture-r7-20261003/r6-c4-failure-reference.json",
+    "sha256": "1e83d22c30e95275de85c45351852bc844d084e018979ec3fbdfe3670add40b9",
+    "passed": false
+  },
+  "dependencies": {
+    "method": "copy verified node_modules from confirmed clean baseline source checkout",
+    "donor": "/srv/screeps-treasury-build/t4-architecture-20261003/candidate/node_modules",
+    "normalizedLockEqual": true,
+    "onlyIgnoredLockFields": [
+      "version",
+      "packages[empty].version"
+    ],
+    "donorLockSha256": "2a8d3f3abc7b25a8b4b4e3aa69db234d8085480d48bc6b44e2204da6ef9c37aa",
+    "candidateLockSha256": "704613b428098bf601763ae837bac17fc35c74f301c7d80dddb4a0bb1b0e50b2",
+    "candidateDonorDevDependenciesEqual": true
+  },
+  "scopeSuites": [
+    "src/runtime/marketBaseResourceAutomation.test.ts",
+    "src/runtime/logistics/resourceTransferTasks.test.ts",
+    "src/runtime/treasuryTerminalTransfer.integration.test.ts",
+    "src/runtime/treasuryT2Lifecycle.integration.test.ts",
+    "src/runtime/treasuryT2Binding.integration.test.ts",
+    "src/runtime/synthesisControl.test.ts",
+    "src/runtime/treasuryT3Binding.integration.test.ts",
+    "src/runtime/treasuryT2Concurrency.test.ts",
+    "src/runtime/marketSaleAutomation.test.ts",
+    "src/runtime/treasuryT2LegacyCargo.test.ts",
+    "src/runtime/powerCreepControl.test.ts",
+    "src/main.test.ts",
+    "src/runtime/treasuryT2PowerCargo.test.ts",
+    "src/runtime/treasuryT3Lifecycle.integration.test.ts",
+    "src/roles/remoteMiningCarrier.test.ts",
+    "src/runtime/synthesisControlStateMachine.test.ts",
+    "src/runtime/marketSaleDirectAutomation.test.ts",
+    "src/runtime/treasuryT3Preparing.integration.test.ts",
+    "src/roles/energyTargets.test.ts",
+    "src/runtime/marketDirectContinuousAutomation.test.ts",
+    "src/runtime/treasuryTerminalTransfer.test.ts",
+    "src/runtime/marketActionArbiter.test.ts",
+    "src/roles/powerBankHauler.test.ts",
+    "src/runtime/carrierTaskBoard.revisionCache.test.ts",
+    "src/runtime/marketSaleDirectPending.test.ts",
+    "src/runtime/taskSystem/adapters/carrierLogistics.test.ts",
+    "src/runtime/logistics/receiverCapacityLedger.test.ts",
+    "src/roles/remoteCarrier.test.ts",
+    "src/runtime/creepAssignmentState.test.ts",
+    "src/runtime/energyPickupReservation.test.ts",
+    "src/runtime/resourceReservation.test.ts",
+    "src/runtime/treasuryT3Facts.test.ts",
+    "src/runtime/treasuryT2Facts.test.ts",
+    "src/runtime/treasuryT2LegacyRoot.test.ts",
+    "src/runtime/marketSaleDirectShadow.test.ts",
+    "src/runtime/marketWriteArchitecture.test.ts",
+    "src/runtime/treasuryT2Binding.red.test.ts",
+    "src/runtime/treasuryT4Budget.test.ts",
+    "src/runtime/treasuryT4Continuous.integration.test.ts",
+    "src/runtime/treasuryT2FenceCache.test.ts",
+    "src/runtime/synthesisTransferDemand.test.ts",
+    "src/roles/carrier.terminalFeedBound.test.ts",
+    "src/runtime/resourceControl.capacityRegression.test.ts",
+    "src/runtime/resourceControl.test.ts",
+    "src/roles/carrier.test.ts",
+    "src/roles/carrier.bestCandidate.test.ts",
+    "src/runtime/carrierTaskBoard.test.ts",
+    "src/runtime/treasuryT4Facts.test.ts",
+    "src/runtime/localCarrierDestinationCapacity.test.ts",
+    "src/runtime/treasuryT4ProducerBridge.integration.test.ts",
+    "src/runtime/treasuryT4ValidationCache.test.ts",
+    "src/runtime/treasuryT4BudgetCache.test.ts",
+    "src/runtime/treasuryT4StopBoundary.test.ts",
+    "src/runtime/treasuryT4LegacyFenceCache.test.ts"
+  ],
+  "scopeSuiteCount": 54,
+  "candidateTests": {
+    "numTotalTests": 688,
+    "numPassedTests": 688,
+    "numFailedTests": 0,
+    "numPendingTests": 0,
+    "numTodoTests": 0,
+    "numTotalTestSuites": 54,
+    "numPassedTestSuites": 54,
+    "numFailedTestSuites": 0,
+    "numPendingTestSuites": 0,
+    "success": true
+  },
+  "legacyFenceCacheTestCount": 34,
+  "actualPublicFenceHashAndFreshNativeGate": {
+    "status": "passed",
+    "fullName": "旧 T1/T2/T3 cargo control 只缓存完整 POD 字节的数学证明 100 次真实公开 fence query 的 600 次旧本验签降至三个 unique token，各次 native read 仍验两本",
+    "publicQueryCount": 100,
+    "expectedCargoHashes": 3,
+    "nativeReadCountPerLane": 100,
+    "expectedFreshNativeHashes": 600,
+    "sourceTestSha256": "2095c186107633681c0309c28955b3325094b7caee34aa64d15c95274a36a28c"
+  },
+  "toolsCounts": {
+    "tests": 22,
+    "pass": 22,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "buildIdentity": {
+    "version": "2026.10.3-5",
+    "git_hash": "53bb7e7",
+    "time": "2026-10-02T23:04:53.747Z",
+    "tag": "2026.10.3-5+53bb7e7@2026-10-02T23:04:53.747Z",
+    "commit": "53bb7e705343fc9961a3a3e3b8a85a3faebe92a7",
+    "tree": "9bfa395dcdad80a1fd364d63eb8a8dfc03719eba",
+    "branch": "detached",
+    "dirty": "false",
+    "deployBundleHash": "dccf0f8e8c66ef550e89ee5f0154c4ee405e69fcbdc8b23cbf9ea416fc01a182",
+    "mainSha256": "3fc244cdce34b7717b6496e1fc29c9d232100bf33091ee2631a2f7cfa4091838",
+    "mainBytes": 3443955,
+    "footerHashMatchesPrefooter": true
+  },
+  "candidateIdentityAfter": {
+    "head": "53bb7e705343fc9961a3a3e3b8a85a3faebe92a7",
+    "tree": "9bfa395dcdad80a1fd364d63eb8a8dfc03719eba",
+    "porcelain": ""
+  },
+  "originalCheckoutAfter": {
+    "head": "9fb64f2e37266f749b09737e66af445ba415b827",
+    "tree": "c7dc0f7890f8b15763a2e8bbc45d6ff762a16bbb",
+    "porcelain": ""
+  },
+  "frozenCandidate": "/srv/screeps-treasury-build/t4-architecture-r7-20261003/frozen-candidate",
+  "outcome": "PASS",
+  "endedAtUtc": "2026-10-02T23:05:35.916139+00:00"
+}

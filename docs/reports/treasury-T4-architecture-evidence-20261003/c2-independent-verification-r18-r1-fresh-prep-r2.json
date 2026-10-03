@@ -1,0 +1,13 @@
+{
+  "schema": "screeps-r18-fresh-preparation-independent-verification/v1",
+  "passed": false,
+  "case": "t4-c2",
+  "isolatedWorldOnly": true,
+  "formalApiAccessed": false,
+  "worldModified": false,
+  "sceneReplayed": false,
+  "completeT4Acceptance": false,
+  "error": "cannot assign to field 'path'",
+  "outerWrapperSha256": "b91811c2a1ea090125ff7fd2cdaa6599f0308607ea3c1fab7f61ac8e70d25a32",
+  "originalAdapterSha256": "891092a42583ba24b1da99a17366e821591ae82a476171b28e6c5bd7e6675c9e"
+}

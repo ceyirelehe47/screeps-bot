@@ -1,0 +1,247 @@
+{
+  "schema": "screeps-r18-semantic-small-result-package/v1",
+  "capturedAtUtc": "2026-10-03T07:27:18.329606+00:00",
+  "isolatedWorldOnly": true,
+  "fullMemoryAndDatabaseRemainOnServer": true,
+  "originalWholeBytesPreserved": true,
+  "sourceRun": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003",
+  "included": [
+    {
+      "source": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/c3-budget-independent-verification-r18-r1-fresh-prep-r2.json",
+      "file": "c3-budget-independent-verification-r18-r1-fresh-prep-r2.json",
+      "sha256": "75cf39ecefb458dcfb7bd0220558e7eb1a8c9b7699897f6c9c5f0d1a1d5e7336",
+      "bytes": 17872
+    },
+    {
+      "source": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/c3-budget-window-independent-provenance-r18-r4.json",
+      "file": "c3-budget-window-independent-provenance-r18-r4.json",
+      "sha256": "587dd1255326734fac14e5de30dd70de2948d22186ff42606d222493c29f9131",
+      "bytes": 5871
+    },
+    {
+      "source": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/c3-budget-window-independent-r18-r4.json",
+      "file": "c3-budget-window-independent-r18-r4.json",
+      "sha256": "cfa5dc6e7162f6d5f9bfc116f4eaf53ecd681be3fd3488e144fadb17591f21e4",
+      "bytes": 14566
+    },
+    {
+      "source": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/c3-budget-window-selfcheck-r18-r1-report.json",
+      "file": "c3-budget-window-selfcheck-r18-r1-report.json",
+      "sha256": "f9f97abaaa03aecf877bf77ab8244f6187a9bff653b3b2f5aac9253fe49235e2",
+      "bytes": 22765
+    },
+    {
+      "source": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/c3-complete-independent-r18-r5-complete-c3-r5-budget-prep.json",
+      "file": "c3-complete-independent-r18-r5-complete-c3-r5-budget-prep.json",
+      "sha256": "75cf39ecefb458dcfb7bd0220558e7eb1a8c9b7699897f6c9c5f0d1a1d5e7336",
+      "bytes": 17872
+    },
+    {
+      "source": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/c3-complete-independent-r18-r5-complete-c3-r5-lease-prep.json",
+      "file": "c3-complete-independent-r18-r5-complete-c3-r5-lease-prep.json",
+      "sha256": "24599e73bf7e0cffa04aa9a622a52d7d0be314afc55c613c951c99e2f9cb66ec",
+      "bytes": 17852
+    },
+    {
+      "source": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/c3-complete-independent-r18-r5-complete-c3-r5-producerBudget-prep.json",
+      "file": "c3-complete-independent-r18-r5-complete-c3-r5-producerBudget-prep.json",
+      "sha256": "f61a55a59cd65f347219bdd1eaa7b20fac283dc739eaee3502692fd1a2dd61ea",
+      "bytes": 58877
+    },
+    {
+      "source": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/c3-complete-independent-r18-r5-provenance.json",
+      "file": "c3-complete-independent-r18-r5-provenance.json",
+      "sha256": "b6a6bb1431dc68e347d8054de2a4756180744ee5d08e7159d57d2c94b3de3c05",
+      "bytes": 150274
+    },
+    {
+      "source": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/c3-complete-independent-r18-r5.json",
+      "file": "c3-complete-independent-r18-r5.json",
+      "sha256": "d7d186264ad2504884f297bd2e9a52e02670414f34e2b41820f5ae21627c4d3d",
+      "bytes": 34816
+    },
+    {
+      "source": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/c3-lease-independent-verification-r18-r1-fresh-prep-r2.json",
+      "file": "c3-lease-independent-verification-r18-r1-fresh-prep-r2.json",
+      "sha256": "24599e73bf7e0cffa04aa9a622a52d7d0be314afc55c613c951c99e2f9cb66ec",
+      "bytes": 17852
+    },
+    {
+      "source": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/c3-producer-independent-r18-r3-producer-terminal-prep-r3.json",
+      "file": "c3-producer-independent-r18-r3-producer-terminal-prep-r3.json",
+      "sha256": "40afaf389269f3c01eb38330966daa2cdcb141540d2c8af3a3f6d4d97a8d21ef",
+      "bytes": 551
+    },
+    {
+      "source": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/c3-producer-independent-r18-r4-producer-terminal-prep-r4.json",
+      "file": "c3-producer-independent-r18-r4-producer-terminal-prep-r4.json",
+      "sha256": "9756bd9dcb3be07506636693f928386d71a9a118365145d1ea1f4c07bfa1438a",
+      "bytes": 631
+    },
+    {
+      "source": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/c3-producer-independent-r18-r5-producer-terminal-prep-r4.json",
+      "file": "c3-producer-independent-r18-r5-producer-terminal-prep-r4.json",
+      "sha256": "f61a55a59cd65f347219bdd1eaa7b20fac283dc739eaee3502692fd1a2dd61ea",
+      "bytes": 58877
+    },
+    {
+      "source": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/c3-producer-independent-r18-r5-provenance.json",
+      "file": "c3-producer-independent-r18-r5-provenance.json",
+      "sha256": "b74e64013c691157887a2219ffebf7a850029dee5ad21bbe2337efb1e896302a",
+      "bytes": 106530
+    },
+    {
+      "source": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/c3-producer-independent-r18-r5.json",
+      "file": "c3-producer-independent-r18-r5.json",
+      "sha256": "6e578e87a8bfddaafa7d2147ed38657ca5806fdb9de101c22d0fd74092968bc6",
+      "bytes": 17886
+    },
+    {
+      "source": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/c3-producer-private-db-original-copy-r18-r1.json",
+      "file": "c3-producer-private-db-original-copy-r18-r1.json",
+      "sha256": "1e10fca9a99802c2521cb8ef812ee1c3aaab136b55e81f898bcd9228ffcfd0ac",
+      "bytes": 1742
+    },
+    {
+      "source": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/c3-terminal-unload-independent-provenance-r18-r2.json",
+      "file": "c3-terminal-unload-independent-provenance-r18-r2.json",
+      "sha256": "a276ab4f12566511f274a5d166355a6159ae20a231e3d91eb87608f39bd8898a",
+      "bytes": 8303
+    },
+    {
+      "source": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/c3-terminal-unload-independent-r18-r2.json",
+      "file": "c3-terminal-unload-independent-r18-r2.json",
+      "sha256": "ceb463788f51a92914489249845b39e96a417f507d34666e0f0a53d2fd593065",
+      "bytes": 10598
+    },
+    {
+      "source": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/fresh-cargo-proof-selfcheck-r18-r1-report.json",
+      "file": "fresh-cargo-proof-selfcheck-r18-r1-report.json",
+      "sha256": "b260c371499386780279fde24f54a992fd5fcf4ee0ebe15ac175daf593022b67",
+      "bytes": 13960
+    },
+    {
+      "source": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/fresh-cargo-proof-selfcheck-r18-r2-report.json",
+      "file": "fresh-cargo-proof-selfcheck-r18-r2-report.json",
+      "sha256": "cb569f8c43f72104b30752b0d47da5d49309a531a35beac1f10ab5cf40a0129a",
+      "bytes": 27410
+    },
+    {
+      "source": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/product-unload-selfcheck-r18-r1-report.json",
+      "file": "product-unload-selfcheck-r18-r1-report.json",
+      "sha256": "2ff131d40618dce96db63120b1b09a8c86495338ea5bd96fc6c791bac2f01534",
+      "bytes": 16672
+    },
+    {
+      "source": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/product-unload-selfcheck-r18-r2-report.json",
+      "file": "product-unload-selfcheck-r18-r2-report.json",
+      "sha256": "728f810f9426fa6df5b79440623161167f0e07597cfd17b1826605e924cdf910",
+      "bytes": 19473
+    },
+    {
+      "source": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/semantic-final-positive-stopped-r18-r1.json",
+      "file": "semantic-final-positive-stopped-r18-r1.json",
+      "sha256": "cf513a46674e71f91443539d3dccb870d49924963b960386f52a155b5a3ff841",
+      "bytes": 1158
+    },
+    {
+      "source": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-completed-persistence.json",
+      "file": "t4-c3-producer-budget-completed-persistence.json",
+      "sha256": "d8c710848b8697d75c062fbb48ed5d7d218aece64c0886f990e08e32cf36710b",
+      "bytes": 513
+    },
+    {
+      "source": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-configured-fixture-persistence.json",
+      "file": "t4-c3-producer-budget-configured-fixture-persistence.json",
+      "sha256": "3e5a37f6da8cdab0f35416cc221513e9f03c73e5a8d50ec4e5ef4b64984237f8",
+      "bytes": 521
+    },
+    {
+      "source": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-fresh-cargo-prep-r2-proof.json",
+      "file": "t4-c3-producer-budget-fresh-cargo-prep-r2-proof.json",
+      "sha256": "dd2142931d4d154f3fbf2a7d5dbe9d917e278738d658437fa5d0274e10c23052",
+      "bytes": 5228
+    },
+    {
+      "source": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-stop-handoff-continuation-r3-result.json",
+      "file": "t4-c3-producer-budget-stop-handoff-continuation-r3-result.json",
+      "sha256": "13870940c14b4546918f3181eb61a032b1e16ab0d175aab957f4574000390357",
+      "bytes": 8207
+    },
+    {
+      "source": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/r18-t4-c3-producer-budget-fresh-prep-r2-context.json",
+      "file": "r18-t4-c3-producer-budget-fresh-prep-r2-context.json",
+      "sha256": "7dd511ed791b8501c7941f50522cff186a7979cf91ea8cd5e78a7f120c2b1a32",
+      "bytes": 2930
+    },
+    {
+      "source": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/r18-t4-c3-producer-budget-fresh-prep-r2-result.json",
+      "file": "r18-t4-c3-producer-budget-fresh-prep-r2-result.json",
+      "sha256": "fda3bb6b6caf1f54538b2ed20e7a25e1e2850983831afc157fe08bd2314b9d62",
+      "bytes": 4655
+    },
+    {
+      "source": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/r18-t4-c3-producer-budget-product-unload-continuation-r1-context.json",
+      "file": "r18-t4-c3-producer-budget-product-unload-continuation-r1-context.json",
+      "sha256": "82e5f1dd6915d40f2609389f56489ad85e78de7feac9f827ee3560888a860176",
+      "bytes": 3503
+    },
+    {
+      "source": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/r18-t4-c3-producer-budget-product-unload-continuation-r1-result.json",
+      "file": "r18-t4-c3-producer-budget-product-unload-continuation-r1-result.json",
+      "sha256": "7aa2752af4a100908bd31ebea27372e7c942c662e8e472f79ed1eaaaa9e58c7c",
+      "bytes": 5532
+    },
+    {
+      "source": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/r18-t4-c3-producer-budget-product-unload-continuation-r2-context.json",
+      "file": "r18-t4-c3-producer-budget-product-unload-continuation-r2-context.json",
+      "sha256": "1a2f0aecd4e5ae432074734d9b5c7beb2bede3c1cf8abc20ce95fe3645e0f0c9",
+      "bytes": 4614
+    },
+    {
+      "source": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/r18-t4-c3-producer-budget-product-unload-continuation-r2-result.json",
+      "file": "r18-t4-c3-producer-budget-product-unload-continuation-r2-result.json",
+      "sha256": "6c5878647351b73a40b8e1e1faa4c9a1c05fdf73e29bc2fe7f0b9b1bd6bfee0c",
+      "bytes": 6643
+    },
+    {
+      "source": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/r18-t4-c3-producer-budget-stop-handoff-continuation-r3-context.json",
+      "file": "r18-t4-c3-producer-budget-stop-handoff-continuation-r3-context.json",
+      "sha256": "454c4007016e2b5e25881c760386a4bd7319b14346e1b6f0862c489e65928a3e",
+      "bytes": 5849
+    },
+    {
+      "source": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/r18-t4-c3-producer-budget-stop-handoff-continuation-r3-result.json",
+      "file": "r18-t4-c3-producer-budget-stop-handoff-continuation-r3-result.json",
+      "sha256": "eb29ab3521910ee314fcdc20643d36f79a25ba629272ae0b597e1e347d5c038f",
+      "bytes": 7911
+    }
+  ],
+  "excluded": [
+    {
+      "source": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-fresh-cargo-prep-r2-result.json",
+      "file": "t4-c3-producer-budget-fresh-cargo-prep-r2-result.json",
+      "sha256": "6d49cc186495965284dea4a942d7bf5fdf09d4b894f20a3f4812b38a3fbfd4a2",
+      "bytes": 414363,
+      "excludedReason": "完整Memory/UTF8源字段仅留服务器",
+      "fieldPaths": [
+        "/binding/preludeRoleSourcesUtf8/src/roles/carrier.ts/large-string",
+        "/binding/preparation_chain/0/before_snapshot/rawMemory",
+        "/binding/preparation_chain/0/before_snapshot/rawMemory/large-string",
+        "/binding/preparation_chain/0/after_snapshot/rawMemory",
+        "/binding/preparation_chain/0/after_snapshot/rawMemory/large-string"
+      ]
+    },
+    {
+      "source": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-product-unload-continuation-r2-result.json",
+      "file": "t4-c3-producer-budget-product-unload-continuation-r2-result.json",
+      "sha256": "cec98d63ebe37f7e3dbf48950f983026b34a3cd5516f6e4ded3b502ab7333b9f",
+      "bytes": 1686125,
+      "excludedReason": "完整Memory/UTF8源字段仅留服务器",
+      "fieldPaths": [
+        "/binding/productionMemorySourceUtf8",
+        "/binding/productionMemorySourceUtf8/large-string"
+      ]
+    }
+  ]
+}

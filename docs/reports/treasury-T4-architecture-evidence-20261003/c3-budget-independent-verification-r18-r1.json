@@ -1,0 +1,261 @@
+{
+  "schema": "screeps-t4-semantic-verification/v1",
+  "isolatedWorldOnly": true,
+  "passed": true,
+  "cases": [
+    {
+      "case": "c3",
+      "passed": true,
+      "completeC3Case": false,
+      "verifiedScenario": "budget",
+      "evidenceClass": "real_isolated_engine",
+      "realNativeReceiptCount": 1,
+      "scenarios": [
+        {
+          "scenario": "budget",
+          "passed": true,
+          "evidenceClass": "real_isolated_engine",
+          "bundleSha256": "9d300172be0bed439e93b7a47d206dcfa3fc5b9db727a571f8ffa761a14f7f4d",
+          "history": {
+            "historySha256": "0277be7b71f0155c067f187d0795cb2e9fe2fe7a595264d39cb32169c89d61ee",
+            "retainedRingAttemptIds": [
+              "tk1_1_9992ef348b720174",
+              "tk1_2_563d0bd13dd4ea10",
+              "tk1_3_1429d627c9e7b52c"
+            ],
+            "retainedRealReceiptIds": [
+              "5096bb4bbf5435c",
+              "ea82c5ad9941756",
+              "1215ccbb7652168"
+            ]
+          },
+          "preparation": {
+            "preparationSchema": "revised-independent-lab-preparation/v1",
+            "sourceDatabaseSha256": "cdd36d0b0013bb641019290820f86972b3e4797910de24d95a44133b500cb43c",
+            "sourceTick": 801,
+            "preparationSha256": "ced476ef35cdc53665b506c1881aff8cd8d627eed88cb5794efe5707add84366",
+            "realT3ReceiptId": "1215ccbb7652168",
+            "originalDatabaseFullHistoryIndependentlyRead": true,
+            "actualOriginalDatabasePaused": true,
+            "preservedHistoryEntries": 9,
+            "actualOriginalT4StateAndResponsibilitiesAbsent": true,
+            "stoppedPreconditionIndependentlyChecked": true,
+            "missingPreparationFlagsInvented": false,
+            "frozenBaseline": {
+              "databaseFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/private-databases/db-frozen-pre-t4.json",
+              "databaseSha256": "bf23559afdc92989d715d2ef2219acdd7f97f5bf60c32b0787af6874bf0cc2c3",
+              "persistedTick": 801,
+              "storedGameTimeType": "int",
+              "persistedMemorySha256": "778cd9c1256895dc559e7f1fc9b6c9d9e9476503bb595f3a7f4455cdfb920c0c"
+            }
+          },
+          "fixture": {
+            "originalTaskAmount": 913,
+            "productGoal": 30,
+            "realProductStock": 0,
+            "realOHStock": 4,
+            "realOHDeficit": 26,
+            "counterpartUH": 30
+          },
+          "coldFixture": {
+            "databaseFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/../private-databases/db-t4-c3-budget-configured-fixture.json",
+            "databaseSha256": "fc8e5aae2202c7108d85080cb779d7087d1508a9ea3e8b9fc03ea2de3f84e4ca",
+            "persistedTick": 804,
+            "storedGameTimeType": "int",
+            "persistedMemorySha256": "41b59e89572738cfe68a11f0a6719c8ecbf3a361746dcbb813bd2dc4afec22f9",
+            "beforePID": "3833096",
+            "afterPID": "3833373",
+            "beforeTick": 804,
+            "afterTick": 804,
+            "coldExactReadback": true
+          },
+          "pauseStability": {
+            "drivers": 10,
+            "diagnosticUnmatchedDrivers": [],
+            "requiredStableMs": 10000,
+            "maxWaitMs": 60000,
+            "minimumObservedStableMs": 10128,
+            "bindings": [
+              {
+                "driverNonceKey": "__labT4EnableResultNonce",
+                "driverSuffix": "-executed",
+                "snapshot": "t4-c3-budget-enabled-pilot"
+              },
+              {
+                "driver": "t4-c3-budget-slice1-native-driver",
+                "snapshot": "t4-c3-budget-slice1-native"
+              },
+              {
+                "driver": "t4-c3-budget-slice1-committed-driver",
+                "snapshot": "t4-c3-budget-slice1-committed"
+              },
+              {
+                "driver": "t4-c3-budget-budget-observe-driver",
+                "snapshot": "t4-c3-budget-budget-exhausted"
+              },
+              {
+                "driver": "t4-c3-budget-stopped-driver",
+                "snapshot": "t4-c3-budget-stopped"
+              },
+              {
+                "driver": "t4-c3-budget-reset-driver",
+                "snapshot": "t4-c3-budget-after-reset"
+              },
+              {
+                "driver": "t4-c3-budget-handback-driver",
+                "snapshot": "t4-c3-budget-ordinary-handback"
+              },
+              {
+                "driver": "t4-c3-budget-reenable-driver",
+                "snapshot": "t4-c3-budget-reenable-rejected"
+              }
+            ],
+            "verified": [
+              {
+                "label": "t4-c3-budget-budget-observe-driver",
+                "matched": true,
+                "diagnosticOnly": false,
+                "observedStableMs": 10128,
+                "stableSamples": 41,
+                "samples": 41,
+                "barrierWallMs": 10143,
+                "endTick": 868
+              },
+              {
+                "label": "t4-c3-budget-enable-executed",
+                "matched": true,
+                "diagnosticOnly": false,
+                "observedStableMs": 10154,
+                "stableSamples": 41,
+                "samples": 45,
+                "barrierWallMs": 11183,
+                "endTick": 805
+              },
+              {
+                "label": "t4-c3-budget-handback-driver",
+                "matched": true,
+                "diagnosticOnly": false,
+                "observedStableMs": 10148,
+                "stableSamples": 41,
+                "samples": 44,
+                "barrierWallMs": 10922,
+                "endTick": 881
+              },
+              {
+                "label": "t4-c3-budget-pre-setup-cargo-drain",
+                "matched": true,
+                "diagnosticOnly": false,
+                "observedStableMs": 10201,
+                "stableSamples": 41,
+                "samples": 41,
+                "barrierWallMs": 10205,
+                "endTick": 804
+              },
+              {
+                "label": "t4-c3-budget-reenable-driver",
+                "matched": true,
+                "diagnosticOnly": false,
+                "observedStableMs": 10158,
+                "stableSamples": 41,
+                "samples": 41,
+                "barrierWallMs": 10171,
+                "endTick": 882
+              },
+              {
+                "label": "t4-c3-budget-reset-driver",
+                "matched": true,
+                "diagnosticOnly": false,
+                "observedStableMs": 10201,
+                "stableSamples": 41,
+                "samples": 41,
+                "barrierWallMs": 10215,
+                "endTick": 871
+              },
+              {
+                "label": "t4-c3-budget-slice1-committed-driver",
+                "matched": true,
+                "diagnosticOnly": false,
+                "observedStableMs": 10147,
+                "stableSamples": 41,
+                "samples": 44,
+                "barrierWallMs": 10924,
+                "endTick": 808
+              },
+              {
+                "label": "t4-c3-budget-slice1-native-driver",
+                "matched": true,
+                "diagnosticOnly": false,
+                "observedStableMs": 10175,
+                "stableSamples": 41,
+                "samples": 44,
+                "barrierWallMs": 10951,
+                "endTick": 806
+              },
+              {
+                "label": "t4-c3-budget-stopped-driver",
+                "matched": true,
+                "diagnosticOnly": false,
+                "observedStableMs": 10142,
+                "stableSamples": 41,
+                "samples": 45,
+                "barrierWallMs": 11170,
+                "endTick": 869
+              },
+              {
+                "label": "t4-c3-budget-warmup",
+                "matched": true,
+                "diagnosticOnly": false,
+                "observedStableMs": 10164,
+                "stableSamples": 41,
+                "samples": 47,
+                "barrierWallMs": 11699,
+                "endTick": 803
+              }
+            ]
+          },
+          "restart": {
+            "databaseFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/../private-databases/db-before-t4-c3-budget-stopped-restart.json",
+            "databaseSha256": "11d3aea07b12bc53b04f742f103139a4850851e0ca9039110dfbe8e56f2e1ec1",
+            "persistedTick": 869,
+            "storedGameTimeType": "int",
+            "persistedMemorySha256": "65e9fc3d6bd82f41956b722af10864189891d23d99cbd153bfefa31c687b5cb1",
+            "beforePID": "3833373",
+            "afterPID": "3834843",
+            "beforeTick": 869,
+            "afterTick": 871,
+            "coldExactReadback": false
+          },
+          "realNativeReceiptCount": 1,
+          "native": {
+            "sequence": 1,
+            "attemptId": "tk1_4_ccb4594aa9f64a98",
+            "receiptId": "9694fee1f79773e",
+            "amount": 10,
+            "fee": 1,
+            "nativeTick": 805,
+            "taskRemainingBefore": 913,
+            "workKey": "biz:treasury-continuous-oh-T4-2026-10-02:d4fbe0122066cc18:1"
+          },
+          "independentlyRecomputedBudgetRefusal": "rolling24h_oh_exceeded",
+          "ordinaryHandbackAmount": 16,
+          "ordinaryHandbackReceiptId": "01d1ff0a2e1dd61",
+          "remainingAfterOrdinaryDemandCovered": 887,
+          "reenableRejected": true
+        }
+      ]
+    }
+  ],
+  "realNativeReceiptCountAcrossIndependentCases": 1,
+  "syntheticHistoryExcludedFromRealNativeCounts": true,
+  "verificationArtifacts": {
+    "verifierFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/verify-t4.py",
+    "verifierSha256": "e4357be83d19305f3fccb67d080c80294b56562f7b12c54714c0b8a4fcc4d34f",
+    "planFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/verify-t4-plan-semantic-r18.json",
+    "planSha256": "476281fa8bc750de073ddc28059a81639bb113f00fdf6f7636e7775179175529",
+    "manifestFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/candidate/manifest.json",
+    "manifestSha256": "6b2b73e71b4ede5f912cfbe14f52ee8c8cc8f803f4af5dacf3602ed31c4e97a9",
+    "mainFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/candidate/main.js",
+    "mainSha256": "9d300172be0bed439e93b7a47d206dcfa3fc5b9db727a571f8ffa761a14f7f4d",
+    "mainBytes": 3443761
+  }
+}

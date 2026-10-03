@@ -1,0 +1,672 @@
+{
+  "schema": "screeps-current-t4-semantic-adapter-provenance/v1",
+  "isolatedWorldOnly": true,
+  "formalApiAccessed": false,
+  "completeT4Acceptance": false,
+  "wrapperFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/verify-t4-current-r18-r1.py",
+  "wrapperSha256": "891092a42583ba24b1da99a17366e821591ae82a476171b28e6c5bd7e6675c9e",
+  "binding": {
+    "originalBaseFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/verify-t4.py",
+    "originalBaseSha256": "e4357be83d19305f3fccb67d080c80294b56562f7b12c54714c0b8a4fcc4d34f",
+    "inMemoryPatchedBaseSha256": "92570d42b256f94703643ed3ab4946d8ec3ec5cad02edac06409ad63a20a6f6d",
+    "exactSchemaOriginal": "    require(state[\"hash\"] == canonical_hash({\"domain\": \"treasury-t4:continuous-oh-state-v1\", \"payload\": payload}), f\"{label}: T4 canonical hash无效\")\n",
+    "exactSchemaReplacement": "    require(type(state[\"schemaVersion\"]) is int and state[\"schemaVersion\"] in (1, 2), f\"{label}: T4 schema域非法\")\n    require(state[\"hash\"] == canonical_hash({\"domain\": f\"treasury-t4:continuous-oh-state-v{state['schemaVersion']}\", \"payload\": payload}), f\"{label}: T4 canonical hash无效\")\n",
+    "exactTransactionOriginal": "        txs = [{**{k: t[k] for k in (\"_id\", \"time\", \"from\", \"to\") if k in t},\n                **({\"resource\": t[\"resourceType\"]} if \"resourceType\" in t else {}),\n                **{k: t[k] for k in (\"amount\", \"description\") if k in t}} for t in snap.raw[\"transactions\"]]\n        txs.sort(key=lambda t: t[\"_id\"])\n",
+    "exactTransactionReplacement": "        txs = sorted(snap.raw[\"transactions\"], key=lambda t: t[\"_id\"])\n",
+    "otherOriginalSourceBytesPreserved": true,
+    "fullPayloadHashRetained": true,
+    "frozenDriverFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/run-until-t4.cjs",
+    "frozenDriverSha256": "d4811fca14d69a81c0a3653252d8628337fe9c3453aed3b74445bac5d19532ba",
+    "transactionBindingContract": "complete_raw_transaction_json_sorted_by_id",
+    "projectedFallbackAccepted": false,
+    "exactPreNativeOriginal": "        require(isinstance(cycle, dict) and (cycle[\"status\"], cycle[\"sequence\"], cycle[\"quota\"], cycle[\"reservedFee\"], cycle[\"taskId\"], cycle[\"taskRemainingAtArm\"]) == (\"preparing\", 1, None, None, task_id, 26) and snap.task(task_id)[\"remainingAmount\"] == 26 and not snap.task(task_id).get(\"treasurySlice\"), \"C1 pre-native准备态被提前Arm/扣量/重建cohort\")\n",
+    "exactPreNativeReplacement": "        c1_pre_native_observable_ready(snap, task_id)\n",
+    "c1ContractFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/c1-current-contract-r18-r1.py",
+    "c1ContractSha256": "224b9cec0cadcaa6d4049e8306751e1006e7f5cdaa76365cbada24fcde88b55c",
+    "c1ProofBinding": {
+      "originalC1FunctionSha256": "a2f3ac3c1f6360c958e544fc0c5c0eba8e49865edcf6726165a14f678a7ac226",
+      "derivedC1FunctionSha256": "fa08f0c81b4e2b28d9fd05ae7ca644b1677109a5fd4c28c57919a8cee2899c85",
+      "exactChanges": [
+        {
+          "before": "    baseline = load_snapshot(evidence, spec[\"baseline\"])\n",
+          "after": "    global C1_BASELINE\n    baseline = load_snapshot(evidence, spec[\"baseline\"])\n    C1_BASELINE = baseline\n",
+          "occurrences": 1
+        },
+        {
+          "before": "check_native(",
+          "after": "check_c1_actual_native(",
+          "occurrences": 2
+        },
+        {
+          "before": "check_no_extra_receipts(",
+          "after": "check_c1_actual_records(",
+          "occurrences": 6
+        },
+        {
+          "before": "check_counters(",
+          "after": "check_c1_actual_counters(",
+          "occurrences": 5
+        },
+        {
+          "before": "s[\"sequenceHighWater\"] == 3",
+          "after": "s[\"sequenceHighWater\"] == c1_complete_frontier(awaiting, 3)",
+          "occurrences": 1
+        },
+        {
+          "before": "len(s[\"closedCycles\"]) == 3",
+          "after": "len(s[\"closedCycles\"]) == c1_complete_frontier(awaiting, 3)",
+          "occurrences": 1
+        },
+        {
+          "before": "state[\"sequenceHighWater\"] == 3",
+          "after": "state[\"sequenceHighWater\"] == c1_complete_frontier(current, 3)",
+          "occurrences": 1
+        },
+        {
+          "before": "current.state[\"sequenceHighWater\"] == 4",
+          "after": "current.state[\"sequenceHighWater\"] == c1_complete_frontier(current, 4)",
+          "occurrences": 1
+        }
+      ],
+      "otherOriginalC1SourcePreserved": true,
+      "zeroNativeAuthority": "actual signed complete pre_native_recovery/not_executed gen1 certificates only",
+      "noAssumedZeroSequenceOrCount": true,
+      "nativeOrdinalsAreRealReceipts": true,
+      "productControlSourceSha256": "ba323af9fbe021c2abdd06c259eb2803137df0222129122109bea9ac49b13bdc"
+    },
+    "observableReadinessOnly": true,
+    "unobservedHeapReadinessClaimed": false,
+    "sourceCommit": "a24f2a777c26c4f3e3dc2ea489b65d39cab92042",
+    "sourceTree": "46710866e3a2d0c36185fb6e06f01192fbcd4faa",
+    "sourceArchiveSha256": "d12ebc7360965c22e5092630bc15946230be475fd6f4413ce9e0fb6175729f79",
+    "mainSha256": "9d300172be0bed439e93b7a47d206dcfa3fc5b9db727a571f8ffa761a14f7f4d",
+    "sameTickSetupPhaseProof": {
+      "outerWrapperFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/verify-c1-setup-phase-r18-r1.py",
+      "outerWrapperSha256": "d2ee07947e271c7fd45278d83edfcb06175e74bff7bbfacf371ffea901020e37",
+      "specificPreSetupSnapshots": {
+        "t4-c1-natural-before-setup-after-real-drain-snapshot.json": "0f3ad5a21ea2bb0fb23bc55bbadfec3f18ea465ffdd12857a54a423a47529976",
+        "t4-c1-natural-continuation-failure-before-persistence-snapshot.json": "b106157b1904751ce2dbdb75b2eba94cc4164caec0bbc5c7f825d96ac86f54ae",
+        "t4-c1-natural-drained-805-before-setup-readback-snapshot.json": "d2d82326db4512064334b897d49fd1497bae7919f0846e88fae71c3ef7c89f9a"
+      },
+      "fixedOriginalArtifacts": {
+        "t4-c1-natural-cargo-drain-before-snapshot.json": "8f41bc72ab569d5e3e1b2d8d74758745422651c25c7c5fce966877d014e17f6a",
+        "t4-c1-natural-cargo-drain-driver.json": "631cc2a2e319af4e2e91563baffbf57c870e121e401e3664e2d18def830383c7",
+        "native-lab-reaction-source-contract-r18-r1.json": "560c3d9b45d66e1a13d20578cb4b5fccfa3ca04771fb319258847cddb7653955",
+        "c1-cargo-reaction-independent-readonly-r18-r3.json": "4dc5c99377a38ef5ce74cac6f724733a9f5075eeea9a0e9df629d9ef1ba30af2",
+        "t4-c1-natural-setup-setup.json": "ffc7f8f303be021eb6b653c1589ea7995c900a1aa09d439e0c2c749047ebf79b",
+        "t4-c1-natural-configured-fixture-before-persistence-snapshot.json": "bd33dbc9a3c2807ff152611b7bca5e1f8a4ff864353c73815b78680bdbe50b24",
+        "t4-c1-natural-cold-fixture-readback-snapshot.json": "db479b04e95df6442ec1a470cd6b5c210ec0c0a53a104ec61d6cca3716bc74df"
+      },
+      "cargoProofSourceSha256": "425b0aad71245a6041a759a454a545c007c5bb050a3b73f10d04ee2443d8e51c",
+      "cargoIndependentProof": {
+        "schema": "screeps-r18-c1-cargo-drain-proof/v1",
+        "inputContract": "r18-initial-progress-barrier-complete-rawdb-v1",
+        "proofRevision": "r18-r3",
+        "copiedR1ProofSha256": "b0353fa6f4f18e69e7a89dad04cbe0d5b2e8dc675260c0cf3265eb8fc6311744",
+        "copiedR2ProofSha256": "705a4740853a700b3376bed7639ede6a6bcadea568aba72bc202f693f5f5639b",
+        "isolatedWorldOnly": true,
+        "formalApiAccessed": false,
+        "candidateAcceptanceClaimed": false,
+        "beforeTick": 803,
+        "afterTick": 805,
+        "mainSha256": "9d300172be0bed439e93b7a47d206dcfa3fc5b9db727a571f8ffa761a14f7f4d",
+        "expectedFrozenDriverSourceSha256": "19064fb62574fd1644b871320f0e266263b69c0bbd078355b6c54959967b7e93",
+        "oldTreasuryRuntimeKeysExact": [
+          "treasuryCore",
+          "treasuryProductionT1Quota",
+          "treasuryProductionT2Quota",
+          "treasuryProductionT3Quota",
+          "treasuryT1FirstLiveControl",
+          "treasuryT1FirstLiveControlMirror",
+          "treasuryT2FirstLiveControl",
+          "treasuryT2FirstLiveControlMirror",
+          "treasuryT3FirstLiveControl",
+          "treasuryT3FirstLiveControlMirror",
+          "treasuryWorldSequence"
+        ],
+        "oldRawTransactionsExact": 37,
+        "originalRCTasksExactNoNewTask": true,
+        "transferMethodIntentIndependentlyRecorded": false,
+        "pickupWithdrawMethodCallsIndependentlyRecorded": false,
+        "originalMainExecutionTelemetryObserved": true,
+        "cargoDrainPhysicalConservationVerified": true,
+        "beforeDigests": {
+          "memorySha256": "b33bbb612b0e237adeb73001b4b5e118a3cac6f91ba78e9a8b7ade246c072c78",
+          "storesSha256": "cf56e1bb7751ed8784a2d31af3917a99ac5e99e4ea10fffcdb0841b3ba143f0e",
+          "transactionsSha256": "52bb9bc9b70e3060c952c0b293b4f2d11df3e47a5fe675c0a3c87270e9b1869f",
+          "transactionCount": 37
+        },
+        "afterDigests": {
+          "memorySha256": "0d84abf00eda7eda2c941d5ea185bdae52b39bb80b59691b2083b479ece82f07",
+          "storesSha256": "374cb4cb9e966bf227db36fe0238378ae9d1a21f4dd603be996d02ece86d4d9b",
+          "transactionsSha256": "52bb9bc9b70e3060c952c0b293b4f2d11df3e47a5fe675c0a3c87270e9b1869f",
+          "transactionCount": 37
+        },
+        "cpuTelemetry": {
+          "beforeLatestMainTick": 802,
+          "afterLatestMainTick": 804,
+          "successfulCreepIntentCountObserved": 0,
+          "counterPresent": false,
+          "absentCounterInterpretedAsZero": true,
+          "rawCPUObjectModified": false,
+          "intentCounterIsIndependentWorkCallTrace": false
+        },
+        "successfulIntentWitnesses": [
+          {
+            "rawSampleIndex": 96,
+            "rawSampleTick": 804,
+            "actualOriginalMainTick": 803,
+            "cpuUpdatedAt": 803,
+            "rawMemorySha256": "e9ef03d2946c93a88aaf25c8852d4e73674676b37914f41cc7cab92510e623d1",
+            "ownedStoresSha256": "1c590a94dfc2ac50c0734a305382fe4b9c57b3810682bc58603d46fa6589bd5b",
+            "rawTransactionsSha256": "52bb9bc9b70e3060c952c0b293b4f2d11df3e47a5fe675c0a3c87270e9b1869f",
+            "frozenCreepIdsWithSubmittedZeroCargo": [
+              "4389c5b0988de7e",
+              "f7add81659a2190"
+            ],
+            "successfulCreepIntentCountObserved": 2,
+            "methodIntentIndependentlyRecorded": false
+          }
+        ],
+        "nativeLabReaction": {
+          "sourceContract": {
+            "recordUtf8Sha256": "560c3d9b45d66e1a13d20578cb4b5fccfa3ca04771fb319258847cddb7653955",
+            "synthesisControlSourceUtf8Sha256": "19e5d4c6ac25cfefb0af28d71c71d20f623a5cbe1b3d1b7cabb81e447aa58c7f",
+            "nativeSourceFiles": {
+              "constants": {
+                "path": "/srv/screeps-treasury-t1/server/node_modules/@screeps/common/lib/constants.js",
+                "sha256": "42fa7b11d157cfcf9bc7a636ad74f43370c649cbdca7d0ef7431eb476f151371"
+              },
+              "processor": {
+                "path": "/srv/screeps-treasury-t1/server/node_modules/@screeps/engine/src/processor/intents/labs/run-reaction.js",
+                "sha256": "e0f2b802ec878339e3d2c164e2360265008087d9672ccd1c1d3395fb84727d9d"
+              }
+            },
+            "actualInstalledExports": {
+              "LAB_REACTION_AMOUNT": 5,
+              "REACTION_TIME_UH2O": 5,
+              "REACTIONS_UH_OH": "UH2O",
+              "REACTIONS_OH_UH": "UH2O"
+            },
+            "sourcesExecutedByVerifier": false
+          },
+          "exactActualEvidence": {
+            "reactionCount": 1,
+            "actualReactionMainTick": 804,
+            "reactionAmount": 5,
+            "cooldownTicks": 5,
+            "ownedRoom": "E1N57",
+            "beforeLabs": {
+              "907ec1ebdfae530": {
+                "resource": "UH",
+                "amount": 20,
+                "cooldownTime": 756,
+                "x": 25,
+                "y": 27,
+                "effects": null
+              },
+              "3d45c1ebdfbcec9": {
+                "resource": "OH",
+                "amount": 20,
+                "cooldownTime": 756,
+                "x": 27,
+                "y": 27,
+                "effects": null
+              },
+              "4dcec1ebdfc4e3f": {
+                "resource": "UH2O",
+                "amount": 10,
+                "cooldownTime": 804,
+                "x": 26,
+                "y": 28,
+                "effects": null
+              }
+            },
+            "afterLabs": {
+              "907ec1ebdfae530": {
+                "resource": "UH",
+                "amount": 15,
+                "cooldownTime": 756,
+                "x": 25,
+                "y": 27,
+                "effects": null
+              },
+              "3d45c1ebdfbcec9": {
+                "resource": "OH",
+                "amount": 15,
+                "cooldownTime": 756,
+                "x": 27,
+                "y": 27,
+                "effects": null
+              },
+              "4dcec1ebdfc4e3f": {
+                "resource": "UH2O",
+                "amount": 15,
+                "cooldownTime": 809,
+                "x": 26,
+                "y": 28,
+                "effects": null
+              }
+            },
+            "sameExactLabCohort": true,
+            "noPowerLabEffectsInAllObservedFrames": true,
+            "chebyshevOutputToEachInputAtMostTwo": true,
+            "runtimeBefore": {
+              "updatedAt": 802,
+              "generatedTaskCount": 0,
+              "failedTaskCount": 0,
+              "successfulRunCount": 0,
+              "lastActions": [],
+              "bindings": {},
+              "rooms": {
+                "E1N57": {
+                  "stage": "synthesizing",
+                  "activeProduct": "UH2O",
+                  "reagentA": "UH",
+                  "reagentB": "OH",
+                  "targetAmount": 30,
+                  "batchSize": 30,
+                  "reagentLabIds": [
+                    "907ec1ebdfae530",
+                    "3d45c1ebdfbcec9"
+                  ],
+                  "productLabIds": [
+                    "4dcec1ebdfc4e3f"
+                  ],
+                  "successfulRuns": 2,
+                  "pendingTasks": 1,
+                  "lastTransitionAt": 794,
+                  "nextReactionAt": 804
+                }
+              }
+            },
+            "runtimeAfter": {
+              "updatedAt": 804,
+              "generatedTaskCount": 0,
+              "failedTaskCount": 0,
+              "successfulRunCount": 1,
+              "lastActions": [
+                "synthesis-runs:E1N57:UH2O:count=1"
+              ],
+              "bindings": {},
+              "rooms": {
+                "E1N57": {
+                  "stage": "synthesizing",
+                  "activeProduct": "UH2O",
+                  "reagentA": "UH",
+                  "reagentB": "OH",
+                  "targetAmount": 30,
+                  "batchSize": 30,
+                  "reagentLabIds": [
+                    "907ec1ebdfae530",
+                    "3d45c1ebdfbcec9"
+                  ],
+                  "productLabIds": [
+                    "4dcec1ebdfc4e3f"
+                  ],
+                  "successfulRuns": 3,
+                  "pendingTasks": 0,
+                  "lastTransitionAt": 794,
+                  "nextReactionAt": 809
+                }
+              }
+            },
+            "all144RawFramesPreserved": true,
+            "allOtherNonEnergyResourcesExactInEveryRawFrame": true,
+            "inFlightFramesUsedAsChemicalCertificate": false
+          }
+        },
+        "physicalConservation": {
+          "ownedEntityCount": 34,
+          "sameOwnedIdentitySet": true,
+          "allStoreResourceTotalsBefore": {
+            "OH": 19994,
+            "H": 52000,
+            "energy": 1003309,
+            "UH": 20,
+            "UH2O": 10
+          },
+          "allStoreResourceTotalsAfter": {
+            "OH": 19989,
+            "H": 52000,
+            "energy": 1003309,
+            "UH": 15,
+            "UH2O": 15
+          },
+          "exactSpeciesDeltas": {
+            "OH": -5,
+            "UH": -5,
+            "UH2O": 5
+          },
+          "quantifiedUHOComponentsBefore": {
+            "U": 30,
+            "H": 72034,
+            "O": 20004
+          },
+          "quantifiedUHOComponentsAfter": {
+            "U": 30,
+            "H": 72034,
+            "O": 20004
+          },
+          "componentQuantificationResources": [
+            "H",
+            "O",
+            "OH",
+            "U",
+            "UH",
+            "UH2O"
+          ],
+          "reactionComponentDeltas": {
+            "U": 0,
+            "H": 0,
+            "O": 0
+          },
+          "creepEnergyDecreases": [
+            {
+              "entityId": "f7add81659a2190",
+              "name": "lab-r2-carrier",
+              "room": "E4N58",
+              "energyDecrease": 50,
+              "beforeStore": {
+                "energy": 50
+              },
+              "afterStore": {
+                "energy": 0
+              }
+            },
+            {
+              "entityId": "4389c5b0988de7e",
+              "name": "lab-t2-target-carrier",
+              "room": "E1N57",
+              "energyDecrease": 50,
+              "beforeStore": {
+                "OH": 0,
+                "energy": 50
+              },
+              "afterStore": {
+                "OH": 0,
+                "energy": 0
+              }
+            }
+          ],
+          "sameRoomStructureEnergyIncreases": [
+            {
+              "entityId": "d7dc41dd18efd58",
+              "type": "storage",
+              "room": "E4N58",
+              "energyIncrease": 50,
+              "beforeStore": {
+                "energy": 97400
+              },
+              "afterStore": {
+                "energy": 97450
+              }
+            },
+            {
+              "entityId": "a252c1b028c5660",
+              "type": "storage",
+              "room": "E1N57",
+              "energyIncrease": 50,
+              "beforeStore": {
+                "energy": 100050
+              },
+              "afterStore": {
+                "energy": 100100
+              }
+            }
+          ],
+          "receivedEnergyByRoom": {
+            "E4N58": 50,
+            "E1N57": 50
+          },
+          "nonEnergyResourcesExactPerEntityExceptFrozenOneReaction": true,
+          "exactLabResourceExceptions": {
+            "907ec1ebdfae530": {
+              "UH": -5
+            },
+            "3d45c1ebdfbcec9": {
+              "OH": -5
+            },
+            "4dcec1ebdfc4e3f": {
+              "UH2O": 5
+            }
+          },
+          "allOtherResourcesExactPerEntity": true,
+          "nonStoreSourceEnergyExcluded": true
+        },
+        "driverFullRawObservation": {
+          "rawDbSamplesVerified": 144,
+          "rawSamplesExcluded": 0,
+          "initialFrameCoherentAndExactBefore803": true,
+          "progressSampleTicks": [
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            803,
+            804
+          ],
+          "inFlightRawSampleIndexesRetained": [],
+          "inFlightBarrierSampleIndexesRetained": [],
+          "inFlightRowsUsedAsPhysicalCertificate": false,
+          "pauseRawSamplesVerified": 47,
+          "finalCoherentStableSamples": 41,
+          "lastSignatureStableMsIndependentlyRecomputed": 10222,
+          "finalRawMemoryStoresTransactionsBoundToAfter": true,
+          "tickDurationGetterValueUnchanged": 1500,
+          "codeObservedFreshAtStartAndCachedForRows": true,
+          "freshActualMainSha256AtEnd": "9d300172be0bed439e93b7a47d206dcfa3fc5b9db727a571f8ffa761a14f7f4d",
+          "driverSourceSha256Bound": "19064fb62574fd1644b871320f0e266263b69c0bbd078355b6c54959967b7e93",
+          "digestContract": "full_raw_memory_and_owned_store_projection_and_complete_raw_transactions"
+        }
+      },
+      "firstSetupBeforeAndAfterFullMemoryExact": true,
+      "preSetupStillIncludedInOriginalHistoryAndBundleChecks": true,
+      "postSetupExpiredTaskEntireJsonCheckRetained": true,
+      "sameTickDoesNotImplyPostSetup": true
+    }
+  },
+  "frozenPlanSha256": "476281fa8bc750de073ddc28059a81639bb113f00fdf6f7636e7775179175529",
+  "originalInvocation": [
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/verify-t4.py",
+    "--case",
+    "c1",
+    "--evidence",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence",
+    "--plan",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/verify-t4-plan-semantic-r18.json",
+    "--manifest",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/candidate/manifest.json",
+    "--bundle",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/candidate/main.js",
+    "--output",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/c1-independent-verification-r18-r3.json"
+  ],
+  "uniqueFullWrapperInputs": {
+    "--run-root": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003",
+    "--case": "c1",
+    "--evidence": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence",
+    "--plan": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/verify-t4-plan-semantic-r18.json",
+    "--manifest": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/candidate/manifest.json",
+    "--bundle": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/candidate/main.js",
+    "--output": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/c1-independent-verification-r18-r3.json",
+    "--adapter-provenance-output": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/c1-independent-adapter-provenance-r18-r3.json"
+  },
+  "exactWrapperInvocation": [
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/verify-c1-setup-phase-r18-r1.py",
+    "--run-root",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003",
+    "--case",
+    "c1",
+    "--evidence",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence",
+    "--plan",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/verify-t4-plan-semantic-r18.json",
+    "--manifest",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/candidate/manifest.json",
+    "--bundle",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/candidate/main.js",
+    "--output",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/c1-independent-verification-r18-r3.json",
+    "--adapter-provenance-output",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/c1-independent-adapter-provenance-r18-r3.json"
+  ],
+  "additionalStaticReviewGuards": {
+    "realServiceRestart": {
+      "beforePID": "3802450",
+      "afterPID": "3805063"
+    },
+    "backupDatabase": {
+      "databaseFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/db-before-t4-c1-natural-postrelease-restart.json",
+      "databaseSha256": "2e8d5d2f878669a5f701c44b266b3397c5953d8481138906e33da2cadce02c20",
+      "persistedTick": 986,
+      "storedGameTimeType": "int",
+      "persistedMemorySha256": "3b26781749b04c3d0c6a0b60bfe99806f24fc3694131fd0684fe087e2086147f"
+    },
+    "completedDatabase": {
+      "databaseFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/db-t4-c1-natural-completed.json",
+      "databaseSha256": "c01abe200ed87aac5b43b62f39491a601c4abb93d7844a964e712dad32856d65",
+      "persistedTick": 991,
+      "storedGameTimeType": "int",
+      "persistedMemorySha256": "d879f731b64c096e822424e7223f13e72c204ef0b9a86fc4797f65a76ea63c84"
+    },
+    "sameTickColdMemoryStoresCodeReceiptsExact": true,
+    "actualOriginalMainTickAdvance": 5,
+    "originalFourReceiptsAndAllConsumedHistoryPreserved": true,
+    "fifthNativeReceiptCount": 0,
+    "kernelExactExceptThreeActualTickMarkers": [
+      {
+        "path": "lifecycle.lastBeginTick",
+        "before": 985,
+        "after": 990
+      },
+      {
+        "path": "lifecycle.lastEndTick",
+        "before": 985,
+        "after": 990
+      },
+      {
+        "path": "recovery.budgetTick",
+        "before": 985,
+        "after": 990
+      }
+    ],
+    "pauseStability": {
+      "label": "C1 postrelease five ticks",
+      "matched": true,
+      "diagnosticOnly": false,
+      "observedStableMs": 10165,
+      "stableSamples": 41,
+      "samples": 41,
+      "barrierWallMs": 10180,
+      "endTick": 991
+    },
+    "batchPhysicalConservation": {
+      "sameTickSnapshotSha256": "16683f49d8b4ac07cfa858a1afe13e91793c12f4066b4ca63a7188da061453af",
+      "structureTotalsIndependentlyRecomputed": {
+        "UH": 10,
+        "OH": 0,
+        "UH2O": 30
+      },
+      "ownedCreepCargoIndependentlyRecomputed": {
+        "UH": 0,
+        "OH": 0,
+        "UH2O": 0
+      },
+      "allRecordedObjectsExact": true
+    }
+  },
+  "passed": true,
+  "verificationReportFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/c1-independent-verification-r18-r3.json",
+  "verificationReportSha256": "7fef372bff20008f489e3f6e91c66404c8d44fe927370f316c8a0366cd5de7eb"
+}

@@ -1,0 +1,20 @@
+{
+  "originalsPreserved": true,
+  "copies": [
+    {
+      "source": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/db-t4-c2-configured-fixture.json",
+      "privateCopy": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/private-databases/db-t4-c2-configured-fixture.json",
+      "sha256": "6bf96c2cdcc3e774a61d786bf1694690f6fdd0e6065ce13d53bbe4bd357ccf54"
+    },
+    {
+      "source": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/db-before-t4-c2-unknown-restart.json",
+      "privateCopy": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/private-databases/db-before-t4-c2-unknown-restart.json",
+      "sha256": "0fe83859a5aa12b4c36aaed9f75a1aa216b741480ca3e56cf218d783533da4cc"
+    },
+    {
+      "source": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/db-t4-c2-completed.json",
+      "privateCopy": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/private-databases/db-t4-c2-completed.json",
+      "sha256": "33aa2321010d4d5f954176818dfa13c6b4eaa61df1b878f27e5d270516f2c203"
+    }
+  ]
+}

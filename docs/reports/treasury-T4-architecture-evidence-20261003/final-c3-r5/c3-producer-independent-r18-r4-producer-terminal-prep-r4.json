@@ -1,0 +1,13 @@
+{
+  "schema": "screeps-r18-fresh-preparation-independent-verification/v1",
+  "passed": false,
+  "case": "t4-c3-producer-budget",
+  "isolatedWorldOnly": true,
+  "formalApiAccessed": false,
+  "worldModified": false,
+  "sceneReplayed": false,
+  "completeT4Acceptance": false,
+  "error": "缺少paused DB原件: /srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/../private-databases/db-t4-c3-producer-budget-configured-fixture.json",
+  "outerWrapperSha256": "0ab195cc2ea1cebc4c848ec9f2715211d070d2e5eb8769ca5ceaee2187e917e4",
+  "originalAdapterSha256": "891092a42583ba24b1da99a17366e821591ae82a476171b28e6c5bd7e6675c9e"
+}

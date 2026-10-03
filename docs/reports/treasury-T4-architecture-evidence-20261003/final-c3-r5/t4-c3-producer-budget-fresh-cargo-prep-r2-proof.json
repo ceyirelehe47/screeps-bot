@@ -1,0 +1,167 @@
+{
+  "schema": "screeps-r18-fresh-case-cargo-prep-proof/v1",
+  "outcome": "PASS",
+  "case": "t4-c3-producer-budget",
+  "inputContract": "r18-fresh-case-baseline801-align-driver-pure-dict-v1",
+  "isolatedWorldOnly": true,
+  "formalApiAccessed": false,
+  "candidateAcceptanceClaimed": false,
+  "mainSha256": "9d300172be0bed439e93b7a47d206dcfa3fc5b9db727a571f8ffa761a14f7f4d",
+  "mode": "drain",
+  "preludeEvidenceScope": "physical_endpoints_and_original_pause_hashes",
+  "warmupProgressRawSamplesAvailable": false,
+  "prelude": {
+    "evidenceScope": "physical_endpoints_and_original_pause_hashes",
+    "progressRawSamplesAvailable": false,
+    "originalDriverSourceSha256": "d4811fca14d69a81c0a3653252d8628337fe9c3453aed3b74445bac5d19532ba",
+    "pause": {
+      "allOriginalPauseSamples": 47,
+      "actualStableMs": 10167,
+      "lastFullEndpointHashBound": true
+    },
+    "physicalEndpoints": {
+      "branch": "align-loaded50",
+      "evidenceScope": "physical_endpoints_and_original_pause_hashes",
+      "reactionCountDerived": 0,
+      "actualReactionMainTickDerived": null,
+      "energyDeliveredByRoom": {
+        "E4N58": 50,
+        "E1N57": 50
+      },
+      "carrierEnergyDecreaseByRoom": {
+        "E4N58": 0,
+        "E1N57": 0
+      },
+      "terminalEnergyDecreaseByRoom": {
+        "E4N58": 50,
+        "E1N57": 50
+      },
+      "energyDeltaByEntity": {
+        "f7add81659a2190": 0,
+        "d7dc41dd18efd58": 50,
+        "370f41dd18e91de": -50,
+        "4389c5b0988de7e": 0,
+        "a252c1b028c5660": 50,
+        "5ca4c1b028a9b3b": -50
+      },
+      "otherResourcesExactPerEntity": true,
+      "UHOComponentsBefore": {
+        "U": 30,
+        "H": 72034,
+        "O": 20004
+      },
+      "UHOComponentsAfter": {
+        "U": 30,
+        "H": 72034,
+        "O": 20004
+      },
+      "perTickActorOrMethodTraceClaimed": false
+    }
+  },
+  "prepared": {
+    "mode": "drain",
+    "allRawSamples": 134,
+    "rawSamplesExcluded": 0,
+    "inFlightIndexesRetained": [],
+    "actualMainTickDelta": 1,
+    "pause": {
+      "allOriginalPauseSamples": 41,
+      "actualStableMs": 10216,
+      "lastFullEndpointHashBound": true
+    },
+    "physicalEndpoints": {
+      "reactionCountDerived": 0,
+      "actualReactionMainTickDerived": null,
+      "energyDeliveredByRoom": {
+        "E4N58": 50,
+        "E1N57": 50
+      },
+      "otherResourcesExactPerEntity": true,
+      "UHOComponentsBefore": {
+        "U": 30,
+        "H": 72034,
+        "O": 20004
+      },
+      "UHOComponentsAfter": {
+        "U": 30,
+        "H": 72034,
+        "O": 20004
+      }
+    },
+    "zeroObserveNoResume": false
+  },
+  "totalPhysicalConservation": {
+    "reactionCountDerived": 0,
+    "actualReactionMainTickDerived": null,
+    "baselineCarrierEnergyDecreaseByRoom": {
+      "E4N58": 50,
+      "E1N57": 50
+    },
+    "storageEnergyIncreaseByRoom": {
+      "E4N58": 100,
+      "E1N57": 100
+    },
+    "terminalEnergyDecreaseByRoom": {
+      "E4N58": 50,
+      "E1N57": 50
+    },
+    "energyDeltaByEntity": {
+      "f7add81659a2190": -50,
+      "d7dc41dd18efd58": 100,
+      "370f41dd18e91de": -50,
+      "4389c5b0988de7e": -50,
+      "a252c1b028c5660": 100,
+      "5ca4c1b028a9b3b": -50
+    },
+    "segmentsAddedAndDirectFullEntityDeltaChecked": true,
+    "otherResourcesExactPerEntity": true,
+    "UHOComponentsBefore": {
+      "U": 30,
+      "H": 72034,
+      "O": 20004
+    },
+    "UHOComponentsAfter": {
+      "U": 30,
+      "H": 72034,
+      "O": 20004
+    }
+  },
+  "reactionSourceContract": {
+    "recordUtf8Sha256": "560c3d9b45d66e1a13d20578cb4b5fccfa3ca04771fb319258847cddb7653955",
+    "synthesisControlSourceUtf8Sha256": "19e5d4c6ac25cfefb0af28d71c71d20f623a5cbe1b3d1b7cabb81e447aa58c7f",
+    "nativeSourceFiles": {
+      "constants": {
+        "path": "/srv/screeps-treasury-t1/server/node_modules/@screeps/common/lib/constants.js",
+        "sha256": "42fa7b11d157cfcf9bc7a636ad74f43370c649cbdca7d0ef7431eb476f151371"
+      },
+      "processor": {
+        "path": "/srv/screeps-treasury-t1/server/node_modules/@screeps/engine/src/processor/intents/labs/run-reaction.js",
+        "sha256": "e0f2b802ec878339e3d2c164e2360265008087d9672ccd1c1d3395fb84727d9d"
+      }
+    },
+    "actualInstalledExports": {
+      "LAB_REACTION_AMOUNT": 5,
+      "REACTION_TIME_UH2O": 5,
+      "REACTIONS_UH_OH": "UH2O",
+      "REACTIONS_OH_UH": "UH2O"
+    },
+    "sourcesExecutedByVerifier": false
+  },
+  "preludeRoleSourceContract": {
+    "sourceSha256ByPath": {
+      "src/roles/carrier.ts": "e8ae3f94e5c7bb9d492bd2da6c57b6932a679949306ac3281ea195e3a8daecde",
+      "src/mount/mountCreep.ts": "d5e4502bed2031528f9f29318e2e020a5c57655da1035049da5fbac320866a70",
+      "src/roles/energyTargets.ts": "36e8dfa1ce40c7c0fb59c2e0ae866858a3e40bfcd1cfe5068b13f57cff8f6226"
+    },
+    "sourceExecuted": false,
+    "evidenceScope": "endpoint_physical_and_product_source_compatibility",
+    "perTickActorOrMethodTraceClaimed": false
+  },
+  "oldFiscalAndCfgAndRCTasksExact": true,
+  "old37CompleteRawTransactionsExact": true,
+  "transferMethodIntentIndependentlyRecorded": false,
+  "baselineTick": 801,
+  "afterAlignTick": 803,
+  "afterDrainTick": 804,
+  "independentCaseClaimSha256": "d530d830dcb6ef71a6120b1234670921be2e2a7aa17efa2d8aab4a4296e5e21b"
+}

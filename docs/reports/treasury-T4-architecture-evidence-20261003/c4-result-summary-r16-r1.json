@@ -1,0 +1,302 @@
+{
+  "schema": "screeps-r16-c4-result-summary/v1",
+  "isolatedWorldOnly": true,
+  "passed": false,
+  "sourceCommit": "9fb64f2e37266f749b09737e66af445ba415b827",
+  "sourceTree": "c7dc0f7890f8b15763a2e8bbc45d6ff762a16bbb",
+  "mainSha256": "f6d62d7f4938d961ba3c276246f57464213cd974a3ee39dc6f26ff450168f615",
+  "mainBytes": 3439794,
+  "buildTag": "2026.10.3-4+9fb64f2@2026-10-02T22:12:14.509Z",
+  "deployBundleHash": "4025cdc718fdf26871c379501aca9672ab7525bbe1d84a3ca0115a16c1c3c030",
+  "manifestSha256": "2de1110719719a751c9a884b7ed0c00c2b0a785e9ecd9ba37559c118efe9f54c",
+  "sourceArchiveSha256": "ca4766c195d59c5f6e2741dbe2c10521cfeffddf1d1f9437b96161021e680472",
+  "verifierSha256": "e4357be83d19305f3fccb67d080c80294b56562f7b12c54714c0b8a4fcc4d34f",
+  "sealToolSha256": "e8ca6bbf09a5385a929a6f62171607a941315607dcefd8ee5b25b7903d9bca9d",
+  "summaryToolSha256": "4d0c5d0965ff9e35fc4021fbf2d52ff286739fbbf177c9223beed204e81d26e9",
+  "sourceContractSealSha256": "30346096fb175c204f9e371291073f8b4543e83c5bc30125b5e13900f0b72f4c",
+  "planSha256": "853bc14674455be6de1e6fdf104191e262c12e3762c443e413807cd1e5eea924",
+  "cpuEvidenceScope": "isolatedGameCPU",
+  "productionCpuBudgetVerified": false,
+  "syntheticHistoryExcludedFromActualNativeSends": true,
+  "scenarios": [
+    {
+      "scenario": "emptybook",
+      "independentPassed": true,
+      "sampleCount": 31,
+      "coldSamples": 1,
+      "warmSamples": 30,
+      "syntheticConsumption": 0,
+      "syntheticClosedCertificates": 0,
+      "oldNativeTransactions": 37,
+      "actualT4NativeReceiptDelta": 0,
+      "coldMainTotal": 80.04539999999997,
+      "warmMetrics": {
+        "mainTotal": {
+          "count": 30,
+          "min": 4.791786000000002,
+          "mean": 7.514432999999995,
+          "p50": 6.463195999999925,
+          "p95": 11.474350000000015,
+          "max": 14.120588999999882
+        },
+        "wrappedMainUsed": {
+          "count": 30,
+          "min": 12.256095999999957,
+          "mean": 17.141371599999978,
+          "p50": 16.100987000000032,
+          "p95": 23.255751000000032,
+          "max": 27.00241200000005
+        },
+        "treasuryBeginTick": {
+          "count": 30,
+          "min": 1.8824829999999793,
+          "mean": 3.9133968333333353,
+          "p50": 3.4005849999998645,
+          "p95": 7.055145000000039,
+          "max": 7.199577999999974
+        },
+        "treasuryEndTick": {
+          "count": 30,
+          "min": 0,
+          "mean": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "creepWork": {
+          "count": 30,
+          "min": 0.0012619999999969878,
+          "mean": 0.002058000000016591,
+          "p50": 0.0018059999999877618,
+          "p95": 0.003798000000074353,
+          "max": 0.004115000000012969
+        },
+        "usedAfterBenchmark": {
+          "count": 30,
+          "min": 12.336146999999983,
+          "mean": 17.272892466666672,
+          "p50": 16.19446300000004,
+          "p95": 23.353992999999946,
+          "max": 28.34319000000005
+        },
+        "remainingTickHeadroom": {
+          "count": 30,
+          "min": 471.65680999999995,
+          "mean": 482.7271075333334,
+          "p50": 483.540208,
+          "p95": 487.48076100000003,
+          "max": 487.663853
+        }
+      },
+      "warmFence": {
+        "samples": 0,
+        "allCompleted": null,
+        "used": null
+      },
+      "firstWarmBucket": 9876,
+      "lastWarmBucket": 10000,
+      "warmBucketDelta": 124,
+      "minimumWarmBucket": 9876,
+      "actualCpuLimits": [
+        100
+      ],
+      "actualTickLimits": [
+        500
+      ],
+      "carrierSamplesWithBothOriginalWorks": 0,
+      "driverSha256": "41bfcb364a4964ef3e181ccf85b7d250ad57a5386542d68ca51d99fb16504b9d",
+      "actualDatabaseSha256": "2c6e1a22ba4658bbbb2108ec5d793ba7446364d2d267a69dd2d59be9c8abfd27",
+      "independentReportSha256": "325c22a1a997a721743ad1bf9733782ad14a32cd29627468a5362d48c17c5ce5",
+      "failureGate": null
+    },
+    {
+      "scenario": "max-idle",
+      "independentPassed": true,
+      "sampleCount": 31,
+      "coldSamples": 1,
+      "warmSamples": 30,
+      "syntheticConsumption": 90,
+      "syntheticClosedCertificates": 128,
+      "oldNativeTransactions": 37,
+      "actualT4NativeReceiptDelta": 0,
+      "coldMainTotal": 121.54221599999998,
+      "warmMetrics": {
+        "mainTotal": {
+          "count": 30,
+          "min": 36.06977199999983,
+          "mean": 55.52776820000002,
+          "p50": 52.16892299999995,
+          "p95": 80.51473099999998,
+          "max": 86.40581300000008
+        },
+        "wrappedMainUsed": {
+          "count": 30,
+          "min": 42.754512999999974,
+          "mean": 64.24233949999997,
+          "p50": 59.21242799999993,
+          "p95": 90.74266799999987,
+          "max": 98.22188700000015
+        },
+        "treasuryBeginTick": {
+          "count": 30,
+          "min": 32.78893900000003,
+          "mean": 50.94211093333334,
+          "p50": 47.1102820000001,
+          "p95": 76.98914000000013,
+          "max": 80.73329200000012
+        },
+        "treasuryEndTick": {
+          "count": 30,
+          "min": 0.355565000000297,
+          "mean": 0.9089911999999875,
+          "p50": 0.5822980000000371,
+          "p95": 1.7575420000000577,
+          "max": 6.834069999999997
+        },
+        "creepWork": {
+          "count": 30,
+          "min": 0.0013309999999364663,
+          "mean": 0.0020531666666727235,
+          "p50": 0.0017669999997451669,
+          "p95": 0.0030600000000049477,
+          "max": 0.00345500000003085
+        },
+        "usedAfterBenchmark": {
+          "count": 30,
+          "min": 42.83191799999997,
+          "mean": 64.37239410000002,
+          "p50": 59.37773400000003,
+          "p95": 90.8088150000001,
+          "max": 98.30918299999985
+        },
+        "remainingTickHeadroom": {
+          "count": 30,
+          "min": 401.69081700000015,
+          "mean": 435.6276059000001,
+          "p50": 435.9970209999997,
+          "p95": 456.7322919999997,
+          "max": 457.168082
+        }
+      },
+      "warmFence": {
+        "samples": 0,
+        "allCompleted": null,
+        "used": null
+      },
+      "firstWarmBucket": 9843,
+      "lastWarmBucket": 10000,
+      "warmBucketDelta": 157,
+      "minimumWarmBucket": 9843,
+      "actualCpuLimits": [
+        100
+      ],
+      "actualTickLimits": [
+        500
+      ],
+      "carrierSamplesWithBothOriginalWorks": 0,
+      "driverSha256": "a659a2054eb5099ba9c2d819a1216bc3d6a2e8a75037611461d6442468ca981b",
+      "actualDatabaseSha256": "05a64c792502aad652d8e927f3c70991689908669bef747e277cc7d1c3fc2232",
+      "independentReportSha256": "a3774b2e70ad163ac481c547382bf584f89833eae3fcd76c41e014aa846ea514",
+      "failureGate": null
+    },
+    {
+      "scenario": "max-carrier",
+      "independentPassed": false,
+      "sampleCount": 31,
+      "coldSamples": 1,
+      "warmSamples": 30,
+      "syntheticConsumption": 90,
+      "syntheticClosedCertificates": 128,
+      "oldNativeTransactions": 37,
+      "actualT4NativeReceiptDelta": 0,
+      "coldMainTotal": 176.216596,
+      "warmMetrics": {
+        "mainTotal": {
+          "count": 30,
+          "min": 35.77200999999968,
+          "mean": 51.744412833333314,
+          "p50": 50.65350699999999,
+          "p95": 73.91833599999995,
+          "max": 74.19703299999992
+        },
+        "wrappedMainUsed": {
+          "count": 30,
+          "min": 43.146729999999934,
+          "mean": 60.98170996666667,
+          "p50": 58.166817000000265,
+          "p95": 85.69514800000002,
+          "max": 93.27211299999999
+        },
+        "treasuryBeginTick": {
+          "count": 30,
+          "min": 32.3531210000001,
+          "mean": 46.21502936666669,
+          "p50": 45.2843519999999,
+          "p95": 63.42401599999994,
+          "max": 69.22484199999985
+        },
+        "treasuryEndTick": {
+          "count": 30,
+          "min": 0.3651460000000952,
+          "mean": 0.7225553666666429,
+          "p50": 0.48564299999998184,
+          "p95": 1.682886999999937,
+          "max": 2.084979000000203
+        },
+        "creepWork": {
+          "count": 30,
+          "min": 0.2782680000000255,
+          "mean": 0.7810824333333547,
+          "p50": 0.4363210000001345,
+          "p95": 3.0641319999999723,
+          "max": 3.5067510000000084
+        },
+        "usedAfterBenchmark": {
+          "count": 30,
+          "min": 62.56292799999983,
+          "mean": 93.08035046666669,
+          "p50": 88.06013700000017,
+          "p95": 135.81933800000002,
+          "max": 160.78019300000005
+        },
+        "remainingTickHeadroom": {
+          "count": 30,
+          "min": 339.21980699999995,
+          "mean": 406.91964953333337,
+          "p50": 409.5270959999998,
+          "p95": 431.263328,
+          "max": 437.43707200000017
+        }
+      },
+      "warmFence": {
+        "samples": 30,
+        "allCompleted": true,
+        "used": {
+          "availableSamples": 30,
+          "min": 19.25214199999982,
+          "mean": 31.80703413333334,
+          "p50": 28.14874299999974,
+          "p95": 56.64841200000001,
+          "max": 67.309753
+        }
+      },
+      "firstWarmBucket": 9713,
+      "lastWarmBucket": 9654,
+      "warmBucketDelta": -59,
+      "minimumWarmBucket": 9558,
+      "actualCpuLimits": [
+        100
+      ],
+      "actualTickLimits": [
+        500
+      ],
+      "carrierSamplesWithBothOriginalWorks": 30,
+      "driverSha256": "f91208a07a46923684ccce484bd51ef38069175f3dced60f519b6812e0705d7c",
+      "actualDatabaseSha256": "57c5a4d89ed3a5a98d71b1d3f7e3c79b121f1b946ed5ea046b89e7edfc3fb4f1",
+      "independentReportSha256": "1e83d22c30e95275de85c45351852bc844d084e018979ec3fbdfe3670add40b9",
+      "failureGate": "warm bucket不得下降"
+    }
+  ],
+  "initialStartupFailurePreserved": "R16父目录保存未启动的权限失败claim/log/DB；R1用同SHA可写工作副本，未重用旧claim。",
+  "fullOriginalsRemainAt": "/srv/screeps-treasury-t1/r16-t4-architecture-20261003/performance-r1"
+}

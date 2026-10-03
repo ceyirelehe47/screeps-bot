@@ -1,0 +1,348 @@
+{
+  "schema": "screeps-r18-producer-window-independent/v1",
+  "passed": true,
+  "isolatedWorldOnly": true,
+  "formalApiAccessed": false,
+  "worldModified": false,
+  "candidateAcceptanceClaimed": false,
+  "completeC3Acceptance": false,
+  "proof": {
+    "schema": "screeps-r18-c3-budget-window-no-new-task-proof/v1",
+    "outcome": "PASS",
+    "case": "t4-c3-producer-budget",
+    "inputContract": "r18-c3-sameclaim938-998-budget-window-no-new-task-pure-dict-v1",
+    "sameClaimSha256": "d530d830dcb6ef71a6120b1234670921be2e2a7aa17efa2d8aab4a4296e5e21b",
+    "currentDatabaseSha256": "3af30bda2b9b88c6f8f8c2b85bf61abcc827658c5f44e46875090f89fc5fd9eb",
+    "allOriginalSamples": 60,
+    "samplesExcluded": 0,
+    "firstTick": 938,
+    "lastTick": 997,
+    "driverEndTick": 998,
+    "scheduledResourceControlRuns": 12,
+    "originalMainDelegatedEverySample": true,
+    "canonicalOHBefore": {
+      "lab-t3-c1-26-OH": {
+        "id": "lab-t3-c1-26-OH",
+        "resource": "OH",
+        "fromRoomName": "E4N58",
+        "toRoomName": "E1N57",
+        "amount": 913,
+        "remainingAmount": 887,
+        "status": "cancelled",
+        "origin": "automatic",
+        "reason": "synthesis:E1N57:UH2O",
+        "createdAt": 788,
+        "updatedAt": 800,
+        "lastProgressAt": 791,
+        "lastError": "automatic_synthesis_need_covered"
+      },
+      "74075640:1:OH:E4N58->E1N57": {
+        "id": "74075640:1:OH:E4N58->E1N57",
+        "resource": "OH",
+        "fromRoomName": "E4N58",
+        "toRoomName": "E1N57",
+        "amount": 1384,
+        "remainingAmount": 913,
+        "status": "cancelled",
+        "createdAt": 74075640,
+        "updatedAt": 74083875,
+        "origin": "automatic",
+        "lastProgressAt": 74078870,
+        "reason": "synthesis:E1N57:UH2O",
+        "blockedReason": "insufficient_terminal_resource_or_fee",
+        "blockedSince": 74081020,
+        "lastError": "automatic_no_progress_timeout"
+      },
+      "805:1:OH:E4N58->E1N57": {
+        "id": "805:1:OH:E4N58->E1N57",
+        "resource": "OH",
+        "fromRoomName": "E4N58",
+        "toRoomName": "E1N57",
+        "amount": 26,
+        "remainingAmount": 0,
+        "status": "done",
+        "createdAt": 805,
+        "updatedAt": 916,
+        "origin": "automatic",
+        "lastProgressAt": 916,
+        "reason": "synthesis:E1N57:UH2O"
+      }
+    },
+    "canonicalOHAfter": {
+      "lab-t3-c1-26-OH": {
+        "id": "lab-t3-c1-26-OH",
+        "resource": "OH",
+        "fromRoomName": "E4N58",
+        "toRoomName": "E1N57",
+        "amount": 913,
+        "remainingAmount": 887,
+        "status": "cancelled",
+        "origin": "automatic",
+        "reason": "synthesis:E1N57:UH2O",
+        "createdAt": 788,
+        "updatedAt": 800,
+        "lastProgressAt": 791,
+        "lastError": "automatic_synthesis_need_covered"
+      },
+      "74075640:1:OH:E4N58->E1N57": {
+        "id": "74075640:1:OH:E4N58->E1N57",
+        "resource": "OH",
+        "fromRoomName": "E4N58",
+        "toRoomName": "E1N57",
+        "amount": 1384,
+        "remainingAmount": 913,
+        "status": "cancelled",
+        "createdAt": 74075640,
+        "updatedAt": 74083875,
+        "origin": "automatic",
+        "lastProgressAt": 74078870,
+        "reason": "synthesis:E1N57:UH2O",
+        "blockedReason": "insufficient_terminal_resource_or_fee",
+        "blockedSince": 74081020,
+        "lastError": "automatic_no_progress_timeout"
+      },
+      "805:1:OH:E4N58->E1N57": {
+        "id": "805:1:OH:E4N58->E1N57",
+        "resource": "OH",
+        "fromRoomName": "E4N58",
+        "toRoomName": "E1N57",
+        "amount": 26,
+        "remainingAmount": 0,
+        "status": "done",
+        "createdAt": 805,
+        "updatedAt": 916,
+        "origin": "automatic",
+        "lastProgressAt": 916,
+        "reason": "synthesis:E1N57:UH2O"
+      }
+    },
+    "canonicalWholeJSONExact": true,
+    "canonicalSummaryProjectionExactEverySample": true,
+    "newAnyRCTaskIDs": [],
+    "retainedTasksWholeJSONExact": true,
+    "allRCTasksWholeJSONExactClaimed": false,
+    "naturalGCSourceCompatibleRows": [
+      {
+        "id": "lab-t2-c2-UH",
+        "originalWholeTask": {
+          "id": "lab-t2-c2-UH",
+          "resource": "UH",
+          "fromRoomName": "E4N58",
+          "toRoomName": "E1N57",
+          "amount": 100,
+          "remainingAmount": 0,
+          "status": "done",
+          "origin": "automatic",
+          "reason": "synthesis:E1N57:UH2O",
+          "createdAt": 756,
+          "updatedAt": 779,
+          "lastProgressAt": 779
+        },
+        "updatedAt": 779,
+        "eligibleCleanupTicks": [
+          986
+        ],
+        "firstEligibleCleanupTick": 986,
+        "strictAgeAtFirstEligibleTick": 207,
+        "deletionTickIndependentlyObserved": false
+      },
+      {
+        "id": "lab-t2-c2-pre-source-ordinary",
+        "originalWholeTask": {
+          "id": "lab-t2-c2-pre-source-ordinary",
+          "resource": "H",
+          "fromRoomName": "W9N8",
+          "toRoomName": "E4N58",
+          "amount": 100,
+          "remainingAmount": 0,
+          "status": "done",
+          "origin": "manual",
+          "createdAt": 736,
+          "updatedAt": 760,
+          "lastProgressAt": 760
+        },
+        "updatedAt": 760,
+        "eligibleCleanupTicks": [
+          969,
+          986
+        ],
+        "firstEligibleCleanupTick": 969,
+        "strictAgeAtFirstEligibleTick": 209,
+        "deletionTickIndependentlyObserved": false
+      },
+      {
+        "id": "lab-t2-c2-pre-target-ordinary",
+        "originalWholeTask": {
+          "id": "lab-t2-c2-pre-target-ordinary",
+          "resource": "H",
+          "fromRoomName": "W8N8",
+          "toRoomName": "E1N57",
+          "amount": 100,
+          "remainingAmount": 0,
+          "status": "done",
+          "origin": "manual",
+          "createdAt": 736,
+          "updatedAt": 760,
+          "lastProgressAt": 760
+        },
+        "updatedAt": 760,
+        "eligibleCleanupTicks": [
+          969,
+          986
+        ],
+        "firstEligibleCleanupTick": 969,
+        "strictAgeAtFirstEligibleTick": 209,
+        "deletionTickIndependentlyObserved": false
+      },
+      {
+        "id": "lab-t2-c2-block-source-ordinary",
+        "originalWholeTask": {
+          "id": "lab-t2-c2-block-source-ordinary",
+          "resource": "H",
+          "fromRoomName": "W9N8",
+          "toRoomName": "E4N58",
+          "amount": 100,
+          "remainingAmount": 0,
+          "status": "done",
+          "origin": "manual",
+          "createdAt": 746,
+          "updatedAt": 780,
+          "lastProgressAt": 780
+        },
+        "updatedAt": 780,
+        "eligibleCleanupTicks": [
+          986
+        ],
+        "firstEligibleCleanupTick": 986,
+        "strictAgeAtFirstEligibleTick": 206,
+        "deletionTickIndependentlyObserved": false
+      },
+      {
+        "id": "lab-t2-c2-block-target-ordinary",
+        "originalWholeTask": {
+          "id": "lab-t2-c2-block-target-ordinary",
+          "resource": "H",
+          "fromRoomName": "W8N8",
+          "toRoomName": "E1N57",
+          "amount": 100,
+          "remainingAmount": 0,
+          "status": "done",
+          "origin": "manual",
+          "createdAt": 746,
+          "updatedAt": 780,
+          "lastProgressAt": 780
+        },
+        "updatedAt": 780,
+        "eligibleCleanupTicks": [
+          986
+        ],
+        "firstEligibleCleanupTick": 986,
+        "strictAgeAtFirstEligibleTick": 206,
+        "deletionTickIndependentlyObserved": false
+      },
+      {
+        "id": "lab-t2-c2-unrelated-ordinary",
+        "originalWholeTask": {
+          "id": "lab-t2-c2-unrelated-ordinary",
+          "resource": "H",
+          "fromRoomName": "E3N59",
+          "toRoomName": "W8N8",
+          "amount": 100,
+          "remainingAmount": 0,
+          "status": "done",
+          "origin": "manual",
+          "createdAt": 746,
+          "updatedAt": 770,
+          "lastProgressAt": 770
+        },
+        "updatedAt": 770,
+        "eligibleCleanupTicks": [
+          986
+        ],
+        "firstEligibleCleanupTick": 986,
+        "strictAgeAtFirstEligibleTick": 216,
+        "deletionTickIndependentlyObserved": false
+      }
+    ],
+    "cleanupCadenceTicks": [
+      952,
+      969,
+      986
+    ],
+    "cleanupSourceSha256ByPath": {
+      "src/runtime/memoryCleanup.ts": "c8efdfe940e5cf662781f49222d1f46710126db12c8d8e06eac3a0d2601bb8a6",
+      "src/runtime/logistics/resourceTransferTasks.ts": "5e8585d7e34ce8ee9fd047a322cb5916074940ff4ee14224e3578d5df8dbb202",
+      "src/runtime/treasuryTaskCommitmentBridge.ts": "fdef0ff2827905d3c9bd0293f9b986c37ac7eae2b8e8b4d6fac7096a9e343676",
+      "src/runtime/resourceControl.ts": "7cb1473a866976720eb1fdc8663e608c46355999cb288b7c32b778f19b32496c"
+    },
+    "old740Production972WholeJSONExact": true,
+    "createdAtUsedAsNewIdentityPredicate": false,
+    "old40RawTransactionsExact": true,
+    "outgoingIDsExactEverySample": true,
+    "pilotDebitsCertificatesExact": true,
+    "sourceOH": {
+      "terminal": 10,
+      "storage": 877
+    },
+    "pause": {
+      "label": "same998-budget-held",
+      "matched": true,
+      "diagnosticOnly": false,
+      "observedStableMs": 10179,
+      "stableSamples": 41,
+      "samples": 41,
+      "barrierWallMs": 10193,
+      "endTick": 998
+    },
+    "originalFailuresPreserved": true,
+    "sourceExecuted": false,
+    "windowReplayed": false,
+    "formalApiAccessed": false,
+    "candidateAcceptanceClaimed": false,
+    "isolatedWorldOnly": true,
+    "stopOrHandoffExecuted": false
+  },
+  "binding": {
+    "case": "t4-c3-producer-budget",
+    "claimSha256": "d530d830dcb6ef71a6120b1234670921be2e2a7aa17efa2d8aab4a4296e5e21b",
+    "currentDatabaseSha256": "3af30bda2b9b88c6f8f8c2b85bf61abcc827658c5f44e46875090f89fc5fd9eb",
+    "demandSnapshotSha256": "8f30328c4bfd16c863887a9a3269c0bd29246c11327b06e97bd3697fbb380e0c",
+    "heldSnapshotSha256": "3a0b824a54153f215ac988708b12972684ecb1d77304591eb1bba1eca3cc0026",
+    "driverReportSha256": "ac5035c8c820ed05e9fe40b79222e504d64e8a4a2fc3c82878268b9e3b2e69c5",
+    "originalDriverSourceSha256": "d4811fca14d69a81c0a3653252d8628337fe9c3453aed3b74445bac5d19532ba",
+    "originalRunnerSha256": "4905f4909b58c705763392a0004cb3da5c8d3b2643041bde2fc080b58247d988",
+    "adapterSha256": "891092a42583ba24b1da99a17366e821591ae82a476171b28e6c5bd7e6675c9e",
+    "mainSha256": "9d300172be0bed439e93b7a47d206dcfa3fc5b9db727a571f8ffa761a14f7f4d",
+    "oldCallerResultSha256": "cec98d63ebe37f7e3dbf48950f983026b34a3cd5516f6e4ded3b502ab7333b9f",
+    "oldSupervisorResultSha256": "6c5878647351b73a40b8e1e1faa4c9a1c05fdf73e29bc2fe7f0b9b1bd6bfee0c",
+    "expectedProofToolSha256": "7fd567fce19d698285ab1b9c0a6df1d96e65f9ba9d5af218baf28ee055ee36a2"
+  },
+  "cleanupSourceSha256": {
+    "src/runtime/memoryCleanup.ts": "c8efdfe940e5cf662781f49222d1f46710126db12c8d8e06eac3a0d2601bb8a6",
+    "src/runtime/logistics/resourceTransferTasks.ts": "5e8585d7e34ce8ee9fd047a322cb5916074940ff4ee14224e3578d5df8dbb202",
+    "src/runtime/treasuryTaskCommitmentBridge.ts": "fdef0ff2827905d3c9bd0293f9b986c37ac7eae2b8e8b4d6fac7096a9e343676",
+    "src/runtime/resourceControl.ts": "7cb1473a866976720eb1fdc8663e608c46355999cb288b7c32b778f19b32496c"
+  },
+  "actualInputSha256": {
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/verify-c3-product-unload-r18-r2.py": "7eee374ff259d05a2943eb05ffcae3308e07ce8d5f742c643eada2de174d9ac8",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/verify-t4-current-r18-r1.py": "891092a42583ba24b1da99a17366e821591ae82a476171b28e6c5bd7e6675c9e",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/verify-t4.py": "e4357be83d19305f3fccb67d080c80294b56562f7b12c54714c0b8a4fcc4d34f",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/run-t4-scenarios-r18-physical-cold-r1.py": "4905f4909b58c705763392a0004cb3da5c8d3b2643041bde2fc080b58247d988",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/run-until-t4.cjs": "d4811fca14d69a81c0a3653252d8628337fe9c3453aed3b74445bac5d19532ba",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/c3-producer-budget-window-proof-r18-r1.py": "7fd567fce19d698285ab1b9c0a6df1d96e65f9ba9d5af218baf28ee055ee36a2",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/candidate/production-memory-source.json": "972403b475fd333803a7417f55534d87c44bb3439d7fa31b46b3c5d6cbe0999e",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-new-demand-ready-terminal-snapshot.json": "8f30328c4bfd16c863887a9a3269c0bd29246c11327b06e97bd3697fbb380e0c",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-budget-held-snapshot.json": "3a0b824a54153f215ac988708b12972684ecb1d77304591eb1bba1eca3cc0026",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-budget-held-driver-driver.json": "ac5035c8c820ed05e9fe40b79222e504d64e8a4a2fc3c82878268b9e3b2e69c5",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/r18-t4-c3-producer-budget-product-unload-continuation-r2-server-db-after.json": "3af30bda2b9b88c6f8f8c2b85bf61abcc827658c5f44e46875090f89fc5fd9eb",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-product-unload-continuation-r2-result.json": "cec98d63ebe37f7e3dbf48950f983026b34a3cd5516f6e4ded3b502ab7333b9f",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/r18-t4-c3-producer-budget-product-unload-continuation-r2-result.json": "6c5878647351b73a40b8e1e1faa4c9a1c05fdf73e29bc2fe7f0b9b1bd6bfee0c",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-independent-instance.json": "d530d830dcb6ef71a6120b1234670921be2e2a7aa17efa2d8aab4a4296e5e21b",
+    "/srv/screeps-treasury-build/t4-architecture-r8-20261003/candidate/src/runtime/memoryCleanup.ts": "c8efdfe940e5cf662781f49222d1f46710126db12c8d8e06eac3a0d2601bb8a6",
+    "/srv/screeps-treasury-build/t4-architecture-r8-20261003/candidate/src/runtime/logistics/resourceTransferTasks.ts": "5e8585d7e34ce8ee9fd047a322cb5916074940ff4ee14224e3578d5df8dbb202",
+    "/srv/screeps-treasury-build/t4-architecture-r8-20261003/candidate/src/runtime/treasuryTaskCommitmentBridge.ts": "fdef0ff2827905d3c9bd0293f9b986c37ac7eae2b8e8b4d6fac7096a9e343676",
+    "/srv/screeps-treasury-build/t4-architecture-r8-20261003/candidate/src/runtime/resourceControl.ts": "7cb1473a866976720eb1fdc8663e608c46355999cb288b7c32b778f19b32496c"
+  },
+  "oldFAILPreserved": true,
+  "originalIDDifferenceAnd60AndPostStopCreatedAtGatesRetained": true
+}

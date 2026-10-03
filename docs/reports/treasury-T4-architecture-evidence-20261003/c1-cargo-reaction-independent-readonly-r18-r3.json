@@ -1,0 +1,464 @@
+{
+  "schema": "screeps-r18-c1-cargo-reaction-readonly-verification/v1",
+  "worldModified": false,
+  "driverReplayed": false,
+  "newFrozenTools": {
+    "c1-cargo-drain-proof-r18-r3.py": "425b0aad71245a6041a759a454a545c007c5bb050a3b73f10d04ee2443d8e51c",
+    "continue-c1-after-real-drain-r18-r3.py": "dd99488f9df18201fe3dfb52f8b86c00d2e1cb821f1ee5a9b1fb451d7573d36e",
+    "supervise-c1-continuation-r18-r3.py": "dafa688da87afb572aeff7e0d84faaea336879d88e433f3b4230eee8e6bed12f",
+    "c1-continuation-plan-r18-r3.json": "c974cc7b0a860293bb1f4d7e60a7db36bfdc6c0f78db1a5a0da922260221b73b"
+  },
+  "passed": true,
+  "proof": {
+    "schema": "screeps-r18-c1-cargo-drain-proof/v1",
+    "inputContract": "r18-initial-progress-barrier-complete-rawdb-v1",
+    "proofRevision": "r18-r3",
+    "copiedR1ProofSha256": "b0353fa6f4f18e69e7a89dad04cbe0d5b2e8dc675260c0cf3265eb8fc6311744",
+    "copiedR2ProofSha256": "705a4740853a700b3376bed7639ede6a6bcadea568aba72bc202f693f5f5639b",
+    "isolatedWorldOnly": true,
+    "formalApiAccessed": false,
+    "candidateAcceptanceClaimed": false,
+    "beforeTick": 803,
+    "afterTick": 805,
+    "mainSha256": "9d300172be0bed439e93b7a47d206dcfa3fc5b9db727a571f8ffa761a14f7f4d",
+    "expectedFrozenDriverSourceSha256": "19064fb62574fd1644b871320f0e266263b69c0bbd078355b6c54959967b7e93",
+    "oldTreasuryRuntimeKeysExact": [
+      "treasuryCore",
+      "treasuryProductionT1Quota",
+      "treasuryProductionT2Quota",
+      "treasuryProductionT3Quota",
+      "treasuryT1FirstLiveControl",
+      "treasuryT1FirstLiveControlMirror",
+      "treasuryT2FirstLiveControl",
+      "treasuryT2FirstLiveControlMirror",
+      "treasuryT3FirstLiveControl",
+      "treasuryT3FirstLiveControlMirror",
+      "treasuryWorldSequence"
+    ],
+    "oldRawTransactionsExact": 37,
+    "originalRCTasksExactNoNewTask": true,
+    "transferMethodIntentIndependentlyRecorded": false,
+    "pickupWithdrawMethodCallsIndependentlyRecorded": false,
+    "originalMainExecutionTelemetryObserved": true,
+    "cargoDrainPhysicalConservationVerified": true,
+    "beforeDigests": {
+      "memorySha256": "b33bbb612b0e237adeb73001b4b5e118a3cac6f91ba78e9a8b7ade246c072c78",
+      "storesSha256": "cf56e1bb7751ed8784a2d31af3917a99ac5e99e4ea10fffcdb0841b3ba143f0e",
+      "transactionsSha256": "52bb9bc9b70e3060c952c0b293b4f2d11df3e47a5fe675c0a3c87270e9b1869f",
+      "transactionCount": 37
+    },
+    "afterDigests": {
+      "memorySha256": "0d84abf00eda7eda2c941d5ea185bdae52b39bb80b59691b2083b479ece82f07",
+      "storesSha256": "374cb4cb9e966bf227db36fe0238378ae9d1a21f4dd603be996d02ece86d4d9b",
+      "transactionsSha256": "52bb9bc9b70e3060c952c0b293b4f2d11df3e47a5fe675c0a3c87270e9b1869f",
+      "transactionCount": 37
+    },
+    "cpuTelemetry": {
+      "beforeLatestMainTick": 802,
+      "afterLatestMainTick": 804,
+      "successfulCreepIntentCountObserved": 0,
+      "counterPresent": false,
+      "absentCounterInterpretedAsZero": true,
+      "rawCPUObjectModified": false,
+      "intentCounterIsIndependentWorkCallTrace": false
+    },
+    "successfulIntentWitnesses": [
+      {
+        "rawSampleIndex": 96,
+        "rawSampleTick": 804,
+        "actualOriginalMainTick": 803,
+        "cpuUpdatedAt": 803,
+        "rawMemorySha256": "e9ef03d2946c93a88aaf25c8852d4e73674676b37914f41cc7cab92510e623d1",
+        "ownedStoresSha256": "1c590a94dfc2ac50c0734a305382fe4b9c57b3810682bc58603d46fa6589bd5b",
+        "rawTransactionsSha256": "52bb9bc9b70e3060c952c0b293b4f2d11df3e47a5fe675c0a3c87270e9b1869f",
+        "frozenCreepIdsWithSubmittedZeroCargo": [
+          "4389c5b0988de7e",
+          "f7add81659a2190"
+        ],
+        "successfulCreepIntentCountObserved": 2,
+        "methodIntentIndependentlyRecorded": false
+      }
+    ],
+    "nativeLabReaction": {
+      "sourceContract": {
+        "recordUtf8Sha256": "560c3d9b45d66e1a13d20578cb4b5fccfa3ca04771fb319258847cddb7653955",
+        "synthesisControlSourceUtf8Sha256": "19e5d4c6ac25cfefb0af28d71c71d20f623a5cbe1b3d1b7cabb81e447aa58c7f",
+        "nativeSourceFiles": {
+          "constants": {
+            "path": "/srv/screeps-treasury-t1/server/node_modules/@screeps/common/lib/constants.js",
+            "sha256": "42fa7b11d157cfcf9bc7a636ad74f43370c649cbdca7d0ef7431eb476f151371"
+          },
+          "processor": {
+            "path": "/srv/screeps-treasury-t1/server/node_modules/@screeps/engine/src/processor/intents/labs/run-reaction.js",
+            "sha256": "e0f2b802ec878339e3d2c164e2360265008087d9672ccd1c1d3395fb84727d9d"
+          }
+        },
+        "actualInstalledExports": {
+          "LAB_REACTION_AMOUNT": 5,
+          "REACTION_TIME_UH2O": 5,
+          "REACTIONS_UH_OH": "UH2O",
+          "REACTIONS_OH_UH": "UH2O"
+        },
+        "sourcesExecutedByVerifier": false
+      },
+      "exactActualEvidence": {
+        "reactionCount": 1,
+        "actualReactionMainTick": 804,
+        "reactionAmount": 5,
+        "cooldownTicks": 5,
+        "ownedRoom": "E1N57",
+        "beforeLabs": {
+          "907ec1ebdfae530": {
+            "resource": "UH",
+            "amount": 20,
+            "cooldownTime": 756,
+            "x": 25,
+            "y": 27,
+            "effects": null
+          },
+          "3d45c1ebdfbcec9": {
+            "resource": "OH",
+            "amount": 20,
+            "cooldownTime": 756,
+            "x": 27,
+            "y": 27,
+            "effects": null
+          },
+          "4dcec1ebdfc4e3f": {
+            "resource": "UH2O",
+            "amount": 10,
+            "cooldownTime": 804,
+            "x": 26,
+            "y": 28,
+            "effects": null
+          }
+        },
+        "afterLabs": {
+          "907ec1ebdfae530": {
+            "resource": "UH",
+            "amount": 15,
+            "cooldownTime": 756,
+            "x": 25,
+            "y": 27,
+            "effects": null
+          },
+          "3d45c1ebdfbcec9": {
+            "resource": "OH",
+            "amount": 15,
+            "cooldownTime": 756,
+            "x": 27,
+            "y": 27,
+            "effects": null
+          },
+          "4dcec1ebdfc4e3f": {
+            "resource": "UH2O",
+            "amount": 15,
+            "cooldownTime": 809,
+            "x": 26,
+            "y": 28,
+            "effects": null
+          }
+        },
+        "sameExactLabCohort": true,
+        "noPowerLabEffectsInAllObservedFrames": true,
+        "chebyshevOutputToEachInputAtMostTwo": true,
+        "runtimeBefore": {
+          "updatedAt": 802,
+          "generatedTaskCount": 0,
+          "failedTaskCount": 0,
+          "successfulRunCount": 0,
+          "lastActions": [],
+          "bindings": {},
+          "rooms": {
+            "E1N57": {
+              "stage": "synthesizing",
+              "activeProduct": "UH2O",
+              "reagentA": "UH",
+              "reagentB": "OH",
+              "targetAmount": 30,
+              "batchSize": 30,
+              "reagentLabIds": [
+                "907ec1ebdfae530",
+                "3d45c1ebdfbcec9"
+              ],
+              "productLabIds": [
+                "4dcec1ebdfc4e3f"
+              ],
+              "successfulRuns": 2,
+              "pendingTasks": 1,
+              "lastTransitionAt": 794,
+              "nextReactionAt": 804
+            }
+          }
+        },
+        "runtimeAfter": {
+          "updatedAt": 804,
+          "generatedTaskCount": 0,
+          "failedTaskCount": 0,
+          "successfulRunCount": 1,
+          "lastActions": [
+            "synthesis-runs:E1N57:UH2O:count=1"
+          ],
+          "bindings": {},
+          "rooms": {
+            "E1N57": {
+              "stage": "synthesizing",
+              "activeProduct": "UH2O",
+              "reagentA": "UH",
+              "reagentB": "OH",
+              "targetAmount": 30,
+              "batchSize": 30,
+              "reagentLabIds": [
+                "907ec1ebdfae530",
+                "3d45c1ebdfbcec9"
+              ],
+              "productLabIds": [
+                "4dcec1ebdfc4e3f"
+              ],
+              "successfulRuns": 3,
+              "pendingTasks": 0,
+              "lastTransitionAt": 794,
+              "nextReactionAt": 809
+            }
+          }
+        },
+        "all144RawFramesPreserved": true,
+        "allOtherNonEnergyResourcesExactInEveryRawFrame": true,
+        "inFlightFramesUsedAsChemicalCertificate": false
+      }
+    },
+    "physicalConservation": {
+      "ownedEntityCount": 34,
+      "sameOwnedIdentitySet": true,
+      "allStoreResourceTotalsBefore": {
+        "OH": 19994,
+        "H": 52000,
+        "energy": 1003309,
+        "UH": 20,
+        "UH2O": 10
+      },
+      "allStoreResourceTotalsAfter": {
+        "OH": 19989,
+        "H": 52000,
+        "energy": 1003309,
+        "UH": 15,
+        "UH2O": 15
+      },
+      "exactSpeciesDeltas": {
+        "OH": -5,
+        "UH2O": 5,
+        "UH": -5
+      },
+      "quantifiedUHOComponentsBefore": {
+        "U": 30,
+        "H": 72034,
+        "O": 20004
+      },
+      "quantifiedUHOComponentsAfter": {
+        "U": 30,
+        "H": 72034,
+        "O": 20004
+      },
+      "componentQuantificationResources": [
+        "H",
+        "O",
+        "OH",
+        "U",
+        "UH",
+        "UH2O"
+      ],
+      "reactionComponentDeltas": {
+        "U": 0,
+        "H": 0,
+        "O": 0
+      },
+      "creepEnergyDecreases": [
+        {
+          "entityId": "f7add81659a2190",
+          "name": "lab-r2-carrier",
+          "room": "E4N58",
+          "energyDecrease": 50,
+          "beforeStore": {
+            "energy": 50
+          },
+          "afterStore": {
+            "energy": 0
+          }
+        },
+        {
+          "entityId": "4389c5b0988de7e",
+          "name": "lab-t2-target-carrier",
+          "room": "E1N57",
+          "energyDecrease": 50,
+          "beforeStore": {
+            "OH": 0,
+            "energy": 50
+          },
+          "afterStore": {
+            "OH": 0,
+            "energy": 0
+          }
+        }
+      ],
+      "sameRoomStructureEnergyIncreases": [
+        {
+          "entityId": "d7dc41dd18efd58",
+          "type": "storage",
+          "room": "E4N58",
+          "energyIncrease": 50,
+          "beforeStore": {
+            "energy": 97400
+          },
+          "afterStore": {
+            "energy": 97450
+          }
+        },
+        {
+          "entityId": "a252c1b028c5660",
+          "type": "storage",
+          "room": "E1N57",
+          "energyIncrease": 50,
+          "beforeStore": {
+            "energy": 100050
+          },
+          "afterStore": {
+            "energy": 100100
+          }
+        }
+      ],
+      "receivedEnergyByRoom": {
+        "E4N58": 50,
+        "E1N57": 50
+      },
+      "nonEnergyResourcesExactPerEntityExceptFrozenOneReaction": true,
+      "exactLabResourceExceptions": {
+        "907ec1ebdfae530": {
+          "UH": -5
+        },
+        "3d45c1ebdfbcec9": {
+          "OH": -5
+        },
+        "4dcec1ebdfc4e3f": {
+          "UH2O": 5
+        }
+      },
+      "allOtherResourcesExactPerEntity": true,
+      "nonStoreSourceEnergyExcluded": true
+    },
+    "driverFullRawObservation": {
+      "rawDbSamplesVerified": 144,
+      "rawSamplesExcluded": 0,
+      "initialFrameCoherentAndExactBefore803": true,
+      "progressSampleTicks": [
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        803,
+        804
+      ],
+      "inFlightRawSampleIndexesRetained": [],
+      "inFlightBarrierSampleIndexesRetained": [],
+      "inFlightRowsUsedAsPhysicalCertificate": false,
+      "pauseRawSamplesVerified": 47,
+      "finalCoherentStableSamples": 41,
+      "lastSignatureStableMsIndependentlyRecomputed": 10222,
+      "finalRawMemoryStoresTransactionsBoundToAfter": true,
+      "tickDurationGetterValueUnchanged": 1500,
+      "codeObservedFreshAtStartAndCachedForRows": true,
+      "freshActualMainSha256AtEnd": "9d300172be0bed439e93b7a47d206dcfa3fc5b9db727a571f8ffa761a14f7f4d",
+      "driverSourceSha256Bound": "19064fb62574fd1644b871320f0e266263b69c0bbd078355b6c54959967b7e93",
+      "digestContract": "full_raw_memory_and_owned_store_projection_and_complete_raw_transactions"
+    }
+  }
+}

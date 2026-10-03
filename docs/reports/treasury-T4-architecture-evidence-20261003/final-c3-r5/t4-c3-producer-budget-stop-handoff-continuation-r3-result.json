@@ -1,0 +1,128 @@
+{
+  "schema": "screeps-r18-c3-sameclaim998-stop-handoff-continuation/v3",
+  "case": "t4-c3-producer-budget",
+  "continuationSha256": "88849d4b34a8537afdbc9bc693c49348184cbbc4f23e00e1de394a30864393bb",
+  "claimSha256": "d530d830dcb6ef71a6120b1234670921be2e2a7aa17efa2d8aab4a4296e5e21b",
+  "currentDatabaseSha256": "3af30bda2b9b88c6f8f8c2b85bf61abcc827658c5f44e46875090f89fc5fd9eb",
+  "demandSnapshotSha256": "8f30328c4bfd16c863887a9a3269c0bd29246c11327b06e97bd3697fbb380e0c",
+  "heldSnapshotSha256": "3a0b824a54153f215ac988708b12972684ecb1d77304591eb1bba1eca3cc0026",
+  "windowDriverReportSha256": "ac5035c8c820ed05e9fe40b79222e504d64e8a4a2fc3c82878268b9e3b2e69c5",
+  "windowProofSha256": "7fd567fce19d698285ab1b9c0a6df1d96e65f9ba9d5af218baf28ee055ee36a2",
+  "originalRunnerSha256": "4905f4909b58c705763392a0004cb3da5c8d3b2643041bde2fc080b58247d988",
+  "mainSha256": "9d300172be0bed439e93b7a47d206dcfa3fc5b9db727a571f8ffa761a14f7f4d",
+  "adapterSha256": "891092a42583ba24b1da99a17366e821591ae82a476171b28e6c5bd7e6675c9e",
+  "baseBinding": {
+    "originalBaseFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/verify-t4.py",
+    "originalBaseSha256": "e4357be83d19305f3fccb67d080c80294b56562f7b12c54714c0b8a4fcc4d34f",
+    "inMemoryPatchedBaseSha256": "92570d42b256f94703643ed3ab4946d8ec3ec5cad02edac06409ad63a20a6f6d",
+    "exactSchemaOriginal": "    require(state[\"hash\"] == canonical_hash({\"domain\": \"treasury-t4:continuous-oh-state-v1\", \"payload\": payload}), f\"{label}: T4 canonical hash无效\")\n",
+    "exactSchemaReplacement": "    require(type(state[\"schemaVersion\"]) is int and state[\"schemaVersion\"] in (1, 2), f\"{label}: T4 schema域非法\")\n    require(state[\"hash\"] == canonical_hash({\"domain\": f\"treasury-t4:continuous-oh-state-v{state['schemaVersion']}\", \"payload\": payload}), f\"{label}: T4 canonical hash无效\")\n",
+    "exactTransactionOriginal": "        txs = [{**{k: t[k] for k in (\"_id\", \"time\", \"from\", \"to\") if k in t},\n                **({\"resource\": t[\"resourceType\"]} if \"resourceType\" in t else {}),\n                **{k: t[k] for k in (\"amount\", \"description\") if k in t}} for t in snap.raw[\"transactions\"]]\n        txs.sort(key=lambda t: t[\"_id\"])\n",
+    "exactTransactionReplacement": "        txs = sorted(snap.raw[\"transactions\"], key=lambda t: t[\"_id\"])\n",
+    "otherOriginalSourceBytesPreserved": true,
+    "fullPayloadHashRetained": true,
+    "frozenDriverFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/run-until-t4.cjs",
+    "frozenDriverSha256": "d4811fca14d69a81c0a3653252d8628337fe9c3453aed3b74445bac5d19532ba",
+    "transactionBindingContract": "complete_raw_transaction_json_sorted_by_id",
+    "projectedFallbackAccepted": false,
+    "exactPreNativeOriginal": "        require(isinstance(cycle, dict) and (cycle[\"status\"], cycle[\"sequence\"], cycle[\"quota\"], cycle[\"reservedFee\"], cycle[\"taskId\"], cycle[\"taskRemainingAtArm\"]) == (\"preparing\", 1, None, None, task_id, 26) and snap.task(task_id)[\"remainingAmount\"] == 26 and not snap.task(task_id).get(\"treasurySlice\"), \"C1 pre-native准备态被提前Arm/扣量/重建cohort\")\n",
+    "exactPreNativeReplacement": "        c1_pre_native_observable_ready(snap, task_id)\n",
+    "c1ContractFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/c1-current-contract-r18-r1.py",
+    "c1ContractSha256": "224b9cec0cadcaa6d4049e8306751e1006e7f5cdaa76365cbada24fcde88b55c",
+    "c1ProofBinding": {
+      "originalC1FunctionSha256": "a2f3ac3c1f6360c958e544fc0c5c0eba8e49865edcf6726165a14f678a7ac226",
+      "derivedC1FunctionSha256": "fa08f0c81b4e2b28d9fd05ae7ca644b1677109a5fd4c28c57919a8cee2899c85",
+      "exactChanges": [
+        {
+          "before": "    baseline = load_snapshot(evidence, spec[\"baseline\"])\n",
+          "after": "    global C1_BASELINE\n    baseline = load_snapshot(evidence, spec[\"baseline\"])\n    C1_BASELINE = baseline\n",
+          "occurrences": 1
+        },
+        {
+          "before": "check_native(",
+          "after": "check_c1_actual_native(",
+          "occurrences": 2
+        },
+        {
+          "before": "check_no_extra_receipts(",
+          "after": "check_c1_actual_records(",
+          "occurrences": 6
+        },
+        {
+          "before": "check_counters(",
+          "after": "check_c1_actual_counters(",
+          "occurrences": 5
+        },
+        {
+          "before": "s[\"sequenceHighWater\"] == 3",
+          "after": "s[\"sequenceHighWater\"] == c1_complete_frontier(awaiting, 3)",
+          "occurrences": 1
+        },
+        {
+          "before": "len(s[\"closedCycles\"]) == 3",
+          "after": "len(s[\"closedCycles\"]) == c1_complete_frontier(awaiting, 3)",
+          "occurrences": 1
+        },
+        {
+          "before": "state[\"sequenceHighWater\"] == 3",
+          "after": "state[\"sequenceHighWater\"] == c1_complete_frontier(current, 3)",
+          "occurrences": 1
+        },
+        {
+          "before": "current.state[\"sequenceHighWater\"] == 4",
+          "after": "current.state[\"sequenceHighWater\"] == c1_complete_frontier(current, 4)",
+          "occurrences": 1
+        }
+      ],
+      "otherOriginalC1SourcePreserved": true,
+      "zeroNativeAuthority": "actual signed complete pre_native_recovery/not_executed gen1 certificates only",
+      "noAssumedZeroSequenceOrCount": true,
+      "nativeOrdinalsAreRealReceipts": true,
+      "productControlSourceSha256": "ba323af9fbe021c2abdd06c259eb2803137df0222129122109bea9ac49b13bdc"
+    },
+    "observableReadinessOnly": true,
+    "unobservedHeapReadinessClaimed": false,
+    "sourceCommit": "a24f2a777c26c4f3e3dc2ea489b65d39cab92042",
+    "sourceTree": "46710866e3a2d0c36185fb6e06f01192fbcd4faa",
+    "sourceArchiveSha256": "d12ebc7360965c22e5092630bc15946230be475fd6f4413ce9e0fb6175729f79",
+    "mainSha256": "9d300172be0bed439e93b7a47d206dcfa3fc5b9db727a571f8ffa761a14f7f4d"
+  },
+  "baselineRestored": false,
+  "claimReplayed": false,
+  "alignReplayed": false,
+  "setupReplayed": false,
+  "reloadReplayed": false,
+  "goalReplayed": false,
+  "batchReplayed": false,
+  "nativeReplayed": false,
+  "acceptReplayed": false,
+  "enableReplayed": false,
+  "observerReinstalled": false,
+  "windowReplayed": false,
+  "onlyOriginalStopAndOrdinaryHandoffTail": true,
+  "isolatedWorldOnly": true,
+  "formalApiAccessed": false,
+  "candidateAcceptanceClaimed": false,
+  "coldReadbackSnapshotSha256": "36a7a2210fc380f7d34eb94221a8f8d68683f650dc7e4610bbbec68e7abd50b0",
+  "coldWorkingDatabaseFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/db-t4-c3-producer-budget-held-998-cold-start-r3.json",
+  "coldWorkingDatabaseSha256": "3af30bda2b9b88c6f8f8c2b85bf61abcc827658c5f44e46875090f89fc5fd9eb",
+  "coldWholeMemoryCodeRaw40AndOwnedEntitiesExact": true,
+  "windowProofPassed": true,
+  "binding": {
+    "case": "t4-c3-producer-budget",
+    "claimSha256": "d530d830dcb6ef71a6120b1234670921be2e2a7aa17efa2d8aab4a4296e5e21b",
+    "currentDatabaseSha256": "3af30bda2b9b88c6f8f8c2b85bf61abcc827658c5f44e46875090f89fc5fd9eb",
+    "demandSnapshotSha256": "8f30328c4bfd16c863887a9a3269c0bd29246c11327b06e97bd3697fbb380e0c",
+    "heldSnapshotSha256": "3a0b824a54153f215ac988708b12972684ecb1d77304591eb1bba1eca3cc0026",
+    "driverReportSha256": "ac5035c8c820ed05e9fe40b79222e504d64e8a4a2fc3c82878268b9e3b2e69c5",
+    "originalDriverSourceSha256": "d4811fca14d69a81c0a3653252d8628337fe9c3453aed3b74445bac5d19532ba",
+    "originalRunnerSha256": "4905f4909b58c705763392a0004cb3da5c8d3b2643041bde2fc080b58247d988",
+    "adapterSha256": "891092a42583ba24b1da99a17366e821591ae82a476171b28e6c5bd7e6675c9e",
+    "mainSha256": "9d300172be0bed439e93b7a47d206dcfa3fc5b9db727a571f8ffa761a14f7f4d",
+    "oldCallerResultSha256": "cec98d63ebe37f7e3dbf48950f983026b34a3cd5516f6e4ded3b502ab7333b9f",
+    "oldSupervisorResultSha256": "6c5878647351b73a40b8e1e1faa4c9a1c05fdf73e29bc2fe7f0b9b1bd6bfee0c",
+    "expectedProofToolSha256": "7fd567fce19d698285ab1b9c0a6df1d96e65f9ba9d5af218baf28ee055ee36a2"
+  },
+  "originalTailSha256": "7a4338cffc94fc69d070675106ba43f7819ca450bf61a512a89dd7a5a19ac6b4",
+  "outcome": "completed_requires_original_and_budget_window_independent_verifiers"
+}

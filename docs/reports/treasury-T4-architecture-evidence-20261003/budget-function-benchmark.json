@@ -1,0 +1,279 @@
+{
+  "schema": "screeps-t4-pure-budget-benchmark/v1",
+  "measuredScope": "仅公开预算函数 warm validation/check 纯数学耗时；不是整 tick、Game.cpu 或 Engine CPU",
+  "node": "v22.22.1",
+  "iterationsPerSample": 1000,
+  "warmupCallsPerFunction": 100,
+  "sampleCount": 7,
+  "policyAndHistoryEqual": true,
+  "historyCount": 90,
+  "sequenceHighWater": 128,
+  "variants": {
+    "baseline": {
+      "sourceCommit": "f1016300282d1184df345d85cd864a7523a0e930",
+      "provenance": {
+        "treasuryContinuousOHDataTree.ts": {
+          "sourceSha256": "8b4e377a20ff8862d6fdc2fe2fec58de7dbae58533a52a7f06de74992466c58f",
+          "transpiledSha256": "1dbf97445738a94359df6f3fee4251f1a7f8fcbe9985e7fd507c542d06d7374b"
+        },
+        "treasuryContinuousOHBudget.ts": {
+          "sourceSha256": "ad57caf3544dfc5cd7ccab34dccbb1c374562309432902e78585f7ce880d2589",
+          "transpiledSha256": "67dca15b8993ecfbd79340a958c73f730bc1d66cfb925a705a1ec9d56a6fa0bc"
+        }
+      },
+      "historyJsonSha256": "a7c7c268f26111c2405c62bc41491e985adcd0bfe48db264473bcf30631129a4",
+      "policyJsonSha256": "3f8571ef324dec3787f824175b788b0c4431995127ac38034209be11ec2ea479",
+      "semanticResults": {
+        "validate128": true,
+        "validate127": false,
+        "publicNextSliceGate": {
+          "ok": false,
+          "reason": "lifetime_oh_exceeded"
+        },
+        "publicRegressedClock": {
+          "ok": false,
+          "reason": "invalid_budget_clock"
+        }
+      }
+    },
+    "candidate": {
+      "sourceCommit": "9fb64f2e37266f749b09737e66af445ba415b827",
+      "provenance": {
+        "treasuryContinuousOHDataTree.ts": {
+          "sourceSha256": "00918476db5a5f5db66fd438280b981a15390139c9dfb44ab4a88c01b836b03e",
+          "transpiledSha256": "9e3ef35eb32d092bab55c392c95e3115f35f42044e39c2db6c2efd4c185f254b"
+        },
+        "treasuryContinuousOHBudget.ts": {
+          "sourceSha256": "7290e84b44eed12004ce080e8225ca77c1538a8c92e31d150d3936c4e6b6335a",
+          "transpiledSha256": "3a9f0640cc85517a40747fb1eb40e2e464777bdd6e6656c9c3027318f9b448ef"
+        }
+      },
+      "historyJsonSha256": "a7c7c268f26111c2405c62bc41491e985adcd0bfe48db264473bcf30631129a4",
+      "policyJsonSha256": "3f8571ef324dec3787f824175b788b0c4431995127ac38034209be11ec2ea479",
+      "semanticResults": {
+        "validate128": true,
+        "validate127": false,
+        "publicNextSliceGate": {
+          "ok": false,
+          "reason": "lifetime_oh_exceeded"
+        },
+        "publicRegressedClock": {
+          "ok": false,
+          "reason": "invalid_budget_clock"
+        }
+      }
+    }
+  },
+  "samples": [
+    {
+      "sample": 0,
+      "variant": "baseline",
+      "operation": "validate",
+      "durationNs": 105565024,
+      "nsPerCall": 105565.024
+    },
+    {
+      "sample": 0,
+      "variant": "baseline",
+      "operation": "check",
+      "durationNs": 101321876,
+      "nsPerCall": 101321.876
+    },
+    {
+      "sample": 0,
+      "variant": "candidate",
+      "operation": "validate",
+      "durationNs": 7330249,
+      "nsPerCall": 7330.249
+    },
+    {
+      "sample": 0,
+      "variant": "candidate",
+      "operation": "check",
+      "durationNs": 12544859,
+      "nsPerCall": 12544.859
+    },
+    {
+      "sample": 1,
+      "variant": "candidate",
+      "operation": "validate",
+      "durationNs": 5246533,
+      "nsPerCall": 5246.533
+    },
+    {
+      "sample": 1,
+      "variant": "candidate",
+      "operation": "check",
+      "durationNs": 26959655,
+      "nsPerCall": 26959.655
+    },
+    {
+      "sample": 1,
+      "variant": "baseline",
+      "operation": "validate",
+      "durationNs": 96855316,
+      "nsPerCall": 96855.316
+    },
+    {
+      "sample": 1,
+      "variant": "baseline",
+      "operation": "check",
+      "durationNs": 100908187,
+      "nsPerCall": 100908.187
+    },
+    {
+      "sample": 2,
+      "variant": "baseline",
+      "operation": "validate",
+      "durationNs": 95429214,
+      "nsPerCall": 95429.214
+    },
+    {
+      "sample": 2,
+      "variant": "baseline",
+      "operation": "check",
+      "durationNs": 109132872,
+      "nsPerCall": 109132.872
+    },
+    {
+      "sample": 2,
+      "variant": "candidate",
+      "operation": "validate",
+      "durationNs": 4433551,
+      "nsPerCall": 4433.551
+    },
+    {
+      "sample": 2,
+      "variant": "candidate",
+      "operation": "check",
+      "durationNs": 9900840,
+      "nsPerCall": 9900.84
+    },
+    {
+      "sample": 3,
+      "variant": "candidate",
+      "operation": "validate",
+      "durationNs": 4608945,
+      "nsPerCall": 4608.945
+    },
+    {
+      "sample": 3,
+      "variant": "candidate",
+      "operation": "check",
+      "durationNs": 11428005,
+      "nsPerCall": 11428.005
+    },
+    {
+      "sample": 3,
+      "variant": "baseline",
+      "operation": "validate",
+      "durationNs": 100018360,
+      "nsPerCall": 100018.36
+    },
+    {
+      "sample": 3,
+      "variant": "baseline",
+      "operation": "check",
+      "durationNs": 98999178,
+      "nsPerCall": 98999.178
+    },
+    {
+      "sample": 4,
+      "variant": "baseline",
+      "operation": "validate",
+      "durationNs": 93363462,
+      "nsPerCall": 93363.462
+    },
+    {
+      "sample": 4,
+      "variant": "baseline",
+      "operation": "check",
+      "durationNs": 97828997,
+      "nsPerCall": 97828.997
+    },
+    {
+      "sample": 4,
+      "variant": "candidate",
+      "operation": "validate",
+      "durationNs": 4546101,
+      "nsPerCall": 4546.101
+    },
+    {
+      "sample": 4,
+      "variant": "candidate",
+      "operation": "check",
+      "durationNs": 9073895,
+      "nsPerCall": 9073.895
+    },
+    {
+      "sample": 5,
+      "variant": "candidate",
+      "operation": "validate",
+      "durationNs": 4580751,
+      "nsPerCall": 4580.751
+    },
+    {
+      "sample": 5,
+      "variant": "candidate",
+      "operation": "check",
+      "durationNs": 9082510,
+      "nsPerCall": 9082.51
+    },
+    {
+      "sample": 5,
+      "variant": "baseline",
+      "operation": "validate",
+      "durationNs": 93665568,
+      "nsPerCall": 93665.568
+    },
+    {
+      "sample": 5,
+      "variant": "baseline",
+      "operation": "check",
+      "durationNs": 98543806,
+      "nsPerCall": 98543.806
+    },
+    {
+      "sample": 6,
+      "variant": "baseline",
+      "operation": "validate",
+      "durationNs": 93872293,
+      "nsPerCall": 93872.293
+    },
+    {
+      "sample": 6,
+      "variant": "baseline",
+      "operation": "check",
+      "durationNs": 98963616,
+      "nsPerCall": 98963.616
+    },
+    {
+      "sample": 6,
+      "variant": "candidate",
+      "operation": "validate",
+      "durationNs": 4724843,
+      "nsPerCall": 4724.843
+    },
+    {
+      "sample": 6,
+      "variant": "candidate",
+      "operation": "check",
+      "durationNs": 8788740,
+      "nsPerCall": 8788.74
+    }
+  ],
+  "summary": {
+    "validate": {
+      "baselineMedianNsPerCall": 95429.214,
+      "candidateMedianNsPerCall": 4608.945,
+      "baselineToCandidateRatio": 20.70521865633025
+    },
+    "check": {
+      "baselineMedianNsPerCall": 98999.178,
+      "candidateMedianNsPerCall": 9900.84,
+      "baselineToCandidateRatio": 9.999068563879428
+    }
+  },
+  "scriptSha256": "4b87ecd19a5214dcd0bc0e2a06647a78660f165a3e25aa68de5c7fe083634010",
+  "endedAtUtc": "2026-10-02T22:13:24.667Z"
+}

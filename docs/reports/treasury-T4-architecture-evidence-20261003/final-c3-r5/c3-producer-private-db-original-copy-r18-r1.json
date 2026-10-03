@@ -1,0 +1,28 @@
+{
+  "schema": "screeps-r18-producer-private-db-original-copy/v1",
+  "isolatedWorldOnly": true,
+  "capturedAtUtc": "2026-10-03T07:22:48.581603+00:00",
+  "originalCopies": [
+    {
+      "source": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/db-t4-c3-producer-budget-configured-fixture.json",
+      "destination": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/private-databases/db-t4-c3-producer-budget-configured-fixture.json",
+      "sha256": "4763a4f63b13cb22b9c5d43804e6c73f54ec974decd358f9e2a98c291be1cfc9",
+      "persistenceReceipt": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-configured-fixture-persistence.json",
+      "persistenceReceiptSha256": "3e5a37f6da8cdab0f35416cc221513e9f03c73e5a8d50ec4e5ef4b64984237f8",
+      "mode": "0400",
+      "bytes": 4433319
+    },
+    {
+      "source": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/db-t4-c3-producer-budget-completed.json",
+      "destination": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/private-databases/db-t4-c3-producer-budget-completed.json",
+      "sha256": "f01eb80d842aeea12a2f4448b8013c7aa7d59d2f7b9ee4c48fcba2bf661a5525",
+      "persistenceReceipt": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-completed-persistence.json",
+      "persistenceReceiptSha256": "d8c710848b8697d75c062fbb48ed5d7d218aece64c0886f990e08e32cf36710b",
+      "mode": "0400",
+      "bytes": 4369534
+    }
+  ],
+  "workingDatabaseBeforeSha256": "f01eb80d842aeea12a2f4448b8013c7aa7d59d2f7b9ee4c48fcba2bf661a5525",
+  "workingDatabaseAfterSha256": "f01eb80d842aeea12a2f4448b8013c7aa7d59d2f7b9ee4c48fcba2bf661a5525",
+  "service": "ActiveState=inactive\nSubState=dead\nMainPID=0\n"
+}

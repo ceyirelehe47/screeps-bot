@@ -1,0 +1,162 @@
+{
+  "schema": "screeps-r18-complete-c4-positive-handoff/v1",
+  "run": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003",
+  "fullC4Passed": true,
+  "scenarios": [
+    "emptybook",
+    "max-idle",
+    "max-carrier"
+  ],
+  "skippedScenarios": 0,
+  "fullC4ReportSha256": "0465efc1e82f1e057274982a5643af499710f66ef348ee9cba728b765bf6cb4c",
+  "summarySha256": "01ba2b5b32628f6d08b93300854f40a52a7d73078ae34c579cd61ea49c59c3e0",
+  "sourceContractSealSha256": "4275e25bc25a23b3dee4e5c7b89e55da360f010d56f10600a576bd2608e7598d",
+  "mainSha256": "9d300172be0bed439e93b7a47d206dcfa3fc5b9db727a571f8ffa761a14f7f4d",
+  "mainBytes": 3443761,
+  "manifestSha256": "6b2b73e71b4ede5f912cfbe14f52ee8c8cc8f803f4af5dacf3602ed31c4e97a9",
+  "sourceCommit": "a24f2a777c26c4f3e3dc2ea489b65d39cab92042",
+  "sourceTree": "46710866e3a2d0c36185fb6e06f01192fbcd4faa",
+  "sourceArchiveSha256": "d12ebc7360965c22e5092630bc15946230be475fd6f4413ce9e0fb6175729f79",
+  "buildTag": "2026.10.3-6+a24f2a7@2026-10-02T23:59:33.645Z",
+  "deployBundleHash": "9666cfb48f698d80f47c02d6e0bbd1aac18e5de22a5c67a8d52267b4cc722a87",
+  "semanticPlanSha256": "476281fa8bc750de073ddc28059a81639bb113f00fdf6f7636e7775179175529",
+  "c4PlanSha256": "046c851b35a63f3ea2693abad6c7434dd175ef5e321976684be6236d9aeb25d0",
+  "fullPlanSha256": "e23f0288ee537770722e8ed2c643a33e5d2a2fcc7aeb085e0ebf9cde2930b77b",
+  "originalDatabaseSha256": "cdd36d0b0013bb641019290820f86972b3e4797910de24d95a44133b500cb43c",
+  "frozenDatabaseSha256": "bf23559afdc92989d715d2ef2219acdd7f97f5bf60c32b0787af6874bf0cc2c3",
+  "candidateFixtures": {
+    "actual-archive-source-memory.json": "6f11563a04a5946ed1b5c6d6a8e183e41cf0760f52d2f8e1507d8e856ca3f33c",
+    "expired-production-shape-task.json": "7c6961a3adda6e403ad79458d2a40ff4f15beed28be9a78af438cc3e48cb18bc"
+  },
+  "templateSha256": "ff100e55a6ae396a62e4ded3faa1900a6a6fd3e9d1e63bd86a1fd69a1b6082fe",
+  "tools": [
+    {
+      "name": "run-t4-performance.py",
+      "oldSha256": "762d0c70054779db91fad07e044da5dc5da546c332a152ac4a618ab6d9429901",
+      "newSha256": "15947e98e04c7c9f39c6be37263f0cb67a8392a1bf29030e27e85f1af1e225b2",
+      "runPathReplacementOnly": true
+    },
+    {
+      "name": "freeze-lab-baseline.py",
+      "oldSha256": "33496a506770d4c52a636e4eb171514154a74de81fbe5d47458251e368ab3ce8",
+      "newSha256": "a81732b8c8524338549a13bebdc70783b62d970736587ca61584e5a6375c3051",
+      "runPathReplacementOnly": true
+    },
+    {
+      "name": "run-t4-scenarios.py",
+      "oldSha256": "86f71e214f0b8347e3039650b72eb363a71c30b9e2f8a3435e522eee2717069c",
+      "newSha256": "d0ecd387a741c67b64a81a5c4b3fe3c2ad9e11a1f5fe8a2f927bf7f8b692b514",
+      "runPathReplacementOnly": true
+    },
+    {
+      "name": "lab-t4-perf.cjs",
+      "oldSha256": "5487123833ba1bc630f123370be96b0b21c6d6b22d19e95f13d3d897c93b77c8",
+      "newSha256": "ff090e099268703c4af784be38781c19bc3e67c1536b7d62c82b241b6c1b39df",
+      "runPathReplacementOnly": true
+    },
+    {
+      "name": "lab-t4.cjs",
+      "oldSha256": "d2c4dcb454fb4f0b24ee7a4abffe38996525d9d6a4edf2cd802ce7df54911476",
+      "newSha256": "37b9b385a2c8e70077d4dc62292236f504d8504ee3734b16af39ec5361b8c082",
+      "runPathReplacementOnly": true
+    },
+    {
+      "name": "run-until-t4.cjs",
+      "oldSha256": "eedc5dad74450339a40ef8b2d4b3cc81ad27c964d3edb3a86aa8c497c06385ec",
+      "newSha256": "d4811fca14d69a81c0a3653252d8628337fe9c3453aed3b74445bac5d19532ba",
+      "runPathReplacementOnly": true
+    },
+    {
+      "name": "observe-console-probe.cjs",
+      "oldSha256": "643e5714b6c4cb76f106a7d116c289c0c37ee7e4069ac072cf3fb800fd439710",
+      "newSha256": "643e5714b6c4cb76f106a7d116c289c0c37ee7e4069ac072cf3fb800fd439710",
+      "runPathReplacementOnly": true
+    },
+    {
+      "name": "synthetic-history.cjs",
+      "oldSha256": "df659df0769730459ca17d0c8b8f465fd3c29ddacb363ff786eeb9a12518ae3d",
+      "newSha256": "df659df0769730459ca17d0c8b8f465fd3c29ddacb363ff786eeb9a12518ae3d",
+      "runPathReplacementOnly": true
+    },
+    {
+      "name": "audit-perf-source-maintenance.py",
+      "oldSha256": "27012a68a2673cd0ce1811dae0f6115d90138ab79bcc7c8ff06d3f5946b5bf35",
+      "newSha256": "27012a68a2673cd0ce1811dae0f6115d90138ab79bcc7c8ff06d3f5946b5bf35",
+      "runPathReplacementOnly": true
+    },
+    {
+      "name": "verify-t4.py",
+      "oldSha256": "e4357be83d19305f3fccb67d080c80294b56562f7b12c54714c0b8a4fcc4d34f",
+      "newSha256": "e4357be83d19305f3fccb67d080c80294b56562f7b12c54714c0b8a4fcc4d34f",
+      "runPathReplacementOnly": true
+    }
+  ],
+  "exporterBinding": {
+    "schema": "screeps-r18-additional-exporter-binding/v1",
+    "name": "export-evidence.py",
+    "oldFile": "/srv/screeps-treasury-t1/r15-t4-r5-20261002/tools/export-evidence.py",
+    "newFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/export-evidence.py",
+    "oldSha256": "b6d07488609c98d25fa6c0b28fbe53e7e23e8eb8a479f017d647add6c950362d",
+    "newSha256": "12449a99e133c7b66cd68297856318faa3012eddd08d3e841bb5a795b3717095",
+    "runPathReplacementOnly": true,
+    "originalPreserved": true,
+    "worldNotReplayed": true,
+    "positiveStoppedPrecondition": {
+      "capturedAtUtc": "2026-10-03T00:30:30.080565+00:00",
+      "properties": {
+        "LoadState": "not-found",
+        "ActiveState": "inactive",
+        "SubState": "dead",
+        "MainPID": "0"
+      },
+      "endpoints": [
+        {
+          "host": "127.0.0.1",
+          "port": 21025,
+          "connectionRefused": true
+        },
+        {
+          "host": "127.0.0.1",
+          "port": 21026,
+          "connectionRefused": true
+        },
+        {
+          "host": "::1",
+          "port": 21027,
+          "connectionRefused": true
+        }
+      ],
+      "positiveStoppedState": true
+    }
+  },
+  "cpuEvidenceScope": "isolatedGameCPU",
+  "productionCpuBudgetVerified": false,
+  "newC1C2C3NotYetVerified": true,
+  "positiveStoppedState": {
+    "capturedAtUtc": "2026-10-03T00:31:33.044475+00:00",
+    "properties": {
+      "LoadState": "not-found",
+      "ActiveState": "inactive",
+      "SubState": "dead",
+      "MainPID": "0"
+    },
+    "endpoints": [
+      {
+        "host": "127.0.0.1",
+        "port": 21025,
+        "connectionRefused": true
+      },
+      {
+        "host": "127.0.0.1",
+        "port": 21026,
+        "connectionRefused": true
+      },
+      {
+        "host": "::1",
+        "port": 21027,
+        "connectionRefused": true
+      }
+    ],
+    "positiveStoppedState": true
+  }
+}

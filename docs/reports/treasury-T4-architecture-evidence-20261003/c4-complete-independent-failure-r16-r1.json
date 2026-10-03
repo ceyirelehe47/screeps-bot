@@ -1,0 +1,19 @@
+{
+  "schema": "screeps-r16-c4-complete-independent-failure/v1",
+  "isolatedWorldOnly": true,
+  "passed": false,
+  "originalVerifierResult": {
+    "schema": "screeps-t4-semantic-verification/v1",
+    "passed": false,
+    "error": "C4完整100query压力期间实际bucket下降，不能以tickLimit burst余量宣称持续预算通过"
+  },
+  "originalVerifierOutputSha256": "3980b18ed5bc1ee6d1c319e74bc0d7f2ac6cb46d549d9dfa0285f88c2ecf4e59",
+  "verifierSha256": "e4357be83d19305f3fccb67d080c80294b56562f7b12c54714c0b8a4fcc4d34f",
+  "planSha256": "853bc14674455be6de1e6fdf104191e262c12e3762c443e413807cd1e5eea924",
+  "manifestSha256": "2de1110719719a751c9a884b7ed0c00c2b0a785e9ecd9ba37559c118efe9f54c",
+  "mainSha256": "f6d62d7f4938d961ba3c276246f57464213cd974a3ee39dc6f26ff450168f615",
+  "sourceContractSealSha256": "30346096fb175c204f9e371291073f8b4543e83c5bc30125b5e13900f0b72f4c",
+  "verifierExitStatus": 1,
+  "semanticGateUnchanged": true,
+  "failureWorldNotReplayed": true
+}

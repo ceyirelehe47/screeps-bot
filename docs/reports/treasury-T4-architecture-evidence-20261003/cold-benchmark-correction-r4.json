@@ -1,0 +1,29 @@
+{
+  "schema": "screeps-r18-cold-benchmark-report-correction/v1",
+  "sourceReportFile": "/Users/forst/Downloads/screeps-treasury-autonomous-20261002/engine/t4-r8/r18-small-report-package/c4-complete-independent-verification-r18.json",
+  "sourceReportSha256": "0465efc1e82f1e057274982a5643af499710f66ef348ee9cba728b765bf6cb4c",
+  "exactJsonPath": "cases[0].scenarios[2].cold.benchmark",
+  "coldBenchmark": {
+    "requestedQueries": 100,
+    "queries": 100,
+    "used": 24.878325000000018,
+    "completed": true,
+    "tick": 6000,
+    "buildHash": "9666cfb48f698d80f47c02d6e0bbd1aac18e5de22a5c67a8d52267b4cc722a87"
+  },
+  "mainSha256": "9d300172be0bed439e93b7a47d206dcfa3fc5b9db727a571f8ffa761a14f7f4d",
+  "coldUsedAfterBenchmark": 272.71110300000004,
+  "coldTickLimit": 500,
+  "coldRemainingTickHeadroom": 227.28889699999996,
+  "coldCarrierIndividualWrapperObserved": false,
+  "coldActualProfilerCreepWork": 6.770394000000067,
+  "coldActualProfilerCreepWorkCount": 2,
+  "absentIndividualWrapperIsNotZeroWork": true,
+  "harvestInvokesBenchmarkForColdAndWarm": true,
+  "probeToolOldSha256": "5487123833ba1bc630f123370be96b0b21c6d6b22d19e95f13d3d897c93b77c8",
+  "probeToolCurrentPathOnlySha256": "ff090e099268703c4af784be38781c19bc3e67c1536b7d62c82b241b6c1b39df",
+  "correctedDocumentFile": "/Users/forst/Downloads/screeps-treasury-autonomous-20261002/engine/t4-r8/R18隔离性能结论-r4.md",
+  "correctedDocumentSha256": "6eff17152b1fd6c4a60d191e4a623d9675b214db8f99135ca3aa3da2e669ad99",
+  "originalEvidenceUnchanged": true,
+  "noSSHOrWorldReplay": true
+}

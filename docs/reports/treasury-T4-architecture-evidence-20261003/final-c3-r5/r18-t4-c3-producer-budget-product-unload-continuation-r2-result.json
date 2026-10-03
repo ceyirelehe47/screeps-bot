@@ -1,0 +1,122 @@
+{
+  "schema": "screeps-current-t4-scene-supervisor/v1",
+  "case": "t4-c3-producer-budget",
+  "pid": 3866660,
+  "argv": [
+    "python3",
+    "-u",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/continue-c3-producer-after-product-unload-r18-r2.py"
+  ],
+  "startedAtUnix": 1791006760.7413805,
+  "startedAtMonotonic": 756576.889662332,
+  "stoppedPrecondition": {
+    "capturedAtUtc": "2026-10-03T05:52:40.721443+00:00",
+    "properties": {
+      "LoadState": "not-found",
+      "ActiveState": "inactive",
+      "SubState": "dead",
+      "MainPID": "0"
+    },
+    "endpoints": [
+      {
+        "host": "127.0.0.1",
+        "port": 21025,
+        "connectionRefused": true
+      },
+      {
+        "host": "127.0.0.1",
+        "port": 21026,
+        "connectionRefused": true
+      },
+      {
+        "host": "::1",
+        "port": 21027,
+        "connectionRefused": true
+      }
+    ],
+    "positiveStoppedState": true
+  },
+  "supervisorUnit": "screeps-r18-t4-c3-producer-budget-product-unload-continuation-r2.service",
+  "supervisorCgroup": "0::/system.slice/screeps-r18-t4-c3-producer-budget-product-unload-continuation-r2.service\n",
+  "frozenFiles": {
+    "candidate/main.js": "9d300172be0bed439e93b7a47d206dcfa3fc5b9db727a571f8ffa761a14f7f4d",
+    "candidate/manifest.json": "6b2b73e71b4ede5f912cfbe14f52ee8c8cc8f803f4af5dacf3602ed31c4e97a9",
+    "tools/run-t4-scenarios-r18-physical-cold-r1.py": "4905f4909b58c705763392a0004cb3da5c8d3b2643041bde2fc080b58247d988",
+    "tools/lab-t4-r18-physical-uh-r1.cjs": "52f8eb2101e07e33101da26e2f0437559972178a79c8bdc43852a80075a1813c",
+    "tools/run-until-t4.cjs": "d4811fca14d69a81c0a3653252d8628337fe9c3453aed3b74445bac5d19532ba",
+    "tools/verify-t4-plan-semantic-r18.json": "476281fa8bc750de073ddc28059a81639bb113f00fdf6f7636e7775179175529",
+    "db-frozen-pre-t4.json": "bf23559afdc92989d715d2ef2219acdd7f97f5bf60c32b0787af6874bf0cc2c3",
+    "r18-t4-c3-producer-budget-fresh-prep-r2-server-db-after.json": "f2ff18ad46edc135eb103339b8e8d00aa306de54fdc3fc4fd23274249f018e9d",
+    "evidence/t4-c3-producer-budget-independent-instance.json": "d530d830dcb6ef71a6120b1234670921be2e2a7aa17efa2d8aab4a4296e5e21b",
+    "evidence/t4-c3-producer-budget-fresh-prep-r2-failure-before-persistence-snapshot.json": "9102afc8fa4b4ab26745bbb67b55def1178c4b7b61921a2f86ef9843303b66d5",
+    "candidate/production-memory-source.json": "972403b475fd333803a7417f55534d87c44bb3439d7fa31b46b3c5d6cbe0999e",
+    "tools/run-until-product-unloaded-r18-r1.cjs": "8d607fa5dfb3000e8d582ef1aef047545765fe0924bcc2d242b5c768d0a98426",
+    "tools/c3-product-unload-proof-r18-r1.py": "776b9b76a9c1fc586bf61c630a5508b8906abe441a0f10e42970ec35b82a1065",
+    "tools/c3-product-unload-proof-r18-r2.py": "5600953c7e8ae9044fcc940ed36b6453d4f7e3b514618780e2c15a29575336b4",
+    "tools/verify-t4-current-r18-r1.py": "891092a42583ba24b1da99a17366e821591ae82a476171b28e6c5bd7e6675c9e",
+    "tools/continue-c3-producer-after-product-unload-r18-r1.py": "d0b43c97066ddfb4d2e4ee1578c1c5d1d344c17d8865eadfcf796e759edf2204",
+    "tools/continue-c3-producer-after-product-unload-r18-r2.py": "5ef347df753783b210279161d0a9f53ccdf52f26c25e9c0e77a9d1ecd8209360",
+    "tools/supervise-c3-producer-continuation-r18-r1.py": "b771ad43b41cc004c8d5cc194f83e578253fdd44b3977e12665acd38c91443be",
+    "r18-t4-c3-producer-budget-product-unload-continuation-r1-server-db-after.json": "57eff302b8cc785bd218adb698027480ac69a5c8746c0ef8c415ac8d6b19bdd9",
+    "evidence/t4-c3-producer-budget-unload-r1-failure-before-persistence-snapshot.json": "1ac02fe2c3eec58327025d456c01c1503376af0efff5abaf6cbda811f98a8b65",
+    "evidence/t4-c3-producer-budget-product-unload-driver.json": "2b80205e042fda7cc99b5f006b25cc658603cf600a6fdfbf16b752d7796c50bb",
+    "evidence/t4-c3-producer-budget-product-unload-continuation-r1-result.json": "6231fc2218805cd5dc59e6be53048d9e42c22d83225ffcff83590cb56d392d3c",
+    "r18-t4-c3-producer-budget-product-unload-continuation-r1-result.json": "7aa2752af4a100908bd31ebea27372e7c942c662e8e472f79ed1eaaaa9e58c7c",
+    "tools/supervise-c1-continuation-r18-r3.py": "dafa688da87afb572aeff7e0d84faaea336879d88e433f3b4230eee8e6bed12f"
+  },
+  "supervisorSha256": "05199f512fb9f21606d9dcdc4c47e68f47707de0d253d268f2e555cb4374ca7d",
+  "serverDatabaseBeforeFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/r18-t4-c3-producer-budget-product-unload-continuation-r2-server-db-before.json",
+  "serverDatabaseBeforeSha256": "57eff302b8cc785bd218adb698027480ac69a5c8746c0ef8c415ac8d6b19bdd9",
+  "isolatedWorldOnly": true,
+  "formalApiAccessed": false,
+  "independentVerificationPassed": false,
+  "runnerPid": 3866662,
+  "runnerProcessGroup": 3866662,
+  "runnerExitCode": 1,
+  "outcome": "FAIL",
+  "runnerInterruptedReturnCode": 1,
+  "runnerGroupFullyReapedOrNoRunnableMembers": true,
+  "freshUnitOwnership": {
+    "LoadState": "loaded",
+    "ActiveState": "active",
+    "SubState": "running",
+    "ActiveEnterTimestampMonotonic": "756577444587",
+    "MainPID": "3866672",
+    "ExecStart": "{ path=/srv/screeps-treasury-t1/r4/start-uts.sh ; argv[]=/srv/screeps-treasury-t1/r4/start-uts.sh ; ignore_errors=no ; start_time=[Sat 2026-10-03 13:52:41 CST] ; stop_time=[n/a] ; pid=3866672 ; code=(null) ; status=0/0 }",
+    "WorkingDirectory": "/srv/screeps-treasury-t1/server"
+  },
+  "freshServerDatabaseCurrentMainSha256": "9d300172be0bed439e93b7a47d206dcfa3fc5b9db727a571f8ffa761a14f7f4d",
+  "freshServerDatabaseBeforeStopSha256": "3af30bda2b9b88c6f8f8c2b85bf61abcc827658c5f44e46875090f89fc5fd9eb",
+  "stoppedAfterCase": {
+    "capturedAtUtc": "2026-10-03T05:54:29.860498+00:00",
+    "properties": {
+      "LoadState": "not-found",
+      "ActiveState": "inactive",
+      "SubState": "dead",
+      "MainPID": "0"
+    },
+    "endpoints": [
+      {
+        "host": "127.0.0.1",
+        "port": 21025,
+        "connectionRefused": true
+      },
+      {
+        "host": "127.0.0.1",
+        "port": 21026,
+        "connectionRefused": true
+      },
+      {
+        "host": "::1",
+        "port": 21027,
+        "connectionRefused": true
+      }
+    ],
+    "positiveStoppedState": true
+  },
+  "serverDatabaseAfterFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/r18-t4-c3-producer-budget-product-unload-continuation-r2-server-db-after.json",
+  "serverDatabaseAfterSha256": "3af30bda2b9b88c6f8f8c2b85bf61abcc827658c5f44e46875090f89fc5fd9eb",
+  "independentInstanceFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-independent-instance.json",
+  "independentInstanceSha256": "d530d830dcb6ef71a6120b1234670921be2e2a7aa17efa2d8aab4a4296e5e21b",
+  "endedAtUnix": 1791006869.8790019
+}

@@ -1,0 +1,354 @@
+{
+  "schema": "screeps-t4-semantic-verification/v1",
+  "isolatedWorldOnly": true,
+  "passed": true,
+  "cases": [
+    {
+      "case": "c2",
+      "passed": true,
+      "evidenceClass": "real_isolated_engine",
+      "bundleSha256": "9d300172be0bed439e93b7a47d206dcfa3fc5b9db727a571f8ffa761a14f7f4d",
+      "history": {
+        "historySha256": "0277be7b71f0155c067f187d0795cb2e9fe2fe7a595264d39cb32169c89d61ee",
+        "retainedRingAttemptIds": [
+          "tk1_1_9992ef348b720174",
+          "tk1_2_563d0bd13dd4ea10",
+          "tk1_3_1429d627c9e7b52c"
+        ],
+        "retainedRealReceiptIds": [
+          "5096bb4bbf5435c",
+          "ea82c5ad9941756",
+          "1215ccbb7652168"
+        ]
+      },
+      "preparation": {
+        "preparationSchema": "revised-independent-lab-preparation/v1",
+        "sourceDatabaseSha256": "cdd36d0b0013bb641019290820f86972b3e4797910de24d95a44133b500cb43c",
+        "sourceTick": 801,
+        "preparationSha256": "ced476ef35cdc53665b506c1881aff8cd8d627eed88cb5794efe5707add84366",
+        "realT3ReceiptId": "1215ccbb7652168",
+        "originalDatabaseFullHistoryIndependentlyRead": true,
+        "actualOriginalDatabasePaused": true,
+        "preservedHistoryEntries": 9,
+        "actualOriginalT4StateAndResponsibilitiesAbsent": true,
+        "stoppedPreconditionIndependentlyChecked": true,
+        "missingPreparationFlagsInvented": false,
+        "frozenBaseline": {
+          "databaseFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/private-databases/db-frozen-pre-t4.json",
+          "databaseSha256": "bf23559afdc92989d715d2ef2219acdd7f97f5bf60c32b0787af6874bf0cc2c3",
+          "persistedTick": 801,
+          "storedGameTimeType": "int",
+          "persistedMemorySha256": "778cd9c1256895dc559e7f1fc9b6c9d9e9476503bb595f3a7f4455cdfb920c0c"
+        }
+      },
+      "pauseStability": {
+        "drivers": 17,
+        "diagnosticUnmatchedDrivers": [],
+        "requiredStableMs": 10000,
+        "maxWaitMs": 60000,
+        "minimumObservedStableMs": 10142,
+        "bindings": [
+          {
+            "driverNonceKey": "__labT4EnableResultNonce",
+            "driverSuffix": "-executed",
+            "snapshot": "t4-c2-enabled-pilot"
+          },
+          {
+            "driver": "t4-c2-slice1-native-driver",
+            "snapshot": "t4-c2-slice1-native"
+          },
+          {
+            "driver": "t4-c2-unknown-driver",
+            "snapshot": "t4-c2-unknown"
+          },
+          {
+            "driver": "t4-c2-unrelated-driver",
+            "snapshot": "t4-c2-unrelated-while-unknown"
+          },
+          {
+            "driver": "t4-c2-post-reset-driver",
+            "snapshot": "t4-c2-post-reset"
+          },
+          {
+            "driver": "t4-c2-off-held-driver",
+            "snapshot": "t4-c2-off-held"
+          },
+          {
+            "driver": "t4-c2-settled-driver",
+            "snapshot": "t4-c2-committed"
+          },
+          {
+            "driver": "t4-c2-stopped-driver",
+            "snapshot": "t4-c2-stopped"
+          },
+          {
+            "driver": "t4-c2-repeat-close-driver",
+            "snapshot": "t4-c2-repeat-close"
+          },
+          {
+            "driver": "t4-c2-carrier-release-driver",
+            "snapshot": "t4-c2-ordinary-handback"
+          }
+        ],
+        "verified": [
+          {
+            "label": "t4-c2-carrier-release-driver",
+            "matched": true,
+            "diagnosticOnly": false,
+            "observedStableMs": 10157,
+            "stableSamples": 41,
+            "samples": 41,
+            "barrierWallMs": 10171,
+            "endTick": 844
+          },
+          {
+            "label": "t4-c2-enable-executed",
+            "matched": true,
+            "diagnosticOnly": false,
+            "observedStableMs": 10156,
+            "stableSamples": 41,
+            "samples": 45,
+            "barrierWallMs": 11191,
+            "endTick": 805
+          },
+          {
+            "label": "t4-c2-off-held-driver",
+            "matched": true,
+            "diagnosticOnly": false,
+            "observedStableMs": 10155,
+            "stableSamples": 41,
+            "samples": 41,
+            "barrierWallMs": 10168,
+            "endTick": 817
+          },
+          {
+            "label": "t4-c2-ordinary-oh-handback-driver",
+            "matched": true,
+            "diagnosticOnly": false,
+            "observedStableMs": 10142,
+            "stableSamples": 41,
+            "samples": 43,
+            "barrierWallMs": 10663,
+            "endTick": 841
+          },
+          {
+            "label": "t4-c2-post-reset-driver",
+            "matched": true,
+            "diagnosticOnly": false,
+            "observedStableMs": 10155,
+            "stableSamples": 41,
+            "samples": 41,
+            "barrierWallMs": 10169,
+            "endTick": 814
+          },
+          {
+            "label": "t4-c2-pre-setup-cargo-drain",
+            "matched": true,
+            "diagnosticOnly": false,
+            "observedStableMs": 10199,
+            "stableSamples": 41,
+            "samples": 41,
+            "barrierWallMs": 10203,
+            "endTick": 804
+          },
+          {
+            "label": "t4-c2-repeat-close-driver",
+            "matched": true,
+            "diagnosticOnly": false,
+            "observedStableMs": 10186,
+            "stableSamples": 41,
+            "samples": 41,
+            "barrierWallMs": 10200,
+            "endTick": 821
+          },
+          {
+            "label": "t4-c2-restored-source-in-driver",
+            "matched": true,
+            "diagnosticOnly": false,
+            "observedStableMs": 10146,
+            "stableSamples": 41,
+            "samples": 44,
+            "barrierWallMs": 10921,
+            "endTick": 826
+          },
+          {
+            "label": "t4-c2-restored-source-out-driver",
+            "matched": true,
+            "diagnosticOnly": false,
+            "observedStableMs": 10156,
+            "stableSamples": 41,
+            "samples": 41,
+            "barrierWallMs": 10170,
+            "endTick": 826
+          },
+          {
+            "label": "t4-c2-restored-target-in-driver",
+            "matched": true,
+            "diagnosticOnly": false,
+            "observedStableMs": 10160,
+            "stableSamples": 41,
+            "samples": 41,
+            "barrierWallMs": 10173,
+            "endTick": 826
+          },
+          {
+            "label": "t4-c2-restored-target-out-driver",
+            "matched": true,
+            "diagnosticOnly": false,
+            "observedStableMs": 10160,
+            "stableSamples": 41,
+            "samples": 41,
+            "barrierWallMs": 10209,
+            "endTick": 826
+          },
+          {
+            "label": "t4-c2-settled-driver",
+            "matched": true,
+            "diagnosticOnly": false,
+            "observedStableMs": 10159,
+            "stableSamples": 41,
+            "samples": 43,
+            "barrierWallMs": 10684,
+            "endTick": 819
+          },
+          {
+            "label": "t4-c2-slice1-native-driver",
+            "matched": true,
+            "diagnosticOnly": false,
+            "observedStableMs": 10157,
+            "stableSamples": 41,
+            "samples": 44,
+            "barrierWallMs": 10936,
+            "endTick": 806
+          },
+          {
+            "label": "t4-c2-stopped-driver",
+            "matched": true,
+            "diagnosticOnly": false,
+            "observedStableMs": 10153,
+            "stableSamples": 41,
+            "samples": 41,
+            "barrierWallMs": 10167,
+            "endTick": 819
+          },
+          {
+            "label": "t4-c2-unknown-driver",
+            "matched": true,
+            "diagnosticOnly": false,
+            "observedStableMs": 10152,
+            "stableSamples": 41,
+            "samples": 41,
+            "barrierWallMs": 10166,
+            "endTick": 812
+          },
+          {
+            "label": "t4-c2-unrelated-driver",
+            "matched": true,
+            "diagnosticOnly": false,
+            "observedStableMs": 10155,
+            "stableSamples": 41,
+            "samples": 41,
+            "barrierWallMs": 10168,
+            "endTick": 812
+          },
+          {
+            "label": "t4-c2-warmup",
+            "matched": true,
+            "diagnosticOnly": false,
+            "observedStableMs": 10162,
+            "stableSamples": 41,
+            "samples": 47,
+            "barrierWallMs": 11726,
+            "endTick": 803
+          }
+        ]
+      },
+      "restart": {
+        "databaseFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/../private-databases/db-before-t4-c2-unknown-restart.json",
+        "databaseSha256": "0fe83859a5aa12b4c36aaed9f75a1aa216b741480ca3e56cf218d783533da4cc",
+        "persistedTick": 812,
+        "storedGameTimeType": "int",
+        "persistedMemorySha256": "d9886c37bcae2321a27db80b483d44542cac2b7773a331f7583a07b7aa14c907",
+        "beforePID": "3828188",
+        "afterPID": "3828822",
+        "beforeTick": 812,
+        "afterTick": 814,
+        "coldExactReadback": false
+      },
+      "fixture": {
+        "originalTaskAmount": 913,
+        "productGoal": 30,
+        "realProductStock": 0,
+        "realOHStock": 4,
+        "realOHDeficit": 26,
+        "counterpartUH": 30
+      },
+      "coldFixture": {
+        "databaseFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/../private-databases/db-t4-c2-configured-fixture.json",
+        "databaseSha256": "6bf96c2cdcc3e774a61d786bf1694690f6fdd0e6065ce13d53bbe4bd357ccf54",
+        "persistedTick": 804,
+        "storedGameTimeType": "int",
+        "persistedMemorySha256": "04de12d75175d20a47b19b69062f9b2b6ad01d73fccf1522797d480ecea6e777",
+        "beforePID": "3827913",
+        "afterPID": "3828188",
+        "beforeTick": 804,
+        "afterTick": 804,
+        "coldExactReadback": true
+      },
+      "faultExactlyReversed": {
+        "terminalId": "5ca4c1b028a9b3b",
+        "beforeOH": 10,
+        "faultOH": 11,
+        "restoredOH": 10,
+        "carrierOriginalWorkObservedAfterReset": true
+      },
+      "unrelatedReceiptId": "792afdfbd70e9eb",
+      "protectedDirections": [
+        "source-in",
+        "target-in",
+        "source-out",
+        "target-out"
+      ],
+      "ordinaryHandbackReceiptIds": [
+        "e3a3fe19d349581",
+        "bb39fe19d34cbc5",
+        "82f6fe19d34f48f",
+        "ff9efe19d341f95",
+        "853dfe27b823f42"
+      ],
+      "carrierFixtureProvenance": "explicit_synthetic_already_carried_H50",
+      "carrierStoreAcrossResetAndHandback": "H50→H0",
+      "remainingAfterOrdinaryDemandCovered": 887,
+      "taskId": "lab-t4-c2-OH",
+      "realNativeReceiptCount": 1,
+      "originalAttemptId": "tk1_4_0a35dab476c99174",
+      "retainedPermanentDebit": [
+        {
+          "sequence": 1,
+          "attemptId": "tk1_4_0a35dab476c99174",
+          "amount": 10,
+          "fee": 1,
+          "atTick": 805,
+          "atMs": 1790999226693,
+          "epoch": 0
+        }
+      ],
+      "remainingAfterCommitted": 903,
+      "finalStatus": "stopped",
+      "finalMode": "off"
+    }
+  ],
+  "realNativeReceiptCountAcrossIndependentCases": 1,
+  "syntheticHistoryExcludedFromRealNativeCounts": true,
+  "verificationArtifacts": {
+    "verifierFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/verify-t4.py",
+    "verifierSha256": "e4357be83d19305f3fccb67d080c80294b56562f7b12c54714c0b8a4fcc4d34f",
+    "planFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/verify-t4-plan-semantic-r18.json",
+    "planSha256": "476281fa8bc750de073ddc28059a81639bb113f00fdf6f7636e7775179175529",
+    "manifestFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/candidate/manifest.json",
+    "manifestSha256": "6b2b73e71b4ede5f912cfbe14f52ee8c8cc8f803f4af5dacf3602ed31c4e97a9",
+    "mainFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/candidate/main.js",
+    "mainSha256": "9d300172be0bed439e93b7a47d206dcfa3fc5b9db727a571f8ffa761a14f7f4d",
+    "mainBytes": 3443761
+  }
+}

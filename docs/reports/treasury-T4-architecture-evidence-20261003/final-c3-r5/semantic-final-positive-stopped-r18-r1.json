@@ -1,0 +1,40 @@
+{
+  "schema": "screeps-r18-semantic-final-stopped/v1",
+  "isolatedWorldOnly": true,
+  "capturedAtUtc": "2026-10-03T07:25:19.784575+00:00",
+  "service": {
+    "ActiveState": "inactive",
+    "SubState": "dead",
+    "MainPID": "0",
+    "WorkingDirectory": ""
+  },
+  "ports": [
+    {
+      "host": "127.0.0.1",
+      "port": 21025,
+      "connectEx": 111,
+      "connectionRefused": true
+    },
+    {
+      "host": "127.0.0.1",
+      "port": 21026,
+      "connectEx": 111,
+      "connectionRefused": true
+    },
+    {
+      "host": "::1",
+      "port": 21027,
+      "connectEx": 111,
+      "connectionRefused": true
+    }
+  ],
+  "runnableExperimentProcesses": [],
+  "workingDatabaseSha256": "f01eb80d842aeea12a2f4448b8013c7aa7d59d2f7b9ee4c48fcba2bf661a5525",
+  "tick": 1001,
+  "mainLoopPaused": true,
+  "currentMainSha256": "9d300172be0bed439e93b7a47d206dcfa3fc5b9db727a571f8ffa761a14f7f4d",
+  "readOnlyVerificationCompleted": true,
+  "productionAcceptanceClaimed": false,
+  "fullC3ReportSha256": "d7d186264ad2504884f297bd2e9a52e02670414f34e2b41820f5ae21627c4d3d",
+  "fullC3ProvenanceSha256": "b6a6bb1431dc68e347d8054de2a4756180744ee5d08e7159d57d2c94b3de3c05"
+}

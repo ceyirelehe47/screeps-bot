@@ -1,0 +1,24 @@
+{
+  "case": "t4-c2",
+  "unit": "screeps-r18-t4-c2-fresh-prep-supervisor-r2",
+  "argv": [
+    "systemd-run",
+    "--unit=screeps-r18-t4-c2-fresh-prep-supervisor-r2",
+    "--collect",
+    "--property=WorkingDirectory=/srv/screeps-treasury-t1/r18-t4-architecture-20261003",
+    "--property=StandardOutput=append:/srv/screeps-treasury-t1/r18-t4-architecture-20261003/r18-t4-c2-fresh-prep-r2.log",
+    "--property=StandardError=append:/srv/screeps-treasury-t1/r18-t4-architecture-20261003/r18-t4-c2-fresh-prep-r2.log",
+    "--property=KillMode=control-group",
+    "--property=TimeoutStopSec=60s",
+    "python3",
+    "-u",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/supervise-fresh-cases-r18-r2.py",
+    "t4-c2"
+  ],
+  "selfcheckReportSha256": "cb569f8c43f72104b30752b0d47da5d49309a531a35beac1f10ab5cf40a0129a",
+  "dispatchReturnCode": 0,
+  "stdout": "",
+  "stderr": "Running as unit: screeps-r18-t4-c2-fresh-prep-supervisor-r2.service; invocation ID: ee7b3e67ac9a4712b11f3c3be26d9d3e\n",
+  "dispatchedAtUtc": "2026-10-03T03:46:17.070209+00:00",
+  "isolatedWorldOnly": true
+}

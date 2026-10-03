@@ -1,0 +1,1853 @@
+{
+  "schema": "screeps-current-t4-semantic-adapter-provenance/v1",
+  "isolatedWorldOnly": true,
+  "formalApiAccessed": false,
+  "completeT4Acceptance": false,
+  "wrapperFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/verify-t4-current-r18-r1.py",
+  "wrapperSha256": "891092a42583ba24b1da99a17366e821591ae82a476171b28e6c5bd7e6675c9e",
+  "binding": {
+    "originalBaseFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/verify-t4.py",
+    "originalBaseSha256": "e4357be83d19305f3fccb67d080c80294b56562f7b12c54714c0b8a4fcc4d34f",
+    "inMemoryPatchedBaseSha256": "92570d42b256f94703643ed3ab4946d8ec3ec5cad02edac06409ad63a20a6f6d",
+    "exactSchemaOriginal": "    require(state[\"hash\"] == canonical_hash({\"domain\": \"treasury-t4:continuous-oh-state-v1\", \"payload\": payload}), f\"{label}: T4 canonical hash无效\")\n",
+    "exactSchemaReplacement": "    require(type(state[\"schemaVersion\"]) is int and state[\"schemaVersion\"] in (1, 2), f\"{label}: T4 schema域非法\")\n    require(state[\"hash\"] == canonical_hash({\"domain\": f\"treasury-t4:continuous-oh-state-v{state['schemaVersion']}\", \"payload\": payload}), f\"{label}: T4 canonical hash无效\")\n",
+    "exactTransactionOriginal": "        txs = [{**{k: t[k] for k in (\"_id\", \"time\", \"from\", \"to\") if k in t},\n                **({\"resource\": t[\"resourceType\"]} if \"resourceType\" in t else {}),\n                **{k: t[k] for k in (\"amount\", \"description\") if k in t}} for t in snap.raw[\"transactions\"]]\n        txs.sort(key=lambda t: t[\"_id\"])\n",
+    "exactTransactionReplacement": "        txs = sorted(snap.raw[\"transactions\"], key=lambda t: t[\"_id\"])\n",
+    "otherOriginalSourceBytesPreserved": true,
+    "fullPayloadHashRetained": true,
+    "frozenDriverFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/run-until-t4.cjs",
+    "frozenDriverSha256": "d4811fca14d69a81c0a3653252d8628337fe9c3453aed3b74445bac5d19532ba",
+    "transactionBindingContract": "complete_raw_transaction_json_sorted_by_id",
+    "projectedFallbackAccepted": false,
+    "exactPreNativeOriginal": "        require(isinstance(cycle, dict) and (cycle[\"status\"], cycle[\"sequence\"], cycle[\"quota\"], cycle[\"reservedFee\"], cycle[\"taskId\"], cycle[\"taskRemainingAtArm\"]) == (\"preparing\", 1, None, None, task_id, 26) and snap.task(task_id)[\"remainingAmount\"] == 26 and not snap.task(task_id).get(\"treasurySlice\"), \"C1 pre-native准备态被提前Arm/扣量/重建cohort\")\n",
+    "exactPreNativeReplacement": "        c1_pre_native_observable_ready(snap, task_id)\n",
+    "c1ContractFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/c1-current-contract-r18-r1.py",
+    "c1ContractSha256": "224b9cec0cadcaa6d4049e8306751e1006e7f5cdaa76365cbada24fcde88b55c",
+    "c1ProofBinding": {
+      "originalC1FunctionSha256": "a2f3ac3c1f6360c958e544fc0c5c0eba8e49865edcf6726165a14f678a7ac226",
+      "derivedC1FunctionSha256": "fa08f0c81b4e2b28d9fd05ae7ca644b1677109a5fd4c28c57919a8cee2899c85",
+      "exactChanges": [
+        {
+          "before": "    baseline = load_snapshot(evidence, spec[\"baseline\"])\n",
+          "after": "    global C1_BASELINE\n    baseline = load_snapshot(evidence, spec[\"baseline\"])\n    C1_BASELINE = baseline\n",
+          "occurrences": 1
+        },
+        {
+          "before": "check_native(",
+          "after": "check_c1_actual_native(",
+          "occurrences": 2
+        },
+        {
+          "before": "check_no_extra_receipts(",
+          "after": "check_c1_actual_records(",
+          "occurrences": 6
+        },
+        {
+          "before": "check_counters(",
+          "after": "check_c1_actual_counters(",
+          "occurrences": 5
+        },
+        {
+          "before": "s[\"sequenceHighWater\"] == 3",
+          "after": "s[\"sequenceHighWater\"] == c1_complete_frontier(awaiting, 3)",
+          "occurrences": 1
+        },
+        {
+          "before": "len(s[\"closedCycles\"]) == 3",
+          "after": "len(s[\"closedCycles\"]) == c1_complete_frontier(awaiting, 3)",
+          "occurrences": 1
+        },
+        {
+          "before": "state[\"sequenceHighWater\"] == 3",
+          "after": "state[\"sequenceHighWater\"] == c1_complete_frontier(current, 3)",
+          "occurrences": 1
+        },
+        {
+          "before": "current.state[\"sequenceHighWater\"] == 4",
+          "after": "current.state[\"sequenceHighWater\"] == c1_complete_frontier(current, 4)",
+          "occurrences": 1
+        }
+      ],
+      "otherOriginalC1SourcePreserved": true,
+      "zeroNativeAuthority": "actual signed complete pre_native_recovery/not_executed gen1 certificates only",
+      "noAssumedZeroSequenceOrCount": true,
+      "nativeOrdinalsAreRealReceipts": true,
+      "productControlSourceSha256": "ba323af9fbe021c2abdd06c259eb2803137df0222129122109bea9ac49b13bdc"
+    },
+    "observableReadinessOnly": true,
+    "unobservedHeapReadinessClaimed": false,
+    "sourceCommit": "a24f2a777c26c4f3e3dc2ea489b65d39cab92042",
+    "sourceTree": "46710866e3a2d0c36185fb6e06f01192fbcd4faa",
+    "sourceArchiveSha256": "d12ebc7360965c22e5092630bc15946230be475fd6f4413ce9e0fb6175729f79",
+    "mainSha256": "9d300172be0bed439e93b7a47d206dcfa3fc5b9db727a571f8ffa761a14f7f4d",
+    "freshPreparationIndependentProof": {
+      "schema": "screeps-r18-fresh-preparation-independent-verification/v1",
+      "passed": true,
+      "case": "t4-c3-producer-budget",
+      "isolatedWorldOnly": true,
+      "formalApiAccessed": false,
+      "worldModified": false,
+      "sceneReplayed": false,
+      "completeT4Acceptance": false,
+      "outerWrapperFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/verify-fresh-cases-r18-r3.py",
+      "outerWrapperSha256": "5f6628ddefb204be5eaaefafcf1e19324e0c8fa22b317d7424c33ac13d607531",
+      "originalAdapterSha256": "891092a42583ba24b1da99a17366e821591ae82a476171b28e6c5bd7e6675c9e",
+      "originalPlanSha256": "476281fa8bc750de073ddc28059a81639bb113f00fdf6f7636e7775179175529",
+      "preludeRoleSourceSha256": {
+        "src/roles/carrier.ts": "e8ae3f94e5c7bb9d492bd2da6c57b6932a679949306ac3281ea195e3a8daecde",
+        "src/mount/mountCreep.ts": "d5e4502bed2031528f9f29318e2e020a5c57655da1035049da5fbac320866a70",
+        "src/roles/energyTargets.ts": "36e8dfa1ce40c7c0fb59c2e0ae866858a3e40bfcd1cfe5068b13f57cff8f6226"
+      },
+      "frozenFiles": {
+        "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/verify-t4.py": "e4357be83d19305f3fccb67d080c80294b56562f7b12c54714c0b8a4fcc4d34f",
+        "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/verify-t4-current-r18-r1.py": "891092a42583ba24b1da99a17366e821591ae82a476171b28e6c5bd7e6675c9e",
+        "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/verify-t4-plan-semantic-r18.json": "476281fa8bc750de073ddc28059a81639bb113f00fdf6f7636e7775179175529",
+        "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/run-t4-scenarios-r18-physical-cold-r1.py": "4905f4909b58c705763392a0004cb3da5c8d3b2643041bde2fc080b58247d988",
+        "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/lab-t4-r18-physical-uh-r1.cjs": "52f8eb2101e07e33101da26e2f0437559972178a79c8bdc43852a80075a1813c",
+        "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/run-until-t4.cjs": "d4811fca14d69a81c0a3653252d8628337fe9c3453aed3b74445bac5d19532ba",
+        "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/run-until-fresh-cargo-zero-r18-r1.cjs": "2818c2bbbd3b6540d0137de735dafd937afb399219f35c4786ec9be3caf43832",
+        "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/c2-c3-cargo-drain-proof-r18-r3.py": "3248f179053074df105478d6d4a1779c9e6ef9b544523607d14a27277b59e5c6",
+        "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/run-fresh-cases-with-cargo-drain-r18-r2.py": "52ad968f881473c67e2e66d078d1c79540729b9ed317d2b1c0f0fa5f1705dd45",
+        "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/supervise-fresh-cases-r18-r2.py": "fe75976962bcd6e5910e4e8107e83762d0195c17613a883b753b7072d4f45b6a",
+        "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/candidate/main.js": "9d300172be0bed439e93b7a47d206dcfa3fc5b9db727a571f8ffa761a14f7f4d",
+        "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/candidate/manifest.json": "6b2b73e71b4ede5f912cfbe14f52ee8c8cc8f803f4af5dacf3602ed31c4e97a9",
+        "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/candidate/expired-production-shape-task.json": "7c6961a3adda6e403ad79458d2a40ff4f15beed28be9a78af438cc3e48cb18bc",
+        "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/candidate/production-memory-source.json": "972403b475fd333803a7417f55534d87c44bb3439d7fa31b46b3c5d6cbe0999e",
+        "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/db-frozen-pre-t4.json": "bf23559afdc92989d715d2ef2219acdd7f97f5bf60c32b0787af6874bf0cc2c3",
+        "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/native-lab-reaction-source-contract-r18-r1.json": "560c3d9b45d66e1a13d20578cb4b5fccfa3ca04771fb319258847cddb7653955",
+        "/srv/screeps-treasury-build/t4-architecture-r8-20261003/candidate/src/runtime/synthesisControl.ts": "19e5d4c6ac25cfefb0af28d71c71d20f623a5cbe1b3d1b7cabb81e447aa58c7f",
+        "/srv/screeps-treasury-build/t4-architecture-r8-20261003/candidate/src/roles/carrier.ts": "e8ae3f94e5c7bb9d492bd2da6c57b6932a679949306ac3281ea195e3a8daecde",
+        "/srv/screeps-treasury-build/t4-architecture-r8-20261003/candidate/src/mount/mountCreep.ts": "d5e4502bed2031528f9f29318e2e020a5c57655da1035049da5fbac320866a70",
+        "/srv/screeps-treasury-build/t4-architecture-r8-20261003/candidate/src/roles/energyTargets.ts": "36e8dfa1ce40c7c0fb59c2e0ae866858a3e40bfcd1cfe5068b13f57cff8f6226"
+      },
+      "originalArtifacts": {
+        "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-independent-instance.json": "d530d830dcb6ef71a6120b1234670921be2e2a7aa17efa2d8aab4a4296e5e21b",
+        "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-before-setup-snapshot.json": "1e5def5b5b169a832fdfa2dbcf21d0011e2052a26dafcdf117fde38fcd0c34a0",
+        "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-after-align-before-setup-snapshot.json": "71c8512d704bb3b73bb7e8ae0314b69e4d131d5eb3afef2591b40cfc5ff808cb",
+        "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-warmup-driver.json": "86e338dbde78660da860296850461d3f304700905a04ddcc74dc1689edf68f4c",
+        "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-pre-setup-cargo-drain-driver.json": "919f8be0f032cac60771c21cd3689bde8d3a1b2817f937dda3d3555e8cae6667",
+        "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-before-setup-after-real-drain-snapshot.json": "b80eb2bd3ac39b63c0d2d94ee862cba832abf3b8de1133ce30dc505622da59c9",
+        "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-fresh-cargo-prep-r2-binding.json": "ac615d7f1f82746bad0f0a11f316b7fecaa1a17f5a4d50a410a9bda7c3d667a7",
+        "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-fresh-cargo-prep-r2-proof.json": "dd2142931d4d154f3fbf2a7d5dbe9d917e278738d658437fa5d0274e10c23052",
+        "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-fresh-cargo-prep-r2-start.json": "b0381dfaed1dd4288196b437aa4117856d2015c4c14edaf05c3faff5ee662ce0",
+        "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-fresh-cargo-prep-r2-result.json": "6d49cc186495965284dea4a942d7bf5fdf09d4b894f20a3f4812b38a3fbfd4a2",
+        "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-setup-setup.json": "f293324b354d1506c71c18da765a2168aa5ad028ea7329ba3610d248c05a8b0f",
+        "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-configured-fixture-before-persistence-snapshot.json": "59a7a28c79ad24f72051e1d720ae1e10b19c20766f30bda1853425c4fa868779",
+        "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-cold-fixture-readback-snapshot.json": "fcbed156d43f2444d1ad886851eaac7f0c5f25cdf7471cb6f18df822a4493d47"
+      },
+      "supervisorContextFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/r18-t4-c3-producer-budget-fresh-prep-r2-context.json",
+      "supervisorContextSha256": "7dd511ed791b8501c7941f50522cff186a7979cf91ea8cd5e78a7f120c2b1a32",
+      "supervisorResultFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/r18-t4-c3-producer-budget-fresh-prep-r2-result.json",
+      "supervisorResultSha256": "fda3bb6b6caf1f54538b2ed20e7a25e1e2850983831afc157fe08bd2314b9d62",
+      "pureProofRerunEntireResultExact": true,
+      "cargoIndependentProof": {
+        "schema": "screeps-r18-fresh-case-cargo-prep-proof/v1",
+        "outcome": "PASS",
+        "case": "t4-c3-producer-budget",
+        "inputContract": "r18-fresh-case-baseline801-align-driver-pure-dict-v1",
+        "isolatedWorldOnly": true,
+        "formalApiAccessed": false,
+        "candidateAcceptanceClaimed": false,
+        "mainSha256": "9d300172be0bed439e93b7a47d206dcfa3fc5b9db727a571f8ffa761a14f7f4d",
+        "mode": "drain",
+        "preludeEvidenceScope": "physical_endpoints_and_original_pause_hashes",
+        "warmupProgressRawSamplesAvailable": false,
+        "prelude": {
+          "evidenceScope": "physical_endpoints_and_original_pause_hashes",
+          "progressRawSamplesAvailable": false,
+          "originalDriverSourceSha256": "d4811fca14d69a81c0a3653252d8628337fe9c3453aed3b74445bac5d19532ba",
+          "pause": {
+            "allOriginalPauseSamples": 47,
+            "actualStableMs": 10167,
+            "lastFullEndpointHashBound": true
+          },
+          "physicalEndpoints": {
+            "branch": "align-loaded50",
+            "evidenceScope": "physical_endpoints_and_original_pause_hashes",
+            "reactionCountDerived": 0,
+            "actualReactionMainTickDerived": null,
+            "energyDeliveredByRoom": {
+              "E4N58": 50,
+              "E1N57": 50
+            },
+            "carrierEnergyDecreaseByRoom": {
+              "E4N58": 0,
+              "E1N57": 0
+            },
+            "terminalEnergyDecreaseByRoom": {
+              "E4N58": 50,
+              "E1N57": 50
+            },
+            "energyDeltaByEntity": {
+              "f7add81659a2190": 0,
+              "d7dc41dd18efd58": 50,
+              "370f41dd18e91de": -50,
+              "4389c5b0988de7e": 0,
+              "a252c1b028c5660": 50,
+              "5ca4c1b028a9b3b": -50
+            },
+            "otherResourcesExactPerEntity": true,
+            "UHOComponentsBefore": {
+              "U": 30,
+              "H": 72034,
+              "O": 20004
+            },
+            "UHOComponentsAfter": {
+              "U": 30,
+              "H": 72034,
+              "O": 20004
+            },
+            "perTickActorOrMethodTraceClaimed": false
+          }
+        },
+        "prepared": {
+          "mode": "drain",
+          "allRawSamples": 134,
+          "rawSamplesExcluded": 0,
+          "inFlightIndexesRetained": [],
+          "actualMainTickDelta": 1,
+          "pause": {
+            "allOriginalPauseSamples": 41,
+            "actualStableMs": 10216,
+            "lastFullEndpointHashBound": true
+          },
+          "physicalEndpoints": {
+            "reactionCountDerived": 0,
+            "actualReactionMainTickDerived": null,
+            "energyDeliveredByRoom": {
+              "E4N58": 50,
+              "E1N57": 50
+            },
+            "otherResourcesExactPerEntity": true,
+            "UHOComponentsBefore": {
+              "U": 30,
+              "H": 72034,
+              "O": 20004
+            },
+            "UHOComponentsAfter": {
+              "U": 30,
+              "H": 72034,
+              "O": 20004
+            }
+          },
+          "zeroObserveNoResume": false
+        },
+        "totalPhysicalConservation": {
+          "reactionCountDerived": 0,
+          "actualReactionMainTickDerived": null,
+          "baselineCarrierEnergyDecreaseByRoom": {
+            "E4N58": 50,
+            "E1N57": 50
+          },
+          "storageEnergyIncreaseByRoom": {
+            "E4N58": 100,
+            "E1N57": 100
+          },
+          "terminalEnergyDecreaseByRoom": {
+            "E4N58": 50,
+            "E1N57": 50
+          },
+          "energyDeltaByEntity": {
+            "f7add81659a2190": -50,
+            "d7dc41dd18efd58": 100,
+            "370f41dd18e91de": -50,
+            "4389c5b0988de7e": -50,
+            "a252c1b028c5660": 100,
+            "5ca4c1b028a9b3b": -50
+          },
+          "segmentsAddedAndDirectFullEntityDeltaChecked": true,
+          "otherResourcesExactPerEntity": true,
+          "UHOComponentsBefore": {
+            "U": 30,
+            "H": 72034,
+            "O": 20004
+          },
+          "UHOComponentsAfter": {
+            "U": 30,
+            "H": 72034,
+            "O": 20004
+          }
+        },
+        "reactionSourceContract": {
+          "recordUtf8Sha256": "560c3d9b45d66e1a13d20578cb4b5fccfa3ca04771fb319258847cddb7653955",
+          "synthesisControlSourceUtf8Sha256": "19e5d4c6ac25cfefb0af28d71c71d20f623a5cbe1b3d1b7cabb81e447aa58c7f",
+          "nativeSourceFiles": {
+            "constants": {
+              "path": "/srv/screeps-treasury-t1/server/node_modules/@screeps/common/lib/constants.js",
+              "sha256": "42fa7b11d157cfcf9bc7a636ad74f43370c649cbdca7d0ef7431eb476f151371"
+            },
+            "processor": {
+              "path": "/srv/screeps-treasury-t1/server/node_modules/@screeps/engine/src/processor/intents/labs/run-reaction.js",
+              "sha256": "e0f2b802ec878339e3d2c164e2360265008087d9672ccd1c1d3395fb84727d9d"
+            }
+          },
+          "actualInstalledExports": {
+            "LAB_REACTION_AMOUNT": 5,
+            "REACTION_TIME_UH2O": 5,
+            "REACTIONS_UH_OH": "UH2O",
+            "REACTIONS_OH_UH": "UH2O"
+          },
+          "sourcesExecutedByVerifier": false
+        },
+        "preludeRoleSourceContract": {
+          "sourceSha256ByPath": {
+            "src/roles/carrier.ts": "e8ae3f94e5c7bb9d492bd2da6c57b6932a679949306ac3281ea195e3a8daecde",
+            "src/mount/mountCreep.ts": "d5e4502bed2031528f9f29318e2e020a5c57655da1035049da5fbac320866a70",
+            "src/roles/energyTargets.ts": "36e8dfa1ce40c7c0fb59c2e0ae866858a3e40bfcd1cfe5068b13f57cff8f6226"
+          },
+          "sourceExecuted": false,
+          "evidenceScope": "endpoint_physical_and_product_source_compatibility",
+          "perTickActorOrMethodTraceClaimed": false
+        },
+        "oldFiscalAndCfgAndRCTasksExact": true,
+        "old37CompleteRawTransactionsExact": true,
+        "transferMethodIntentIndependentlyRecorded": false,
+        "baselineTick": 801,
+        "afterAlignTick": 803,
+        "afterDrainTick": 804,
+        "independentCaseClaimSha256": "d530d830dcb6ef71a6120b1234670921be2e2a7aa17efa2d8aab4a4296e5e21b"
+      },
+      "baseline801WarmupAlignDriverChainExact": true,
+      "setupBeforeAfterFullMemoryExact": true,
+      "originalColdFixture": {
+        "databaseFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/../private-databases/db-t4-c3-producer-budget-configured-fixture.json",
+        "databaseSha256": "4763a4f63b13cb22b9c5d43804e6c73f54ec974decd358f9e2a98c291be1cfc9",
+        "persistedTick": 804,
+        "storedGameTimeType": "int",
+        "persistedMemorySha256": "35defbabc726a512b3f15c460a94c4011e2a0879551b854703e8204aca64711c",
+        "beforePID": "3840346",
+        "afterPID": "3840642",
+        "beforeTick": 804,
+        "afterTick": 804,
+        "coldExactReadback": true
+      },
+      "allGlobSnapshotCount": 28,
+      "allGlobSnapshotsOriginalHistory": {
+        "historySha256": "0277be7b71f0155c067f187d0795cb2e9fe2fe7a595264d39cb32169c89d61ee",
+        "retainedRingAttemptIds": [
+          "tk1_1_9992ef348b720174",
+          "tk1_2_563d0bd13dd4ea10",
+          "tk1_3_1429d627c9e7b52c"
+        ],
+        "retainedRealReceiptIds": [
+          "5096bb4bbf5435c",
+          "ea82c5ad9941756",
+          "1215ccbb7652168"
+        ]
+      },
+      "allGlobSnapshotsOriginalBundleSha256": "9d300172be0bed439e93b7a47d206dcfa3fc5b9db727a571f8ffa761a14f7f4d",
+      "exactTwoPreSetupArtifacts": {
+        "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-after-align-before-setup-snapshot.json": "71c8512d704bb3b73bb7e8ae0314b69e4d131d5eb3afef2591b40cfc5ff808cb",
+        "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-before-setup-after-real-drain-snapshot.json": "b80eb2bd3ac39b63c0d2d94ee862cba832abf3b8de1133ce30dc505622da59c9"
+      },
+      "preSetupStillIncludedInOriginalHistoryAndBundleChecks": true,
+      "expiredGateExceptionRequiresSameFixtureTickZeroCargoAndSetupBeforeFullMemory": true,
+      "postSetupExpiredTaskEntireJsonCheckRetained": true,
+      "originalStrict60SamplesAndCanonicalPayloadGatesUnmodified": true,
+      "negativeChecks": {
+        "passed": true,
+        "skipped": 0,
+        "worldModified": false,
+        "sceneReplayed": false,
+        "method": "只在内存复制件中变更；所有原件只读",
+        "tests": [
+          {
+            "case": "duplicate-case",
+            "passed": true,
+            "error": "完整入口拒绝重复/缩写/未知flag: --case"
+          },
+          {
+            "case": "duplicate-root",
+            "passed": true,
+            "error": "完整入口拒绝重复/缩写/未知flag: --run-root"
+          },
+          {
+            "case": "mixed-selfcheck",
+            "passed": true,
+            "error": "完整入口selfcheck/formal模式混合或必需flag不全"
+          },
+          {
+            "case": "align/memory",
+            "passed": true,
+            "error": "fresh preSetup 路径/SHA/全 Memory/code/raw tx/ownedStore 不等已独验的自身原 anchor"
+          },
+          {
+            "case": "align/code",
+            "passed": true,
+            "error": "fresh preSetup 路径/SHA/全 Memory/code/raw tx/ownedStore 不等已独验的自身原 anchor"
+          },
+          {
+            "case": "align/transaction",
+            "passed": true,
+            "error": "fresh preSetup 路径/SHA/全 Memory/code/raw tx/ownedStore 不等已独验的自身原 anchor"
+          },
+          {
+            "case": "align/ownedStore",
+            "passed": true,
+            "error": "fresh preSetup 路径/SHA/全 Memory/code/raw tx/ownedStore 不等已独验的自身原 anchor"
+          },
+          {
+            "case": "align/issuedState",
+            "passed": true,
+            "error": "fresh preSetup 提前发行/带责任/提前安装旧 cancelled task"
+          },
+          {
+            "case": "align/oldTask",
+            "passed": true,
+            "error": "fresh preSetup 提前发行/带责任/提前安装旧 cancelled task"
+          },
+          {
+            "case": "align/wrongPath",
+            "passed": true,
+            "error": "fresh preSetup 路径/SHA/全 Memory/code/raw tx/ownedStore 不等已独验的自身原 anchor"
+          },
+          {
+            "case": "drain/memory",
+            "passed": true,
+            "error": "fresh preSetup 路径/SHA/全 Memory/code/raw tx/ownedStore 不等已独验的自身原 anchor"
+          },
+          {
+            "case": "drain/code",
+            "passed": true,
+            "error": "fresh preSetup 路径/SHA/全 Memory/code/raw tx/ownedStore 不等已独验的自身原 anchor"
+          },
+          {
+            "case": "drain/transaction",
+            "passed": true,
+            "error": "fresh preSetup 路径/SHA/全 Memory/code/raw tx/ownedStore 不等已独验的自身原 anchor"
+          },
+          {
+            "case": "drain/ownedStore",
+            "passed": true,
+            "error": "fresh preSetup 路径/SHA/全 Memory/code/raw tx/ownedStore 不等已独验的自身原 anchor"
+          },
+          {
+            "case": "drain/issuedState",
+            "passed": true,
+            "error": "fresh preSetup 提前发行/带责任/提前安装旧 cancelled task"
+          },
+          {
+            "case": "drain/oldTask",
+            "passed": true,
+            "error": "fresh preSetup 提前发行/带责任/提前安装旧 cancelled task"
+          },
+          {
+            "case": "drain/wrongPath",
+            "passed": true,
+            "error": "fresh preSetup 路径/SHA/全 Memory/code/raw tx/ownedStore 不等已独验的自身原 anchor"
+          },
+          {
+            "case": "sameTick-zeroCargo-full-setup-before-positive",
+            "passed": true
+          },
+          {
+            "case": "sameTick-preSetup-cargo50",
+            "passed": true,
+            "error": "producerBudget sameTick preSetup 例外必须原两 carrier 全 cargo0"
+          },
+          {
+            "case": "sameTick-preSetup-wrong-setup-before",
+            "passed": true,
+            "error": "producerBudget sameTick preSetup 例外必须等首次 setup.before 全 Memory/tick"
+          },
+          {
+            "case": "sameTick-preSetup-wrong-tick",
+            "passed": true,
+            "error": "producerBudget sameTick preSetup 例外必须等首次 setup.before 全 Memory/tick"
+          },
+          {
+            "case": "post-task-missing",
+            "passed": true,
+            "error": "t4-c3-producer-budget-configured-fixture-before-persistence-snapshot.json: 旧cancelled生产形状被复活/延时/扣量/改写"
+          },
+          {
+            "case": "post-task-debit",
+            "passed": true,
+            "error": "t4-c3-producer-budget-configured-fixture-before-persistence-snapshot.json: 旧cancelled生产形状被复活/延时/扣量/改写"
+          },
+          {
+            "case": "post-task-revival",
+            "passed": true,
+            "error": "t4-c3-producer-budget-configured-fixture-before-persistence-snapshot.json: 旧cancelled生产形状被复活/延时/扣量/改写"
+          }
+        ]
+      },
+      "reportFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/c3-producer-independent-r18-r5-producer-terminal-prep-r4.json",
+      "reportSha256": "f61a55a59cd65f347219bdd1eaa7b20fac283dc739eaee3502692fd1a2dd61ea",
+      "sameClaimResolvedCompletion": {
+        "schema": "screeps-r18-c3-sameclaim-resolved-completion/v1",
+        "passed": true,
+        "case": "t4-c3-producer-budget",
+        "resolvedCompletion": true,
+        "isolatedWorldOnly": true,
+        "worldModified": false,
+        "formalApiAccessed": false,
+        "candidateAcceptanceClaimed": false,
+        "completeC3Acceptance": false,
+        "originalFAILResultsUnchanged": true,
+        "claimSha256": "d530d830dcb6ef71a6120b1234670921be2e2a7aa17efa2d8aab4a4296e5e21b",
+        "sourceGraph": [
+          {
+            "resultFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/r18-t4-c3-producer-budget-fresh-prep-r2-result.json",
+            "resultSha256": "fda3bb6b6caf1f54538b2ed20e7a25e1e2850983831afc157fe08bd2314b9d62",
+            "originalOutcome": "FAIL",
+            "originalRunnerExitCode": 1,
+            "beforeDatabaseSha256": "de81fb27d3411f08d533a3d8bcaaf39f4197783fb9a46a66ca0aecd44cf3b905",
+            "afterDatabaseSha256": "f2ff18ad46edc135eb103339b8e8d00aa306de54fdc3fc4fd23274249f018e9d"
+          },
+          {
+            "resultFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/r18-t4-c3-producer-budget-product-unload-continuation-r1-result.json",
+            "resultSha256": "7aa2752af4a100908bd31ebea27372e7c942c662e8e472f79ed1eaaaa9e58c7c",
+            "originalOutcome": "FAIL",
+            "originalRunnerExitCode": 1,
+            "beforeDatabaseSha256": "f2ff18ad46edc135eb103339b8e8d00aa306de54fdc3fc4fd23274249f018e9d",
+            "afterDatabaseSha256": "57eff302b8cc785bd218adb698027480ac69a5c8746c0ef8c415ac8d6b19bdd9"
+          },
+          {
+            "resultFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/r18-t4-c3-producer-budget-product-unload-continuation-r2-result.json",
+            "resultSha256": "6c5878647351b73a40b8e1e1faa4c9a1c05fdf73e29bc2fe7f0b9b1bd6bfee0c",
+            "originalOutcome": "FAIL",
+            "originalRunnerExitCode": 1,
+            "beforeDatabaseSha256": "57eff302b8cc785bd218adb698027480ac69a5c8746c0ef8c415ac8d6b19bdd9",
+            "afterDatabaseSha256": "3af30bda2b9b88c6f8f8c2b85bf61abcc827658c5f44e46875090f89fc5fd9eb"
+          },
+          {
+            "resultFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/r18-t4-c3-producer-budget-stop-handoff-continuation-r3-result.json",
+            "resultSha256": "eb29ab3521910ee314fcdc20643d36f79a25ba629272ae0b597e1e347d5c038f",
+            "originalOutcome": "completed_requires_independent_verifier",
+            "originalRunnerExitCode": 0,
+            "beforeDatabaseSha256": "3af30bda2b9b88c6f8f8c2b85bf61abcc827658c5f44e46875090f89fc5fd9eb",
+            "afterDatabaseSha256": "f01eb80d842aeea12a2f4448b8013c7aa7d59d2f7b9ee4c48fcba2bf661a5525"
+          }
+        ],
+        "full153TerminalProof": {
+          "schema": "screeps-r18-terminal-product30-independent/v2",
+          "passed": true,
+          "isolatedWorldOnly": true,
+          "formalApiAccessed": false,
+          "worldModified": false,
+          "candidateAcceptanceClaimed": false,
+          "completeC3Acceptance": false,
+          "originalDriverMatchedFalsePreserved": true,
+          "originalCallerAndSupervisorFAILPreserved": true,
+          "originalC3SemanticVerificationStillRequired": true,
+          "binding": {
+            "case": "t4-c3-producer-budget",
+            "claimSha256": "d530d830dcb6ef71a6120b1234670921be2e2a7aa17efa2d8aab4a4296e5e21b",
+            "beforeDatabaseSha256": "f2ff18ad46edc135eb103339b8e8d00aa306de54fdc3fc4fd23274249f018e9d",
+            "beforeSnapshotSha256": "9102afc8fa4b4ab26745bbb67b55def1178c4b7b61921a2f86ef9843303b66d5",
+            "afterDatabaseSha256": "57eff302b8cc785bd218adb698027480ac69a5c8746c0ef8c415ac8d6b19bdd9",
+            "adapterSha256": "891092a42583ba24b1da99a17366e821591ae82a476171b28e6c5bd7e6675c9e",
+            "mainSha256": "9d300172be0bed439e93b7a47d206dcfa3fc5b9db727a571f8ffa761a14f7f4d",
+            "expectedDriverSourceSha256": "8d607fa5dfb3000e8d582ef1aef047545765fe0924bcc2d242b5c768d0a98426",
+            "expectedProofToolSha256": "5600953c7e8ae9044fcc940ed36b6453d4f7e3b514618780e2c15a29575336b4",
+            "afterSnapshotSha256": "1ac02fe2c3eec58327025d456c01c1503376af0efff5abaf6cbda811f98a8b65",
+            "driverReportSha256": "2b80205e042fda7cc99b5f006b25cc658603cf600a6fdfbf16b752d7796c50bb"
+          },
+          "productionMemorySourceSha256": "972403b475fd333803a7417f55534d87c44bb3439d7fa31b46b3c5d6cbe0999e",
+          "productionMemorySourceUtf8Bytes": 1516755,
+          "productionMemoryFullTextUsedInternallyOnly": true,
+          "proof": {
+            "schema": "screeps-r18-c3-product-unload-terminal-proof/v2",
+            "outcome": "PASS",
+            "inputContract": "r18-c3-sameclaim931-terminal-product30-diagnostic-pure-dict-v2",
+            "case": "t4-c3-producer-budget",
+            "sameClaimSha256": "d530d830dcb6ef71a6120b1234670921be2e2a7aa17efa2d8aab4a4296e5e21b",
+            "beforeDatabaseSha256": "f2ff18ad46edc135eb103339b8e8d00aa306de54fdc3fc4fd23274249f018e9d",
+            "beforeSnapshotSha256": "9102afc8fa4b4ab26745bbb67b55def1178c4b7b61921a2f86ef9843303b66d5",
+            "afterDatabaseSha256": "57eff302b8cc785bd218adb698027480ac69a5c8746c0ef8c415ac8d6b19bdd9",
+            "afterSnapshotSha256": "1ac02fe2c3eec58327025d456c01c1503376af0efff5abaf6cbda811f98a8b65",
+            "originalDriverReportSha256": "2b80205e042fda7cc99b5f006b25cc658603cf600a6fdfbf16b752d7796c50bb",
+            "originalDriverSourceSha256": "8d607fa5dfb3000e8d582ef1aef047545765fe0924bcc2d242b5c768d0a98426",
+            "originalDriverMatchedFalse": true,
+            "originalDriverOutcomeChanged": false,
+            "originalDriverDiagnosticOnly": true,
+            "coherentProgressWitnessIndexes": [
+              29,
+              30,
+              31,
+              32,
+              33,
+              34,
+              35,
+              36,
+              43,
+              44,
+              45,
+              46,
+              47,
+              48,
+              49,
+              50,
+              51,
+              59,
+              60,
+              61,
+              62,
+              63,
+              64,
+              65,
+              66,
+              67,
+              74,
+              75,
+              76,
+              77,
+              78,
+              79,
+              80,
+              81,
+              82,
+              90,
+              91,
+              92,
+              93,
+              94,
+              95,
+              96,
+              97,
+              104,
+              105,
+              106,
+              107,
+              108,
+              109,
+              110,
+              111,
+              112,
+              113
+            ],
+            "mainSha256": "9d300172be0bed439e93b7a47d206dcfa3fc5b9db727a571f8ffa761a14f7f4d",
+            "actualMainTickDelta": 7,
+            "allRawSamples": 153,
+            "rawSamplesExcluded": 0,
+            "inFlightIndexesRetained": [
+              28,
+              42,
+              58,
+              73,
+              89,
+              119
+            ],
+            "pause": {
+              "allOriginalPauseSamples": 33,
+              "actualStableMs": 10198,
+              "lastFullEndpointHashBound": true
+            },
+            "physicalConservation": {
+              "targetCarrierProductBefore": 30,
+              "targetCarrierProductAfter": 0,
+              "fixedTerminalId": "5ca4c1b028a9b3b",
+              "fixedTerminalProductBefore": 0,
+              "fixedTerminalProductAfter": 30,
+              "fixedStorageProductUnchanged": true,
+              "ownedEnergyBefore": 2555120,
+              "ownedEnergyAfter": 2555120,
+              "otherNonEnergyExactPerEntity": true,
+              "receiverCreepCargoUH_OH_ProductZero": true,
+              "sourceOH": {
+                "terminal": 10,
+                "storage": 877
+              },
+              "chemicalReactionExceptionApplied": false
+            },
+            "canonicalProjectionSha256": "a1fae0763389c09d33bbcea3dc5a02ea3f72364e7ab6954779bb611f890ac81a",
+            "old40CompleteRawTransactionsExact": true,
+            "allRCTasksWholeJSONExact": true,
+            "oldCancelledTaskProduction972WholeJSONExact": true,
+            "pilotConsumptionClosedResponsibilitiesExact": true,
+            "newNativeOrDebitOrIssuedResponsibilityCount": 0,
+            "coreExactExceptThreeMainClockMarkers": true,
+            "roleSourceSha256ByPath": {
+              "src/roles/carrier.ts": "e8ae3f94e5c7bb9d492bd2da6c57b6932a679949306ac3281ea195e3a8daecde",
+              "src/mount/mountCreep.ts": "d5e4502bed2031528f9f29318e2e020a5c57655da1035049da5fbac320866a70",
+              "src/roles/energyTargets.ts": "36e8dfa1ce40c7c0fb59c2e0ae866858a3e40bfcd1cfe5068b13f57cff8f6226"
+            },
+            "sourceExecuted": false,
+            "transferMethodIntentIndependentlyRecorded": false,
+            "preludeActorTraceClaimed": false,
+            "isolatedWorldOnly": true,
+            "formalApiAccessed": false,
+            "candidateAcceptanceClaimed": false
+          },
+          "frozenFiles": {
+            "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/verify-t4-current-r18-r1.py": "891092a42583ba24b1da99a17366e821591ae82a476171b28e6c5bd7e6675c9e",
+            "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/verify-t4-plan-semantic-r18.json": "476281fa8bc750de073ddc28059a81639bb113f00fdf6f7636e7775179175529",
+            "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/candidate/main.js": "9d300172be0bed439e93b7a47d206dcfa3fc5b9db727a571f8ffa761a14f7f4d",
+            "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/candidate/manifest.json": "6b2b73e71b4ede5f912cfbe14f52ee8c8cc8f803f4af5dacf3602ed31c4e97a9",
+            "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/run-until-product-unloaded-r18-r1.cjs": "8d607fa5dfb3000e8d582ef1aef047545765fe0924bcc2d242b5c768d0a98426",
+            "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/c3-product-unload-proof-r18-r2.py": "5600953c7e8ae9044fcc940ed36b6453d4f7e3b514618780e2c15a29575336b4",
+            "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/continue-c3-producer-after-product-unload-r18-r1.py": "d0b43c97066ddfb4d2e4ee1578c1c5d1d344c17d8865eadfcf796e759edf2204",
+            "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/supervise-c3-producer-continuation-r18-r1.py": "b771ad43b41cc004c8d5cc194f83e578253fdd44b3977e12665acd38c91443be",
+            "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/candidate/production-memory-source.json": "972403b475fd333803a7417f55534d87c44bb3439d7fa31b46b3c5d6cbe0999e",
+            "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-independent-instance.json": "d530d830dcb6ef71a6120b1234670921be2e2a7aa17efa2d8aab4a4296e5e21b",
+            "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/r18-t4-c3-producer-budget-fresh-prep-r2-server-db-after.json": "f2ff18ad46edc135eb103339b8e8d00aa306de54fdc3fc4fd23274249f018e9d",
+            "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-fresh-prep-r2-failure-before-persistence-snapshot.json": "9102afc8fa4b4ab26745bbb67b55def1178c4b7b61921a2f86ef9843303b66d5",
+            "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/r18-t4-c3-producer-budget-product-unload-continuation-r1-server-db-after.json": "57eff302b8cc785bd218adb698027480ac69a5c8746c0ef8c415ac8d6b19bdd9",
+            "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-unload-r1-failure-before-persistence-snapshot.json": "1ac02fe2c3eec58327025d456c01c1503376af0efff5abaf6cbda811f98a8b65",
+            "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-product-unload-driver.json": "2b80205e042fda7cc99b5f006b25cc658603cf600a6fdfbf16b752d7796c50bb",
+            "/srv/screeps-treasury-build/t4-architecture-r8-20261003/candidate/src/roles/carrier.ts": "e8ae3f94e5c7bb9d492bd2da6c57b6932a679949306ac3281ea195e3a8daecde",
+            "/srv/screeps-treasury-build/t4-architecture-r8-20261003/candidate/src/mount/mountCreep.ts": "d5e4502bed2031528f9f29318e2e020a5c57655da1035049da5fbac320866a70",
+            "/srv/screeps-treasury-build/t4-architecture-r8-20261003/candidate/src/roles/energyTargets.ts": "36e8dfa1ce40c7c0fb59c2e0ae866858a3e40bfcd1cfe5068b13f57cff8f6226"
+          },
+          "actualInputSha256": {
+            "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-independent-instance.json": "d530d830dcb6ef71a6120b1234670921be2e2a7aa17efa2d8aab4a4296e5e21b",
+            "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/r18-t4-c3-producer-budget-fresh-prep-r2-server-db-after.json": "f2ff18ad46edc135eb103339b8e8d00aa306de54fdc3fc4fd23274249f018e9d",
+            "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-fresh-prep-r2-failure-before-persistence-snapshot.json": "9102afc8fa4b4ab26745bbb67b55def1178c4b7b61921a2f86ef9843303b66d5",
+            "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-product-unload-before-snapshot.json": "9bb174607390d50ebaf7b0f99e563fcf36cd9ed13ec06ab29b8217d4aa0da703",
+            "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-unload-r1-failure-before-persistence-snapshot.json": "1ac02fe2c3eec58327025d456c01c1503376af0efff5abaf6cbda811f98a8b65",
+            "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/r18-t4-c3-producer-budget-product-unload-continuation-r1-server-db-after.json": "57eff302b8cc785bd218adb698027480ac69a5c8746c0ef8c415ac8d6b19bdd9",
+            "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-product-unload-driver.json": "2b80205e042fda7cc99b5f006b25cc658603cf600a6fdfbf16b752d7796c50bb",
+            "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-product-unload-continuation-r1-start.json": "2e5cbc86c09e95917d97aa049a50e1aad2adbe5621cb7e575bb0f2992b1687cd",
+            "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-product-unload-continuation-r1-result.json": "6231fc2218805cd5dc59e6be53048d9e42c22d83225ffcff83590cb56d392d3c",
+            "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/r18-t4-c3-producer-budget-product-unload-continuation-r1-context.json": "82e5f1dd6915d40f2609389f56489ad85e78de7feac9f827ee3560888a860176",
+            "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/r18-t4-c3-producer-budget-product-unload-continuation-r1-result.json": "7aa2752af4a100908bd31ebea27372e7c942c662e8e472f79ed1eaaaa9e58c7c"
+          }
+        },
+        "full60BudgetWindowProof": {
+          "schema": "screeps-r18-producer-window-independent/v1",
+          "passed": true,
+          "isolatedWorldOnly": true,
+          "formalApiAccessed": false,
+          "worldModified": false,
+          "candidateAcceptanceClaimed": false,
+          "completeC3Acceptance": false,
+          "proof": {
+            "schema": "screeps-r18-c3-budget-window-no-new-task-proof/v1",
+            "outcome": "PASS",
+            "case": "t4-c3-producer-budget",
+            "inputContract": "r18-c3-sameclaim938-998-budget-window-no-new-task-pure-dict-v1",
+            "sameClaimSha256": "d530d830dcb6ef71a6120b1234670921be2e2a7aa17efa2d8aab4a4296e5e21b",
+            "currentDatabaseSha256": "3af30bda2b9b88c6f8f8c2b85bf61abcc827658c5f44e46875090f89fc5fd9eb",
+            "allOriginalSamples": 60,
+            "samplesExcluded": 0,
+            "firstTick": 938,
+            "lastTick": 997,
+            "driverEndTick": 998,
+            "scheduledResourceControlRuns": 12,
+            "originalMainDelegatedEverySample": true,
+            "canonicalOHBefore": {
+              "lab-t3-c1-26-OH": {
+                "id": "lab-t3-c1-26-OH",
+                "resource": "OH",
+                "fromRoomName": "E4N58",
+                "toRoomName": "E1N57",
+                "amount": 913,
+                "remainingAmount": 887,
+                "status": "cancelled",
+                "origin": "automatic",
+                "reason": "synthesis:E1N57:UH2O",
+                "createdAt": 788,
+                "updatedAt": 800,
+                "lastProgressAt": 791,
+                "lastError": "automatic_synthesis_need_covered"
+              },
+              "74075640:1:OH:E4N58->E1N57": {
+                "id": "74075640:1:OH:E4N58->E1N57",
+                "resource": "OH",
+                "fromRoomName": "E4N58",
+                "toRoomName": "E1N57",
+                "amount": 1384,
+                "remainingAmount": 913,
+                "status": "cancelled",
+                "createdAt": 74075640,
+                "updatedAt": 74083875,
+                "origin": "automatic",
+                "lastProgressAt": 74078870,
+                "reason": "synthesis:E1N57:UH2O",
+                "blockedReason": "insufficient_terminal_resource_or_fee",
+                "blockedSince": 74081020,
+                "lastError": "automatic_no_progress_timeout"
+              },
+              "805:1:OH:E4N58->E1N57": {
+                "id": "805:1:OH:E4N58->E1N57",
+                "resource": "OH",
+                "fromRoomName": "E4N58",
+                "toRoomName": "E1N57",
+                "amount": 26,
+                "remainingAmount": 0,
+                "status": "done",
+                "createdAt": 805,
+                "updatedAt": 916,
+                "origin": "automatic",
+                "lastProgressAt": 916,
+                "reason": "synthesis:E1N57:UH2O"
+              }
+            },
+            "canonicalOHAfter": {
+              "lab-t3-c1-26-OH": {
+                "id": "lab-t3-c1-26-OH",
+                "resource": "OH",
+                "fromRoomName": "E4N58",
+                "toRoomName": "E1N57",
+                "amount": 913,
+                "remainingAmount": 887,
+                "status": "cancelled",
+                "origin": "automatic",
+                "reason": "synthesis:E1N57:UH2O",
+                "createdAt": 788,
+                "updatedAt": 800,
+                "lastProgressAt": 791,
+                "lastError": "automatic_synthesis_need_covered"
+              },
+              "74075640:1:OH:E4N58->E1N57": {
+                "id": "74075640:1:OH:E4N58->E1N57",
+                "resource": "OH",
+                "fromRoomName": "E4N58",
+                "toRoomName": "E1N57",
+                "amount": 1384,
+                "remainingAmount": 913,
+                "status": "cancelled",
+                "createdAt": 74075640,
+                "updatedAt": 74083875,
+                "origin": "automatic",
+                "lastProgressAt": 74078870,
+                "reason": "synthesis:E1N57:UH2O",
+                "blockedReason": "insufficient_terminal_resource_or_fee",
+                "blockedSince": 74081020,
+                "lastError": "automatic_no_progress_timeout"
+              },
+              "805:1:OH:E4N58->E1N57": {
+                "id": "805:1:OH:E4N58->E1N57",
+                "resource": "OH",
+                "fromRoomName": "E4N58",
+                "toRoomName": "E1N57",
+                "amount": 26,
+                "remainingAmount": 0,
+                "status": "done",
+                "createdAt": 805,
+                "updatedAt": 916,
+                "origin": "automatic",
+                "lastProgressAt": 916,
+                "reason": "synthesis:E1N57:UH2O"
+              }
+            },
+            "canonicalWholeJSONExact": true,
+            "canonicalSummaryProjectionExactEverySample": true,
+            "newAnyRCTaskIDs": [],
+            "retainedTasksWholeJSONExact": true,
+            "allRCTasksWholeJSONExactClaimed": false,
+            "naturalGCSourceCompatibleRows": [
+              {
+                "id": "lab-t2-c2-UH",
+                "originalWholeTask": {
+                  "id": "lab-t2-c2-UH",
+                  "resource": "UH",
+                  "fromRoomName": "E4N58",
+                  "toRoomName": "E1N57",
+                  "amount": 100,
+                  "remainingAmount": 0,
+                  "status": "done",
+                  "origin": "automatic",
+                  "reason": "synthesis:E1N57:UH2O",
+                  "createdAt": 756,
+                  "updatedAt": 779,
+                  "lastProgressAt": 779
+                },
+                "updatedAt": 779,
+                "eligibleCleanupTicks": [
+                  986
+                ],
+                "firstEligibleCleanupTick": 986,
+                "strictAgeAtFirstEligibleTick": 207,
+                "deletionTickIndependentlyObserved": false
+              },
+              {
+                "id": "lab-t2-c2-pre-source-ordinary",
+                "originalWholeTask": {
+                  "id": "lab-t2-c2-pre-source-ordinary",
+                  "resource": "H",
+                  "fromRoomName": "W9N8",
+                  "toRoomName": "E4N58",
+                  "amount": 100,
+                  "remainingAmount": 0,
+                  "status": "done",
+                  "origin": "manual",
+                  "createdAt": 736,
+                  "updatedAt": 760,
+                  "lastProgressAt": 760
+                },
+                "updatedAt": 760,
+                "eligibleCleanupTicks": [
+                  969,
+                  986
+                ],
+                "firstEligibleCleanupTick": 969,
+                "strictAgeAtFirstEligibleTick": 209,
+                "deletionTickIndependentlyObserved": false
+              },
+              {
+                "id": "lab-t2-c2-pre-target-ordinary",
+                "originalWholeTask": {
+                  "id": "lab-t2-c2-pre-target-ordinary",
+                  "resource": "H",
+                  "fromRoomName": "W8N8",
+                  "toRoomName": "E1N57",
+                  "amount": 100,
+                  "remainingAmount": 0,
+                  "status": "done",
+                  "origin": "manual",
+                  "createdAt": 736,
+                  "updatedAt": 760,
+                  "lastProgressAt": 760
+                },
+                "updatedAt": 760,
+                "eligibleCleanupTicks": [
+                  969,
+                  986
+                ],
+                "firstEligibleCleanupTick": 969,
+                "strictAgeAtFirstEligibleTick": 209,
+                "deletionTickIndependentlyObserved": false
+              },
+              {
+                "id": "lab-t2-c2-block-source-ordinary",
+                "originalWholeTask": {
+                  "id": "lab-t2-c2-block-source-ordinary",
+                  "resource": "H",
+                  "fromRoomName": "W9N8",
+                  "toRoomName": "E4N58",
+                  "amount": 100,
+                  "remainingAmount": 0,
+                  "status": "done",
+                  "origin": "manual",
+                  "createdAt": 746,
+                  "updatedAt": 780,
+                  "lastProgressAt": 780
+                },
+                "updatedAt": 780,
+                "eligibleCleanupTicks": [
+                  986
+                ],
+                "firstEligibleCleanupTick": 986,
+                "strictAgeAtFirstEligibleTick": 206,
+                "deletionTickIndependentlyObserved": false
+              },
+              {
+                "id": "lab-t2-c2-block-target-ordinary",
+                "originalWholeTask": {
+                  "id": "lab-t2-c2-block-target-ordinary",
+                  "resource": "H",
+                  "fromRoomName": "W8N8",
+                  "toRoomName": "E1N57",
+                  "amount": 100,
+                  "remainingAmount": 0,
+                  "status": "done",
+                  "origin": "manual",
+                  "createdAt": 746,
+                  "updatedAt": 780,
+                  "lastProgressAt": 780
+                },
+                "updatedAt": 780,
+                "eligibleCleanupTicks": [
+                  986
+                ],
+                "firstEligibleCleanupTick": 986,
+                "strictAgeAtFirstEligibleTick": 206,
+                "deletionTickIndependentlyObserved": false
+              },
+              {
+                "id": "lab-t2-c2-unrelated-ordinary",
+                "originalWholeTask": {
+                  "id": "lab-t2-c2-unrelated-ordinary",
+                  "resource": "H",
+                  "fromRoomName": "E3N59",
+                  "toRoomName": "W8N8",
+                  "amount": 100,
+                  "remainingAmount": 0,
+                  "status": "done",
+                  "origin": "manual",
+                  "createdAt": 746,
+                  "updatedAt": 770,
+                  "lastProgressAt": 770
+                },
+                "updatedAt": 770,
+                "eligibleCleanupTicks": [
+                  986
+                ],
+                "firstEligibleCleanupTick": 986,
+                "strictAgeAtFirstEligibleTick": 216,
+                "deletionTickIndependentlyObserved": false
+              }
+            ],
+            "cleanupCadenceTicks": [
+              952,
+              969,
+              986
+            ],
+            "cleanupSourceSha256ByPath": {
+              "src/runtime/memoryCleanup.ts": "c8efdfe940e5cf662781f49222d1f46710126db12c8d8e06eac3a0d2601bb8a6",
+              "src/runtime/logistics/resourceTransferTasks.ts": "5e8585d7e34ce8ee9fd047a322cb5916074940ff4ee14224e3578d5df8dbb202",
+              "src/runtime/treasuryTaskCommitmentBridge.ts": "fdef0ff2827905d3c9bd0293f9b986c37ac7eae2b8e8b4d6fac7096a9e343676",
+              "src/runtime/resourceControl.ts": "7cb1473a866976720eb1fdc8663e608c46355999cb288b7c32b778f19b32496c"
+            },
+            "old740Production972WholeJSONExact": true,
+            "createdAtUsedAsNewIdentityPredicate": false,
+            "old40RawTransactionsExact": true,
+            "outgoingIDsExactEverySample": true,
+            "pilotDebitsCertificatesExact": true,
+            "sourceOH": {
+              "terminal": 10,
+              "storage": 877
+            },
+            "pause": {
+              "label": "same998-budget-held",
+              "matched": true,
+              "diagnosticOnly": false,
+              "observedStableMs": 10179,
+              "stableSamples": 41,
+              "samples": 41,
+              "barrierWallMs": 10193,
+              "endTick": 998
+            },
+            "originalFailuresPreserved": true,
+            "sourceExecuted": false,
+            "windowReplayed": false,
+            "formalApiAccessed": false,
+            "candidateAcceptanceClaimed": false,
+            "isolatedWorldOnly": true,
+            "stopOrHandoffExecuted": false
+          },
+          "binding": {
+            "case": "t4-c3-producer-budget",
+            "claimSha256": "d530d830dcb6ef71a6120b1234670921be2e2a7aa17efa2d8aab4a4296e5e21b",
+            "currentDatabaseSha256": "3af30bda2b9b88c6f8f8c2b85bf61abcc827658c5f44e46875090f89fc5fd9eb",
+            "demandSnapshotSha256": "8f30328c4bfd16c863887a9a3269c0bd29246c11327b06e97bd3697fbb380e0c",
+            "heldSnapshotSha256": "3a0b824a54153f215ac988708b12972684ecb1d77304591eb1bba1eca3cc0026",
+            "driverReportSha256": "ac5035c8c820ed05e9fe40b79222e504d64e8a4a2fc3c82878268b9e3b2e69c5",
+            "originalDriverSourceSha256": "d4811fca14d69a81c0a3653252d8628337fe9c3453aed3b74445bac5d19532ba",
+            "originalRunnerSha256": "4905f4909b58c705763392a0004cb3da5c8d3b2643041bde2fc080b58247d988",
+            "adapterSha256": "891092a42583ba24b1da99a17366e821591ae82a476171b28e6c5bd7e6675c9e",
+            "mainSha256": "9d300172be0bed439e93b7a47d206dcfa3fc5b9db727a571f8ffa761a14f7f4d",
+            "oldCallerResultSha256": "cec98d63ebe37f7e3dbf48950f983026b34a3cd5516f6e4ded3b502ab7333b9f",
+            "oldSupervisorResultSha256": "6c5878647351b73a40b8e1e1faa4c9a1c05fdf73e29bc2fe7f0b9b1bd6bfee0c",
+            "expectedProofToolSha256": "7fd567fce19d698285ab1b9c0a6df1d96e65f9ba9d5af218baf28ee055ee36a2"
+          },
+          "cleanupSourceSha256": {
+            "src/runtime/memoryCleanup.ts": "c8efdfe940e5cf662781f49222d1f46710126db12c8d8e06eac3a0d2601bb8a6",
+            "src/runtime/logistics/resourceTransferTasks.ts": "5e8585d7e34ce8ee9fd047a322cb5916074940ff4ee14224e3578d5df8dbb202",
+            "src/runtime/treasuryTaskCommitmentBridge.ts": "fdef0ff2827905d3c9bd0293f9b986c37ac7eae2b8e8b4d6fac7096a9e343676",
+            "src/runtime/resourceControl.ts": "7cb1473a866976720eb1fdc8663e608c46355999cb288b7c32b778f19b32496c"
+          },
+          "actualInputSha256": {
+            "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/verify-c3-product-unload-r18-r2.py": "7eee374ff259d05a2943eb05ffcae3308e07ce8d5f742c643eada2de174d9ac8",
+            "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/verify-t4-current-r18-r1.py": "891092a42583ba24b1da99a17366e821591ae82a476171b28e6c5bd7e6675c9e",
+            "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/verify-t4.py": "e4357be83d19305f3fccb67d080c80294b56562f7b12c54714c0b8a4fcc4d34f",
+            "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/run-t4-scenarios-r18-physical-cold-r1.py": "4905f4909b58c705763392a0004cb3da5c8d3b2643041bde2fc080b58247d988",
+            "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/run-until-t4.cjs": "d4811fca14d69a81c0a3653252d8628337fe9c3453aed3b74445bac5d19532ba",
+            "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/c3-producer-budget-window-proof-r18-r1.py": "7fd567fce19d698285ab1b9c0a6df1d96e65f9ba9d5af218baf28ee055ee36a2",
+            "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/candidate/production-memory-source.json": "972403b475fd333803a7417f55534d87c44bb3439d7fa31b46b3c5d6cbe0999e",
+            "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-new-demand-ready-terminal-snapshot.json": "8f30328c4bfd16c863887a9a3269c0bd29246c11327b06e97bd3697fbb380e0c",
+            "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-budget-held-snapshot.json": "3a0b824a54153f215ac988708b12972684ecb1d77304591eb1bba1eca3cc0026",
+            "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-budget-held-driver-driver.json": "ac5035c8c820ed05e9fe40b79222e504d64e8a4a2fc3c82878268b9e3b2e69c5",
+            "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/r18-t4-c3-producer-budget-product-unload-continuation-r2-server-db-after.json": "3af30bda2b9b88c6f8f8c2b85bf61abcc827658c5f44e46875090f89fc5fd9eb",
+            "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-product-unload-continuation-r2-result.json": "cec98d63ebe37f7e3dbf48950f983026b34a3cd5516f6e4ded3b502ab7333b9f",
+            "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/r18-t4-c3-producer-budget-product-unload-continuation-r2-result.json": "6c5878647351b73a40b8e1e1faa4c9a1c05fdf73e29bc2fe7f0b9b1bd6bfee0c",
+            "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-independent-instance.json": "d530d830dcb6ef71a6120b1234670921be2e2a7aa17efa2d8aab4a4296e5e21b",
+            "/srv/screeps-treasury-build/t4-architecture-r8-20261003/candidate/src/runtime/memoryCleanup.ts": "c8efdfe940e5cf662781f49222d1f46710126db12c8d8e06eac3a0d2601bb8a6",
+            "/srv/screeps-treasury-build/t4-architecture-r8-20261003/candidate/src/runtime/logistics/resourceTransferTasks.ts": "5e8585d7e34ce8ee9fd047a322cb5916074940ff4ee14224e3578d5df8dbb202",
+            "/srv/screeps-treasury-build/t4-architecture-r8-20261003/candidate/src/runtime/treasuryTaskCommitmentBridge.ts": "fdef0ff2827905d3c9bd0293f9b986c37ac7eae2b8e8b4d6fac7096a9e343676",
+            "/srv/screeps-treasury-build/t4-architecture-r8-20261003/candidate/src/runtime/resourceControl.ts": "7cb1473a866976720eb1fdc8663e608c46355999cb288b7c32b778f19b32496c"
+          },
+          "oldFAILPreserved": true,
+          "originalIDDifferenceAnd60AndPostStopCreatedAtGatesRetained": true
+        },
+        "originalStopHandoffTailSha256": "7a4338cffc94fc69d070675106ba43f7819ca450bf61a512a89dd7a5a19ac6b4",
+        "finalPersistedDatabase": {
+          "databaseFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/r18-t4-c3-producer-budget-stop-handoff-continuation-r3-server-db-after.json",
+          "databaseSha256": "f01eb80d842aeea12a2f4448b8013c7aa7d59d2f7b9ee4c48fcba2bf661a5525",
+          "persistedTick": 1001,
+          "storedGameTimeType": "int",
+          "persistedMemorySha256": "9cd9684062c823b7c608e71d9178862f7d3308e98d0910f7e9bd687ae925fbc3"
+        },
+        "actualSourceSha256": {
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/verify-fresh-cases-r18-r3.py": "5f6628ddefb204be5eaaefafcf1e19324e0c8fa22b317d7424c33ac13d607531",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/verify-c3-producer-contract-r18-r4.py": "8ea4725dd23d66bd9e7a0af7cc258d7bc8ded7bd4e10b48ce3c336748758a75d",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/verify-c3-product-unload-r18-r2.py": "7eee374ff259d05a2943eb05ffcae3308e07ce8d5f742c643eada2de174d9ac8",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/run-t4-scenarios-r18-physical-cold-r1.py": "4905f4909b58c705763392a0004cb3da5c8d3b2643041bde2fc080b58247d988",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-independent-instance.json": "d530d830dcb6ef71a6120b1234670921be2e2a7aa17efa2d8aab4a4296e5e21b",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-fresh-cargo-prep-r2-result.json": "6d49cc186495965284dea4a942d7bf5fdf09d4b894f20a3f4812b38a3fbfd4a2",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-fresh-cargo-prep-r2-proof.json": "dd2142931d4d154f3fbf2a7d5dbe9d917e278738d658437fa5d0274e10c23052",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-fresh-cargo-prep-r2-start.json": "b0381dfaed1dd4288196b437aa4117856d2015c4c14edaf05c3faff5ee662ce0",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-stop-handoff-continuation-r3-result.json": "13870940c14b4546918f3181eb61a032b1e16ab0d175aab957f4574000390357",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-completed-before-persistence-snapshot.json": "040c2eed46490599fa7a5a6c48932d9815dcb0e8d27bbbabd030695ba7d19267",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/r18-t4-c3-producer-budget-fresh-prep-r2-result.json": "fda3bb6b6caf1f54538b2ed20e7a25e1e2850983831afc157fe08bd2314b9d62",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/supervise-fresh-cases-r18-r2.py": "fe75976962bcd6e5910e4e8107e83762d0195c17613a883b753b7072d4f45b6a",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/run-fresh-cases-with-cargo-drain-r18-r2.py": "52ad968f881473c67e2e66d078d1c79540729b9ed317d2b1c0f0fa5f1705dd45",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/r18-t4-c3-producer-budget-product-unload-continuation-r1-result.json": "7aa2752af4a100908bd31ebea27372e7c942c662e8e472f79ed1eaaaa9e58c7c",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/supervise-c3-producer-continuation-r18-r1.py": "b771ad43b41cc004c8d5cc194f83e578253fdd44b3977e12665acd38c91443be",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/continue-c3-producer-after-product-unload-r18-r1.py": "d0b43c97066ddfb4d2e4ee1578c1c5d1d344c17d8865eadfcf796e759edf2204",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/r18-t4-c3-producer-budget-product-unload-continuation-r2-result.json": "6c5878647351b73a40b8e1e1faa4c9a1c05fdf73e29bc2fe7f0b9b1bd6bfee0c",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/supervise-c3-producer-continuation-r18-r2.py": "05199f512fb9f21606d9dcdc4c47e68f47707de0d253d268f2e555cb4374ca7d",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/continue-c3-producer-after-product-unload-r18-r2.py": "5ef347df753783b210279161d0a9f53ccdf52f26c25e9c0e77a9d1ecd8209360",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/r18-t4-c3-producer-budget-stop-handoff-continuation-r3-result.json": "eb29ab3521910ee314fcdc20643d36f79a25ba629272ae0b597e1e347d5c038f",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/supervise-c3-producer-continuation-r18-r3.py": "ba07d2bd73eb9d07865c36dcb53440fcc718ae9ed0b74afa1112bd07096b1843",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/continue-c3-producer-after-budget-window-r18-r3.py": "88849d4b34a8537afdbc9bc693c49348184cbbc4f23e00e1de394a30864393bb",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/r18-t4-c3-producer-budget-fresh-prep-r2-server-db-before.json": "de81fb27d3411f08d533a3d8bcaaf39f4197783fb9a46a66ca0aecd44cf3b905",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/r18-t4-c3-producer-budget-fresh-prep-r2-server-db-after.json": "f2ff18ad46edc135eb103339b8e8d00aa306de54fdc3fc4fd23274249f018e9d",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/r18-t4-c3-producer-budget-product-unload-continuation-r1-server-db-before.json": "f2ff18ad46edc135eb103339b8e8d00aa306de54fdc3fc4fd23274249f018e9d",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/r18-t4-c3-producer-budget-product-unload-continuation-r1-server-db-after.json": "57eff302b8cc785bd218adb698027480ac69a5c8746c0ef8c415ac8d6b19bdd9",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/r18-t4-c3-producer-budget-product-unload-continuation-r2-server-db-before.json": "57eff302b8cc785bd218adb698027480ac69a5c8746c0ef8c415ac8d6b19bdd9",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/r18-t4-c3-producer-budget-product-unload-continuation-r2-server-db-after.json": "3af30bda2b9b88c6f8f8c2b85bf61abcc827658c5f44e46875090f89fc5fd9eb",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/r18-t4-c3-producer-budget-stop-handoff-continuation-r3-server-db-before.json": "3af30bda2b9b88c6f8f8c2b85bf61abcc827658c5f44e46875090f89fc5fd9eb",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/r18-t4-c3-producer-budget-stop-handoff-continuation-r3-server-db-after.json": "f01eb80d842aeea12a2f4448b8013c7aa7d59d2f7b9ee4c48fcba2bf661a5525",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/r18-t4-c3-producer-budget-fresh-prep-r2-context.json": "7dd511ed791b8501c7941f50522cff186a7979cf91ea8cd5e78a7f120c2b1a32",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/r18-t4-c3-producer-budget-product-unload-continuation-r1-context.json": "82e5f1dd6915d40f2609389f56489ad85e78de7feac9f827ee3560888a860176",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/r18-t4-c3-producer-budget-product-unload-continuation-r2-context.json": "1a2f0aecd4e5ae432074734d9b5c7beb2bede3c1cf8abc20ce95fe3645e0f0c9",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/r18-t4-c3-producer-budget-stop-handoff-continuation-r3-context.json": "454c4007016e2b5e25881c760386a4bd7319b14346e1b6f0862c489e65928a3e",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-stop-handoff-tail-source-r3.json": "bc0d0ab8b955c09d0370350dfa21a5c1a33a9e34a959e450362dad1b364f36e5"
+        },
+        "completionSourceGraphNegativeChecks": {
+          "passed": true,
+          "count": 11,
+          "tests": [
+            {
+              "name": "claim",
+              "rejected": true
+            },
+            {
+              "name": "main",
+              "rejected": true
+            },
+            {
+              "name": "db",
+              "rejected": true
+            },
+            {
+              "name": "final-outcome",
+              "rejected": true
+            },
+            {
+              "name": "final-exit",
+              "rejected": true
+            },
+            {
+              "name": "reap",
+              "rejected": true
+            },
+            {
+              "name": "argv",
+              "rejected": true
+            },
+            {
+              "name": "source",
+              "rejected": true
+            },
+            {
+              "name": "unit",
+              "rejected": true
+            },
+            {
+              "name": "cgroup",
+              "rejected": true
+            },
+            {
+              "name": "backwards-time",
+              "rejected": true
+            }
+          ],
+          "method": "仅内存来源图复制；不改文件/claim/世界"
+        },
+        "wrapperFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/c3-resolved-completion-r18-r1.py",
+        "wrapperSha256": "813628a9442488adc78afa172241c45e85b43584371ef1d22212114b930b0708",
+        "originalFreshVerifierSha256": "5f6628ddefb204be5eaaefafcf1e19324e0c8fa22b317d7424c33ac13d607531",
+        "originalInstallSha256": "d2bb97af62af64fe0ee4bc10a45edb449650a2fbe1e42863ad9bed8b23abca76",
+        "derivedInstallSha256": "341c562694379d0396d7ac9214a74a176d3e87ca770fa2361e4fb7085b6b889f",
+        "exactCompletionConditions": [
+          [
+            "            artifacts['prepResult'].get('outcome') == 'completed_requires_original_independent_verifier' and\n",
+            "            resolved_completion_condition(case, 'prep', artifacts['prepResult']) and\n"
+          ],
+          [
+            "            scene_result.get('outcome') == 'completed_requires_independent_verifier' and\n            scene_result.get('runnerExitCode') == 0 and\n",
+            "            resolved_completion_condition(case, 'supervisor', scene_result) and\n"
+          ]
+        ],
+        "allOtherFreshInstallSourceBytesPreserved": true,
+        "oldResultDictionariesModified": false
+      }
+    },
+    "terminalProductUnloadDiagnosticAndMemoryBridge": {
+      "wrapperFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/verify-c3-product-unload-r18-r2.py",
+      "wrapperSha256": "7eee374ff259d05a2943eb05ffcae3308e07ce8d5f742c643eada2de174d9ac8",
+      "independentTerminalProof": {
+        "schema": "screeps-r18-terminal-product30-independent/v2",
+        "passed": true,
+        "isolatedWorldOnly": true,
+        "formalApiAccessed": false,
+        "worldModified": false,
+        "candidateAcceptanceClaimed": false,
+        "completeC3Acceptance": false,
+        "originalDriverMatchedFalsePreserved": true,
+        "originalCallerAndSupervisorFAILPreserved": true,
+        "originalC3SemanticVerificationStillRequired": true,
+        "binding": {
+          "case": "t4-c3-producer-budget",
+          "claimSha256": "d530d830dcb6ef71a6120b1234670921be2e2a7aa17efa2d8aab4a4296e5e21b",
+          "beforeDatabaseSha256": "f2ff18ad46edc135eb103339b8e8d00aa306de54fdc3fc4fd23274249f018e9d",
+          "beforeSnapshotSha256": "9102afc8fa4b4ab26745bbb67b55def1178c4b7b61921a2f86ef9843303b66d5",
+          "afterDatabaseSha256": "57eff302b8cc785bd218adb698027480ac69a5c8746c0ef8c415ac8d6b19bdd9",
+          "adapterSha256": "891092a42583ba24b1da99a17366e821591ae82a476171b28e6c5bd7e6675c9e",
+          "mainSha256": "9d300172be0bed439e93b7a47d206dcfa3fc5b9db727a571f8ffa761a14f7f4d",
+          "expectedDriverSourceSha256": "8d607fa5dfb3000e8d582ef1aef047545765fe0924bcc2d242b5c768d0a98426",
+          "expectedProofToolSha256": "5600953c7e8ae9044fcc940ed36b6453d4f7e3b514618780e2c15a29575336b4",
+          "afterSnapshotSha256": "1ac02fe2c3eec58327025d456c01c1503376af0efff5abaf6cbda811f98a8b65",
+          "driverReportSha256": "2b80205e042fda7cc99b5f006b25cc658603cf600a6fdfbf16b752d7796c50bb"
+        },
+        "productionMemorySourceSha256": "972403b475fd333803a7417f55534d87c44bb3439d7fa31b46b3c5d6cbe0999e",
+        "productionMemorySourceUtf8Bytes": 1516755,
+        "productionMemoryFullTextUsedInternallyOnly": true,
+        "proof": {
+          "schema": "screeps-r18-c3-product-unload-terminal-proof/v2",
+          "outcome": "PASS",
+          "inputContract": "r18-c3-sameclaim931-terminal-product30-diagnostic-pure-dict-v2",
+          "case": "t4-c3-producer-budget",
+          "sameClaimSha256": "d530d830dcb6ef71a6120b1234670921be2e2a7aa17efa2d8aab4a4296e5e21b",
+          "beforeDatabaseSha256": "f2ff18ad46edc135eb103339b8e8d00aa306de54fdc3fc4fd23274249f018e9d",
+          "beforeSnapshotSha256": "9102afc8fa4b4ab26745bbb67b55def1178c4b7b61921a2f86ef9843303b66d5",
+          "afterDatabaseSha256": "57eff302b8cc785bd218adb698027480ac69a5c8746c0ef8c415ac8d6b19bdd9",
+          "afterSnapshotSha256": "1ac02fe2c3eec58327025d456c01c1503376af0efff5abaf6cbda811f98a8b65",
+          "originalDriverReportSha256": "2b80205e042fda7cc99b5f006b25cc658603cf600a6fdfbf16b752d7796c50bb",
+          "originalDriverSourceSha256": "8d607fa5dfb3000e8d582ef1aef047545765fe0924bcc2d242b5c768d0a98426",
+          "originalDriverMatchedFalse": true,
+          "originalDriverOutcomeChanged": false,
+          "originalDriverDiagnosticOnly": true,
+          "coherentProgressWitnessIndexes": [
+            29,
+            30,
+            31,
+            32,
+            33,
+            34,
+            35,
+            36,
+            43,
+            44,
+            45,
+            46,
+            47,
+            48,
+            49,
+            50,
+            51,
+            59,
+            60,
+            61,
+            62,
+            63,
+            64,
+            65,
+            66,
+            67,
+            74,
+            75,
+            76,
+            77,
+            78,
+            79,
+            80,
+            81,
+            82,
+            90,
+            91,
+            92,
+            93,
+            94,
+            95,
+            96,
+            97,
+            104,
+            105,
+            106,
+            107,
+            108,
+            109,
+            110,
+            111,
+            112,
+            113
+          ],
+          "mainSha256": "9d300172be0bed439e93b7a47d206dcfa3fc5b9db727a571f8ffa761a14f7f4d",
+          "actualMainTickDelta": 7,
+          "allRawSamples": 153,
+          "rawSamplesExcluded": 0,
+          "inFlightIndexesRetained": [
+            28,
+            42,
+            58,
+            73,
+            89,
+            119
+          ],
+          "pause": {
+            "allOriginalPauseSamples": 33,
+            "actualStableMs": 10198,
+            "lastFullEndpointHashBound": true
+          },
+          "physicalConservation": {
+            "targetCarrierProductBefore": 30,
+            "targetCarrierProductAfter": 0,
+            "fixedTerminalId": "5ca4c1b028a9b3b",
+            "fixedTerminalProductBefore": 0,
+            "fixedTerminalProductAfter": 30,
+            "fixedStorageProductUnchanged": true,
+            "ownedEnergyBefore": 2555120,
+            "ownedEnergyAfter": 2555120,
+            "otherNonEnergyExactPerEntity": true,
+            "receiverCreepCargoUH_OH_ProductZero": true,
+            "sourceOH": {
+              "terminal": 10,
+              "storage": 877
+            },
+            "chemicalReactionExceptionApplied": false
+          },
+          "canonicalProjectionSha256": "a1fae0763389c09d33bbcea3dc5a02ea3f72364e7ab6954779bb611f890ac81a",
+          "old40CompleteRawTransactionsExact": true,
+          "allRCTasksWholeJSONExact": true,
+          "oldCancelledTaskProduction972WholeJSONExact": true,
+          "pilotConsumptionClosedResponsibilitiesExact": true,
+          "newNativeOrDebitOrIssuedResponsibilityCount": 0,
+          "coreExactExceptThreeMainClockMarkers": true,
+          "roleSourceSha256ByPath": {
+            "src/roles/carrier.ts": "e8ae3f94e5c7bb9d492bd2da6c57b6932a679949306ac3281ea195e3a8daecde",
+            "src/mount/mountCreep.ts": "d5e4502bed2031528f9f29318e2e020a5c57655da1035049da5fbac320866a70",
+            "src/roles/energyTargets.ts": "36e8dfa1ce40c7c0fb59c2e0ae866858a3e40bfcd1cfe5068b13f57cff8f6226"
+          },
+          "sourceExecuted": false,
+          "transferMethodIntentIndependentlyRecorded": false,
+          "preludeActorTraceClaimed": false,
+          "isolatedWorldOnly": true,
+          "formalApiAccessed": false,
+          "candidateAcceptanceClaimed": false
+        },
+        "frozenFiles": {
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/verify-t4-current-r18-r1.py": "891092a42583ba24b1da99a17366e821591ae82a476171b28e6c5bd7e6675c9e",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/verify-t4-plan-semantic-r18.json": "476281fa8bc750de073ddc28059a81639bb113f00fdf6f7636e7775179175529",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/candidate/main.js": "9d300172be0bed439e93b7a47d206dcfa3fc5b9db727a571f8ffa761a14f7f4d",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/candidate/manifest.json": "6b2b73e71b4ede5f912cfbe14f52ee8c8cc8f803f4af5dacf3602ed31c4e97a9",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/run-until-product-unloaded-r18-r1.cjs": "8d607fa5dfb3000e8d582ef1aef047545765fe0924bcc2d242b5c768d0a98426",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/c3-product-unload-proof-r18-r2.py": "5600953c7e8ae9044fcc940ed36b6453d4f7e3b514618780e2c15a29575336b4",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/continue-c3-producer-after-product-unload-r18-r1.py": "d0b43c97066ddfb4d2e4ee1578c1c5d1d344c17d8865eadfcf796e759edf2204",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/supervise-c3-producer-continuation-r18-r1.py": "b771ad43b41cc004c8d5cc194f83e578253fdd44b3977e12665acd38c91443be",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/candidate/production-memory-source.json": "972403b475fd333803a7417f55534d87c44bb3439d7fa31b46b3c5d6cbe0999e",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-independent-instance.json": "d530d830dcb6ef71a6120b1234670921be2e2a7aa17efa2d8aab4a4296e5e21b",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/r18-t4-c3-producer-budget-fresh-prep-r2-server-db-after.json": "f2ff18ad46edc135eb103339b8e8d00aa306de54fdc3fc4fd23274249f018e9d",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-fresh-prep-r2-failure-before-persistence-snapshot.json": "9102afc8fa4b4ab26745bbb67b55def1178c4b7b61921a2f86ef9843303b66d5",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/r18-t4-c3-producer-budget-product-unload-continuation-r1-server-db-after.json": "57eff302b8cc785bd218adb698027480ac69a5c8746c0ef8c415ac8d6b19bdd9",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-unload-r1-failure-before-persistence-snapshot.json": "1ac02fe2c3eec58327025d456c01c1503376af0efff5abaf6cbda811f98a8b65",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-product-unload-driver.json": "2b80205e042fda7cc99b5f006b25cc658603cf600a6fdfbf16b752d7796c50bb",
+          "/srv/screeps-treasury-build/t4-architecture-r8-20261003/candidate/src/roles/carrier.ts": "e8ae3f94e5c7bb9d492bd2da6c57b6932a679949306ac3281ea195e3a8daecde",
+          "/srv/screeps-treasury-build/t4-architecture-r8-20261003/candidate/src/mount/mountCreep.ts": "d5e4502bed2031528f9f29318e2e020a5c57655da1035049da5fbac320866a70",
+          "/srv/screeps-treasury-build/t4-architecture-r8-20261003/candidate/src/roles/energyTargets.ts": "36e8dfa1ce40c7c0fb59c2e0ae866858a3e40bfcd1cfe5068b13f57cff8f6226"
+        },
+        "actualInputSha256": {
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-independent-instance.json": "d530d830dcb6ef71a6120b1234670921be2e2a7aa17efa2d8aab4a4296e5e21b",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/r18-t4-c3-producer-budget-fresh-prep-r2-server-db-after.json": "f2ff18ad46edc135eb103339b8e8d00aa306de54fdc3fc4fd23274249f018e9d",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-fresh-prep-r2-failure-before-persistence-snapshot.json": "9102afc8fa4b4ab26745bbb67b55def1178c4b7b61921a2f86ef9843303b66d5",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-product-unload-before-snapshot.json": "9bb174607390d50ebaf7b0f99e563fcf36cd9ed13ec06ab29b8217d4aa0da703",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-unload-r1-failure-before-persistence-snapshot.json": "1ac02fe2c3eec58327025d456c01c1503376af0efff5abaf6cbda811f98a8b65",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/r18-t4-c3-producer-budget-product-unload-continuation-r1-server-db-after.json": "57eff302b8cc785bd218adb698027480ac69a5c8746c0ef8c415ac8d6b19bdd9",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-product-unload-driver.json": "2b80205e042fda7cc99b5f006b25cc658603cf600a6fdfbf16b752d7796c50bb",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-product-unload-continuation-r1-start.json": "2e5cbc86c09e95917d97aa049a50e1aad2adbe5621cb7e575bb0f2992b1687cd",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-product-unload-continuation-r1-result.json": "6231fc2218805cd5dc59e6be53048d9e42c22d83225ffcff83590cb56d392d3c",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/r18-t4-c3-producer-budget-product-unload-continuation-r1-context.json": "82e5f1dd6915d40f2609389f56489ad85e78de7feac9f827ee3560888a860176",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/r18-t4-c3-producer-budget-product-unload-continuation-r1-result.json": "7aa2752af4a100908bd31ebea27372e7c942c662e8e472f79ed1eaaaa9e58c7c"
+        }
+      },
+      "onlyDiagnosticLabel": "t4-c3-producer-budget-product-unload",
+      "diagnosticExpectedMatched": false,
+      "allGlobDriversStillChecked": true,
+      "allSuccessfulDriverBindingsStillRequireMatchedTrue": true,
+      "originalSupplementalFunctionSha256": "b54a47ef2b2924dc0518ea92c6fabfa0d6c826ba09521f4163ff071a9a30327c",
+      "inMemorySupplementalFunctionSha256": "945d0d4f74c43fcd40ff1a0f0097c66f50453092c4eaf9d5f23ee2e4a9230b62",
+      "exactMemoryOriginal": "            base.require(goal[\"beforeRawMemory\"] == idle.raw[\"rawMemory\"] and batch[\"beforeRawMemory\"] == goal[\"afterRawMemory\"], \"C3producer goal/batch并非完整原idle Memory连续原文\")\n",
+      "exactMemoryReplacement": "            detail[\"goalBatchObservedTerminalUnloadBridge\"] = c3_terminal_unload_memory_bridge(base, root, goal, batch, idle)\n",
+      "otherSupplementalSourceBytesPreserved": true,
+      "createdAtAndOriginal60SamplesUnmodified": true
+    },
+    "noNewCanonicalNamespaceAndFixedReceiverAnchor": {
+      "wrapperFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/verify-c3-producer-contract-r18-r4.py",
+      "wrapperSha256": "8ea4725dd23d66bd9e7a0af7cc258d7bc8ded7bd4e10b48ce3c336748758a75d",
+      "terminalAdapterSha256": "7eee374ff259d05a2943eb05ffcae3308e07ce8d5f742c643eada2de174d9ac8",
+      "windowProofSha256": "7fd567fce19d698285ab1b9c0a6df1d96e65f9ba9d5af218baf28ee055ee36a2",
+      "independentWindowProof": {
+        "schema": "screeps-r18-producer-window-independent/v1",
+        "passed": true,
+        "isolatedWorldOnly": true,
+        "formalApiAccessed": false,
+        "worldModified": false,
+        "candidateAcceptanceClaimed": false,
+        "completeC3Acceptance": false,
+        "proof": {
+          "schema": "screeps-r18-c3-budget-window-no-new-task-proof/v1",
+          "outcome": "PASS",
+          "case": "t4-c3-producer-budget",
+          "inputContract": "r18-c3-sameclaim938-998-budget-window-no-new-task-pure-dict-v1",
+          "sameClaimSha256": "d530d830dcb6ef71a6120b1234670921be2e2a7aa17efa2d8aab4a4296e5e21b",
+          "currentDatabaseSha256": "3af30bda2b9b88c6f8f8c2b85bf61abcc827658c5f44e46875090f89fc5fd9eb",
+          "allOriginalSamples": 60,
+          "samplesExcluded": 0,
+          "firstTick": 938,
+          "lastTick": 997,
+          "driverEndTick": 998,
+          "scheduledResourceControlRuns": 12,
+          "originalMainDelegatedEverySample": true,
+          "canonicalOHBefore": {
+            "lab-t3-c1-26-OH": {
+              "id": "lab-t3-c1-26-OH",
+              "resource": "OH",
+              "fromRoomName": "E4N58",
+              "toRoomName": "E1N57",
+              "amount": 913,
+              "remainingAmount": 887,
+              "status": "cancelled",
+              "origin": "automatic",
+              "reason": "synthesis:E1N57:UH2O",
+              "createdAt": 788,
+              "updatedAt": 800,
+              "lastProgressAt": 791,
+              "lastError": "automatic_synthesis_need_covered"
+            },
+            "74075640:1:OH:E4N58->E1N57": {
+              "id": "74075640:1:OH:E4N58->E1N57",
+              "resource": "OH",
+              "fromRoomName": "E4N58",
+              "toRoomName": "E1N57",
+              "amount": 1384,
+              "remainingAmount": 913,
+              "status": "cancelled",
+              "createdAt": 74075640,
+              "updatedAt": 74083875,
+              "origin": "automatic",
+              "lastProgressAt": 74078870,
+              "reason": "synthesis:E1N57:UH2O",
+              "blockedReason": "insufficient_terminal_resource_or_fee",
+              "blockedSince": 74081020,
+              "lastError": "automatic_no_progress_timeout"
+            },
+            "805:1:OH:E4N58->E1N57": {
+              "id": "805:1:OH:E4N58->E1N57",
+              "resource": "OH",
+              "fromRoomName": "E4N58",
+              "toRoomName": "E1N57",
+              "amount": 26,
+              "remainingAmount": 0,
+              "status": "done",
+              "createdAt": 805,
+              "updatedAt": 916,
+              "origin": "automatic",
+              "lastProgressAt": 916,
+              "reason": "synthesis:E1N57:UH2O"
+            }
+          },
+          "canonicalOHAfter": {
+            "lab-t3-c1-26-OH": {
+              "id": "lab-t3-c1-26-OH",
+              "resource": "OH",
+              "fromRoomName": "E4N58",
+              "toRoomName": "E1N57",
+              "amount": 913,
+              "remainingAmount": 887,
+              "status": "cancelled",
+              "origin": "automatic",
+              "reason": "synthesis:E1N57:UH2O",
+              "createdAt": 788,
+              "updatedAt": 800,
+              "lastProgressAt": 791,
+              "lastError": "automatic_synthesis_need_covered"
+            },
+            "74075640:1:OH:E4N58->E1N57": {
+              "id": "74075640:1:OH:E4N58->E1N57",
+              "resource": "OH",
+              "fromRoomName": "E4N58",
+              "toRoomName": "E1N57",
+              "amount": 1384,
+              "remainingAmount": 913,
+              "status": "cancelled",
+              "createdAt": 74075640,
+              "updatedAt": 74083875,
+              "origin": "automatic",
+              "lastProgressAt": 74078870,
+              "reason": "synthesis:E1N57:UH2O",
+              "blockedReason": "insufficient_terminal_resource_or_fee",
+              "blockedSince": 74081020,
+              "lastError": "automatic_no_progress_timeout"
+            },
+            "805:1:OH:E4N58->E1N57": {
+              "id": "805:1:OH:E4N58->E1N57",
+              "resource": "OH",
+              "fromRoomName": "E4N58",
+              "toRoomName": "E1N57",
+              "amount": 26,
+              "remainingAmount": 0,
+              "status": "done",
+              "createdAt": 805,
+              "updatedAt": 916,
+              "origin": "automatic",
+              "lastProgressAt": 916,
+              "reason": "synthesis:E1N57:UH2O"
+            }
+          },
+          "canonicalWholeJSONExact": true,
+          "canonicalSummaryProjectionExactEverySample": true,
+          "newAnyRCTaskIDs": [],
+          "retainedTasksWholeJSONExact": true,
+          "allRCTasksWholeJSONExactClaimed": false,
+          "naturalGCSourceCompatibleRows": [
+            {
+              "id": "lab-t2-c2-UH",
+              "originalWholeTask": {
+                "id": "lab-t2-c2-UH",
+                "resource": "UH",
+                "fromRoomName": "E4N58",
+                "toRoomName": "E1N57",
+                "amount": 100,
+                "remainingAmount": 0,
+                "status": "done",
+                "origin": "automatic",
+                "reason": "synthesis:E1N57:UH2O",
+                "createdAt": 756,
+                "updatedAt": 779,
+                "lastProgressAt": 779
+              },
+              "updatedAt": 779,
+              "eligibleCleanupTicks": [
+                986
+              ],
+              "firstEligibleCleanupTick": 986,
+              "strictAgeAtFirstEligibleTick": 207,
+              "deletionTickIndependentlyObserved": false
+            },
+            {
+              "id": "lab-t2-c2-pre-source-ordinary",
+              "originalWholeTask": {
+                "id": "lab-t2-c2-pre-source-ordinary",
+                "resource": "H",
+                "fromRoomName": "W9N8",
+                "toRoomName": "E4N58",
+                "amount": 100,
+                "remainingAmount": 0,
+                "status": "done",
+                "origin": "manual",
+                "createdAt": 736,
+                "updatedAt": 760,
+                "lastProgressAt": 760
+              },
+              "updatedAt": 760,
+              "eligibleCleanupTicks": [
+                969,
+                986
+              ],
+              "firstEligibleCleanupTick": 969,
+              "strictAgeAtFirstEligibleTick": 209,
+              "deletionTickIndependentlyObserved": false
+            },
+            {
+              "id": "lab-t2-c2-pre-target-ordinary",
+              "originalWholeTask": {
+                "id": "lab-t2-c2-pre-target-ordinary",
+                "resource": "H",
+                "fromRoomName": "W8N8",
+                "toRoomName": "E1N57",
+                "amount": 100,
+                "remainingAmount": 0,
+                "status": "done",
+                "origin": "manual",
+                "createdAt": 736,
+                "updatedAt": 760,
+                "lastProgressAt": 760
+              },
+              "updatedAt": 760,
+              "eligibleCleanupTicks": [
+                969,
+                986
+              ],
+              "firstEligibleCleanupTick": 969,
+              "strictAgeAtFirstEligibleTick": 209,
+              "deletionTickIndependentlyObserved": false
+            },
+            {
+              "id": "lab-t2-c2-block-source-ordinary",
+              "originalWholeTask": {
+                "id": "lab-t2-c2-block-source-ordinary",
+                "resource": "H",
+                "fromRoomName": "W9N8",
+                "toRoomName": "E4N58",
+                "amount": 100,
+                "remainingAmount": 0,
+                "status": "done",
+                "origin": "manual",
+                "createdAt": 746,
+                "updatedAt": 780,
+                "lastProgressAt": 780
+              },
+              "updatedAt": 780,
+              "eligibleCleanupTicks": [
+                986
+              ],
+              "firstEligibleCleanupTick": 986,
+              "strictAgeAtFirstEligibleTick": 206,
+              "deletionTickIndependentlyObserved": false
+            },
+            {
+              "id": "lab-t2-c2-block-target-ordinary",
+              "originalWholeTask": {
+                "id": "lab-t2-c2-block-target-ordinary",
+                "resource": "H",
+                "fromRoomName": "W8N8",
+                "toRoomName": "E1N57",
+                "amount": 100,
+                "remainingAmount": 0,
+                "status": "done",
+                "origin": "manual",
+                "createdAt": 746,
+                "updatedAt": 780,
+                "lastProgressAt": 780
+              },
+              "updatedAt": 780,
+              "eligibleCleanupTicks": [
+                986
+              ],
+              "firstEligibleCleanupTick": 986,
+              "strictAgeAtFirstEligibleTick": 206,
+              "deletionTickIndependentlyObserved": false
+            },
+            {
+              "id": "lab-t2-c2-unrelated-ordinary",
+              "originalWholeTask": {
+                "id": "lab-t2-c2-unrelated-ordinary",
+                "resource": "H",
+                "fromRoomName": "E3N59",
+                "toRoomName": "W8N8",
+                "amount": 100,
+                "remainingAmount": 0,
+                "status": "done",
+                "origin": "manual",
+                "createdAt": 746,
+                "updatedAt": 770,
+                "lastProgressAt": 770
+              },
+              "updatedAt": 770,
+              "eligibleCleanupTicks": [
+                986
+              ],
+              "firstEligibleCleanupTick": 986,
+              "strictAgeAtFirstEligibleTick": 216,
+              "deletionTickIndependentlyObserved": false
+            }
+          ],
+          "cleanupCadenceTicks": [
+            952,
+            969,
+            986
+          ],
+          "cleanupSourceSha256ByPath": {
+            "src/runtime/memoryCleanup.ts": "c8efdfe940e5cf662781f49222d1f46710126db12c8d8e06eac3a0d2601bb8a6",
+            "src/runtime/logistics/resourceTransferTasks.ts": "5e8585d7e34ce8ee9fd047a322cb5916074940ff4ee14224e3578d5df8dbb202",
+            "src/runtime/treasuryTaskCommitmentBridge.ts": "fdef0ff2827905d3c9bd0293f9b986c37ac7eae2b8e8b4d6fac7096a9e343676",
+            "src/runtime/resourceControl.ts": "7cb1473a866976720eb1fdc8663e608c46355999cb288b7c32b778f19b32496c"
+          },
+          "old740Production972WholeJSONExact": true,
+          "createdAtUsedAsNewIdentityPredicate": false,
+          "old40RawTransactionsExact": true,
+          "outgoingIDsExactEverySample": true,
+          "pilotDebitsCertificatesExact": true,
+          "sourceOH": {
+            "terminal": 10,
+            "storage": 877
+          },
+          "pause": {
+            "label": "same998-budget-held",
+            "matched": true,
+            "diagnosticOnly": false,
+            "observedStableMs": 10179,
+            "stableSamples": 41,
+            "samples": 41,
+            "barrierWallMs": 10193,
+            "endTick": 998
+          },
+          "originalFailuresPreserved": true,
+          "sourceExecuted": false,
+          "windowReplayed": false,
+          "formalApiAccessed": false,
+          "candidateAcceptanceClaimed": false,
+          "isolatedWorldOnly": true,
+          "stopOrHandoffExecuted": false
+        },
+        "binding": {
+          "case": "t4-c3-producer-budget",
+          "claimSha256": "d530d830dcb6ef71a6120b1234670921be2e2a7aa17efa2d8aab4a4296e5e21b",
+          "currentDatabaseSha256": "3af30bda2b9b88c6f8f8c2b85bf61abcc827658c5f44e46875090f89fc5fd9eb",
+          "demandSnapshotSha256": "8f30328c4bfd16c863887a9a3269c0bd29246c11327b06e97bd3697fbb380e0c",
+          "heldSnapshotSha256": "3a0b824a54153f215ac988708b12972684ecb1d77304591eb1bba1eca3cc0026",
+          "driverReportSha256": "ac5035c8c820ed05e9fe40b79222e504d64e8a4a2fc3c82878268b9e3b2e69c5",
+          "originalDriverSourceSha256": "d4811fca14d69a81c0a3653252d8628337fe9c3453aed3b74445bac5d19532ba",
+          "originalRunnerSha256": "4905f4909b58c705763392a0004cb3da5c8d3b2643041bde2fc080b58247d988",
+          "adapterSha256": "891092a42583ba24b1da99a17366e821591ae82a476171b28e6c5bd7e6675c9e",
+          "mainSha256": "9d300172be0bed439e93b7a47d206dcfa3fc5b9db727a571f8ffa761a14f7f4d",
+          "oldCallerResultSha256": "cec98d63ebe37f7e3dbf48950f983026b34a3cd5516f6e4ded3b502ab7333b9f",
+          "oldSupervisorResultSha256": "6c5878647351b73a40b8e1e1faa4c9a1c05fdf73e29bc2fe7f0b9b1bd6bfee0c",
+          "expectedProofToolSha256": "7fd567fce19d698285ab1b9c0a6df1d96e65f9ba9d5af218baf28ee055ee36a2"
+        },
+        "cleanupSourceSha256": {
+          "src/runtime/memoryCleanup.ts": "c8efdfe940e5cf662781f49222d1f46710126db12c8d8e06eac3a0d2601bb8a6",
+          "src/runtime/logistics/resourceTransferTasks.ts": "5e8585d7e34ce8ee9fd047a322cb5916074940ff4ee14224e3578d5df8dbb202",
+          "src/runtime/treasuryTaskCommitmentBridge.ts": "fdef0ff2827905d3c9bd0293f9b986c37ac7eae2b8e8b4d6fac7096a9e343676",
+          "src/runtime/resourceControl.ts": "7cb1473a866976720eb1fdc8663e608c46355999cb288b7c32b778f19b32496c"
+        },
+        "actualInputSha256": {
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/verify-c3-product-unload-r18-r2.py": "7eee374ff259d05a2943eb05ffcae3308e07ce8d5f742c643eada2de174d9ac8",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/verify-t4-current-r18-r1.py": "891092a42583ba24b1da99a17366e821591ae82a476171b28e6c5bd7e6675c9e",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/verify-t4.py": "e4357be83d19305f3fccb67d080c80294b56562f7b12c54714c0b8a4fcc4d34f",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/run-t4-scenarios-r18-physical-cold-r1.py": "4905f4909b58c705763392a0004cb3da5c8d3b2643041bde2fc080b58247d988",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/run-until-t4.cjs": "d4811fca14d69a81c0a3653252d8628337fe9c3453aed3b74445bac5d19532ba",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/c3-producer-budget-window-proof-r18-r1.py": "7fd567fce19d698285ab1b9c0a6df1d96e65f9ba9d5af218baf28ee055ee36a2",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/candidate/production-memory-source.json": "972403b475fd333803a7417f55534d87c44bb3439d7fa31b46b3c5d6cbe0999e",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-new-demand-ready-terminal-snapshot.json": "8f30328c4bfd16c863887a9a3269c0bd29246c11327b06e97bd3697fbb380e0c",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-budget-held-snapshot.json": "3a0b824a54153f215ac988708b12972684ecb1d77304591eb1bba1eca3cc0026",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-budget-held-driver-driver.json": "ac5035c8c820ed05e9fe40b79222e504d64e8a4a2fc3c82878268b9e3b2e69c5",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/r18-t4-c3-producer-budget-product-unload-continuation-r2-server-db-after.json": "3af30bda2b9b88c6f8f8c2b85bf61abcc827658c5f44e46875090f89fc5fd9eb",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-product-unload-continuation-r2-result.json": "cec98d63ebe37f7e3dbf48950f983026b34a3cd5516f6e4ded3b502ab7333b9f",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/r18-t4-c3-producer-budget-product-unload-continuation-r2-result.json": "6c5878647351b73a40b8e1e1faa4c9a1c05fdf73e29bc2fe7f0b9b1bd6bfee0c",
+          "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-producer-budget-independent-instance.json": "d530d830dcb6ef71a6120b1234670921be2e2a7aa17efa2d8aab4a4296e5e21b",
+          "/srv/screeps-treasury-build/t4-architecture-r8-20261003/candidate/src/runtime/memoryCleanup.ts": "c8efdfe940e5cf662781f49222d1f46710126db12c8d8e06eac3a0d2601bb8a6",
+          "/srv/screeps-treasury-build/t4-architecture-r8-20261003/candidate/src/runtime/logistics/resourceTransferTasks.ts": "5e8585d7e34ce8ee9fd047a322cb5916074940ff4ee14224e3578d5df8dbb202",
+          "/srv/screeps-treasury-build/t4-architecture-r8-20261003/candidate/src/runtime/treasuryTaskCommitmentBridge.ts": "fdef0ff2827905d3c9bd0293f9b986c37ac7eae2b8e8b4d6fac7096a9e343676",
+          "/srv/screeps-treasury-build/t4-architecture-r8-20261003/candidate/src/runtime/resourceControl.ts": "7cb1473a866976720eb1fdc8663e608c46355999cb288b7c32b778f19b32496c"
+        },
+        "oldFAILPreserved": true,
+        "originalIDDifferenceAnd60AndPostStopCreatedAtGatesRetained": true
+      },
+      "exactReceiverOriginal": "    receiver = [o for o in idle.raw[\"objects\"] if o.get(\"user\") == UID and o.get(\"room\") == ENDPOINTS[1] and o.get(\"type\") in (\"storage\", \"terminal\", \"lab\")]\n",
+      "exactReceiverReplacement": "    receiver = [o for o in c3_verified_terminal_receiver_anchor(evidence, idle, batch_artifact).raw[\"objects\"] if o.get(\"user\") == UID and o.get(\"room\") == ENDPOINTS[1] and o.get(\"type\") in (\"storage\", \"terminal\", \"lab\")]\n",
+      "originalProducerFunctionSha256": "08aa9fb48b56d46118a2a5fa9441fe5cec6a4d9bbce9cc7cf14b0f5ac4d84a86",
+      "derivedProducerFunctionSha256": "629111020374accf853bfa20d4bd0c1a4f1f665d8edf64c16bc86c8f5dd7e83f",
+      "exactHelperMemoryOriginal": "    require(batch_before == expected, \"goal与batch两配置fixture之间推进了游戏或改写Memory\")\n",
+      "exactHelperMemoryReplacement": "    expected = c3_verified_terminal_goal_batch_before(evidence, goal_label, batch_label, state_reference, goal, batch, expected, batch_before)\n",
+      "originalGoalBatchHelperSha256": "483821abc7a124faa5175f735810162ca81a84906072ce947215e2a097f80aab",
+      "derivedGoalBatchHelperSha256": "ad40e1cc1d2465987abc5f94173b9d4d9580a8e4104a976dc2f29bdf4e996bb9",
+      "otherOriginalGoalBatchHelperBytesPreserved": true,
+      "actualBatchBefore938ReturnedOnlyAfterFull153TerminalProof": true,
+      "originalThreeBatchConfigurationChangesAndAfterWholeMemoryEqualityRetained": true,
+      "otherOriginalProducerSourceBytesPreserved": true,
+      "knownHistorical740WholeJSONLockedNotGenerallyIgnoringCancelled": true,
+      "originalIDDifferenceWhole60UTCAndGenuinePostStopCreatedAtRetained": true,
+      "idle931StillIncludedInAllSourceHistoryAndBundleChecks": true
+    },
+    "producerTerminalEntry": {
+      "wrapperFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/verify-c3-producer-terminal-r18-r4.py",
+      "wrapperSha256": "0ab195cc2ea1cebc4c848ec9f2715211d070d2e5eb8769ca5ceaee2187e917e4",
+      "originalFreshVerifierSha256": "5f6628ddefb204be5eaaefafcf1e19324e0c8fa22b317d7424c33ac13d607531",
+      "terminalBridgeSha256": "8ea4725dd23d66bd9e7a0af7cc258d7bc8ded7bd4e10b48ce3c336748758a75d",
+      "onlyTwoAuthorizedTerminalContractsInstalled": true,
+      "historicalNamespaceProofAndOneFixedReceiverAnchorInstalled": true,
+      "resolvedCompletionComponentFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/c3-resolved-completion-r18-r1.py",
+      "resolvedCompletionComponentSha256": "813628a9442488adc78afa172241c45e85b43584371ef1d22212114b930b0708"
+    }
+  },
+  "frozenPlanSha256": "476281fa8bc750de073ddc28059a81639bb113f00fdf6f7636e7775179175529",
+  "originalInvocation": [
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/verify-t4.py",
+    "--case",
+    "c3",
+    "--evidence",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence",
+    "--plan",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/verify-t4-plan-semantic-r18.json",
+    "--manifest",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/candidate/manifest.json",
+    "--bundle",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/candidate/main.js",
+    "--output",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/c3-producer-independent-r18-r5.json",
+    "--scenario",
+    "producerBudget"
+  ],
+  "uniqueFullWrapperInputs": {
+    "--run-root": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003",
+    "--case": "c3",
+    "--scenario": "producerBudget",
+    "--adapter-provenance-output": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/c3-producer-independent-r18-r5-provenance.json",
+    "--evidence": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence",
+    "--plan": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/verify-t4-plan-semantic-r18.json",
+    "--manifest": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/candidate/manifest.json",
+    "--bundle": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/candidate/main.js",
+    "--output": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/c3-producer-independent-r18-r5.json"
+  },
+  "exactWrapperInvocation": [
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/verify-c3-producer-terminal-r18-r4.py",
+    "--run-root",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003",
+    "--case",
+    "c3",
+    "--scenario",
+    "producerBudget",
+    "--adapter-provenance-output",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/c3-producer-independent-r18-r5-provenance.json",
+    "--evidence",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence",
+    "--plan",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/verify-t4-plan-semantic-r18.json",
+    "--manifest",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/candidate/manifest.json",
+    "--bundle",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/candidate/main.js",
+    "--output",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/c3-producer-independent-r18-r5.json"
+  ],
+  "additionalStaticReviewGuards": {
+    "scenarios": [
+      {
+        "scenario": "producerBudget",
+        "sessionAndPolicyImmutable": true,
+        "labels": [
+          "t4-c3-producer-budget-enabled-pilot",
+          "t4-c3-producer-budget-slice1-native",
+          "t4-c3-producer-budget-slice2-native",
+          "t4-c3-producer-budget-slice3-native",
+          "t4-c3-producer-budget-pilot-released",
+          "t4-c3-producer-budget-live-idle"
+        ],
+        "goalBatchObservedTerminalUnloadBridge": {
+          "beforeSnapshotSha256": "9102afc8fa4b4ab26745bbb67b55def1178c4b7b61921a2f86ef9843303b66d5",
+          "afterSnapshotSha256": "1ac02fe2c3eec58327025d456c01c1503376af0efff5abaf6cbda811f98a8b65",
+          "original153DriverReportSha256": "2b80205e042fda7cc99b5f006b25cc658603cf600a6fdfbf16b752d7796c50bb",
+          "terminalPureProofSha256": "5600953c7e8ae9044fcc940ed36b6453d4f7e3b514618780e2c15a29575336b4",
+          "goalFixtureSha256": "aa0ae877e5a26c8572de615087cf4a2f41328c61dabcad984e150598800190df",
+          "batchFixtureSha256": "fd2e63a2021c13f62354be0cd3dbc8c191323d62893adab84503e9aac8fa7d45",
+          "all153RawRowsVerified": true,
+          "directGoalBatchMemoryEqualityClaimed": false,
+          "goalBatchConfigurationDiffAndPhysicalStockAndStrict60OriginalGatesRetained": true
+        },
+        "goalBatchFullOriginalMemoryChainExact": true,
+        "physicalBatchConservation": {
+          "sameTickSnapshotSha256": "8f30328c4bfd16c863887a9a3269c0bd29246c11327b06e97bd3697fbb380e0c",
+          "structureTotalsIndependentlyRecomputed": {
+            "UH": 10,
+            "OH": 0,
+            "UH2O": 30
+          },
+          "ownedCreepCargoIndependentlyRecomputed": {
+            "UH": 0,
+            "OH": 0,
+            "UH2O": 0
+          },
+          "allRecordedObjectsExact": true
+        },
+        "completeOriginalObservationWindow": {
+          "actualDriverStartTick": 938,
+          "actualDriverEndTick": 998,
+          "completeActualMainSamples": 60,
+          "wholeOriginalArrayExactRange": true,
+          "rawSamplesExcluded": 0,
+          "firstInstallationTickRetained": true,
+          "fullWindowAllRowsChecked": true,
+          "originalStrict60BaseGatePreserved": true
+        }
+      }
+    ]
+  },
+  "passed": true,
+  "verificationReportFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/c3-producer-independent-r18-r5.json",
+  "verificationReportSha256": "6e578e87a8bfddaafa7d2147ed38657ca5806fdb9de101c22d0fd74092968bc6"
+}

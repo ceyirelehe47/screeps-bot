@@ -1,0 +1,110 @@
+{
+  "schema": "screeps-current-t4-scene-supervisor/v1",
+  "case": "t4-c3-lease",
+  "pid": 3836889,
+  "argv": [
+    "python3",
+    "-u",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/run-fresh-cases-with-cargo-drain-r18-r2.py",
+    "t4-c3-lease"
+  ],
+  "startedAtUnix": 1791000689.0743866,
+  "startedAtMonotonic": 750505.222668203,
+  "stoppedPrecondition": {
+    "capturedAtUtc": "2026-10-03T04:11:29.069650+00:00",
+    "properties": {
+      "LoadState": "not-found",
+      "ActiveState": "inactive",
+      "SubState": "dead",
+      "MainPID": "0"
+    },
+    "endpoints": [
+      {
+        "host": "127.0.0.1",
+        "port": 21025,
+        "connectionRefused": true
+      },
+      {
+        "host": "127.0.0.1",
+        "port": 21026,
+        "connectionRefused": true
+      },
+      {
+        "host": "::1",
+        "port": 21027,
+        "connectionRefused": true
+      }
+    ],
+    "positiveStoppedState": true
+  },
+  "supervisorUnit": "screeps-r18-t4-c3-lease-fresh-prep-supervisor-r2.service",
+  "supervisorCgroup": "0::/system.slice/screeps-r18-t4-c3-lease-fresh-prep-supervisor-r2.service\n",
+  "frozenFiles": {
+    "candidate/main.js": "9d300172be0bed439e93b7a47d206dcfa3fc5b9db727a571f8ffa761a14f7f4d",
+    "candidate/manifest.json": "6b2b73e71b4ede5f912cfbe14f52ee8c8cc8f803f4af5dacf3602ed31c4e97a9",
+    "tools/run-t4-scenarios-r18-physical-cold-r1.py": "4905f4909b58c705763392a0004cb3da5c8d3b2643041bde2fc080b58247d988",
+    "tools/lab-t4-r18-physical-uh-r1.cjs": "52f8eb2101e07e33101da26e2f0437559972178a79c8bdc43852a80075a1813c",
+    "tools/run-until-t4.cjs": "d4811fca14d69a81c0a3653252d8628337fe9c3453aed3b74445bac5d19532ba",
+    "tools/run-fresh-cases-with-cargo-drain-r18-r2.py": "52ad968f881473c67e2e66d078d1c79540729b9ed317d2b1c0f0fa5f1705dd45",
+    "tools/run-until-fresh-cargo-zero-r18-r1.cjs": "2818c2bbbd3b6540d0137de735dafd937afb399219f35c4786ec9be3caf43832",
+    "tools/c2-c3-cargo-drain-proof-r18-r3.py": "3248f179053074df105478d6d4a1779c9e6ef9b544523607d14a27277b59e5c6",
+    "tools/supervise-t4-semantic-r18-r1.py": "9f4088c06aec947c8af00d1cb527ed8bec0cffc28dae895a9ea9fd83f8f54e4f",
+    "tools/verify-t4-plan-semantic-r18.json": "476281fa8bc750de073ddc28059a81639bb113f00fdf6f7636e7775179175529",
+    "db-frozen-pre-t4.json": "bf23559afdc92989d715d2ef2219acdd7f97f5bf60c32b0787af6874bf0cc2c3"
+  },
+  "supervisorSha256": "fe75976962bcd6e5910e4e8107e83762d0195c17613a883b753b7072d4f45b6a",
+  "derivedFromSupervisorSha256": "9f4088c06aec947c8af00d1cb527ed8bec0cffc28dae895a9ea9fd83f8f54e4f",
+  "serverDatabaseBeforeFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/r18-t4-c3-lease-fresh-prep-r2-server-db-before.json",
+  "serverDatabaseBeforeSha256": "8378b2c72ebd0a2866c1d61e30316ba11c3abe81eb70425621547a4ec8ad1386",
+  "isolatedWorldOnly": true,
+  "formalApiAccessed": false,
+  "independentVerificationPassed": false,
+  "runnerPid": 3836891,
+  "runnerProcessGroup": 3836891,
+  "runnerExitCode": 0,
+  "outcome": "completed_requires_independent_verifier",
+  "runnerInterruptedReturnCode": 0,
+  "runnerGroupFullyReapedOrNoRunnableMembers": true,
+  "freshUnitOwnership": {
+    "LoadState": "not-found",
+    "ActiveState": "inactive",
+    "SubState": "dead",
+    "ActiveEnterTimestampMonotonic": "0",
+    "MainPID": "0",
+    "WorkingDirectory": ""
+  },
+  "freshServerDatabaseCurrentMainSha256": "9d300172be0bed439e93b7a47d206dcfa3fc5b9db727a571f8ffa761a14f7f4d",
+  "freshServerDatabaseBeforeStopSha256": "de81fb27d3411f08d533a3d8bcaaf39f4197783fb9a46a66ca0aecd44cf3b905",
+  "stoppedAfterCase": {
+    "capturedAtUtc": "2026-10-03T04:14:23.225351+00:00",
+    "properties": {
+      "LoadState": "not-found",
+      "ActiveState": "inactive",
+      "SubState": "dead",
+      "MainPID": "0"
+    },
+    "endpoints": [
+      {
+        "host": "127.0.0.1",
+        "port": 21025,
+        "connectionRefused": true
+      },
+      {
+        "host": "127.0.0.1",
+        "port": 21026,
+        "connectionRefused": true
+      },
+      {
+        "host": "::1",
+        "port": 21027,
+        "connectionRefused": true
+      }
+    ],
+    "positiveStoppedState": true
+  },
+  "serverDatabaseAfterFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/r18-t4-c3-lease-fresh-prep-r2-server-db-after.json",
+  "serverDatabaseAfterSha256": "de81fb27d3411f08d533a3d8bcaaf39f4197783fb9a46a66ca0aecd44cf3b905",
+  "independentInstanceFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c3-lease-independent-instance.json",
+  "independentInstanceSha256": "0306f8f2a555d410c39bec68525e92e3292d1ccd8fad063e2cc884e0c5e9353d",
+  "endedAtUnix": 1791000863.241656
+}

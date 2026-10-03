@@ -1,0 +1,20 @@
+{
+  "originalsPreserved": true,
+  "copies": [
+    {
+      "source": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/db-t4-c3-budget-configured-fixture.json",
+      "privateCopy": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/private-databases/db-t4-c3-budget-configured-fixture.json",
+      "sha256": "fc8e5aae2202c7108d85080cb779d7087d1508a9ea3e8b9fc03ea2de3f84e4ca"
+    },
+    {
+      "source": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/db-before-t4-c3-budget-stopped-restart.json",
+      "privateCopy": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/private-databases/db-before-t4-c3-budget-stopped-restart.json",
+      "sha256": "11d3aea07b12bc53b04f742f103139a4850851e0ca9039110dfbe8e56f2e1ec1"
+    },
+    {
+      "source": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/db-t4-c3-budget-completed.json",
+      "privateCopy": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/private-databases/db-t4-c3-budget-completed.json",
+      "sha256": "8378b2c72ebd0a2866c1d61e30316ba11c3abe81eb70425621547a4ec8ad1386"
+    }
+  ]
+}

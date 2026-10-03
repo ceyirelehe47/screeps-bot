@@ -1,0 +1,359 @@
+{
+  "schema": "screeps-r18-fresh-preparation-independent-verification/v1",
+  "passed": true,
+  "case": "t4-c2",
+  "isolatedWorldOnly": true,
+  "formalApiAccessed": false,
+  "worldModified": false,
+  "sceneReplayed": false,
+  "completeT4Acceptance": false,
+  "outerWrapperFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/verify-fresh-cases-r18-r3.py",
+  "outerWrapperSha256": "5f6628ddefb204be5eaaefafcf1e19324e0c8fa22b317d7424c33ac13d607531",
+  "originalAdapterSha256": "891092a42583ba24b1da99a17366e821591ae82a476171b28e6c5bd7e6675c9e",
+  "originalPlanSha256": "476281fa8bc750de073ddc28059a81639bb113f00fdf6f7636e7775179175529",
+  "preludeRoleSourceSha256": {
+    "src/roles/carrier.ts": "e8ae3f94e5c7bb9d492bd2da6c57b6932a679949306ac3281ea195e3a8daecde",
+    "src/mount/mountCreep.ts": "d5e4502bed2031528f9f29318e2e020a5c57655da1035049da5fbac320866a70",
+    "src/roles/energyTargets.ts": "36e8dfa1ce40c7c0fb59c2e0ae866858a3e40bfcd1cfe5068b13f57cff8f6226"
+  },
+  "frozenFiles": {
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/verify-t4.py": "e4357be83d19305f3fccb67d080c80294b56562f7b12c54714c0b8a4fcc4d34f",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/verify-t4-current-r18-r1.py": "891092a42583ba24b1da99a17366e821591ae82a476171b28e6c5bd7e6675c9e",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/verify-t4-plan-semantic-r18.json": "476281fa8bc750de073ddc28059a81639bb113f00fdf6f7636e7775179175529",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/run-t4-scenarios-r18-physical-cold-r1.py": "4905f4909b58c705763392a0004cb3da5c8d3b2643041bde2fc080b58247d988",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/lab-t4-r18-physical-uh-r1.cjs": "52f8eb2101e07e33101da26e2f0437559972178a79c8bdc43852a80075a1813c",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/run-until-t4.cjs": "d4811fca14d69a81c0a3653252d8628337fe9c3453aed3b74445bac5d19532ba",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/run-until-fresh-cargo-zero-r18-r1.cjs": "2818c2bbbd3b6540d0137de735dafd937afb399219f35c4786ec9be3caf43832",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/c2-c3-cargo-drain-proof-r18-r3.py": "3248f179053074df105478d6d4a1779c9e6ef9b544523607d14a27277b59e5c6",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/run-fresh-cases-with-cargo-drain-r18-r2.py": "52ad968f881473c67e2e66d078d1c79540729b9ed317d2b1c0f0fa5f1705dd45",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/supervise-fresh-cases-r18-r2.py": "fe75976962bcd6e5910e4e8107e83762d0195c17613a883b753b7072d4f45b6a",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/candidate/main.js": "9d300172be0bed439e93b7a47d206dcfa3fc5b9db727a571f8ffa761a14f7f4d",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/candidate/manifest.json": "6b2b73e71b4ede5f912cfbe14f52ee8c8cc8f803f4af5dacf3602ed31c4e97a9",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/candidate/expired-production-shape-task.json": "7c6961a3adda6e403ad79458d2a40ff4f15beed28be9a78af438cc3e48cb18bc",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/candidate/production-memory-source.json": "972403b475fd333803a7417f55534d87c44bb3439d7fa31b46b3c5d6cbe0999e",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/db-frozen-pre-t4.json": "bf23559afdc92989d715d2ef2219acdd7f97f5bf60c32b0787af6874bf0cc2c3",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/native-lab-reaction-source-contract-r18-r1.json": "560c3d9b45d66e1a13d20578cb4b5fccfa3ca04771fb319258847cddb7653955",
+    "/srv/screeps-treasury-build/t4-architecture-r8-20261003/candidate/src/runtime/synthesisControl.ts": "19e5d4c6ac25cfefb0af28d71c71d20f623a5cbe1b3d1b7cabb81e447aa58c7f",
+    "/srv/screeps-treasury-build/t4-architecture-r8-20261003/candidate/src/roles/carrier.ts": "e8ae3f94e5c7bb9d492bd2da6c57b6932a679949306ac3281ea195e3a8daecde",
+    "/srv/screeps-treasury-build/t4-architecture-r8-20261003/candidate/src/mount/mountCreep.ts": "d5e4502bed2031528f9f29318e2e020a5c57655da1035049da5fbac320866a70",
+    "/srv/screeps-treasury-build/t4-architecture-r8-20261003/candidate/src/roles/energyTargets.ts": "36e8dfa1ce40c7c0fb59c2e0ae866858a3e40bfcd1cfe5068b13f57cff8f6226"
+  },
+  "originalArtifacts": {
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c2-independent-instance.json": "57197d11b2229f091c5b9c1daea2af881edbccdb50edd5729bd60cb85e45feea",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c2-before-setup-snapshot.json": "7700a6f4dd150ce9fd843e59eb71f6fcd629a5118bb09a45a3ff3a4708b9e851",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c2-after-align-before-setup-snapshot.json": "9cc0e90dee90918b684cad7878a08c2772ba16250b75a3e2c8be71489273e43b",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c2-warmup-driver.json": "5913d3edb568d1a45e3c8022576b4de223273e8a72a9d73c864fc4d2a344e2dd",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c2-pre-setup-cargo-drain-driver.json": "a517b30f9dd78cc8ea4dabb80dbf7ade3086dfa50bbf44ad1ce6a139aa7c76ea",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c2-before-setup-after-real-drain-snapshot.json": "e7dc8609b33a63b83d2d4fef1715e30a9b1e30a8278385af12ca958fbdf6c750",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c2-fresh-cargo-prep-r2-binding.json": "cf1ce294a40f0aeda4b6033834039b58a010f23ee872674dd648a2c0b8815c85",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c2-fresh-cargo-prep-r2-proof.json": "b04ac870b7a097808c69db0cc36632ac8aeee12c9bf66e55f909ba143cdd0c9d",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c2-fresh-cargo-prep-r2-start.json": "37e121802b68f95518595bd104c52135018e61f1550bbf20a0472a38b98afaef",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c2-fresh-cargo-prep-r2-result.json": "43d37e066d4314a27752e5bd56c32b4bd23fd525b181afee3ac2bc467b5e8b42",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c2-setup-setup.json": "bacfb2434e60453d0a59a1ad3e48e9cf778c99ea4e2dcc88b0bd85ee84c90e7a",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c2-configured-fixture-before-persistence-snapshot.json": "9b5c89cf5bb5f27c7aaea80f2b6d55dc9c152b46c709cfefa03ec2bdfb541d10",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c2-cold-fixture-readback-snapshot.json": "35ee1023e9e593248dd2c754e6f5212c31c60f430b95ff73ab4f592042a39ec0"
+  },
+  "supervisorContextFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/r18-t4-c2-fresh-prep-r2-context.json",
+  "supervisorContextSha256": "2cc2b8279e1d932e98f1677d94e5b0b36f9d30111a923674a56c3129323462ad",
+  "supervisorResultFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/r18-t4-c2-fresh-prep-r2-result.json",
+  "supervisorResultSha256": "de54ebc72ed988b5ad27e8139878a2fe929499ff8b9d9e1fbc2aa89b97165792",
+  "pureProofRerunEntireResultExact": true,
+  "cargoIndependentProof": {
+    "schema": "screeps-r18-fresh-case-cargo-prep-proof/v1",
+    "outcome": "PASS",
+    "case": "t4-c2",
+    "inputContract": "r18-fresh-case-baseline801-align-driver-pure-dict-v1",
+    "isolatedWorldOnly": true,
+    "formalApiAccessed": false,
+    "candidateAcceptanceClaimed": false,
+    "mainSha256": "9d300172be0bed439e93b7a47d206dcfa3fc5b9db727a571f8ffa761a14f7f4d",
+    "mode": "drain",
+    "preludeEvidenceScope": "physical_endpoints_and_original_pause_hashes",
+    "warmupProgressRawSamplesAvailable": false,
+    "prelude": {
+      "evidenceScope": "physical_endpoints_and_original_pause_hashes",
+      "progressRawSamplesAvailable": false,
+      "originalDriverSourceSha256": "d4811fca14d69a81c0a3653252d8628337fe9c3453aed3b74445bac5d19532ba",
+      "pause": {
+        "allOriginalPauseSamples": 47,
+        "actualStableMs": 10162,
+        "lastFullEndpointHashBound": true
+      },
+      "physicalEndpoints": {
+        "branch": "align-loaded50",
+        "evidenceScope": "physical_endpoints_and_original_pause_hashes",
+        "reactionCountDerived": 0,
+        "actualReactionMainTickDerived": null,
+        "energyDeliveredByRoom": {
+          "E4N58": 50,
+          "E1N57": 50
+        },
+        "carrierEnergyDecreaseByRoom": {
+          "E4N58": 0,
+          "E1N57": 0
+        },
+        "terminalEnergyDecreaseByRoom": {
+          "E4N58": 50,
+          "E1N57": 50
+        },
+        "energyDeltaByEntity": {
+          "f7add81659a2190": 0,
+          "d7dc41dd18efd58": 50,
+          "370f41dd18e91de": -50,
+          "4389c5b0988de7e": 0,
+          "a252c1b028c5660": 50,
+          "5ca4c1b028a9b3b": -50
+        },
+        "otherResourcesExactPerEntity": true,
+        "UHOComponentsBefore": {
+          "U": 30,
+          "H": 72034,
+          "O": 20004
+        },
+        "UHOComponentsAfter": {
+          "U": 30,
+          "H": 72034,
+          "O": 20004
+        },
+        "perTickActorOrMethodTraceClaimed": false
+      }
+    },
+    "prepared": {
+      "mode": "drain",
+      "allRawSamples": 136,
+      "rawSamplesExcluded": 0,
+      "inFlightIndexesRetained": [],
+      "actualMainTickDelta": 1,
+      "pause": {
+        "allOriginalPauseSamples": 41,
+        "actualStableMs": 10199,
+        "lastFullEndpointHashBound": true
+      },
+      "physicalEndpoints": {
+        "reactionCountDerived": 0,
+        "actualReactionMainTickDerived": null,
+        "energyDeliveredByRoom": {
+          "E4N58": 50,
+          "E1N57": 50
+        },
+        "otherResourcesExactPerEntity": true,
+        "UHOComponentsBefore": {
+          "U": 30,
+          "H": 72034,
+          "O": 20004
+        },
+        "UHOComponentsAfter": {
+          "U": 30,
+          "H": 72034,
+          "O": 20004
+        }
+      },
+      "zeroObserveNoResume": false
+    },
+    "totalPhysicalConservation": {
+      "reactionCountDerived": 0,
+      "actualReactionMainTickDerived": null,
+      "baselineCarrierEnergyDecreaseByRoom": {
+        "E4N58": 50,
+        "E1N57": 50
+      },
+      "storageEnergyIncreaseByRoom": {
+        "E4N58": 100,
+        "E1N57": 100
+      },
+      "terminalEnergyDecreaseByRoom": {
+        "E4N58": 50,
+        "E1N57": 50
+      },
+      "energyDeltaByEntity": {
+        "f7add81659a2190": -50,
+        "d7dc41dd18efd58": 100,
+        "370f41dd18e91de": -50,
+        "4389c5b0988de7e": -50,
+        "a252c1b028c5660": 100,
+        "5ca4c1b028a9b3b": -50
+      },
+      "segmentsAddedAndDirectFullEntityDeltaChecked": true,
+      "otherResourcesExactPerEntity": true,
+      "UHOComponentsBefore": {
+        "U": 30,
+        "H": 72034,
+        "O": 20004
+      },
+      "UHOComponentsAfter": {
+        "U": 30,
+        "H": 72034,
+        "O": 20004
+      }
+    },
+    "reactionSourceContract": {
+      "recordUtf8Sha256": "560c3d9b45d66e1a13d20578cb4b5fccfa3ca04771fb319258847cddb7653955",
+      "synthesisControlSourceUtf8Sha256": "19e5d4c6ac25cfefb0af28d71c71d20f623a5cbe1b3d1b7cabb81e447aa58c7f",
+      "nativeSourceFiles": {
+        "constants": {
+          "path": "/srv/screeps-treasury-t1/server/node_modules/@screeps/common/lib/constants.js",
+          "sha256": "42fa7b11d157cfcf9bc7a636ad74f43370c649cbdca7d0ef7431eb476f151371"
+        },
+        "processor": {
+          "path": "/srv/screeps-treasury-t1/server/node_modules/@screeps/engine/src/processor/intents/labs/run-reaction.js",
+          "sha256": "e0f2b802ec878339e3d2c164e2360265008087d9672ccd1c1d3395fb84727d9d"
+        }
+      },
+      "actualInstalledExports": {
+        "LAB_REACTION_AMOUNT": 5,
+        "REACTION_TIME_UH2O": 5,
+        "REACTIONS_UH_OH": "UH2O",
+        "REACTIONS_OH_UH": "UH2O"
+      },
+      "sourcesExecutedByVerifier": false
+    },
+    "preludeRoleSourceContract": {
+      "sourceSha256ByPath": {
+        "src/roles/carrier.ts": "e8ae3f94e5c7bb9d492bd2da6c57b6932a679949306ac3281ea195e3a8daecde",
+        "src/mount/mountCreep.ts": "d5e4502bed2031528f9f29318e2e020a5c57655da1035049da5fbac320866a70",
+        "src/roles/energyTargets.ts": "36e8dfa1ce40c7c0fb59c2e0ae866858a3e40bfcd1cfe5068b13f57cff8f6226"
+      },
+      "sourceExecuted": false,
+      "evidenceScope": "endpoint_physical_and_product_source_compatibility",
+      "perTickActorOrMethodTraceClaimed": false
+    },
+    "oldFiscalAndCfgAndRCTasksExact": true,
+    "old37CompleteRawTransactionsExact": true,
+    "transferMethodIntentIndependentlyRecorded": false,
+    "baselineTick": 801,
+    "afterAlignTick": 803,
+    "afterDrainTick": 804,
+    "independentCaseClaimSha256": "57197d11b2229f091c5b9c1daea2af881edbccdb50edd5729bd60cb85e45feea"
+  },
+  "baseline801WarmupAlignDriverChainExact": true,
+  "setupBeforeAfterFullMemoryExact": true,
+  "originalColdFixture": {
+    "databaseFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/../private-databases/db-t4-c2-configured-fixture.json",
+    "databaseSha256": "6bf96c2cdcc3e774a61d786bf1694690f6fdd0e6065ce13d53bbe4bd357ccf54",
+    "persistedTick": 804,
+    "storedGameTimeType": "int",
+    "persistedMemorySha256": "04de12d75175d20a47b19b69062f9b2b6ad01d73fccf1522797d480ecea6e777",
+    "beforePID": "3827913",
+    "afterPID": "3828188",
+    "beforeTick": 804,
+    "afterTick": 804,
+    "coldExactReadback": true
+  },
+  "allGlobSnapshotCount": 18,
+  "allGlobSnapshotsOriginalHistory": {
+    "historySha256": "0277be7b71f0155c067f187d0795cb2e9fe2fe7a595264d39cb32169c89d61ee",
+    "retainedRingAttemptIds": [
+      "tk1_1_9992ef348b720174",
+      "tk1_2_563d0bd13dd4ea10",
+      "tk1_3_1429d627c9e7b52c"
+    ],
+    "retainedRealReceiptIds": [
+      "5096bb4bbf5435c",
+      "ea82c5ad9941756",
+      "1215ccbb7652168"
+    ]
+  },
+  "allGlobSnapshotsOriginalBundleSha256": "9d300172be0bed439e93b7a47d206dcfa3fc5b9db727a571f8ffa761a14f7f4d",
+  "exactTwoPreSetupArtifacts": {
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c2-after-align-before-setup-snapshot.json": "9cc0e90dee90918b684cad7878a08c2772ba16250b75a3e2c8be71489273e43b",
+    "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/t4-c2-before-setup-after-real-drain-snapshot.json": "e7dc8609b33a63b83d2d4fef1715e30a9b1e30a8278385af12ca958fbdf6c750"
+  },
+  "preSetupStillIncludedInOriginalHistoryAndBundleChecks": true,
+  "expiredGateExceptionRequiresSameFixtureTickZeroCargoAndSetupBeforeFullMemory": true,
+  "postSetupExpiredTaskEntireJsonCheckRetained": true,
+  "originalStrict60SamplesAndCanonicalPayloadGatesUnmodified": true,
+  "negativeChecks": {
+    "passed": true,
+    "skipped": 0,
+    "worldModified": false,
+    "sceneReplayed": false,
+    "method": "只在内存复制件中变更；所有原件只读",
+    "tests": [
+      {
+        "case": "duplicate-case",
+        "passed": true,
+        "error": "完整入口拒绝重复/缩写/未知flag: --case"
+      },
+      {
+        "case": "duplicate-root",
+        "passed": true,
+        "error": "完整入口拒绝重复/缩写/未知flag: --run-root"
+      },
+      {
+        "case": "mixed-selfcheck",
+        "passed": true,
+        "error": "完整入口selfcheck/formal模式混合或必需flag不全"
+      },
+      {
+        "case": "align/memory",
+        "passed": true,
+        "error": "fresh preSetup 路径/SHA/全 Memory/code/raw tx/ownedStore 不等已独验的自身原 anchor"
+      },
+      {
+        "case": "align/code",
+        "passed": true,
+        "error": "fresh preSetup 路径/SHA/全 Memory/code/raw tx/ownedStore 不等已独验的自身原 anchor"
+      },
+      {
+        "case": "align/transaction",
+        "passed": true,
+        "error": "fresh preSetup 路径/SHA/全 Memory/code/raw tx/ownedStore 不等已独验的自身原 anchor"
+      },
+      {
+        "case": "align/ownedStore",
+        "passed": true,
+        "error": "fresh preSetup 路径/SHA/全 Memory/code/raw tx/ownedStore 不等已独验的自身原 anchor"
+      },
+      {
+        "case": "align/issuedState",
+        "passed": true,
+        "error": "fresh preSetup 提前发行/带责任/提前安装旧 cancelled task"
+      },
+      {
+        "case": "align/oldTask",
+        "passed": true,
+        "error": "fresh preSetup 提前发行/带责任/提前安装旧 cancelled task"
+      },
+      {
+        "case": "align/wrongPath",
+        "passed": true,
+        "error": "fresh preSetup 路径/SHA/全 Memory/code/raw tx/ownedStore 不等已独验的自身原 anchor"
+      },
+      {
+        "case": "drain/memory",
+        "passed": true,
+        "error": "fresh preSetup 路径/SHA/全 Memory/code/raw tx/ownedStore 不等已独验的自身原 anchor"
+      },
+      {
+        "case": "drain/code",
+        "passed": true,
+        "error": "fresh preSetup 路径/SHA/全 Memory/code/raw tx/ownedStore 不等已独验的自身原 anchor"
+      },
+      {
+        "case": "drain/transaction",
+        "passed": true,
+        "error": "fresh preSetup 路径/SHA/全 Memory/code/raw tx/ownedStore 不等已独验的自身原 anchor"
+      },
+      {
+        "case": "drain/ownedStore",
+        "passed": true,
+        "error": "fresh preSetup 路径/SHA/全 Memory/code/raw tx/ownedStore 不等已独验的自身原 anchor"
+      },
+      {
+        "case": "drain/issuedState",
+        "passed": true,
+        "error": "fresh preSetup 提前发行/带责任/提前安装旧 cancelled task"
+      },
+      {
+        "case": "drain/oldTask",
+        "passed": true,
+        "error": "fresh preSetup 提前发行/带责任/提前安装旧 cancelled task"
+      },
+      {
+        "case": "drain/wrongPath",
+        "passed": true,
+        "error": "fresh preSetup 路径/SHA/全 Memory/code/raw tx/ownedStore 不等已独验的自身原 anchor"
+      }
+    ]
+  }
+}

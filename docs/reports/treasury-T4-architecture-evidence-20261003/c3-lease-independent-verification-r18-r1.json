@@ -1,0 +1,227 @@
+{
+  "schema": "screeps-t4-semantic-verification/v1",
+  "isolatedWorldOnly": true,
+  "passed": true,
+  "cases": [
+    {
+      "case": "c3",
+      "passed": true,
+      "completeC3Case": false,
+      "verifiedScenario": "lease",
+      "evidenceClass": "real_isolated_engine",
+      "realNativeReceiptCount": 0,
+      "scenarios": [
+        {
+          "scenario": "lease",
+          "passed": true,
+          "evidenceClass": "real_isolated_engine",
+          "bundleSha256": "9d300172be0bed439e93b7a47d206dcfa3fc5b9db727a571f8ffa761a14f7f4d",
+          "history": {
+            "historySha256": "0277be7b71f0155c067f187d0795cb2e9fe2fe7a595264d39cb32169c89d61ee",
+            "retainedRingAttemptIds": [
+              "tk1_1_9992ef348b720174",
+              "tk1_2_563d0bd13dd4ea10",
+              "tk1_3_1429d627c9e7b52c"
+            ],
+            "retainedRealReceiptIds": [
+              "5096bb4bbf5435c",
+              "ea82c5ad9941756",
+              "1215ccbb7652168"
+            ]
+          },
+          "preparation": {
+            "preparationSchema": "revised-independent-lab-preparation/v1",
+            "sourceDatabaseSha256": "cdd36d0b0013bb641019290820f86972b3e4797910de24d95a44133b500cb43c",
+            "sourceTick": 801,
+            "preparationSha256": "ced476ef35cdc53665b506c1881aff8cd8d627eed88cb5794efe5707add84366",
+            "realT3ReceiptId": "1215ccbb7652168",
+            "originalDatabaseFullHistoryIndependentlyRead": true,
+            "actualOriginalDatabasePaused": true,
+            "preservedHistoryEntries": 9,
+            "actualOriginalT4StateAndResponsibilitiesAbsent": true,
+            "stoppedPreconditionIndependentlyChecked": true,
+            "missingPreparationFlagsInvented": false,
+            "frozenBaseline": {
+              "databaseFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/private-databases/db-frozen-pre-t4.json",
+              "databaseSha256": "bf23559afdc92989d715d2ef2219acdd7f97f5bf60c32b0787af6874bf0cc2c3",
+              "persistedTick": 801,
+              "storedGameTimeType": "int",
+              "persistedMemorySha256": "778cd9c1256895dc559e7f1fc9b6c9d9e9476503bb595f3a7f4455cdfb920c0c"
+            }
+          },
+          "fixture": {
+            "originalTaskAmount": 913,
+            "productGoal": 30,
+            "realProductStock": 0,
+            "realOHStock": 5,
+            "realOHDeficit": 25,
+            "counterpartUH": 30
+          },
+          "coldFixture": {
+            "databaseFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/../private-databases/db-t4-c3-lease-configured-fixture.json",
+            "databaseSha256": "8bfb208593905208e00303e6e76092e69208ead5cf2de30889e4e2ad8f87e0ae",
+            "persistedTick": 804,
+            "storedGameTimeType": "int",
+            "persistedMemorySha256": "1f78b4a4d40b9c742b5096b54639ed8193205905cc9c55981cc888de4447ad2c",
+            "beforePID": "3836897",
+            "afterPID": "3837326",
+            "beforeTick": 804,
+            "afterTick": 804,
+            "coldExactReadback": true
+          },
+          "pauseStability": {
+            "drivers": 8,
+            "diagnosticUnmatchedDrivers": [],
+            "requiredStableMs": 10000,
+            "maxWaitMs": 60000,
+            "minimumObservedStableMs": 10142,
+            "bindings": [
+              {
+                "driverNonceKey": "__labT4EnableResultNonce",
+                "driverSuffix": "-executed",
+                "snapshot": "t4-c3-lease-enabled-pilot"
+              },
+              {
+                "driver": "t4-c3-lease-preparing-driver",
+                "snapshot": "t4-c3-lease-preparing-no-responsibility"
+              },
+              {
+                "driver": "t4-c3-lease-lease-expired-driver",
+                "snapshot": "t4-c3-lease-lease-expired-no-demand"
+              },
+              {
+                "driver": "t4-c3-lease-stopped-driver",
+                "snapshot": "t4-c3-lease-stopped"
+              },
+              {
+                "driver": "t4-c3-lease-handback-driver",
+                "snapshot": "t4-c3-lease-ordinary-handback"
+              },
+              {
+                "driver": "t4-c3-lease-reset-driver",
+                "snapshot": "t4-c3-lease-after-reset"
+              }
+            ],
+            "verified": [
+              {
+                "label": "t4-c3-lease-enable-executed",
+                "matched": true,
+                "diagnosticOnly": false,
+                "observedStableMs": 10158,
+                "stableSamples": 41,
+                "samples": 45,
+                "barrierWallMs": 11187,
+                "endTick": 805
+              },
+              {
+                "label": "t4-c3-lease-handback-driver",
+                "matched": true,
+                "diagnosticOnly": false,
+                "observedStableMs": 10142,
+                "stableSamples": 41,
+                "samples": 44,
+                "barrierWallMs": 10935,
+                "endTick": 811
+              },
+              {
+                "label": "t4-c3-lease-lease-expired-driver",
+                "matched": true,
+                "diagnosticOnly": false,
+                "observedStableMs": 10152,
+                "stableSamples": 41,
+                "samples": 41,
+                "barrierWallMs": 10166,
+                "endTick": 808
+              },
+              {
+                "label": "t4-c3-lease-pre-setup-cargo-drain",
+                "matched": true,
+                "diagnosticOnly": false,
+                "observedStableMs": 10235,
+                "stableSamples": 41,
+                "samples": 41,
+                "barrierWallMs": 10239,
+                "endTick": 804
+              },
+              {
+                "label": "t4-c3-lease-preparing-driver",
+                "matched": true,
+                "diagnosticOnly": false,
+                "observedStableMs": 10160,
+                "stableSamples": 41,
+                "samples": 44,
+                "barrierWallMs": 10934,
+                "endTick": 806
+              },
+              {
+                "label": "t4-c3-lease-reset-driver",
+                "matched": true,
+                "diagnosticOnly": false,
+                "observedStableMs": 10158,
+                "stableSamples": 41,
+                "samples": 41,
+                "barrierWallMs": 10172,
+                "endTick": 813
+              },
+              {
+                "label": "t4-c3-lease-stopped-driver",
+                "matched": true,
+                "diagnosticOnly": false,
+                "observedStableMs": 10148,
+                "stableSamples": 41,
+                "samples": 44,
+                "barrierWallMs": 10935,
+                "endTick": 809
+              },
+              {
+                "label": "t4-c3-lease-warmup",
+                "matched": true,
+                "diagnosticOnly": false,
+                "observedStableMs": 10170,
+                "stableSamples": 41,
+                "samples": 47,
+                "barrierWallMs": 11730,
+                "endTick": 803
+              }
+            ]
+          },
+          "restart": {
+            "databaseFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/../private-databases/db-before-t4-c3-lease-stopped-restart.json",
+            "databaseSha256": "c8c040fb9aa24eb69451c50941bc7d888705bb841c499a6753e57c184f61d587",
+            "persistedTick": 811,
+            "storedGameTimeType": "int",
+            "persistedMemorySha256": "2aa59b8b177cb9f4cfe0dc77a9f14bb3fc35df01863f331f3c02fec03291d42f",
+            "beforePID": "3837326",
+            "afterPID": "3838262",
+            "beforeTick": 811,
+            "afterTick": 813,
+            "coldExactReadback": false
+          },
+          "realNativeReceiptCount": 0,
+          "originalUnexecutedTaskAmount": 913,
+          "permanentBudgetEntries": 0,
+          "initialRealOHDeficit": 25,
+          "afterGoal4ActualOHStock": 0,
+          "afterGoal4ActualProductStock": 5,
+          "afterGoal4ActualNewOHNeed": 0,
+          "ordinaryTaskCancelledAtActualFullPlanningTick": 810,
+          "automaticCloseReason": "cycle_lease_expired",
+          "ordinaryHandbackReceiptId": "5f3dff7e87275d9"
+        }
+      ]
+    }
+  ],
+  "realNativeReceiptCountAcrossIndependentCases": 0,
+  "syntheticHistoryExcludedFromRealNativeCounts": true,
+  "verificationArtifacts": {
+    "verifierFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/verify-t4.py",
+    "verifierSha256": "e4357be83d19305f3fccb67d080c80294b56562f7b12c54714c0b8a4fcc4d34f",
+    "planFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/verify-t4-plan-semantic-r18.json",
+    "planSha256": "476281fa8bc750de073ddc28059a81639bb113f00fdf6f7636e7775179175529",
+    "manifestFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/candidate/manifest.json",
+    "manifestSha256": "6b2b73e71b4ede5f912cfbe14f52ee8c8cc8f803f4af5dacf3602ed31c4e97a9",
+    "mainFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/candidate/main.js",
+    "mainSha256": "9d300172be0bed439e93b7a47d206dcfa3fc5b9db727a571f8ffa761a14f7f4d",
+    "mainBytes": 3443761
+  }
+}

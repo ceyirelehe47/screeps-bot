@@ -1,0 +1,1893 @@
+{
+  "schema": "screeps-t4-semantic-verification/v1",
+  "isolatedWorldOnly": true,
+  "passed": true,
+  "cases": [
+    {
+      "case": "c4",
+      "passed": true,
+      "evidenceClass": "synthetic_history_real_engine_performance",
+      "syntheticPerformanceOnly": true,
+      "scenarios": [
+        {
+          "scenario": "emptybook",
+          "passed": true,
+          "evidenceClass": "synthetic_history_real_engine_performance",
+          "mainSha256": "9d300172be0bed439e93b7a47d206dcfa3fc5b9db727a571f8ffa761a14f7f4d",
+          "history": {
+            "historySha256": "0277be7b71f0155c067f187d0795cb2e9fe2fe7a595264d39cb32169c89d61ee",
+            "retainedRingAttemptIds": [
+              "tk1_1_9992ef348b720174",
+              "tk1_2_563d0bd13dd4ea10",
+              "tk1_3_1429d627c9e7b52c"
+            ],
+            "retainedRealReceiptIds": [
+              "5096bb4bbf5435c",
+              "ea82c5ad9941756",
+              "1215ccbb7652168"
+            ]
+          },
+          "preparation": {
+            "preparationSchema": "revised-independent-lab-preparation/v1",
+            "sourceDatabaseSha256": "cdd36d0b0013bb641019290820f86972b3e4797910de24d95a44133b500cb43c",
+            "sourceTick": 801,
+            "preparationSha256": "ced476ef35cdc53665b506c1881aff8cd8d627eed88cb5794efe5707add84366",
+            "realT3ReceiptId": "1215ccbb7652168",
+            "originalDatabaseFullHistoryIndependentlyRead": true,
+            "actualOriginalDatabasePaused": true,
+            "preservedHistoryEntries": 9,
+            "actualOriginalT4StateAndResponsibilitiesAbsent": true,
+            "stoppedPreconditionIndependentlyChecked": true,
+            "missingPreparationFlagsInvented": false,
+            "frozenBaseline": {
+              "databaseFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/private-databases/db-frozen-pre-t4.json",
+              "databaseSha256": "bf23559afdc92989d715d2ef2219acdd7f97f5bf60c32b0787af6874bf0cc2c3",
+              "persistedTick": 801,
+              "storedGameTimeType": "int",
+              "persistedMemorySha256": "778cd9c1256895dc559e7f1fc9b6c9d9e9476503bb595f3a7f4455cdfb920c0c"
+            }
+          },
+          "coldFixture": {
+            "databaseFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/../private-databases/db-t4-perf-emptybook-configured-fixture.json",
+            "databaseSha256": "03a605251450a1411c99eea253bdd6b3a820f70ac6decea90a826a0494133e0d",
+            "persistedTick": 6000,
+            "storedGameTimeType": "str",
+            "persistedMemorySha256": "aeee1bea15dd2abaf2705f8bf9ea4ab2a239720ef9401f416809cd170acc50fd",
+            "beforePID": "3765811",
+            "afterPID": "3765937",
+            "beforeTick": 6000,
+            "afterTick": 6000,
+            "coldExactReadback": true
+          },
+          "pauseStability": {
+            "label": "t4-perf-emptybook-measure",
+            "matched": true,
+            "diagnosticOnly": false,
+            "observedStableMs": 10084,
+            "stableSamples": 38,
+            "samples": 41,
+            "barrierWallMs": 10938,
+            "endTick": 6031
+          },
+          "completedDatabase": {
+            "databaseFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/../private-databases/db-t4-perf-emptybook-completed.json",
+            "databaseSha256": "67cf076075cecbb751815e4bbb884c354fe378089152275942e4297eb41eb1a2",
+            "persistedTick": 6031,
+            "storedGameTimeType": "int",
+            "persistedMemorySha256": "bfc7b67ea06e67e2fc7551dd3729d9e6b029a25cbb0e23f1cda3ee4ee16eae14"
+          },
+          "naturalTerminalTaskPruning": {
+            "cleanupInterval": 17,
+            "terminalTaskRetentionTicks": 200,
+            "strictAgeGreaterThanRetention": true,
+            "removed": [
+              {
+                "id": "lab-t2-c2-UH",
+                "status": "done",
+                "updatedAt": 779,
+                "taskSha256": "1ed60cccf672900c4c86dc95bed394acc4df52c5024dcb900b782d881ddc6eb7",
+                "firstAbsentAtTick": 6001,
+                "ageTicks": 5222
+              },
+              {
+                "id": "lab-t2-c2-block-source-ordinary",
+                "status": "done",
+                "updatedAt": 780,
+                "taskSha256": "8b6d463f59b9faaa3ef9207df3b6f3fe18952d502b103900d13645847152a95e",
+                "firstAbsentAtTick": 6001,
+                "ageTicks": 5221
+              },
+              {
+                "id": "lab-t2-c2-block-target-ordinary",
+                "status": "done",
+                "updatedAt": 780,
+                "taskSha256": "cf7f2f8eb4882002808e6cb67b0f6aaaace7ea407d3d04261d6335dafc245f3e",
+                "firstAbsentAtTick": 6001,
+                "ageTicks": 5221
+              },
+              {
+                "id": "lab-t2-c2-pre-source-ordinary",
+                "status": "done",
+                "updatedAt": 760,
+                "taskSha256": "88f9585264ad8ac877c1c698d1acd3d5f073d19941db425f15674541a39d8e41",
+                "firstAbsentAtTick": 6001,
+                "ageTicks": 5241
+              },
+              {
+                "id": "lab-t2-c2-pre-target-ordinary",
+                "status": "done",
+                "updatedAt": 760,
+                "taskSha256": "8db545e5eec3842ef0c34de5fd91866da81018fd8b521949a926550039b734cd",
+                "firstAbsentAtTick": 6001,
+                "ageTicks": 5241
+              },
+              {
+                "id": "lab-t2-c2-unrelated-ordinary",
+                "status": "done",
+                "updatedAt": 770,
+                "taskSha256": "a0a3f8f34fdff0e01ffa976bdae0a52e227c71f770ba4c22fa8b412c5eff196a",
+                "firstAbsentAtTick": 6001,
+                "ageTicks": 5231
+              },
+              {
+                "id": "lab-t3-c1-26-OH",
+                "status": "cancelled",
+                "updatedAt": 800,
+                "taskSha256": "cde2ac840dc5de5fa00e0e275af4627c5ad722be4382b72572401648e40a7410",
+                "firstAbsentAtTick": 6001,
+                "ageTicks": 5201
+              },
+              {
+                "id": "lab-t3-c1-26-resume-inbound-ordinary",
+                "status": "done",
+                "updatedAt": 800,
+                "taskSha256": "154e4e2c6bbe54cf4ef6fc9acf5b321ae495732697f2c0ba652b5e63cebf2f05",
+                "firstAbsentAtTick": 6001,
+                "ageTicks": 5201
+              }
+            ],
+            "retainedTaskIds": [],
+            "pendingOrNativeDebtRemoved": false,
+            "preciseNonTreasuryMaintenance": {
+              "sourceReferences": [
+                "src/runtime/remoteMining.ts:449-509",
+                "src/runtime/remoteMining.ts:1678-1702",
+                "src/runtime/marketSaleLifecycle.ts:503-528"
+              ],
+              "oldScoutTimeoutRows": [
+                "W7N8",
+                "W9N9"
+              ],
+              "scoutTimeoutTick": 6000,
+              "scoutTimeoutStrictAge": 1500,
+              "retryAtTick": 11000,
+              "newRemoteRoom": "W9N7",
+              "removedScoutConfigIds": [
+                "W8N8:remoteMine:W7N8:scout",
+                "W9N8:remoteMine:W9N9:scout"
+              ],
+              "createdScoutConfigId": "W9N8:remoteMine:W9N7:scout",
+              "drainConfirmationCountBefore": 547,
+              "drainConfirmationCountAfter": 578,
+              "drainLastZeroTick": 6030,
+              "actualUniqueMainTicks": 31,
+              "otherDataExactlyPreserved": true
+            },
+            "rawDriverTtlOnlyDataAuditAllowed": false,
+            "driverAudit": {
+              "schema": "screeps-t4-natural-expired-task-pruning/v1",
+              "terminalTaskTtl": 200,
+              "cleanupInterval": 17,
+              "anchor": "updatedAt",
+              "strictBoundary": ">",
+              "terminalStatuses": [
+                "done",
+                "cancelled",
+                "failed"
+              ],
+              "sourceReferences": [
+                "src/runtime/memoryCleanup.ts:17,24,662-665",
+                "src/runtime/logistics/resourceTransferTasks.ts:560-565",
+                "src/runtime/treasuryTaskCommitmentBridge.ts:98-113"
+              ],
+              "sourceNativeResponsibilityClear": true,
+              "entries": [
+                {
+                  "taskId": "lab-t2-c2-UH",
+                  "sourceStatus": "done",
+                  "sourceUpdatedAt": 779,
+                  "sourceRemainingAmount": 0,
+                  "sourceTaskSha256": "1ed60cccf672900c4c86dc95bed394acc4df52c5024dcb900b782d881ddc6eb7",
+                  "firstAbsentAtTick": 6001,
+                  "ageTicksAtFirstAbsence": 5222,
+                  "allowed": true,
+                  "reasons": [],
+                  "sourceTask": {
+                    "id": "lab-t2-c2-UH",
+                    "resource": "UH",
+                    "fromRoomName": "E4N58",
+                    "toRoomName": "E1N57",
+                    "amount": 100,
+                    "remainingAmount": 0,
+                    "status": "done",
+                    "origin": "automatic",
+                    "reason": "synthesis:E1N57:UH2O",
+                    "createdAt": 756,
+                    "updatedAt": 779,
+                    "lastProgressAt": 779
+                  }
+                },
+                {
+                  "taskId": "lab-t2-c2-pre-source-ordinary",
+                  "sourceStatus": "done",
+                  "sourceUpdatedAt": 760,
+                  "sourceRemainingAmount": 0,
+                  "sourceTaskSha256": "88f9585264ad8ac877c1c698d1acd3d5f073d19941db425f15674541a39d8e41",
+                  "firstAbsentAtTick": 6001,
+                  "ageTicksAtFirstAbsence": 5241,
+                  "allowed": true,
+                  "reasons": [],
+                  "sourceTask": {
+                    "id": "lab-t2-c2-pre-source-ordinary",
+                    "resource": "H",
+                    "fromRoomName": "W9N8",
+                    "toRoomName": "E4N58",
+                    "amount": 100,
+                    "remainingAmount": 0,
+                    "status": "done",
+                    "origin": "manual",
+                    "createdAt": 736,
+                    "updatedAt": 760,
+                    "lastProgressAt": 760
+                  }
+                },
+                {
+                  "taskId": "lab-t2-c2-pre-target-ordinary",
+                  "sourceStatus": "done",
+                  "sourceUpdatedAt": 760,
+                  "sourceRemainingAmount": 0,
+                  "sourceTaskSha256": "8db545e5eec3842ef0c34de5fd91866da81018fd8b521949a926550039b734cd",
+                  "firstAbsentAtTick": 6001,
+                  "ageTicksAtFirstAbsence": 5241,
+                  "allowed": true,
+                  "reasons": [],
+                  "sourceTask": {
+                    "id": "lab-t2-c2-pre-target-ordinary",
+                    "resource": "H",
+                    "fromRoomName": "W8N8",
+                    "toRoomName": "E1N57",
+                    "amount": 100,
+                    "remainingAmount": 0,
+                    "status": "done",
+                    "origin": "manual",
+                    "createdAt": 736,
+                    "updatedAt": 760,
+                    "lastProgressAt": 760
+                  }
+                },
+                {
+                  "taskId": "lab-t2-c2-block-source-ordinary",
+                  "sourceStatus": "done",
+                  "sourceUpdatedAt": 780,
+                  "sourceRemainingAmount": 0,
+                  "sourceTaskSha256": "8b6d463f59b9faaa3ef9207df3b6f3fe18952d502b103900d13645847152a95e",
+                  "firstAbsentAtTick": 6001,
+                  "ageTicksAtFirstAbsence": 5221,
+                  "allowed": true,
+                  "reasons": [],
+                  "sourceTask": {
+                    "id": "lab-t2-c2-block-source-ordinary",
+                    "resource": "H",
+                    "fromRoomName": "W9N8",
+                    "toRoomName": "E4N58",
+                    "amount": 100,
+                    "remainingAmount": 0,
+                    "status": "done",
+                    "origin": "manual",
+                    "createdAt": 746,
+                    "updatedAt": 780,
+                    "lastProgressAt": 780
+                  }
+                },
+                {
+                  "taskId": "lab-t2-c2-block-target-ordinary",
+                  "sourceStatus": "done",
+                  "sourceUpdatedAt": 780,
+                  "sourceRemainingAmount": 0,
+                  "sourceTaskSha256": "cf7f2f8eb4882002808e6cb67b0f6aaaace7ea407d3d04261d6335dafc245f3e",
+                  "firstAbsentAtTick": 6001,
+                  "ageTicksAtFirstAbsence": 5221,
+                  "allowed": true,
+                  "reasons": [],
+                  "sourceTask": {
+                    "id": "lab-t2-c2-block-target-ordinary",
+                    "resource": "H",
+                    "fromRoomName": "W8N8",
+                    "toRoomName": "E1N57",
+                    "amount": 100,
+                    "remainingAmount": 0,
+                    "status": "done",
+                    "origin": "manual",
+                    "createdAt": 746,
+                    "updatedAt": 780,
+                    "lastProgressAt": 780
+                  }
+                },
+                {
+                  "taskId": "lab-t2-c2-unrelated-ordinary",
+                  "sourceStatus": "done",
+                  "sourceUpdatedAt": 770,
+                  "sourceRemainingAmount": 0,
+                  "sourceTaskSha256": "a0a3f8f34fdff0e01ffa976bdae0a52e227c71f770ba4c22fa8b412c5eff196a",
+                  "firstAbsentAtTick": 6001,
+                  "ageTicksAtFirstAbsence": 5231,
+                  "allowed": true,
+                  "reasons": [],
+                  "sourceTask": {
+                    "id": "lab-t2-c2-unrelated-ordinary",
+                    "resource": "H",
+                    "fromRoomName": "E3N59",
+                    "toRoomName": "W8N8",
+                    "amount": 100,
+                    "remainingAmount": 0,
+                    "status": "done",
+                    "origin": "manual",
+                    "createdAt": 746,
+                    "updatedAt": 770,
+                    "lastProgressAt": 770
+                  }
+                },
+                {
+                  "taskId": "lab-t3-c1-26-OH",
+                  "sourceStatus": "cancelled",
+                  "sourceUpdatedAt": 800,
+                  "sourceRemainingAmount": 887,
+                  "sourceTaskSha256": "cde2ac840dc5de5fa00e0e275af4627c5ad722be4382b72572401648e40a7410",
+                  "firstAbsentAtTick": 6001,
+                  "ageTicksAtFirstAbsence": 5201,
+                  "allowed": true,
+                  "reasons": [],
+                  "sourceTask": {
+                    "id": "lab-t3-c1-26-OH",
+                    "resource": "OH",
+                    "fromRoomName": "E4N58",
+                    "toRoomName": "E1N57",
+                    "amount": 913,
+                    "remainingAmount": 887,
+                    "status": "cancelled",
+                    "origin": "automatic",
+                    "reason": "synthesis:E1N57:UH2O",
+                    "createdAt": 788,
+                    "updatedAt": 800,
+                    "lastProgressAt": 791,
+                    "lastError": "automatic_synthesis_need_covered"
+                  }
+                },
+                {
+                  "taskId": "lab-t3-c1-26-resume-inbound-ordinary",
+                  "sourceStatus": "done",
+                  "sourceUpdatedAt": 800,
+                  "sourceRemainingAmount": 0,
+                  "sourceTaskSha256": "154e4e2c6bbe54cf4ef6fc9acf5b321ae495732697f2c0ba652b5e63cebf2f05",
+                  "firstAbsentAtTick": 6001,
+                  "ageTicksAtFirstAbsence": 5201,
+                  "allowed": true,
+                  "reasons": [],
+                  "sourceTask": {
+                    "id": "lab-t3-c1-26-resume-inbound-ordinary",
+                    "resource": "H",
+                    "fromRoomName": "W9N8",
+                    "toRoomName": "E4N58",
+                    "amount": 100,
+                    "remainingAmount": 0,
+                    "status": "done",
+                    "origin": "manual",
+                    "createdAt": 775,
+                    "updatedAt": 800,
+                    "lastProgressAt": 800
+                  }
+                }
+              ],
+              "retainedTaskIds": [],
+              "changedTaskIds": [],
+              "addedTaskIds": [],
+              "pendingOrDebtRemovalTaskIds": [],
+              "originalResourceTaskHistoryExact": false,
+              "retainedResourceTaskHistoryExact": true,
+              "dataExactExceptAllowedPruning": false,
+              "allowed": false
+            }
+          },
+          "syntheticBudgetHistoryEntries": 0,
+          "syntheticClosedCertificates": 0,
+          "realNativeReceiptCount": 0,
+          "actualMemoryUtf8Bytes": 1595756,
+          "cold": {
+            "kind": "cold",
+            "tick": 6000,
+            "wallMs": 1790986522671,
+            "mainTotal": 90.95505700000004,
+            "wrappedMainUsed": null,
+            "postMainUsed": 261.569837,
+            "treasuryBeginTick": 13.73318599999999,
+            "treasuryEndTick": 0,
+            "creepWork": 0.0382240000000138,
+            "phasePresence": {
+              "treasuryBeginTick": true,
+              "treasuryEndTick": false,
+              "creepWork": true
+            },
+            "limit": 100,
+            "tickLimit": 500,
+            "bucket": 10000,
+            "usedAfterBenchmark": 261.798374,
+            "remainingTickHeadroom": 238.20162599999998,
+            "carrierWork": [],
+            "workObserved": false,
+            "benchmark": null,
+            "rawMemoryChars": 1500000,
+            "buildHash": "9666cfb48f698d80f47c02d6e0bbd1aac18e5de22a5c67a8d52267b4cc722a87",
+            "mainSha256": "9d300172be0bed439e93b7a47d206dcfa3fc5b9db727a571f8ffa761a14f7f4d",
+            "actualProfilerLatest": {
+              "tick": 6000,
+              "shard": "shard1",
+              "totalUsed": 90.95505700000004,
+              "bucket": 10000,
+              "limit": 100,
+              "tickLimit": 500,
+              "phases": {
+                "treasuryBeginTick": 13.73318599999999,
+                "announceDeploy": 0.09564599999998791,
+                "marketSalePreflight": 14.641953,
+                "pixelGenerator": 0.013969000000003007,
+                "productionMonitor": 3.390871000000004,
+                "nukerControl": 1.8996780000000228,
+                "hubPlanner": 0.35222699999997076,
+                "hubUpgradeControl": 0.862577999999985,
+                "synthesisControl": 2.146310000000028,
+                "factoryControl": 1.0277120000000082,
+                "mineralExtraction": 0.9314529999999763,
+                "resourceControl": 2.793403000000012,
+                "marketSaleAutomation": 2.7088489999999865,
+                "hubProgressAnalytics": 0.059536999999977525,
+                "hubProgressOverlay": 0.12325800000002118,
+                "externalTelemetryExport": 0.05308800000000247,
+                "memoryCleanup": 0.10142999999999347,
+                "portalDiscovery": 0.0388569999999504,
+                "flagControl": 1.669622000000004,
+                "crossShardSignals": 0.23969099999999344,
+                "interShardControl": 0.04692499999998745,
+                "warControl": 0.2079249999999888,
+                "powerBankObserver": 0.3285670000000209,
+                "powerBankHarvest": 0.9850460000000112,
+                "powerCreepControl": 0.15172400000000152,
+                "powerSpawnControl": 0.20451200000002245,
+                "roomPlannerConstruction": 5.998200999999995,
+                "linkControl": 0.7423640000000091,
+                "coreDefense": 0.6890630000000328,
+                "defenseMode": 17.393748000000016,
+                "homeDefense": 0.6620700000000284,
+                "towerControl": 0.16229400000003125,
+                "refreshWorkerTasks": 2.166772999999978,
+                "bootstrapRooms": 2.511530999999991,
+                "remoteMining": 5.274292000000003,
+                "scheduleSpawnTasks": 1.2762200000000234,
+                "spawnWork": 0.04994800000002897,
+                "creepWork": 0.0382240000000138,
+                "empireInventoryShadow": 4.574231000000026,
+                "treasuryT1Shadow": 0.14278300000000854
+              },
+              "fixedActionCounts": {},
+              "untracked": 0.46529799999990473,
+              "emaTotalUsed": 90.95505700000004,
+              "rooms": {},
+              "heap": null
+            },
+            "actualResourceTransferTaskIds": [
+              "lab-t2-c2-UH",
+              "lab-t2-c2-block-source-ordinary",
+              "lab-t2-c2-block-target-ordinary",
+              "lab-t2-c2-pre-source-ordinary",
+              "lab-t2-c2-pre-target-ordinary",
+              "lab-t2-c2-unrelated-ordinary",
+              "lab-t3-c1-26-OH",
+              "lab-t3-c1-26-resume-inbound-ordinary"
+            ],
+            "actualOwnedRoomNames": [
+              "E1N57",
+              "E3N59",
+              "E4N58",
+              "W8N8",
+              "W9N8"
+            ],
+            "standing": null,
+            "treasuryCpuOverMainTotal": 0.15098870203555567,
+            "fence100CpuOverActualLimit": null,
+            "derivedPhasePresence": {
+              "treasuryBeginTick": true,
+              "treasuryEndTick": false,
+              "creepWork": true
+            }
+          },
+          "warmSamples": 30,
+          "statisticsOnlyFinalization": null,
+          "absentActualPhaseDerivedAsZeroCounts": {
+            "treasuryBeginTick": 0,
+            "treasuryEndTick": 31,
+            "creepWork": 0
+          },
+          "rawCpuSamplesModified": false,
+          "independentlyRecomputedWarmCpu": {
+            "mainTotal": {
+              "count": 30,
+              "min": 4.880029000000036,
+              "mean": 7.8137264333333345,
+              "p50": 7.143917999999985,
+              "p95": 12.126914000000056,
+              "max": 20.312378000000024
+            },
+            "wrappedMainUsed": {
+              "count": 30,
+              "min": 13.039158000000043,
+              "mean": 19.269934633333317,
+              "p50": 17.135780000000068,
+              "p95": 30.990173999999968,
+              "max": 36.943872999999996
+            },
+            "treasuryBeginTick": {
+              "count": 30,
+              "min": 2.494197999999983,
+              "mean": 4.248523399999994,
+              "p50": 3.727437999999893,
+              "p95": 6.2799269999999865,
+              "max": 12.597344000000021
+            },
+            "treasuryEndTick": {
+              "count": 30,
+              "min": 0,
+              "mean": 0.0,
+              "p50": 0,
+              "p95": 0,
+              "max": 0
+            },
+            "creepWork": {
+              "count": 30,
+              "min": 0.0012860000001637673,
+              "mean": 0.003411733333329418,
+              "p50": 0.0018279999999322172,
+              "p95": 0.003773000000023785,
+              "max": 0.04313600000000406
+            },
+            "usedAfterBenchmark": {
+              "count": 30,
+              "min": 13.11232300000006,
+              "mean": 19.485511533333366,
+              "p50": 17.215884000000074,
+              "p95": 31.190838999999983,
+              "max": 37.04493400000001
+            },
+            "remainingTickHeadroom": {
+              "count": 30,
+              "min": 462.955066,
+              "mean": 480.51448846666665,
+              "p50": 482.10781099999986,
+              "p95": 486.78474299999993,
+              "max": 486.88767699999994
+            }
+          },
+          "actualCpuLimits": [
+            100
+          ],
+          "actualTickLimits": [
+            500
+          ],
+          "minimumBucket": 9827,
+          "minimumWarmHeadroomAfterProbe": 462.955066,
+          "completed100QueryWarmProbes": 0,
+          "fenceProbeWarmCpu": null,
+          "bothOriginalCarrierWorksObservedEachWarmTick": false,
+          "sustainableComplete100ProbeCpu": null,
+          "initialCarrierCargoPhysicalDelivery": null,
+          "actualArchiveSourceFileSha256": "6f11563a04a5946ed1b5c6d6a8e183e41cf0760f52d2f8e1507d8e856ca3f33c",
+          "actualArchiveSourceIndependentlyRead": true,
+          "actualArchiveSubtreesIndependentlyChecked": 83,
+          "productionCpuBudgetVerified": false
+        },
+        {
+          "scenario": "max-idle",
+          "passed": true,
+          "evidenceClass": "synthetic_history_real_engine_performance",
+          "mainSha256": "9d300172be0bed439e93b7a47d206dcfa3fc5b9db727a571f8ffa761a14f7f4d",
+          "history": {
+            "historySha256": "0277be7b71f0155c067f187d0795cb2e9fe2fe7a595264d39cb32169c89d61ee",
+            "retainedRingAttemptIds": [
+              "tk1_1_9992ef348b720174",
+              "tk1_2_563d0bd13dd4ea10",
+              "tk1_3_1429d627c9e7b52c"
+            ],
+            "retainedRealReceiptIds": [
+              "5096bb4bbf5435c",
+              "ea82c5ad9941756",
+              "1215ccbb7652168"
+            ]
+          },
+          "preparation": {
+            "preparationSchema": "revised-independent-lab-preparation/v1",
+            "sourceDatabaseSha256": "cdd36d0b0013bb641019290820f86972b3e4797910de24d95a44133b500cb43c",
+            "sourceTick": 801,
+            "preparationSha256": "ced476ef35cdc53665b506c1881aff8cd8d627eed88cb5794efe5707add84366",
+            "realT3ReceiptId": "1215ccbb7652168",
+            "originalDatabaseFullHistoryIndependentlyRead": true,
+            "actualOriginalDatabasePaused": true,
+            "preservedHistoryEntries": 9,
+            "actualOriginalT4StateAndResponsibilitiesAbsent": true,
+            "stoppedPreconditionIndependentlyChecked": true,
+            "missingPreparationFlagsInvented": false,
+            "frozenBaseline": {
+              "databaseFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/private-databases/db-frozen-pre-t4.json",
+              "databaseSha256": "bf23559afdc92989d715d2ef2219acdd7f97f5bf60c32b0787af6874bf0cc2c3",
+              "persistedTick": 801,
+              "storedGameTimeType": "int",
+              "persistedMemorySha256": "778cd9c1256895dc559e7f1fc9b6c9d9e9476503bb595f3a7f4455cdfb920c0c"
+            }
+          },
+          "coldFixture": {
+            "databaseFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/../private-databases/db-t4-perf-max-idle-configured-fixture.json",
+            "databaseSha256": "6b5a5de617447961959513fb320798e1c7cdcbfe11d34d4c8f8c06c02fa084e4",
+            "persistedTick": 6000,
+            "storedGameTimeType": "str",
+            "persistedMemorySha256": "7e3ba54dd41c40ed3fd3ca9d937dd21b0bb72a7cc836aed50731a78bd2c5caf9",
+            "beforePID": "3767486",
+            "afterPID": "3767644",
+            "beforeTick": 6000,
+            "afterTick": 6000,
+            "coldExactReadback": true
+          },
+          "pauseStability": {
+            "label": "t4-perf-max-idle-measure",
+            "matched": true,
+            "diagnosticOnly": false,
+            "observedStableMs": 10120,
+            "stableSamples": 38,
+            "samples": 40,
+            "barrierWallMs": 10710,
+            "endTick": 6031
+          },
+          "completedDatabase": {
+            "databaseFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/../private-databases/db-t4-perf-max-idle-completed.json",
+            "databaseSha256": "4e7915db0903eb6b6be5e2dbdfd9ffc8dd98a70b9d7043662320fa4f59c85e6b",
+            "persistedTick": 6031,
+            "storedGameTimeType": "int",
+            "persistedMemorySha256": "e0ce8da5cbcb99861c1e53786b1a1c35ebba9eba8dc0f9819d079511595e2d03"
+          },
+          "naturalTerminalTaskPruning": {
+            "cleanupInterval": 17,
+            "terminalTaskRetentionTicks": 200,
+            "strictAgeGreaterThanRetention": true,
+            "removed": [
+              {
+                "id": "lab-t2-c2-UH",
+                "status": "done",
+                "updatedAt": 779,
+                "taskSha256": "1ed60cccf672900c4c86dc95bed394acc4df52c5024dcb900b782d881ddc6eb7",
+                "firstAbsentAtTick": 6001,
+                "ageTicks": 5222
+              },
+              {
+                "id": "lab-t2-c2-block-source-ordinary",
+                "status": "done",
+                "updatedAt": 780,
+                "taskSha256": "8b6d463f59b9faaa3ef9207df3b6f3fe18952d502b103900d13645847152a95e",
+                "firstAbsentAtTick": 6001,
+                "ageTicks": 5221
+              },
+              {
+                "id": "lab-t2-c2-block-target-ordinary",
+                "status": "done",
+                "updatedAt": 780,
+                "taskSha256": "cf7f2f8eb4882002808e6cb67b0f6aaaace7ea407d3d04261d6335dafc245f3e",
+                "firstAbsentAtTick": 6001,
+                "ageTicks": 5221
+              },
+              {
+                "id": "lab-t2-c2-pre-source-ordinary",
+                "status": "done",
+                "updatedAt": 760,
+                "taskSha256": "88f9585264ad8ac877c1c698d1acd3d5f073d19941db425f15674541a39d8e41",
+                "firstAbsentAtTick": 6001,
+                "ageTicks": 5241
+              },
+              {
+                "id": "lab-t2-c2-pre-target-ordinary",
+                "status": "done",
+                "updatedAt": 760,
+                "taskSha256": "8db545e5eec3842ef0c34de5fd91866da81018fd8b521949a926550039b734cd",
+                "firstAbsentAtTick": 6001,
+                "ageTicks": 5241
+              },
+              {
+                "id": "lab-t2-c2-unrelated-ordinary",
+                "status": "done",
+                "updatedAt": 770,
+                "taskSha256": "a0a3f8f34fdff0e01ffa976bdae0a52e227c71f770ba4c22fa8b412c5eff196a",
+                "firstAbsentAtTick": 6001,
+                "ageTicks": 5231
+              },
+              {
+                "id": "lab-t3-c1-26-OH",
+                "status": "cancelled",
+                "updatedAt": 800,
+                "taskSha256": "cde2ac840dc5de5fa00e0e275af4627c5ad722be4382b72572401648e40a7410",
+                "firstAbsentAtTick": 6001,
+                "ageTicks": 5201
+              },
+              {
+                "id": "lab-t3-c1-26-resume-inbound-ordinary",
+                "status": "done",
+                "updatedAt": 800,
+                "taskSha256": "154e4e2c6bbe54cf4ef6fc9acf5b321ae495732697f2c0ba652b5e63cebf2f05",
+                "firstAbsentAtTick": 6001,
+                "ageTicks": 5201
+              }
+            ],
+            "retainedTaskIds": [],
+            "pendingOrNativeDebtRemoved": false,
+            "preciseNonTreasuryMaintenance": {
+              "sourceReferences": [
+                "src/runtime/remoteMining.ts:449-509",
+                "src/runtime/remoteMining.ts:1678-1702",
+                "src/runtime/marketSaleLifecycle.ts:503-528"
+              ],
+              "oldScoutTimeoutRows": [
+                "W7N8",
+                "W9N9"
+              ],
+              "scoutTimeoutTick": 6000,
+              "scoutTimeoutStrictAge": 1500,
+              "retryAtTick": 11000,
+              "newRemoteRoom": "W9N7",
+              "removedScoutConfigIds": [
+                "W8N8:remoteMine:W7N8:scout",
+                "W9N8:remoteMine:W9N9:scout"
+              ],
+              "createdScoutConfigId": "W9N8:remoteMine:W9N7:scout",
+              "drainConfirmationCountBefore": 547,
+              "drainConfirmationCountAfter": 578,
+              "drainLastZeroTick": 6030,
+              "actualUniqueMainTicks": 31,
+              "otherDataExactlyPreserved": true
+            },
+            "rawDriverTtlOnlyDataAuditAllowed": false,
+            "driverAudit": {
+              "schema": "screeps-t4-natural-expired-task-pruning/v1",
+              "terminalTaskTtl": 200,
+              "cleanupInterval": 17,
+              "anchor": "updatedAt",
+              "strictBoundary": ">",
+              "terminalStatuses": [
+                "done",
+                "cancelled",
+                "failed"
+              ],
+              "sourceReferences": [
+                "src/runtime/memoryCleanup.ts:17,24,662-665",
+                "src/runtime/logistics/resourceTransferTasks.ts:560-565",
+                "src/runtime/treasuryTaskCommitmentBridge.ts:98-113"
+              ],
+              "sourceNativeResponsibilityClear": true,
+              "entries": [
+                {
+                  "taskId": "lab-t2-c2-UH",
+                  "sourceStatus": "done",
+                  "sourceUpdatedAt": 779,
+                  "sourceRemainingAmount": 0,
+                  "sourceTaskSha256": "1ed60cccf672900c4c86dc95bed394acc4df52c5024dcb900b782d881ddc6eb7",
+                  "firstAbsentAtTick": 6001,
+                  "ageTicksAtFirstAbsence": 5222,
+                  "allowed": true,
+                  "reasons": [],
+                  "sourceTask": {
+                    "id": "lab-t2-c2-UH",
+                    "resource": "UH",
+                    "fromRoomName": "E4N58",
+                    "toRoomName": "E1N57",
+                    "amount": 100,
+                    "remainingAmount": 0,
+                    "status": "done",
+                    "origin": "automatic",
+                    "reason": "synthesis:E1N57:UH2O",
+                    "createdAt": 756,
+                    "updatedAt": 779,
+                    "lastProgressAt": 779
+                  }
+                },
+                {
+                  "taskId": "lab-t2-c2-pre-source-ordinary",
+                  "sourceStatus": "done",
+                  "sourceUpdatedAt": 760,
+                  "sourceRemainingAmount": 0,
+                  "sourceTaskSha256": "88f9585264ad8ac877c1c698d1acd3d5f073d19941db425f15674541a39d8e41",
+                  "firstAbsentAtTick": 6001,
+                  "ageTicksAtFirstAbsence": 5241,
+                  "allowed": true,
+                  "reasons": [],
+                  "sourceTask": {
+                    "id": "lab-t2-c2-pre-source-ordinary",
+                    "resource": "H",
+                    "fromRoomName": "W9N8",
+                    "toRoomName": "E4N58",
+                    "amount": 100,
+                    "remainingAmount": 0,
+                    "status": "done",
+                    "origin": "manual",
+                    "createdAt": 736,
+                    "updatedAt": 760,
+                    "lastProgressAt": 760
+                  }
+                },
+                {
+                  "taskId": "lab-t2-c2-pre-target-ordinary",
+                  "sourceStatus": "done",
+                  "sourceUpdatedAt": 760,
+                  "sourceRemainingAmount": 0,
+                  "sourceTaskSha256": "8db545e5eec3842ef0c34de5fd91866da81018fd8b521949a926550039b734cd",
+                  "firstAbsentAtTick": 6001,
+                  "ageTicksAtFirstAbsence": 5241,
+                  "allowed": true,
+                  "reasons": [],
+                  "sourceTask": {
+                    "id": "lab-t2-c2-pre-target-ordinary",
+                    "resource": "H",
+                    "fromRoomName": "W8N8",
+                    "toRoomName": "E1N57",
+                    "amount": 100,
+                    "remainingAmount": 0,
+                    "status": "done",
+                    "origin": "manual",
+                    "createdAt": 736,
+                    "updatedAt": 760,
+                    "lastProgressAt": 760
+                  }
+                },
+                {
+                  "taskId": "lab-t2-c2-block-source-ordinary",
+                  "sourceStatus": "done",
+                  "sourceUpdatedAt": 780,
+                  "sourceRemainingAmount": 0,
+                  "sourceTaskSha256": "8b6d463f59b9faaa3ef9207df3b6f3fe18952d502b103900d13645847152a95e",
+                  "firstAbsentAtTick": 6001,
+                  "ageTicksAtFirstAbsence": 5221,
+                  "allowed": true,
+                  "reasons": [],
+                  "sourceTask": {
+                    "id": "lab-t2-c2-block-source-ordinary",
+                    "resource": "H",
+                    "fromRoomName": "W9N8",
+                    "toRoomName": "E4N58",
+                    "amount": 100,
+                    "remainingAmount": 0,
+                    "status": "done",
+                    "origin": "manual",
+                    "createdAt": 746,
+                    "updatedAt": 780,
+                    "lastProgressAt": 780
+                  }
+                },
+                {
+                  "taskId": "lab-t2-c2-block-target-ordinary",
+                  "sourceStatus": "done",
+                  "sourceUpdatedAt": 780,
+                  "sourceRemainingAmount": 0,
+                  "sourceTaskSha256": "cf7f2f8eb4882002808e6cb67b0f6aaaace7ea407d3d04261d6335dafc245f3e",
+                  "firstAbsentAtTick": 6001,
+                  "ageTicksAtFirstAbsence": 5221,
+                  "allowed": true,
+                  "reasons": [],
+                  "sourceTask": {
+                    "id": "lab-t2-c2-block-target-ordinary",
+                    "resource": "H",
+                    "fromRoomName": "W8N8",
+                    "toRoomName": "E1N57",
+                    "amount": 100,
+                    "remainingAmount": 0,
+                    "status": "done",
+                    "origin": "manual",
+                    "createdAt": 746,
+                    "updatedAt": 780,
+                    "lastProgressAt": 780
+                  }
+                },
+                {
+                  "taskId": "lab-t2-c2-unrelated-ordinary",
+                  "sourceStatus": "done",
+                  "sourceUpdatedAt": 770,
+                  "sourceRemainingAmount": 0,
+                  "sourceTaskSha256": "a0a3f8f34fdff0e01ffa976bdae0a52e227c71f770ba4c22fa8b412c5eff196a",
+                  "firstAbsentAtTick": 6001,
+                  "ageTicksAtFirstAbsence": 5231,
+                  "allowed": true,
+                  "reasons": [],
+                  "sourceTask": {
+                    "id": "lab-t2-c2-unrelated-ordinary",
+                    "resource": "H",
+                    "fromRoomName": "E3N59",
+                    "toRoomName": "W8N8",
+                    "amount": 100,
+                    "remainingAmount": 0,
+                    "status": "done",
+                    "origin": "manual",
+                    "createdAt": 746,
+                    "updatedAt": 770,
+                    "lastProgressAt": 770
+                  }
+                },
+                {
+                  "taskId": "lab-t3-c1-26-OH",
+                  "sourceStatus": "cancelled",
+                  "sourceUpdatedAt": 800,
+                  "sourceRemainingAmount": 887,
+                  "sourceTaskSha256": "cde2ac840dc5de5fa00e0e275af4627c5ad722be4382b72572401648e40a7410",
+                  "firstAbsentAtTick": 6001,
+                  "ageTicksAtFirstAbsence": 5201,
+                  "allowed": true,
+                  "reasons": [],
+                  "sourceTask": {
+                    "id": "lab-t3-c1-26-OH",
+                    "resource": "OH",
+                    "fromRoomName": "E4N58",
+                    "toRoomName": "E1N57",
+                    "amount": 913,
+                    "remainingAmount": 887,
+                    "status": "cancelled",
+                    "origin": "automatic",
+                    "reason": "synthesis:E1N57:UH2O",
+                    "createdAt": 788,
+                    "updatedAt": 800,
+                    "lastProgressAt": 791,
+                    "lastError": "automatic_synthesis_need_covered"
+                  }
+                },
+                {
+                  "taskId": "lab-t3-c1-26-resume-inbound-ordinary",
+                  "sourceStatus": "done",
+                  "sourceUpdatedAt": 800,
+                  "sourceRemainingAmount": 0,
+                  "sourceTaskSha256": "154e4e2c6bbe54cf4ef6fc9acf5b321ae495732697f2c0ba652b5e63cebf2f05",
+                  "firstAbsentAtTick": 6001,
+                  "ageTicksAtFirstAbsence": 5201,
+                  "allowed": true,
+                  "reasons": [],
+                  "sourceTask": {
+                    "id": "lab-t3-c1-26-resume-inbound-ordinary",
+                    "resource": "H",
+                    "fromRoomName": "W9N8",
+                    "toRoomName": "E4N58",
+                    "amount": 100,
+                    "remainingAmount": 0,
+                    "status": "done",
+                    "origin": "manual",
+                    "createdAt": 775,
+                    "updatedAt": 800,
+                    "lastProgressAt": 800
+                  }
+                }
+              ],
+              "retainedTaskIds": [],
+              "changedTaskIds": [],
+              "addedTaskIds": [],
+              "pendingOrDebtRemovalTaskIds": [],
+              "originalResourceTaskHistoryExact": false,
+              "retainedResourceTaskHistoryExact": true,
+              "dataExactExceptAllowedPruning": false,
+              "allowed": false
+            }
+          },
+          "syntheticBudgetHistoryEntries": 90,
+          "syntheticClosedCertificates": 128,
+          "realNativeReceiptCount": 0,
+          "actualMemoryUtf8Bytes": 1599987,
+          "cold": {
+            "kind": "cold",
+            "tick": 6000,
+            "wallMs": 1790986837832,
+            "mainTotal": 104.13102999999998,
+            "wrappedMainUsed": null,
+            "postMainUsed": 246.17916999999997,
+            "treasuryBeginTick": 38.792677,
+            "treasuryEndTick": 0.7800379999999905,
+            "creepWork": 0.018309999999985394,
+            "phasePresence": {
+              "treasuryBeginTick": true,
+              "treasuryEndTick": true,
+              "creepWork": true
+            },
+            "limit": 100,
+            "tickLimit": 500,
+            "bucket": 10000,
+            "usedAfterBenchmark": 246.32650600000002,
+            "remainingTickHeadroom": 253.67349399999998,
+            "carrierWork": [],
+            "workObserved": false,
+            "benchmark": null,
+            "rawMemoryChars": 1499989,
+            "buildHash": "9666cfb48f698d80f47c02d6e0bbd1aac18e5de22a5c67a8d52267b4cc722a87",
+            "mainSha256": "9d300172be0bed439e93b7a47d206dcfa3fc5b9db727a571f8ffa761a14f7f4d",
+            "actualProfilerLatest": {
+              "tick": 6000,
+              "shard": "shard1",
+              "totalUsed": 104.13102999999998,
+              "bucket": 10000,
+              "limit": 100,
+              "tickLimit": 500,
+              "phases": {
+                "treasuryBeginTick": 38.792677,
+                "announceDeploy": 0.07909599999999273,
+                "marketSalePreflight": 12.216525999999988,
+                "pixelGenerator": 0.010792999999978292,
+                "productionMonitor": 1.9903549999999939,
+                "nukerControl": 1.2623040000000003,
+                "hubPlanner": 0.2243970000000104,
+                "hubUpgradeControl": 0.6252409999999884,
+                "synthesisControl": 11.489256000000012,
+                "factoryControl": 0.5926680000000033,
+                "mineralExtraction": 0.8369529999999941,
+                "resourceControl": 0.9397610000000043,
+                "marketSaleAutomation": 2.058014000000014,
+                "hubProgressAnalytics": 0.04202699999999027,
+                "hubProgressOverlay": 0.08024800000001164,
+                "externalTelemetryExport": 0.03565100000002985,
+                "memoryCleanup": 0.054120000000011714,
+                "portalDiscovery": 0.023461999999994987,
+                "flagControl": 1.0807930000000283,
+                "crossShardSignals": 0.1823540000000321,
+                "interShardControl": 0.029866000000026816,
+                "warControl": 0.13382799999999406,
+                "powerBankObserver": 0.2101729999999975,
+                "powerBankHarvest": 0.4528020000000197,
+                "powerCreepControl": 0.12380699999999933,
+                "powerSpawnControl": 0.1881569999999897,
+                "roomPlannerConstruction": 4.074936999999977,
+                "linkControl": 0.4668280000000209,
+                "coreDefense": 0.4882599999999684,
+                "defenseMode": 13.603146999999979,
+                "homeDefense": 0.4660920000000033,
+                "towerControl": 0.10858100000001514,
+                "refreshWorkerTasks": 1.3767460000000256,
+                "bootstrapRooms": 1.7168360000000007,
+                "remoteMining": 3.2116649999999822,
+                "scheduleSpawnTasks": 0.8705049999999801,
+                "spawnWork": 0.03052599999995209,
+                "creepWork": 0.018309999999985394,
+                "empireInventoryShadow": 2.6494820000000345,
+                "treasuryT1Shadow": 0.09517999999997073,
+                "treasuryEndTick": 0.7800379999999905
+              },
+              "fixedActionCounts": {},
+              "untracked": 0.4185679999999934,
+              "emaTotalUsed": 104.13102999999998,
+              "rooms": {},
+              "heap": null
+            },
+            "actualResourceTransferTaskIds": [
+              "lab-t2-c2-UH",
+              "lab-t2-c2-block-source-ordinary",
+              "lab-t2-c2-block-target-ordinary",
+              "lab-t2-c2-pre-source-ordinary",
+              "lab-t2-c2-pre-target-ordinary",
+              "lab-t2-c2-unrelated-ordinary",
+              "lab-t3-c1-26-OH",
+              "lab-t3-c1-26-resume-inbound-ordinary"
+            ],
+            "actualOwnedRoomNames": [
+              "E1N57",
+              "E3N59",
+              "E4N58",
+              "W8N8",
+              "W9N8"
+            ],
+            "standing": {
+              "sessionStatus": "running",
+              "currentCycle": null,
+              "consumption": 90,
+              "closed": 128
+            },
+            "treasuryCpuOverMainTotal": 0.38002807616519296,
+            "fence100CpuOverActualLimit": null,
+            "derivedPhasePresence": {
+              "treasuryBeginTick": true,
+              "treasuryEndTick": true,
+              "creepWork": true
+            }
+          },
+          "warmSamples": 30,
+          "statisticsOnlyFinalization": null,
+          "absentActualPhaseDerivedAsZeroCounts": {
+            "treasuryBeginTick": 0,
+            "treasuryEndTick": 0,
+            "creepWork": 0
+          },
+          "rawCpuSamplesModified": false,
+          "independentlyRecomputedWarmCpu": {
+            "mainTotal": {
+              "count": 30,
+              "min": 29.638353999999936,
+              "mean": 42.780184366666646,
+              "p50": 39.57091300000002,
+              "p95": 68.59935700000005,
+              "max": 68.76564400000007
+            },
+            "wrappedMainUsed": {
+              "count": 30,
+              "min": 36.35071500000004,
+              "mean": 51.652748200000005,
+              "p50": 50.936815000000024,
+              "p95": 79.53710000000001,
+              "max": 80.20715199999995
+            },
+            "treasuryBeginTick": {
+              "count": 30,
+              "min": 27.098308999999972,
+              "mean": 38.3227125,
+              "p50": 34.43054200000006,
+              "p95": 63.868615999999975,
+              "max": 64.46430199999986
+            },
+            "treasuryEndTick": {
+              "count": 30,
+              "min": 0.36122199999999793,
+              "mean": 0.7637403333333584,
+              "p50": 0.42574899999999616,
+              "p95": 1.1890769999999975,
+              "max": 8.916320000000269
+            },
+            "creepWork": {
+              "count": 30,
+              "min": 0.001145999999948799,
+              "mean": 0.0019067666666804446,
+              "p50": 0.0016359999999622232,
+              "p95": 0.003656000000091808,
+              "max": 0.005065999999942505
+            },
+            "usedAfterBenchmark": {
+              "count": 30,
+              "min": 36.4138190000001,
+              "mean": 51.80530110000003,
+              "p50": 51.0341890000002,
+              "p95": 79.60930800000006,
+              "max": 80.27331400000003
+            },
+            "remainingTickHeadroom": {
+              "count": 30,
+              "min": 419.726686,
+              "mean": 448.1946989,
+              "p50": 448.86179100000027,
+              "p95": 462.145397,
+              "max": 463.5861809999999
+            }
+          },
+          "actualCpuLimits": [
+            100
+          ],
+          "actualTickLimits": [
+            500
+          ],
+          "minimumBucket": 9847,
+          "minimumWarmHeadroomAfterProbe": 419.726686,
+          "completed100QueryWarmProbes": 0,
+          "fenceProbeWarmCpu": null,
+          "bothOriginalCarrierWorksObservedEachWarmTick": false,
+          "sustainableComplete100ProbeCpu": null,
+          "initialCarrierCargoPhysicalDelivery": null,
+          "actualArchiveSourceFileSha256": "6f11563a04a5946ed1b5c6d6a8e183e41cf0760f52d2f8e1507d8e856ca3f33c",
+          "actualArchiveSourceIndependentlyRead": true,
+          "actualArchiveSubtreesIndependentlyChecked": 46,
+          "productionCpuBudgetVerified": false
+        },
+        {
+          "scenario": "max-carrier",
+          "passed": true,
+          "evidenceClass": "synthetic_history_real_engine_performance",
+          "mainSha256": "9d300172be0bed439e93b7a47d206dcfa3fc5b9db727a571f8ffa761a14f7f4d",
+          "history": {
+            "historySha256": "0277be7b71f0155c067f187d0795cb2e9fe2fe7a595264d39cb32169c89d61ee",
+            "retainedRingAttemptIds": [
+              "tk1_1_9992ef348b720174",
+              "tk1_2_563d0bd13dd4ea10",
+              "tk1_3_1429d627c9e7b52c"
+            ],
+            "retainedRealReceiptIds": [
+              "5096bb4bbf5435c",
+              "ea82c5ad9941756",
+              "1215ccbb7652168"
+            ]
+          },
+          "preparation": {
+            "preparationSchema": "revised-independent-lab-preparation/v1",
+            "sourceDatabaseSha256": "cdd36d0b0013bb641019290820f86972b3e4797910de24d95a44133b500cb43c",
+            "sourceTick": 801,
+            "preparationSha256": "ced476ef35cdc53665b506c1881aff8cd8d627eed88cb5794efe5707add84366",
+            "realT3ReceiptId": "1215ccbb7652168",
+            "originalDatabaseFullHistoryIndependentlyRead": true,
+            "actualOriginalDatabasePaused": true,
+            "preservedHistoryEntries": 9,
+            "actualOriginalT4StateAndResponsibilitiesAbsent": true,
+            "stoppedPreconditionIndependentlyChecked": true,
+            "missingPreparationFlagsInvented": false,
+            "frozenBaseline": {
+              "databaseFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/private-databases/db-frozen-pre-t4.json",
+              "databaseSha256": "bf23559afdc92989d715d2ef2219acdd7f97f5bf60c32b0787af6874bf0cc2c3",
+              "persistedTick": 801,
+              "storedGameTimeType": "int",
+              "persistedMemorySha256": "778cd9c1256895dc559e7f1fc9b6c9d9e9476503bb595f3a7f4455cdfb920c0c"
+            }
+          },
+          "coldFixture": {
+            "databaseFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/../private-databases/db-t4-perf-max-carrier-configured-fixture.json",
+            "databaseSha256": "e776d6b0a8744ffd9be34be8d1623c83f0c4c86b17560ff4c11a157f3149a70e",
+            "persistedTick": 6000,
+            "storedGameTimeType": "str",
+            "persistedMemorySha256": "d2abd13c74a42eb949b2fd8417ea02427bb07adb78934a3b867cc2943de53e17",
+            "beforePID": "3768538",
+            "afterPID": "3768669",
+            "beforeTick": 6000,
+            "afterTick": 6000,
+            "coldExactReadback": true
+          },
+          "pauseStability": {
+            "label": "t4-perf-max-carrier-measure",
+            "matched": true,
+            "diagnosticOnly": false,
+            "observedStableMs": 10134,
+            "stableSamples": 38,
+            "samples": 40,
+            "barrierWallMs": 10720,
+            "endTick": 6031
+          },
+          "completedDatabase": {
+            "databaseFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/../private-databases/db-t4-perf-max-carrier-completed.json",
+            "databaseSha256": "dfd796059ade4c005cd4958e6c76df80a86fb58dd785683e552dfa383b5bd032",
+            "persistedTick": 6031,
+            "storedGameTimeType": "int",
+            "persistedMemorySha256": "9480fd6aa197c892cdf657adad9fb5963536cd588d6c19ccf4d16450c393b84d"
+          },
+          "naturalTerminalTaskPruning": {
+            "cleanupInterval": 17,
+            "terminalTaskRetentionTicks": 200,
+            "strictAgeGreaterThanRetention": true,
+            "removed": [
+              {
+                "id": "lab-t2-c2-UH",
+                "status": "done",
+                "updatedAt": 779,
+                "taskSha256": "1ed60cccf672900c4c86dc95bed394acc4df52c5024dcb900b782d881ddc6eb7",
+                "firstAbsentAtTick": 6001,
+                "ageTicks": 5222
+              },
+              {
+                "id": "lab-t2-c2-block-source-ordinary",
+                "status": "done",
+                "updatedAt": 780,
+                "taskSha256": "8b6d463f59b9faaa3ef9207df3b6f3fe18952d502b103900d13645847152a95e",
+                "firstAbsentAtTick": 6001,
+                "ageTicks": 5221
+              },
+              {
+                "id": "lab-t2-c2-block-target-ordinary",
+                "status": "done",
+                "updatedAt": 780,
+                "taskSha256": "cf7f2f8eb4882002808e6cb67b0f6aaaace7ea407d3d04261d6335dafc245f3e",
+                "firstAbsentAtTick": 6001,
+                "ageTicks": 5221
+              },
+              {
+                "id": "lab-t2-c2-pre-source-ordinary",
+                "status": "done",
+                "updatedAt": 760,
+                "taskSha256": "88f9585264ad8ac877c1c698d1acd3d5f073d19941db425f15674541a39d8e41",
+                "firstAbsentAtTick": 6001,
+                "ageTicks": 5241
+              },
+              {
+                "id": "lab-t2-c2-pre-target-ordinary",
+                "status": "done",
+                "updatedAt": 760,
+                "taskSha256": "8db545e5eec3842ef0c34de5fd91866da81018fd8b521949a926550039b734cd",
+                "firstAbsentAtTick": 6001,
+                "ageTicks": 5241
+              },
+              {
+                "id": "lab-t2-c2-unrelated-ordinary",
+                "status": "done",
+                "updatedAt": 770,
+                "taskSha256": "a0a3f8f34fdff0e01ffa976bdae0a52e227c71f770ba4c22fa8b412c5eff196a",
+                "firstAbsentAtTick": 6001,
+                "ageTicks": 5231
+              },
+              {
+                "id": "lab-t3-c1-26-OH",
+                "status": "cancelled",
+                "updatedAt": 800,
+                "taskSha256": "cde2ac840dc5de5fa00e0e275af4627c5ad722be4382b72572401648e40a7410",
+                "firstAbsentAtTick": 6001,
+                "ageTicks": 5201
+              },
+              {
+                "id": "lab-t3-c1-26-resume-inbound-ordinary",
+                "status": "done",
+                "updatedAt": 800,
+                "taskSha256": "154e4e2c6bbe54cf4ef6fc9acf5b321ae495732697f2c0ba652b5e63cebf2f05",
+                "firstAbsentAtTick": 6001,
+                "ageTicks": 5201
+              }
+            ],
+            "retainedTaskIds": [],
+            "pendingOrNativeDebtRemoved": false,
+            "preciseNonTreasuryMaintenance": {
+              "sourceReferences": [
+                "src/runtime/remoteMining.ts:449-509",
+                "src/runtime/remoteMining.ts:1678-1702",
+                "src/runtime/marketSaleLifecycle.ts:503-528"
+              ],
+              "oldScoutTimeoutRows": [
+                "W7N8",
+                "W9N9"
+              ],
+              "scoutTimeoutTick": 6000,
+              "scoutTimeoutStrictAge": 1500,
+              "retryAtTick": 11000,
+              "newRemoteRoom": "W9N7",
+              "removedScoutConfigIds": [
+                "W8N8:remoteMine:W7N8:scout",
+                "W9N8:remoteMine:W9N9:scout"
+              ],
+              "createdScoutConfigId": "W9N8:remoteMine:W9N7:scout",
+              "drainConfirmationCountBefore": 547,
+              "drainConfirmationCountAfter": 578,
+              "drainLastZeroTick": 6030,
+              "actualUniqueMainTicks": 31,
+              "otherDataExactlyPreserved": true
+            },
+            "rawDriverTtlOnlyDataAuditAllowed": false,
+            "driverAudit": {
+              "schema": "screeps-t4-natural-expired-task-pruning/v1",
+              "terminalTaskTtl": 200,
+              "cleanupInterval": 17,
+              "anchor": "updatedAt",
+              "strictBoundary": ">",
+              "terminalStatuses": [
+                "done",
+                "cancelled",
+                "failed"
+              ],
+              "sourceReferences": [
+                "src/runtime/memoryCleanup.ts:17,24,662-665",
+                "src/runtime/logistics/resourceTransferTasks.ts:560-565",
+                "src/runtime/treasuryTaskCommitmentBridge.ts:98-113"
+              ],
+              "sourceNativeResponsibilityClear": true,
+              "entries": [
+                {
+                  "taskId": "lab-t2-c2-UH",
+                  "sourceStatus": "done",
+                  "sourceUpdatedAt": 779,
+                  "sourceRemainingAmount": 0,
+                  "sourceTaskSha256": "1ed60cccf672900c4c86dc95bed394acc4df52c5024dcb900b782d881ddc6eb7",
+                  "firstAbsentAtTick": 6001,
+                  "ageTicksAtFirstAbsence": 5222,
+                  "allowed": true,
+                  "reasons": [],
+                  "sourceTask": {
+                    "id": "lab-t2-c2-UH",
+                    "resource": "UH",
+                    "fromRoomName": "E4N58",
+                    "toRoomName": "E1N57",
+                    "amount": 100,
+                    "remainingAmount": 0,
+                    "status": "done",
+                    "origin": "automatic",
+                    "reason": "synthesis:E1N57:UH2O",
+                    "createdAt": 756,
+                    "updatedAt": 779,
+                    "lastProgressAt": 779
+                  }
+                },
+                {
+                  "taskId": "lab-t2-c2-pre-source-ordinary",
+                  "sourceStatus": "done",
+                  "sourceUpdatedAt": 760,
+                  "sourceRemainingAmount": 0,
+                  "sourceTaskSha256": "88f9585264ad8ac877c1c698d1acd3d5f073d19941db425f15674541a39d8e41",
+                  "firstAbsentAtTick": 6001,
+                  "ageTicksAtFirstAbsence": 5241,
+                  "allowed": true,
+                  "reasons": [],
+                  "sourceTask": {
+                    "id": "lab-t2-c2-pre-source-ordinary",
+                    "resource": "H",
+                    "fromRoomName": "W9N8",
+                    "toRoomName": "E4N58",
+                    "amount": 100,
+                    "remainingAmount": 0,
+                    "status": "done",
+                    "origin": "manual",
+                    "createdAt": 736,
+                    "updatedAt": 760,
+                    "lastProgressAt": 760
+                  }
+                },
+                {
+                  "taskId": "lab-t2-c2-pre-target-ordinary",
+                  "sourceStatus": "done",
+                  "sourceUpdatedAt": 760,
+                  "sourceRemainingAmount": 0,
+                  "sourceTaskSha256": "8db545e5eec3842ef0c34de5fd91866da81018fd8b521949a926550039b734cd",
+                  "firstAbsentAtTick": 6001,
+                  "ageTicksAtFirstAbsence": 5241,
+                  "allowed": true,
+                  "reasons": [],
+                  "sourceTask": {
+                    "id": "lab-t2-c2-pre-target-ordinary",
+                    "resource": "H",
+                    "fromRoomName": "W8N8",
+                    "toRoomName": "E1N57",
+                    "amount": 100,
+                    "remainingAmount": 0,
+                    "status": "done",
+                    "origin": "manual",
+                    "createdAt": 736,
+                    "updatedAt": 760,
+                    "lastProgressAt": 760
+                  }
+                },
+                {
+                  "taskId": "lab-t2-c2-block-source-ordinary",
+                  "sourceStatus": "done",
+                  "sourceUpdatedAt": 780,
+                  "sourceRemainingAmount": 0,
+                  "sourceTaskSha256": "8b6d463f59b9faaa3ef9207df3b6f3fe18952d502b103900d13645847152a95e",
+                  "firstAbsentAtTick": 6001,
+                  "ageTicksAtFirstAbsence": 5221,
+                  "allowed": true,
+                  "reasons": [],
+                  "sourceTask": {
+                    "id": "lab-t2-c2-block-source-ordinary",
+                    "resource": "H",
+                    "fromRoomName": "W9N8",
+                    "toRoomName": "E4N58",
+                    "amount": 100,
+                    "remainingAmount": 0,
+                    "status": "done",
+                    "origin": "manual",
+                    "createdAt": 746,
+                    "updatedAt": 780,
+                    "lastProgressAt": 780
+                  }
+                },
+                {
+                  "taskId": "lab-t2-c2-block-target-ordinary",
+                  "sourceStatus": "done",
+                  "sourceUpdatedAt": 780,
+                  "sourceRemainingAmount": 0,
+                  "sourceTaskSha256": "cf7f2f8eb4882002808e6cb67b0f6aaaace7ea407d3d04261d6335dafc245f3e",
+                  "firstAbsentAtTick": 6001,
+                  "ageTicksAtFirstAbsence": 5221,
+                  "allowed": true,
+                  "reasons": [],
+                  "sourceTask": {
+                    "id": "lab-t2-c2-block-target-ordinary",
+                    "resource": "H",
+                    "fromRoomName": "W8N8",
+                    "toRoomName": "E1N57",
+                    "amount": 100,
+                    "remainingAmount": 0,
+                    "status": "done",
+                    "origin": "manual",
+                    "createdAt": 746,
+                    "updatedAt": 780,
+                    "lastProgressAt": 780
+                  }
+                },
+                {
+                  "taskId": "lab-t2-c2-unrelated-ordinary",
+                  "sourceStatus": "done",
+                  "sourceUpdatedAt": 770,
+                  "sourceRemainingAmount": 0,
+                  "sourceTaskSha256": "a0a3f8f34fdff0e01ffa976bdae0a52e227c71f770ba4c22fa8b412c5eff196a",
+                  "firstAbsentAtTick": 6001,
+                  "ageTicksAtFirstAbsence": 5231,
+                  "allowed": true,
+                  "reasons": [],
+                  "sourceTask": {
+                    "id": "lab-t2-c2-unrelated-ordinary",
+                    "resource": "H",
+                    "fromRoomName": "E3N59",
+                    "toRoomName": "W8N8",
+                    "amount": 100,
+                    "remainingAmount": 0,
+                    "status": "done",
+                    "origin": "manual",
+                    "createdAt": 746,
+                    "updatedAt": 770,
+                    "lastProgressAt": 770
+                  }
+                },
+                {
+                  "taskId": "lab-t3-c1-26-OH",
+                  "sourceStatus": "cancelled",
+                  "sourceUpdatedAt": 800,
+                  "sourceRemainingAmount": 887,
+                  "sourceTaskSha256": "cde2ac840dc5de5fa00e0e275af4627c5ad722be4382b72572401648e40a7410",
+                  "firstAbsentAtTick": 6001,
+                  "ageTicksAtFirstAbsence": 5201,
+                  "allowed": true,
+                  "reasons": [],
+                  "sourceTask": {
+                    "id": "lab-t3-c1-26-OH",
+                    "resource": "OH",
+                    "fromRoomName": "E4N58",
+                    "toRoomName": "E1N57",
+                    "amount": 913,
+                    "remainingAmount": 887,
+                    "status": "cancelled",
+                    "origin": "automatic",
+                    "reason": "synthesis:E1N57:UH2O",
+                    "createdAt": 788,
+                    "updatedAt": 800,
+                    "lastProgressAt": 791,
+                    "lastError": "automatic_synthesis_need_covered"
+                  }
+                },
+                {
+                  "taskId": "lab-t3-c1-26-resume-inbound-ordinary",
+                  "sourceStatus": "done",
+                  "sourceUpdatedAt": 800,
+                  "sourceRemainingAmount": 0,
+                  "sourceTaskSha256": "154e4e2c6bbe54cf4ef6fc9acf5b321ae495732697f2c0ba652b5e63cebf2f05",
+                  "firstAbsentAtTick": 6001,
+                  "ageTicksAtFirstAbsence": 5201,
+                  "allowed": true,
+                  "reasons": [],
+                  "sourceTask": {
+                    "id": "lab-t3-c1-26-resume-inbound-ordinary",
+                    "resource": "H",
+                    "fromRoomName": "W9N8",
+                    "toRoomName": "E4N58",
+                    "amount": 100,
+                    "remainingAmount": 0,
+                    "status": "done",
+                    "origin": "manual",
+                    "createdAt": 775,
+                    "updatedAt": 800,
+                    "lastProgressAt": 800
+                  }
+                }
+              ],
+              "retainedTaskIds": [],
+              "changedTaskIds": [],
+              "addedTaskIds": [],
+              "pendingOrDebtRemovalTaskIds": [],
+              "originalResourceTaskHistoryExact": false,
+              "retainedResourceTaskHistoryExact": true,
+              "dataExactExceptAllowedPruning": false,
+              "allowed": false
+            }
+          },
+          "syntheticBudgetHistoryEntries": 90,
+          "syntheticClosedCertificates": 128,
+          "realNativeReceiptCount": 0,
+          "actualMemoryUtf8Bytes": 1613247,
+          "cold": {
+            "kind": "cold",
+            "tick": 6000,
+            "wallMs": 1790986997517,
+            "mainTotal": 116.99515500000004,
+            "wrappedMainUsed": null,
+            "postMainUsed": 247.078331,
+            "treasuryBeginTick": 52.25714599999998,
+            "treasuryEndTick": 0.8073210000000017,
+            "creepWork": 6.770394000000067,
+            "phasePresence": {
+              "treasuryBeginTick": true,
+              "treasuryEndTick": true,
+              "creepWork": true
+            },
+            "limit": 100,
+            "tickLimit": 500,
+            "bucket": 10000,
+            "usedAfterBenchmark": 272.71110300000004,
+            "remainingTickHeadroom": 227.28889699999996,
+            "carrierWork": [],
+            "workObserved": false,
+            "benchmark": {
+              "requestedQueries": 100,
+              "queries": 100,
+              "used": 24.878325000000018,
+              "completed": true,
+              "tick": 6000,
+              "buildHash": "9666cfb48f698d80f47c02d6e0bbd1aac18e5de22a5c67a8d52267b4cc722a87"
+            },
+            "rawMemoryChars": 1499990,
+            "buildHash": "9666cfb48f698d80f47c02d6e0bbd1aac18e5de22a5c67a8d52267b4cc722a87",
+            "mainSha256": "9d300172be0bed439e93b7a47d206dcfa3fc5b9db727a571f8ffa761a14f7f4d",
+            "actualProfilerLatest": {
+              "tick": 6000,
+              "shard": "shard1",
+              "totalUsed": 116.99515500000004,
+              "bucket": 10000,
+              "limit": 100,
+              "tickLimit": 500,
+              "phases": {
+                "treasuryBeginTick": 52.25714599999998,
+                "announceDeploy": 0.08790300000001139,
+                "marketSalePreflight": 9.692002000000002,
+                "pixelGenerator": 0.014893000000000711,
+                "productionMonitor": 2.762276000000014,
+                "nukerControl": 1.9794630000000097,
+                "hubPlanner": 0.328125,
+                "hubUpgradeControl": 0.6009980000000041,
+                "synthesisControl": 1.1650099999999952,
+                "factoryControl": 0.7130039999999838,
+                "mineralExtraction": 0.8602160000000083,
+                "resourceControl": 2.879129000000006,
+                "marketSaleAutomation": 3.511203000000023,
+                "hubProgressAnalytics": 0.07284299999997756,
+                "hubProgressOverlay": 0.0845950000000073,
+                "externalTelemetryExport": 0.035155000000003156,
+                "memoryCleanup": 0.05511300000000574,
+                "portalDiscovery": 0.022985000000005584,
+                "flagControl": 1.1250839999999869,
+                "crossShardSignals": 0.16041100000001052,
+                "interShardControl": 0.029292999999995573,
+                "warControl": 0.13808199999999715,
+                "powerBankObserver": 0.20671799999996665,
+                "powerBankHarvest": 0.5299759999999765,
+                "powerCreepControl": 0.101237000000026,
+                "powerSpawnControl": 0.19141700000000128,
+                "roomPlannerConstruction": 4.0548220000000015,
+                "linkControl": 0.528521000000012,
+                "coreDefense": 0.43415499999997564,
+                "defenseMode": 13.505738000000008,
+                "homeDefense": 0.48759699999999384,
+                "towerControl": 0.10794099999998252,
+                "refreshWorkerTasks": 1.413704999999993,
+                "bootstrapRooms": 1.6752579999999853,
+                "remoteMining": 3.3453509999999937,
+                "scheduleSpawnTasks": 0.8137270000000285,
+                "spawnWork": 0.029705000000035398,
+                "creepWork": 6.770394000000067,
+                "empireInventoryShadow": 2.880018000000007,
+                "treasuryT1Shadow": 0.0974029999999857,
+                "treasuryEndTick": 0.8073210000000017
+              },
+              "fixedActionCounts": {
+                "creepWork": 2
+              },
+              "untracked": 0.43922199999997247,
+              "emaTotalUsed": 116.99515500000004,
+              "rooms": {},
+              "heap": null
+            },
+            "actualResourceTransferTaskIds": [
+              "lab-t2-c2-UH",
+              "lab-t2-c2-block-source-ordinary",
+              "lab-t2-c2-block-target-ordinary",
+              "lab-t2-c2-pre-source-ordinary",
+              "lab-t2-c2-pre-target-ordinary",
+              "lab-t2-c2-unrelated-ordinary",
+              "lab-t3-c1-26-OH",
+              "lab-t3-c1-26-resume-inbound-ordinary"
+            ],
+            "actualOwnedRoomNames": [
+              "E1N57",
+              "E3N59",
+              "E4N58",
+              "W8N8",
+              "W9N8"
+            ],
+            "standing": {
+              "sessionStatus": "running",
+              "currentCycle": null,
+              "consumption": 90,
+              "closed": 128
+            },
+            "treasuryCpuOverMainTotal": 0.453561235078495,
+            "fence100CpuOverActualLimit": 0.24878325000000018,
+            "derivedPhasePresence": {
+              "treasuryBeginTick": true,
+              "treasuryEndTick": true,
+              "creepWork": true
+            }
+          },
+          "warmSamples": 30,
+          "statisticsOnlyFinalization": null,
+          "absentActualPhaseDerivedAsZeroCounts": {
+            "treasuryBeginTick": 0,
+            "treasuryEndTick": 0,
+            "creepWork": 0
+          },
+          "rawCpuSamplesModified": false,
+          "independentlyRecomputedWarmCpu": {
+            "mainTotal": {
+              "count": 30,
+              "min": 30.010798000000023,
+              "mean": 42.433414100000014,
+              "p50": 38.464482999999746,
+              "p95": 63.78234800000007,
+              "max": 69.00818699999991
+            },
+            "wrappedMainUsed": {
+              "count": 30,
+              "min": 37.47922399999993,
+              "mean": 51.38793583333331,
+              "p50": 47.80791299999987,
+              "p95": 80.11960799999997,
+              "max": 81.293768
+            },
+            "treasuryBeginTick": {
+              "count": 30,
+              "min": 26.75200700000005,
+              "mean": 36.51724003333329,
+              "p50": 32.45529899999997,
+              "p95": 57.640896,
+              "max": 63.68976199999997
+            },
+            "treasuryEndTick": {
+              "count": 30,
+              "min": 0.3520189999999275,
+              "mean": 0.9351538999999983,
+              "p50": 0.5267760000001545,
+              "p95": 2.8392240000002857,
+              "max": 4.502354000000196
+            },
+            "creepWork": {
+              "count": 30,
+              "min": 0.26728400000001784,
+              "mean": 1.0741815666666943,
+              "p50": 0.4527610000000095,
+              "p95": 4.093122000000221,
+              "max": 5.565815999999813
+            },
+            "usedAfterBenchmark": {
+              "count": 30,
+              "min": 51.46713900000009,
+              "mean": 74.36990923333333,
+              "p50": 75.54640899999981,
+              "p95": 96.68213799999995,
+              "max": 96.73128899999995
+            },
+            "remainingTickHeadroom": {
+              "count": 30,
+              "min": 403.26871100000005,
+              "mean": 425.6300907666667,
+              "p50": 421.67743900000005,
+              "p95": 443.97314300000016,
+              "max": 448.5328609999999
+            }
+          },
+          "actualCpuLimits": [
+            100
+          ],
+          "actualTickLimits": [
+            500
+          ],
+          "minimumBucket": 9821,
+          "minimumWarmHeadroomAfterProbe": 403.26871100000005,
+          "completed100QueryWarmProbes": 30,
+          "fenceProbeWarmCpu": {
+            "count": 30,
+            "min": 13.285570000000007,
+            "mean": 22.55285546666665,
+            "p50": 19.437787999999955,
+            "p95": 40.93990100000019,
+            "max": 41.66156499999988
+          },
+          "bothOriginalCarrierWorksObservedEachWarmTick": true,
+          "sustainableComplete100ProbeCpu": {
+            "actualSustainableCpuLimit": 100,
+            "warmCompleteUsedAfterBenchmark": {
+              "count": 30,
+              "min": 51.46713900000009,
+              "mean": 74.36990923333333,
+              "p50": 75.54640899999981,
+              "p95": 96.68213799999995,
+              "max": 96.73128899999995
+            },
+            "firstSampleBucket": 10000,
+            "firstWarmBucket": 9821,
+            "lastSampleBucket": 10000,
+            "bucketDeltaAcrossAll31Samples": 0,
+            "bucketDeltaAcrossWarm30Samples": 179,
+            "bucketGateSpan": "warm30samples",
+            "warmSamplesAboveActualCpuLimit": 0,
+            "allWarmCompleteProbeCostsWithinActualLimit": true,
+            "meanWithinActualCpuLimit": true,
+            "bucketNonDecreasingAcrossWarmMeasurement": true,
+            "actualSamplesUnchanged": true
+          },
+          "initialCarrierCargoPhysicalDelivery": {
+            "initialAlreadyCarriedFixtureH": 100,
+            "initialActualCargoAccepted": true,
+            "deliveries": [
+              {
+                "name": "lab-r2-carrier",
+                "room": "E4N58",
+                "creepId": "f7add81659a2190",
+                "initialCreepStore": {
+                  "H": 50
+                },
+                "finalCreepStore": {
+                  "H": 0
+                },
+                "acceptedH": 50,
+                "destinationId": "370f41dd18e91de",
+                "destinationType": "terminal",
+                "destinationInitialStore": {
+                  "OH": 4974,
+                  "H": 10100,
+                  "energy": 99947
+                },
+                "destinationFinalStore": {
+                  "OH": 4974,
+                  "H": 10150,
+                  "energy": 99947
+                },
+                "roomHBefore": 10150,
+                "roomHAfter": 10150
+              },
+              {
+                "name": "lab-t2-target-carrier",
+                "room": "E1N57",
+                "creepId": "4389c5b0988de7e",
+                "initialCreepStore": {
+                  "H": 50
+                },
+                "finalCreepStore": {
+                  "H": 0
+                },
+                "acceptedH": 50,
+                "destinationId": "5ca4c1b028a9b3b",
+                "destinationType": "terminal",
+                "destinationInitialStore": {
+                  "OH": 0,
+                  "H": 10000,
+                  "energy": 99950
+                },
+                "destinationFinalStore": {
+                  "OH": 0,
+                  "H": 10050,
+                  "energy": 99950
+                },
+                "roomHBefore": 10050,
+                "roomHAfter": 10050
+              }
+            ],
+            "allOtherOwnedObjectHUnchanged": true,
+            "sameRoomHConserved": true,
+            "physicalEndpointProofOnly": true,
+            "transferMethodIntentRecorded": false,
+            "warmContinuousLoadedCargoClaimed": false
+          },
+          "actualArchiveSourceFileSha256": "6f11563a04a5946ed1b5c6d6a8e183e41cf0760f52d2f8e1507d8e856ca3f33c",
+          "actualArchiveSourceIndependentlyRead": true,
+          "actualArchiveSubtreesIndependentlyChecked": 45,
+          "productionCpuBudgetVerified": false
+        }
+      ],
+      "realNativeReceiptCount": 0,
+      "productionCpuBudgetVerified": false
+    }
+  ],
+  "realNativeReceiptCountAcrossIndependentCases": 0,
+  "syntheticHistoryExcludedFromRealNativeCounts": true,
+  "verificationArtifacts": {
+    "verifierFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/verify-t4.py",
+    "verifierSha256": "e4357be83d19305f3fccb67d080c80294b56562f7b12c54714c0b8a4fcc4d34f",
+    "planFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/verify-t4-plan-c4-r18.json",
+    "planSha256": "046c851b35a63f3ea2693abad6c7434dd175ef5e321976684be6236d9aeb25d0",
+    "manifestFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/candidate/manifest.json",
+    "manifestSha256": "6b2b73e71b4ede5f912cfbe14f52ee8c8cc8f803f4af5dacf3602ed31c4e97a9",
+    "mainFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/candidate/main.js",
+    "mainSha256": "9d300172be0bed439e93b7a47d206dcfa3fc5b9db727a571f8ffa761a14f7f4d",
+    "mainBytes": 3443761
+  }
+}

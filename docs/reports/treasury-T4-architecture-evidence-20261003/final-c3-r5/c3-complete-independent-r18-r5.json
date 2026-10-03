@@ -1,0 +1,859 @@
+{
+  "schema": "screeps-t4-semantic-verification/v1",
+  "isolatedWorldOnly": true,
+  "passed": true,
+  "cases": [
+    {
+      "case": "c3",
+      "passed": true,
+      "evidenceClass": "real_isolated_engine",
+      "scenarios": [
+        {
+          "scenario": "budget",
+          "passed": true,
+          "evidenceClass": "real_isolated_engine",
+          "bundleSha256": "9d300172be0bed439e93b7a47d206dcfa3fc5b9db727a571f8ffa761a14f7f4d",
+          "history": {
+            "historySha256": "0277be7b71f0155c067f187d0795cb2e9fe2fe7a595264d39cb32169c89d61ee",
+            "retainedRingAttemptIds": [
+              "tk1_1_9992ef348b720174",
+              "tk1_2_563d0bd13dd4ea10",
+              "tk1_3_1429d627c9e7b52c"
+            ],
+            "retainedRealReceiptIds": [
+              "5096bb4bbf5435c",
+              "ea82c5ad9941756",
+              "1215ccbb7652168"
+            ]
+          },
+          "preparation": {
+            "preparationSchema": "revised-independent-lab-preparation/v1",
+            "sourceDatabaseSha256": "cdd36d0b0013bb641019290820f86972b3e4797910de24d95a44133b500cb43c",
+            "sourceTick": 801,
+            "preparationSha256": "ced476ef35cdc53665b506c1881aff8cd8d627eed88cb5794efe5707add84366",
+            "realT3ReceiptId": "1215ccbb7652168",
+            "originalDatabaseFullHistoryIndependentlyRead": true,
+            "actualOriginalDatabasePaused": true,
+            "preservedHistoryEntries": 9,
+            "actualOriginalT4StateAndResponsibilitiesAbsent": true,
+            "stoppedPreconditionIndependentlyChecked": true,
+            "missingPreparationFlagsInvented": false,
+            "frozenBaseline": {
+              "databaseFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/private-databases/db-frozen-pre-t4.json",
+              "databaseSha256": "bf23559afdc92989d715d2ef2219acdd7f97f5bf60c32b0787af6874bf0cc2c3",
+              "persistedTick": 801,
+              "storedGameTimeType": "int",
+              "persistedMemorySha256": "778cd9c1256895dc559e7f1fc9b6c9d9e9476503bb595f3a7f4455cdfb920c0c"
+            }
+          },
+          "fixture": {
+            "originalTaskAmount": 913,
+            "productGoal": 30,
+            "realProductStock": 0,
+            "realOHStock": 4,
+            "realOHDeficit": 26,
+            "counterpartUH": 30
+          },
+          "coldFixture": {
+            "databaseFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/../private-databases/db-t4-c3-budget-configured-fixture.json",
+            "databaseSha256": "fc8e5aae2202c7108d85080cb779d7087d1508a9ea3e8b9fc03ea2de3f84e4ca",
+            "persistedTick": 804,
+            "storedGameTimeType": "int",
+            "persistedMemorySha256": "41b59e89572738cfe68a11f0a6719c8ecbf3a361746dcbb813bd2dc4afec22f9",
+            "beforePID": "3833096",
+            "afterPID": "3833373",
+            "beforeTick": 804,
+            "afterTick": 804,
+            "coldExactReadback": true
+          },
+          "pauseStability": {
+            "drivers": 10,
+            "diagnosticUnmatchedDrivers": [],
+            "requiredStableMs": 10000,
+            "maxWaitMs": 60000,
+            "minimumObservedStableMs": 10128,
+            "bindings": [
+              {
+                "driverNonceKey": "__labT4EnableResultNonce",
+                "driverSuffix": "-executed",
+                "snapshot": "t4-c3-budget-enabled-pilot"
+              },
+              {
+                "driver": "t4-c3-budget-slice1-native-driver",
+                "snapshot": "t4-c3-budget-slice1-native"
+              },
+              {
+                "driver": "t4-c3-budget-slice1-committed-driver",
+                "snapshot": "t4-c3-budget-slice1-committed"
+              },
+              {
+                "driver": "t4-c3-budget-budget-observe-driver",
+                "snapshot": "t4-c3-budget-budget-exhausted"
+              },
+              {
+                "driver": "t4-c3-budget-stopped-driver",
+                "snapshot": "t4-c3-budget-stopped"
+              },
+              {
+                "driver": "t4-c3-budget-reset-driver",
+                "snapshot": "t4-c3-budget-after-reset"
+              },
+              {
+                "driver": "t4-c3-budget-handback-driver",
+                "snapshot": "t4-c3-budget-ordinary-handback"
+              },
+              {
+                "driver": "t4-c3-budget-reenable-driver",
+                "snapshot": "t4-c3-budget-reenable-rejected"
+              }
+            ],
+            "verified": [
+              {
+                "label": "t4-c3-budget-budget-observe-driver",
+                "matched": true,
+                "diagnosticOnly": false,
+                "observedStableMs": 10128,
+                "stableSamples": 41,
+                "samples": 41,
+                "barrierWallMs": 10143,
+                "endTick": 868
+              },
+              {
+                "label": "t4-c3-budget-enable-executed",
+                "matched": true,
+                "diagnosticOnly": false,
+                "observedStableMs": 10154,
+                "stableSamples": 41,
+                "samples": 45,
+                "barrierWallMs": 11183,
+                "endTick": 805
+              },
+              {
+                "label": "t4-c3-budget-handback-driver",
+                "matched": true,
+                "diagnosticOnly": false,
+                "observedStableMs": 10148,
+                "stableSamples": 41,
+                "samples": 44,
+                "barrierWallMs": 10922,
+                "endTick": 881
+              },
+              {
+                "label": "t4-c3-budget-pre-setup-cargo-drain",
+                "matched": true,
+                "diagnosticOnly": false,
+                "observedStableMs": 10201,
+                "stableSamples": 41,
+                "samples": 41,
+                "barrierWallMs": 10205,
+                "endTick": 804
+              },
+              {
+                "label": "t4-c3-budget-reenable-driver",
+                "matched": true,
+                "diagnosticOnly": false,
+                "observedStableMs": 10158,
+                "stableSamples": 41,
+                "samples": 41,
+                "barrierWallMs": 10171,
+                "endTick": 882
+              },
+              {
+                "label": "t4-c3-budget-reset-driver",
+                "matched": true,
+                "diagnosticOnly": false,
+                "observedStableMs": 10201,
+                "stableSamples": 41,
+                "samples": 41,
+                "barrierWallMs": 10215,
+                "endTick": 871
+              },
+              {
+                "label": "t4-c3-budget-slice1-committed-driver",
+                "matched": true,
+                "diagnosticOnly": false,
+                "observedStableMs": 10147,
+                "stableSamples": 41,
+                "samples": 44,
+                "barrierWallMs": 10924,
+                "endTick": 808
+              },
+              {
+                "label": "t4-c3-budget-slice1-native-driver",
+                "matched": true,
+                "diagnosticOnly": false,
+                "observedStableMs": 10175,
+                "stableSamples": 41,
+                "samples": 44,
+                "barrierWallMs": 10951,
+                "endTick": 806
+              },
+              {
+                "label": "t4-c3-budget-stopped-driver",
+                "matched": true,
+                "diagnosticOnly": false,
+                "observedStableMs": 10142,
+                "stableSamples": 41,
+                "samples": 45,
+                "barrierWallMs": 11170,
+                "endTick": 869
+              },
+              {
+                "label": "t4-c3-budget-warmup",
+                "matched": true,
+                "diagnosticOnly": false,
+                "observedStableMs": 10164,
+                "stableSamples": 41,
+                "samples": 47,
+                "barrierWallMs": 11699,
+                "endTick": 803
+              }
+            ]
+          },
+          "restart": {
+            "databaseFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/../private-databases/db-before-t4-c3-budget-stopped-restart.json",
+            "databaseSha256": "11d3aea07b12bc53b04f742f103139a4850851e0ca9039110dfbe8e56f2e1ec1",
+            "persistedTick": 869,
+            "storedGameTimeType": "int",
+            "persistedMemorySha256": "65e9fc3d6bd82f41956b722af10864189891d23d99cbd153bfefa31c687b5cb1",
+            "beforePID": "3833373",
+            "afterPID": "3834843",
+            "beforeTick": 869,
+            "afterTick": 871,
+            "coldExactReadback": false
+          },
+          "realNativeReceiptCount": 1,
+          "native": {
+            "sequence": 1,
+            "attemptId": "tk1_4_ccb4594aa9f64a98",
+            "receiptId": "9694fee1f79773e",
+            "amount": 10,
+            "fee": 1,
+            "nativeTick": 805,
+            "taskRemainingBefore": 913,
+            "workKey": "biz:treasury-continuous-oh-T4-2026-10-02:d4fbe0122066cc18:1"
+          },
+          "independentlyRecomputedBudgetRefusal": "rolling24h_oh_exceeded",
+          "ordinaryHandbackAmount": 16,
+          "ordinaryHandbackReceiptId": "01d1ff0a2e1dd61",
+          "remainingAfterOrdinaryDemandCovered": 887,
+          "reenableRejected": true
+        },
+        {
+          "scenario": "lease",
+          "passed": true,
+          "evidenceClass": "real_isolated_engine",
+          "bundleSha256": "9d300172be0bed439e93b7a47d206dcfa3fc5b9db727a571f8ffa761a14f7f4d",
+          "history": {
+            "historySha256": "0277be7b71f0155c067f187d0795cb2e9fe2fe7a595264d39cb32169c89d61ee",
+            "retainedRingAttemptIds": [
+              "tk1_1_9992ef348b720174",
+              "tk1_2_563d0bd13dd4ea10",
+              "tk1_3_1429d627c9e7b52c"
+            ],
+            "retainedRealReceiptIds": [
+              "5096bb4bbf5435c",
+              "ea82c5ad9941756",
+              "1215ccbb7652168"
+            ]
+          },
+          "preparation": {
+            "preparationSchema": "revised-independent-lab-preparation/v1",
+            "sourceDatabaseSha256": "cdd36d0b0013bb641019290820f86972b3e4797910de24d95a44133b500cb43c",
+            "sourceTick": 801,
+            "preparationSha256": "ced476ef35cdc53665b506c1881aff8cd8d627eed88cb5794efe5707add84366",
+            "realT3ReceiptId": "1215ccbb7652168",
+            "originalDatabaseFullHistoryIndependentlyRead": true,
+            "actualOriginalDatabasePaused": true,
+            "preservedHistoryEntries": 9,
+            "actualOriginalT4StateAndResponsibilitiesAbsent": true,
+            "stoppedPreconditionIndependentlyChecked": true,
+            "missingPreparationFlagsInvented": false,
+            "frozenBaseline": {
+              "databaseFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/private-databases/db-frozen-pre-t4.json",
+              "databaseSha256": "bf23559afdc92989d715d2ef2219acdd7f97f5bf60c32b0787af6874bf0cc2c3",
+              "persistedTick": 801,
+              "storedGameTimeType": "int",
+              "persistedMemorySha256": "778cd9c1256895dc559e7f1fc9b6c9d9e9476503bb595f3a7f4455cdfb920c0c"
+            }
+          },
+          "fixture": {
+            "originalTaskAmount": 913,
+            "productGoal": 30,
+            "realProductStock": 0,
+            "realOHStock": 5,
+            "realOHDeficit": 25,
+            "counterpartUH": 30
+          },
+          "coldFixture": {
+            "databaseFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/../private-databases/db-t4-c3-lease-configured-fixture.json",
+            "databaseSha256": "8bfb208593905208e00303e6e76092e69208ead5cf2de30889e4e2ad8f87e0ae",
+            "persistedTick": 804,
+            "storedGameTimeType": "int",
+            "persistedMemorySha256": "1f78b4a4d40b9c742b5096b54639ed8193205905cc9c55981cc888de4447ad2c",
+            "beforePID": "3836897",
+            "afterPID": "3837326",
+            "beforeTick": 804,
+            "afterTick": 804,
+            "coldExactReadback": true
+          },
+          "pauseStability": {
+            "drivers": 8,
+            "diagnosticUnmatchedDrivers": [],
+            "requiredStableMs": 10000,
+            "maxWaitMs": 60000,
+            "minimumObservedStableMs": 10142,
+            "bindings": [
+              {
+                "driverNonceKey": "__labT4EnableResultNonce",
+                "driverSuffix": "-executed",
+                "snapshot": "t4-c3-lease-enabled-pilot"
+              },
+              {
+                "driver": "t4-c3-lease-preparing-driver",
+                "snapshot": "t4-c3-lease-preparing-no-responsibility"
+              },
+              {
+                "driver": "t4-c3-lease-lease-expired-driver",
+                "snapshot": "t4-c3-lease-lease-expired-no-demand"
+              },
+              {
+                "driver": "t4-c3-lease-stopped-driver",
+                "snapshot": "t4-c3-lease-stopped"
+              },
+              {
+                "driver": "t4-c3-lease-handback-driver",
+                "snapshot": "t4-c3-lease-ordinary-handback"
+              },
+              {
+                "driver": "t4-c3-lease-reset-driver",
+                "snapshot": "t4-c3-lease-after-reset"
+              }
+            ],
+            "verified": [
+              {
+                "label": "t4-c3-lease-enable-executed",
+                "matched": true,
+                "diagnosticOnly": false,
+                "observedStableMs": 10158,
+                "stableSamples": 41,
+                "samples": 45,
+                "barrierWallMs": 11187,
+                "endTick": 805
+              },
+              {
+                "label": "t4-c3-lease-handback-driver",
+                "matched": true,
+                "diagnosticOnly": false,
+                "observedStableMs": 10142,
+                "stableSamples": 41,
+                "samples": 44,
+                "barrierWallMs": 10935,
+                "endTick": 811
+              },
+              {
+                "label": "t4-c3-lease-lease-expired-driver",
+                "matched": true,
+                "diagnosticOnly": false,
+                "observedStableMs": 10152,
+                "stableSamples": 41,
+                "samples": 41,
+                "barrierWallMs": 10166,
+                "endTick": 808
+              },
+              {
+                "label": "t4-c3-lease-pre-setup-cargo-drain",
+                "matched": true,
+                "diagnosticOnly": false,
+                "observedStableMs": 10235,
+                "stableSamples": 41,
+                "samples": 41,
+                "barrierWallMs": 10239,
+                "endTick": 804
+              },
+              {
+                "label": "t4-c3-lease-preparing-driver",
+                "matched": true,
+                "diagnosticOnly": false,
+                "observedStableMs": 10160,
+                "stableSamples": 41,
+                "samples": 44,
+                "barrierWallMs": 10934,
+                "endTick": 806
+              },
+              {
+                "label": "t4-c3-lease-reset-driver",
+                "matched": true,
+                "diagnosticOnly": false,
+                "observedStableMs": 10158,
+                "stableSamples": 41,
+                "samples": 41,
+                "barrierWallMs": 10172,
+                "endTick": 813
+              },
+              {
+                "label": "t4-c3-lease-stopped-driver",
+                "matched": true,
+                "diagnosticOnly": false,
+                "observedStableMs": 10148,
+                "stableSamples": 41,
+                "samples": 44,
+                "barrierWallMs": 10935,
+                "endTick": 809
+              },
+              {
+                "label": "t4-c3-lease-warmup",
+                "matched": true,
+                "diagnosticOnly": false,
+                "observedStableMs": 10170,
+                "stableSamples": 41,
+                "samples": 47,
+                "barrierWallMs": 11730,
+                "endTick": 803
+              }
+            ]
+          },
+          "restart": {
+            "databaseFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/../private-databases/db-before-t4-c3-lease-stopped-restart.json",
+            "databaseSha256": "c8c040fb9aa24eb69451c50941bc7d888705bb841c499a6753e57c184f61d587",
+            "persistedTick": 811,
+            "storedGameTimeType": "int",
+            "persistedMemorySha256": "2aa59b8b177cb9f4cfe0dc77a9f14bb3fc35df01863f331f3c02fec03291d42f",
+            "beforePID": "3837326",
+            "afterPID": "3838262",
+            "beforeTick": 811,
+            "afterTick": 813,
+            "coldExactReadback": false
+          },
+          "realNativeReceiptCount": 0,
+          "originalUnexecutedTaskAmount": 913,
+          "permanentBudgetEntries": 0,
+          "initialRealOHDeficit": 25,
+          "afterGoal4ActualOHStock": 0,
+          "afterGoal4ActualProductStock": 5,
+          "afterGoal4ActualNewOHNeed": 0,
+          "ordinaryTaskCancelledAtActualFullPlanningTick": 810,
+          "automaticCloseReason": "cycle_lease_expired",
+          "ordinaryHandbackReceiptId": "5f3dff7e87275d9"
+        },
+        {
+          "scenario": "producerBudget",
+          "passed": true,
+          "evidenceClass": "real_isolated_engine",
+          "bundleSha256": "9d300172be0bed439e93b7a47d206dcfa3fc5b9db727a571f8ffa761a14f7f4d",
+          "history": {
+            "historySha256": "0277be7b71f0155c067f187d0795cb2e9fe2fe7a595264d39cb32169c89d61ee",
+            "retainedRingAttemptIds": [
+              "tk1_1_9992ef348b720174",
+              "tk1_2_563d0bd13dd4ea10",
+              "tk1_3_1429d627c9e7b52c"
+            ],
+            "retainedRealReceiptIds": [
+              "5096bb4bbf5435c",
+              "ea82c5ad9941756",
+              "1215ccbb7652168"
+            ]
+          },
+          "preparation": {
+            "preparationSchema": "revised-independent-lab-preparation/v1",
+            "sourceDatabaseSha256": "cdd36d0b0013bb641019290820f86972b3e4797910de24d95a44133b500cb43c",
+            "sourceTick": 801,
+            "preparationSha256": "ced476ef35cdc53665b506c1881aff8cd8d627eed88cb5794efe5707add84366",
+            "realT3ReceiptId": "1215ccbb7652168",
+            "originalDatabaseFullHistoryIndependentlyRead": true,
+            "actualOriginalDatabasePaused": true,
+            "preservedHistoryEntries": 9,
+            "actualOriginalT4StateAndResponsibilitiesAbsent": true,
+            "stoppedPreconditionIndependentlyChecked": true,
+            "missingPreparationFlagsInvented": false,
+            "frozenBaseline": {
+              "databaseFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/private-databases/db-frozen-pre-t4.json",
+              "databaseSha256": "bf23559afdc92989d715d2ef2219acdd7f97f5bf60c32b0787af6874bf0cc2c3",
+              "persistedTick": 801,
+              "storedGameTimeType": "int",
+              "persistedMemorySha256": "778cd9c1256895dc559e7f1fc9b6c9d9e9476503bb595f3a7f4455cdfb920c0c"
+            }
+          },
+          "fixture": {
+            "naturalPilotCreatedByProducer": true,
+            "manuallyInjectedPendingOHPilot": false,
+            "actualInitialOHDeficit": 26,
+            "actualCounterpartUH": 40,
+            "initialSynthesisDisabledBeforePublicBootstrap": true
+          },
+          "coldFixture": {
+            "databaseFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/../private-databases/db-t4-c3-producer-budget-configured-fixture.json",
+            "databaseSha256": "4763a4f63b13cb22b9c5d43804e6c73f54ec974decd358f9e2a98c291be1cfc9",
+            "persistedTick": 804,
+            "storedGameTimeType": "int",
+            "persistedMemorySha256": "35defbabc726a512b3f15c460a94c4011e2a0879551b854703e8204aca64711c",
+            "beforePID": "3840346",
+            "afterPID": "3840642",
+            "beforeTick": 804,
+            "afterTick": 804,
+            "coldExactReadback": true
+          },
+          "pauseStability": {
+            "drivers": 17,
+            "diagnosticUnmatchedDrivers": [
+              "t4-c3-producer-budget-product-unload"
+            ],
+            "requiredStableMs": 10000,
+            "maxWaitMs": 60000,
+            "minimumObservedStableMs": 10024,
+            "bindings": [
+              {
+                "driverNonceKey": "__labT4EnableResultNonce",
+                "driverSuffix": "-executed",
+                "snapshot": "t4-c3-producer-budget-enabled-pilot"
+              },
+              {
+                "driver": "t4-c3-producer-budget-slice1-native-driver",
+                "snapshot": "t4-c3-producer-budget-slice1-native"
+              },
+              {
+                "driver": "t4-c3-producer-budget-slice1-committed-driver",
+                "snapshot": "t4-c3-producer-budget-slice1-committed"
+              },
+              {
+                "driver": "t4-c3-producer-budget-slice2-native-driver",
+                "snapshot": "t4-c3-producer-budget-slice2-native"
+              },
+              {
+                "driver": "t4-c3-producer-budget-slice2-committed-driver",
+                "snapshot": "t4-c3-producer-budget-slice2-committed"
+              },
+              {
+                "driver": "t4-c3-producer-budget-slice3-native-driver",
+                "snapshot": "t4-c3-producer-budget-slice3-native"
+              },
+              {
+                "driver": "t4-c3-producer-budget-slice3-committed-driver",
+                "snapshot": "t4-c3-producer-budget-slice3-committed"
+              },
+              {
+                "driver": "t4-c3-producer-budget-pilot-complete-driver",
+                "snapshot": "t4-c3-producer-budget-pilot-awaiting-release"
+              },
+              {
+                "driver": "t4-c3-producer-budget-accept-driver",
+                "snapshot": "t4-c3-producer-budget-pilot-released"
+              },
+              {
+                "driver": "t4-c3-producer-budget-live-idle-driver",
+                "snapshot": "t4-c3-producer-budget-live-idle"
+              },
+              {
+                "driver": "t4-c3-producer-budget-budget-held-driver",
+                "snapshot": "t4-c3-producer-budget-budget-held"
+              },
+              {
+                "driver": "t4-c3-producer-budget-stopped-driver",
+                "snapshot": "t4-c3-producer-budget-stopped"
+              },
+              {
+                "driver": "t4-c3-producer-budget-ordinary-new-task-driver",
+                "snapshot": "t4-c3-producer-budget-ordinary-new-task"
+              },
+              {
+                "driver": "t4-c3-producer-budget-ordinary-handback-driver",
+                "snapshot": "t4-c3-producer-budget-ordinary-handback"
+              }
+            ],
+            "verified": [
+              {
+                "label": "t4-c3-producer-budget-accept-driver",
+                "matched": true,
+                "diagnosticOnly": false,
+                "observedStableMs": 10152,
+                "stableSamples": 41,
+                "samples": 41,
+                "barrierWallMs": 10165,
+                "endTick": 919
+              },
+              {
+                "label": "t4-c3-producer-budget-budget-held-driver",
+                "matched": true,
+                "diagnosticOnly": false,
+                "observedStableMs": 10179,
+                "stableSamples": 41,
+                "samples": 41,
+                "barrierWallMs": 10193,
+                "endTick": 998
+              },
+              {
+                "label": "t4-c3-producer-budget-enable-executed",
+                "matched": true,
+                "diagnosticOnly": false,
+                "observedStableMs": 10180,
+                "stableSamples": 41,
+                "samples": 46,
+                "barrierWallMs": 11465,
+                "endTick": 805
+              },
+              {
+                "label": "t4-c3-producer-budget-live-idle-driver",
+                "matched": true,
+                "diagnosticOnly": false,
+                "observedStableMs": 10129,
+                "stableSamples": 41,
+                "samples": 41,
+                "barrierWallMs": 10143,
+                "endTick": 931
+              },
+              {
+                "label": "t4-c3-producer-budget-ordinary-handback-driver",
+                "matched": true,
+                "diagnosticOnly": false,
+                "observedStableMs": 10222,
+                "stableSamples": 41,
+                "samples": 41,
+                "barrierWallMs": 10238,
+                "endTick": 1001
+              },
+              {
+                "label": "t4-c3-producer-budget-ordinary-new-task-driver",
+                "matched": true,
+                "diagnosticOnly": false,
+                "observedStableMs": 10225,
+                "stableSamples": 41,
+                "samples": 44,
+                "barrierWallMs": 11006,
+                "endTick": 1001
+              },
+              {
+                "label": "t4-c3-producer-budget-pilot-complete-driver",
+                "matched": true,
+                "diagnosticOnly": false,
+                "observedStableMs": 10200,
+                "stableSamples": 41,
+                "samples": 41,
+                "barrierWallMs": 10214,
+                "endTick": 918
+              },
+              {
+                "label": "t4-c3-producer-budget-pre-setup-cargo-drain",
+                "matched": true,
+                "diagnosticOnly": false,
+                "observedStableMs": 10216,
+                "stableSamples": 41,
+                "samples": 41,
+                "barrierWallMs": 10220,
+                "endTick": 804
+              },
+              {
+                "label": "t4-c3-producer-budget-product-unload",
+                "matched": false,
+                "diagnosticOnly": true,
+                "observedStableMs": 10198,
+                "stableSamples": 33,
+                "samples": 33,
+                "barrierWallMs": 10275,
+                "endTick": 938
+              },
+              {
+                "label": "t4-c3-producer-budget-slice1-committed-driver",
+                "matched": true,
+                "diagnosticOnly": false,
+                "observedStableMs": 10146,
+                "stableSamples": 41,
+                "samples": 44,
+                "barrierWallMs": 10920,
+                "endTick": 813
+              },
+              {
+                "label": "t4-c3-producer-budget-slice1-native-driver",
+                "matched": true,
+                "diagnosticOnly": false,
+                "observedStableMs": 10161,
+                "stableSamples": 41,
+                "samples": 44,
+                "barrierWallMs": 10938,
+                "endTick": 811
+              },
+              {
+                "label": "t4-c3-producer-budget-slice2-committed-driver",
+                "matched": true,
+                "diagnosticOnly": false,
+                "observedStableMs": 10153,
+                "stableSamples": 41,
+                "samples": 44,
+                "barrierWallMs": 10927,
+                "endTick": 868
+              },
+              {
+                "label": "t4-c3-producer-budget-slice2-native-driver",
+                "matched": true,
+                "diagnosticOnly": false,
+                "observedStableMs": 10136,
+                "stableSamples": 41,
+                "samples": 44,
+                "barrierWallMs": 10908,
+                "endTick": 866
+              },
+              {
+                "label": "t4-c3-producer-budget-slice3-committed-driver",
+                "matched": true,
+                "diagnosticOnly": false,
+                "observedStableMs": 10166,
+                "stableSamples": 41,
+                "samples": 43,
+                "barrierWallMs": 10690,
+                "endTick": 918
+              },
+              {
+                "label": "t4-c3-producer-budget-slice3-native-driver",
+                "matched": true,
+                "diagnosticOnly": false,
+                "observedStableMs": 10124,
+                "stableSamples": 41,
+                "samples": 44,
+                "barrierWallMs": 10905,
+                "endTick": 916
+              },
+              {
+                "label": "t4-c3-producer-budget-stopped-driver",
+                "matched": true,
+                "diagnosticOnly": false,
+                "observedStableMs": 10024,
+                "stableSamples": 40,
+                "samples": 43,
+                "barrierWallMs": 10806,
+                "endTick": 999
+              },
+              {
+                "label": "t4-c3-producer-budget-warmup",
+                "matched": true,
+                "diagnosticOnly": false,
+                "observedStableMs": 10167,
+                "stableSamples": 41,
+                "samples": 47,
+                "barrierWallMs": 11705,
+                "endTick": 803
+              }
+            ]
+          },
+          "fromDemand": true,
+          "aggregateProof": false,
+          "individualNativeSnapshotsComplete": true,
+          "missingIndividualNativeSequences": [],
+          "nativeSequences": [
+            1,
+            3,
+            4
+          ],
+          "sequenceHighWater": 4,
+          "kernelPipelineCounterDeltas": {
+            "admitted": 4,
+            "dispatched": 4,
+            "settledCommitted": 3,
+            "settledNotExecuted": 1,
+            "rearmings": 0
+          },
+          "zeroNativeAttemptIds": [
+            "tk1_5_e5a6551435115334"
+          ],
+          "expiredProductionShape": {
+            "fixtureFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/../candidate/expired-production-shape-task.json",
+            "productionMemorySha256": "972403b475fd333803a7417f55534d87c44bb3439d7fa31b46b3c5d6cbe0999e",
+            "oldTaskId": "74075640:1:OH:E4N58->E1N57",
+            "oldTaskAmount": 1384,
+            "oldTaskRemaining": 913,
+            "oldTaskEntireJsonExactlyPreserved": true,
+            "isActualProductionEngineProof": false,
+            "exactPreSetupPhaseProof": {
+              "independentPrepReportFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/c3-complete-independent-r18-r5-complete-c3-r5-producerBudget-prep.json",
+              "independentPrepReportSha256": "f61a55a59cd65f347219bdd1eaa7b20fac283dc739eaee3502692fd1a2dd61ea",
+              "actualPreSetupNamesEncountered": [
+                "t4-c3-producer-budget-before-setup-after-real-drain-snapshot.json"
+              ],
+              "otherOriginalSnapshotsChecked": 25,
+              "sameTickDoesNotImplyPostSetup": true,
+              "historyAndBundleFullArrayUnmodified": true
+            }
+          },
+          "preservedWorldContinuations": [],
+          "completedDatabase": {
+            "databaseFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/evidence/../private-databases/db-t4-c3-producer-budget-completed.json",
+            "databaseSha256": "f01eb80d842aeea12a2f4448b8013c7aa7d59d2f7b9ee4c48fcba2bf661a5525",
+            "persistedTick": 1001,
+            "storedGameTimeType": "int",
+            "persistedMemorySha256": "9cd9684062c823b7c608e71d9178862f7d3308e98d0910f7e9bd687ae925fbc3"
+          },
+          "kernelDispatchedIsNotRealNativeCount": true,
+          "kernelDispatchDeltaDiffersFromRealNativeCount": true,
+          "originalPilotTaskPresence": {
+            "t4-c3-producer-budget-pilot-awaiting-release-snapshot.json": "natural_26_done_0_retained",
+            "t4-c3-producer-budget-stopped-snapshot.json": "natural_26_done_0_retained",
+            "t4-c3-producer-budget-ordinary-new-task-snapshot.json": "natural_26_done_0_retained",
+            "t4-c3-producer-budget-ordinary-handback-snapshot.json": "natural_26_done_0_retained"
+          },
+          "healthySynthesisProducerTicks": 60,
+          "resourceControlEffectiveInterval": 5,
+          "scheduledResourceControlUpdates": 12,
+          "realNativeReceiptCount": 3,
+          "natives": [
+            {
+              "sequence": 1,
+              "attemptId": "tk1_4_4a4028061d1eb89c",
+              "receiptId": "c63efffa7e91378",
+              "amount": 10,
+              "fee": 1,
+              "nativeTick": 810,
+              "taskRemainingBefore": 26,
+              "workKey": "biz:treasury-continuous-oh-T4-2026-10-02:18fd1b9566df55bc:1"
+            },
+            {
+              "sequence": 3,
+              "attemptId": "tk1_6_cc6add67560ff8ea",
+              "receiptId": "1ed20014b5af48e",
+              "amount": 10,
+              "fee": 1,
+              "nativeTick": 865,
+              "taskRemainingBefore": 16,
+              "workKey": "biz:treasury-continuous-oh-T4-2026-10-02:18fd1b9566df55bc:3"
+            },
+            {
+              "sequence": 4,
+              "attemptId": "tk1_7_2cff1c19e384922a",
+              "receiptId": "861e002c963f41e",
+              "amount": 6,
+              "fee": 1,
+              "nativeTick": 915,
+              "taskRemainingBefore": 6,
+              "workKey": "biz:treasury-continuous-oh-T4-2026-10-02:18fd1b9566df55bc:4"
+            }
+          ],
+          "pilotAcceptedFromThreeCommittedSlices": true,
+          "originalTaskRemaining": 0,
+          "sourceInitialTerminalOH": 36,
+          "sourceInitialStorageOH": 877,
+          "sourceTerminalAfterPilot": 10,
+          "virtualProducerGateObservationTicks": 60,
+          "canonicalOHTasksCreatedWhileBudgetExhausted": 0,
+          "extraNativeReceiptsWhileBudgetExhausted": 0,
+          "standingNewNeedOH": 10,
+          "legacyHandbackTaskId": "1000:1:OH:E4N58->E1N57",
+          "legacyHandbackReceiptId": "055607b96c8b844",
+          "legacyHandbackAmount": 10,
+          "unchangedT4ConsumptionOH": 26,
+          "physicalFixtureNaturalCarrierProof": false
+        }
+      ],
+      "realNativeReceiptCount": 4
+    }
+  ],
+  "realNativeReceiptCountAcrossIndependentCases": 4,
+  "syntheticHistoryExcludedFromRealNativeCounts": true,
+  "verificationArtifacts": {
+    "verifierFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/verify-t4.py",
+    "verifierSha256": "e4357be83d19305f3fccb67d080c80294b56562f7b12c54714c0b8a4fcc4d34f",
+    "planFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/tools/verify-t4-plan-semantic-r18.json",
+    "planSha256": "476281fa8bc750de073ddc28059a81639bb113f00fdf6f7636e7775179175529",
+    "manifestFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/candidate/manifest.json",
+    "manifestSha256": "6b2b73e71b4ede5f912cfbe14f52ee8c8cc8f803f4af5dacf3602ed31c4e97a9",
+    "mainFile": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/candidate/main.js",
+    "mainSha256": "9d300172be0bed439e93b7a47d206dcfa3fc5b9db727a571f8ffa761a14f7f4d",
+    "mainBytes": 3443761
+  }
+}

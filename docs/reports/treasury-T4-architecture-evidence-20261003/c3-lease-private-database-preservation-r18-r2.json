@@ -1,0 +1,20 @@
+{
+  "originalsPreserved": true,
+  "copies": [
+    {
+      "source": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/db-t4-c3-lease-configured-fixture.json",
+      "privateCopy": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/private-databases/db-t4-c3-lease-configured-fixture.json",
+      "sha256": "8bfb208593905208e00303e6e76092e69208ead5cf2de30889e4e2ad8f87e0ae"
+    },
+    {
+      "source": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/db-before-t4-c3-lease-stopped-restart.json",
+      "privateCopy": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/private-databases/db-before-t4-c3-lease-stopped-restart.json",
+      "sha256": "c8c040fb9aa24eb69451c50941bc7d888705bb841c499a6753e57c184f61d587"
+    },
+    {
+      "source": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/db-t4-c3-lease-completed.json",
+      "privateCopy": "/srv/screeps-treasury-t1/r18-t4-architecture-20261003/private-databases/db-t4-c3-lease-completed.json",
+      "sha256": "de81fb27d3411f08d533a3d8bcaaf39f4197783fb9a46a66ca0aecd44cf3b905"
+    }
+  ]
+}
