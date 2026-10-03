@@ -44,6 +44,21 @@ describe("mountSpawn", () => {
     Game.spawns = {};
   });
 
+  it("同tick多Spawn生产同角色不重名，配对Memory归属保持独立", () => {
+    const room = { name: "E1N57", energyAvailable: 5600, energyCapacityAvailable: 5600 } as Room;
+    const configs = ["E1N57:powerbank:E0N58:attacker", "E1N57:powerbank:W0N57:attacker"];
+    configs.forEach(name => { Memory.data!.creepConfigs![name] = { role: "powerBankAttacker", roomName: room.name, args: [], body: [ATTACK, MOVE] }; });
+    const first = createSpawn("Spawn1", room, [configs[0]]);
+    const second = createSpawn("Spawn2", room, [configs[1]]);
+    Game.spawns = { Spawn1: first, Spawn2: second };
+    for (const spawn of [first, second]) { Object.setPrototypeOf(spawn, prototype); prototype.work.call(spawn); }
+    const one = (first.spawnCreep as jest.Mock).mock.calls[0];
+    const two = (second.spawnCreep as jest.Mock).mock.calls[0];
+    expect(one[1]).not.toBe(two[1]);
+    expect(one[2].memory.configName).toBe(configs[0]);
+    expect(two[2].memory.configName).toBe(configs[1]);
+  });
+
   it("preserves authenticated RCL8 maintenance ownership over war and emergency queues", () => {
     const room = {
       name: "E4N58",

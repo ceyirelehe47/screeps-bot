@@ -39,6 +39,9 @@ export function moveToTarget(
   recordMovementMetric("pathRequests", room.name);
 
   const movementState = ensureCreepMovementState(creep);
+  if (movementState.travelState?.targetRoom !== options.travelTargetRoom) {
+    delete movementState.travelState;
+  }
 
   if (movementState.movementPushedAt === Game.time) {
     return OK;
@@ -132,7 +135,7 @@ export function moveToTarget(
         plainCost: options.plainCost,
         ignoreCreeps,
         maxRooms: options.maxRooms,
-        costCallback: (roomName, matrix) => buildRoomCostMatrix(creep, room, roomName, matrix, options, targetPos),
+        costCallback: (roomName, matrix) => buildRoomMovementMatrix(creep, room, roomName, matrix, { ...options, ignoreCreeps }, targetPos),
       }),
     );
 
@@ -184,7 +187,7 @@ function sameRoomNonEdgeMoveNeedsExitRecovery(creep: AnyCreep, targetPos: RoomPo
   return creep.pos.roomName === targetPos.roomName && isExitTile(creep.pos) && !isExitTile(targetPos);
 }
 
-function buildRoomCostMatrix(
+export function buildRoomMovementMatrix(
   creep: AnyCreep,
   creepRoom: Room,
   roomName: string,
@@ -208,7 +211,7 @@ function buildRoomCostMatrix(
   // 前 creep/PowerCreep 障碍，绝不能作为跨 tick 缓存的输入；静态矩阵完全由
   // 自行读取的 terrain + 自然对象（Source/Mineral/Deposit/Controller）+
   // 结构/工地构成，动态 creep 障碍每 tick 在 clone 上叠加。
-  const roomMatrix = getCachedRoomBaseCostMatrix(creepRoom, roomContext, options);
+  const roomMatrix = getRoomStaticMatrix(creepRoom.name);
 
   if (options.allowPortalTarget && targetPos.roomName === roomName) {
     // Portal 按引擎默认语义在静态层置 0xff；显式以 Portal 为目标（range=0
@@ -223,26 +226,7 @@ function buildRoomCostMatrix(
 
   applySourceContainerPositionAvoidance(roomMatrix, roomName, targetPos, options);
 
-  if (!(options.ignoreCreeps ?? true)) {
-    for (const otherCreep of roomContext.getMyCreeps()) {
-      if (otherCreep === creep) {
-        continue;
-      }
-      roomMatrix.set(otherCreep.pos.x, otherCreep.pos.y, 0xfe);
-    }
-    for (const hostileCreep of roomContext.getHostileCreeps()) {
-      roomMatrix.set(hostileCreep.pos.x, hostileCreep.pos.y, 0xfe);
-    }
-    for (const hostilePowerCreep of roomContext.getHostilePowerCreeps()) {
-      roomMatrix.set(hostilePowerCreep.pos.x, hostilePowerCreep.pos.y, 0xfe);
-    }
-    for (const otherPowerCreep of Object.values(Game.powerCreeps || {})) {
-      if (otherPowerCreep === creep || otherPowerCreep.ticksToLive == null || otherPowerCreep.room?.name !== roomName) {
-        continue;
-      }
-      roomMatrix.set(otherPowerCreep.pos.x, otherPowerCreep.pos.y, 0xfe);
-    }
-  }
+  if (!(options.ignoreCreeps ?? true)) applyMovementCreepObstacles(roomMatrix, creep, roomName);
 
   if (options.costCallback && roomName === creepRoom.name) {
     return options.costCallback(roomName, roomMatrix);
@@ -289,14 +273,14 @@ function applySourceContainerPositionAvoidance(
   }
 }
 
-function getCachedRoomBaseCostMatrix(
-  room: Room,
-  roomContext: ReturnType<ReturnType<typeof getTickContextService>["getRoomContext"]>,
-  options: MoveToTargetOptions,
-): CostMatrix {
-  const plainCost = options.plainCost ?? 1;
-  const swampCost = options.swampCost ?? 5;
-  const cacheKey = `${room.name}:p${plainCost}:s${swampCost}`;
+export function getRoomStaticMatrix(roomName: string): CostMatrix {
+  const room = Game.rooms[roomName];
+  if (!room) return buildStaticRoomCostMatrix(roomName, {
+    structures: [], constructionSites: [], sources: [], minerals: [], deposits: [], controller: undefined,
+  });
+  const roomContext = getTickContextService().getRoomContext(room);
+  // 静态层不含 plain/swamp 参数；房内与跨房共享同一拓扑缓存，业务只改 clone。
+  const cacheKey = roomName;
   // 拓扑指纹跨 tick 复用静态矩阵：结构/工地/RCL/planner 保存时间不变即命中，
   // 指纹变化或 TTL 到期才重建。矩阵只含静态信息（terrain 自行从
   // Game.map.getRoomTerrain 读取，与引擎 fallbackMatrix 完全隔离——后者在
@@ -322,6 +306,23 @@ function getCachedRoomBaseCostMatrix(
   });
   roomBaseCostMatrixBuildCount += 1;
   return baseMatrix.clone();
+}
+
+/** 房内、跨房和卡路重寻路使用相同动态障碍层，不写入静态缓存。 */
+export function applyMovementCreepObstacles(matrix: CostMatrix, creep: AnyCreep, roomName: string): CostMatrix {
+  const room = Game.rooms[roomName];
+  if (!room) return matrix;
+  const context = getTickContextService().getRoomContext(room);
+  const units: AnyCreep[] = [
+    ...(context?.getMyCreeps() ?? room.find(FIND_MY_CREEPS)),
+    ...(context?.getHostileCreeps() ?? room.find(FIND_HOSTILE_CREEPS)),
+    ...(context?.getHostilePowerCreeps() ?? room.find(FIND_HOSTILE_POWER_CREEPS)),
+    ...Object.values(Game.powerCreeps || {}).filter(unit => unit.ticksToLive != null && unit.room?.name === roomName),
+  ];
+  for (const unit of units) {
+    if (unit !== creep) matrix.set(unit.pos.x, unit.pos.y, 0xfe);
+  }
+  return matrix;
 }
 
 function followStoredRoomPath(

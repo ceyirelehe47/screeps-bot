@@ -238,6 +238,20 @@ describe("stable cardinal route passing", () => {
     } as Memory["data"];
   });
 
+  it("遇敌回到母房后载货切到卸货，空车释放交通状态", () => {
+    Memory.data!.remoteMining!.W5N5.status = "defending";
+    const home = makeRoom("W1N1");
+    const role = remoteMiningCarrierRole("W5N5", "src1");
+    const loaded = makeCreep({ room: home, energy: 400 });
+    expect(role.source?.(loaded)).toBe(true);
+    expect(clearMovementState).toHaveBeenCalledWith(loaded);
+    const empty = makeCreep({ room: home, energy: 0, name: "empty" });
+    expect(role.source?.(empty)).toBe(false);
+    expect(role.target(empty)).toBe(false);
+    expect(clearMovementState).toHaveBeenCalledWith(empty);
+    expect(moveToTargetRoom).not.toHaveBeenCalled();
+  });
+
   it("outbound travel passes the home->target two-room route", () => {
     const homeRoom = makeRoom("W1N1");
     const creep = makeCreep({ room: homeRoom, energy: 0 });

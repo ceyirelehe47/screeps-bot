@@ -319,6 +319,7 @@ describe("runWarControl", () => {
 describe("towerDrainDuo 战争控制", () => {
   beforeEach(() => {
     jest.restoreAllMocks();
+    jest.clearAllMocks();
     resetRuntimeServices();
     Game.time = 1000;
     Memory.runtime = {};

@@ -428,8 +428,10 @@ describe("towerDrainDuo 公共战术门", () => {
     expect(blocked.set).toHaveBeenCalledWith(2, 25, 255);
     attacker.pos = new MockPos(2, 25, TARGET) as unknown as RoomPosition;
     healer.pos = new MockPos(2, 26, TARGET) as unknown as RoomPosition;
+    (attacker.move as jest.Mock).mockClear();
     runTowerDrainPair(attacker, TARGET, GREEN_CONFIG);
     expect(attacker.memory._warTowerDrain?.phase).toBe("retreating");
+    expect(attacker.move).toHaveBeenCalledTimes(1);
     expect([BOTTOM, BOTTOM_RIGHT]).toContain((attacker.move as jest.Mock).mock.calls[0]?.[0]);
     expect(attacker.move).not.toHaveBeenCalledWith(LEFT);
   });

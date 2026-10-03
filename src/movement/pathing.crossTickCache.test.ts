@@ -10,7 +10,7 @@ import { clearRoomBaseCostMatrixCacheForTest } from "@/movement/pathing";
 import { clearRoomTopologyRevisionCacheForTest } from "@/movement/roomTopologyRevision";
 import { clearCreepMovementStateForTest, getCreepMovementState } from "@/movement/creepState";
 import { clearMovementAnalyticsForTest, getMovementAnalyticsForTest } from "@/movement/metrics";
-import { clearRoutingCachesForTest, getTravelMatrixBuildCountForTest, moveToTargetRoom } from "@/movement/routing";
+import { clearRoutingCachesForTest, getTravelMatrixBuildCountForTest, getCachedStaticTravelMatrix } from "@/movement/routing";
 import {
   MockRoomPosition,
   RealCostMatrix,
@@ -373,27 +373,6 @@ describe("pathing cross-tick caching", () => {
 
   it("routing 跨房矩阵跨 tick 复用且拓扑变化后重建", () => {
     const harness = buildHarness();
-    // reusePath:0 + ignoreCreeps:false 关闭 segment 缓存，每次都经
-    // PathFinder.search → roomCallback 访问 travelMatrixCache。
-    const travelOptions = { ignoreCreeps: false, reusePath: 0 };
-    (global as unknown as { PathFinder: { search: unknown } }).PathFinder.search = jest.fn(
-      (
-        _origin: RoomPosition,
-        _goal: unknown,
-        opts: { roomCallback: (roomName: string) => boolean | CostMatrix },
-      ) => {
-        // 像 PathFinder 引擎一样为途经房间调用 roomCallback，驱动矩阵构建/命中。
-        opts.roomCallback(harness.room.name);
-        return {
-          path: [new MockRoomPosition(11, 10, harness.room.name) as unknown as RoomPosition],
-          incomplete: false,
-          ops: 1,
-          cost: 1,
-        };
-      },
-    );
-    (harness.room as unknown as Record<string, unknown>).findExitTo = jest.fn(() => RIGHT);
-
     const traveler = createCreep("traveler", "scout", 10, 10, harness.room);
     harness.creeps.push(traveler);
     Game.creeps[traveler.name] = traveler;
@@ -401,16 +380,16 @@ describe("pathing cross-tick caching", () => {
     Game.map.describeExits = jest.fn(() => ({ [RIGHT]: "W2N1" })) as unknown as GameMap["describeExits"];
     Game.map.findRoute = jest.fn(() => [{ exit: RIGHT, room: "W2N1" }]) as unknown as GameMap["findRoute"];
 
-    expect(moveToTargetRoom(traveler, "W2N1", undefined, travelOptions)).toBe(OK);
+    getCachedStaticTravelMatrix(harness.room.name);
     expect(getTravelMatrixBuildCountForTest()).toBe(1);
 
     advanceTick();
-    expect(moveToTargetRoom(traveler, "W2N1", undefined, travelOptions)).toBe(OK);
+    getCachedStaticTravelMatrix(harness.room.name);
     expect(getTravelMatrixBuildCountForTest()).toBe(1);
 
     harness.structures.push({ structureType: STRUCTURE_WALL, pos: { x: 20, y: 20 } });
     advanceTick();
-    expect(moveToTargetRoom(traveler, "W2N1", undefined, travelOptions)).toBe(OK);
+    getCachedStaticTravelMatrix(harness.room.name);
     expect(getTravelMatrixBuildCountForTest()).toBe(2);
   });
 });

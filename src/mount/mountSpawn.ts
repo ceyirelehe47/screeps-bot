@@ -7,6 +7,26 @@ import { isRcl8MaintenanceUpgraderConfig } from "@/runtime/upgraderPolicy";
 import type { RoleName } from "@/types/system";
 import { canSpawnDepositConfig } from "@/runtime/depositHarvest";
 
+let spawnNameGame: typeof Game | undefined;
+let spawnNameTick = -1;
+let reservedSpawnNames = new Set<string>();
+
+function chooseCreepName(spawn: StructureSpawn, config: CreepConfig): string {
+  if (config.name) return config.name;
+  if (spawnNameGame !== Game || spawnNameTick !== Game.time) {
+    spawnNameGame = Game; spawnNameTick = Game.time; reservedSpawnNames = new Set();
+  }
+  const base = `${getCreepNamePrefix(config.role)}-${Game.time}`;
+  const occupied = (name: string) => reservedSpawnNames.has(name) || !!Game.creeps[name] ||
+    Object.values(Game.spawns).some(other => other.spawning?.name === name);
+  let name = base;
+  if (occupied(name)) name = `${base}-${spawn.name}`;
+  let suffix = 1;
+  while (occupied(name)) name = `${base}-${spawn.name}-${suffix++}`;
+  reservedSpawnNames.add(name);
+  return name;
+}
+
 function isTransientConfigName(configName: string): boolean {
   return configName.includes(":manual:") || configName.includes(":emergency:");
 }
@@ -273,7 +293,7 @@ export function mountSpawn(): void {
     if (config.role === "depositHarvester" && !canSpawnDepositConfig(configName, config)) return false;
 
     const body = chooseBody(this, configName);
-    const name = config.name || `${getCreepNamePrefix(config.role)}-${Game.time}`;
+    const name = chooseCreepName(this, config);
     const options: SpawnOptions = {
       memory: {
         role: config.role,

@@ -36,8 +36,8 @@ class MockRoomPosition {
     return this.x === target.x && this.y === target.y && this.roomName === target.roomName;
   }
 
-  public findClosestByPath(): RoomPosition | null {
-    return this as unknown as RoomPosition;
+  public findClosestByPath(direction: DirectionConstant): RoomPosition | null {
+    return new MockRoomPosition(direction === RIGHT ? 49 : direction === LEFT ? 0 : this.x, direction === TOP ? 0 : direction === BOTTOM ? 49 : this.y, this.roomName) as unknown as RoomPosition;
   }
 }
 

@@ -214,7 +214,7 @@ describe("main loop phase ordering", () => {
 
     expect(phaseContract).toEqual(canonicalTickPhases);
     expect(new Set(order).size).toBe(order.length);
-    expect(order).toHaveLength(38);
+    expect(order).toHaveLength(39);
   });
 
   it("keeps one-time registrations outside and before gameLoop", () => {

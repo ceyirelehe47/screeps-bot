@@ -306,10 +306,14 @@ export const remoteMiningCarrierRole: RoleFactory = (targetRoom: string, sourceI
       const homeRoomName = getHomeRoomName(creep);
 
       if (isRemoteSuspendedOrDangerous(targetRoom)) {
+        delete creep.memory._rmcSelectedSource;
         if (creep.room.name !== homeRoomName) {
           moveToTargetRoom(creep, homeRoomName, getRetreatEncodedRoute(homeRoomName, targetRoom), { plainCost: 2, swampCost: 10, travelRange: 3, reusePath: 10 });
+          return false;
         }
-        return false;
+        clearMovementState(creep);
+        // 回撤结束后先卸已有载荷；空车停车必须释放旧交通占位。
+        return !isEmpty(creep);
       }
 
       if (isFull(creep)) {
@@ -422,6 +426,8 @@ export const remoteMiningCarrierRole: RoleFactory = (targetRoom: string, sourceI
         if (suspended) {
           if (creep.room.name !== homeRoomName) {
             moveToTargetRoom(creep, homeRoomName, getRetreatEncodedRoute(homeRoomName, targetRoom), { plainCost: 2, swampCost: 10, travelRange: 3, reusePath: 10 });
+          } else {
+            clearMovementState(creep);
           }
           return false;
         }
@@ -446,6 +452,7 @@ export const remoteMiningCarrierRole: RoleFactory = (targetRoom: string, sourceI
 
       const target = measureCreepDecision(() => getDeliveryTarget(homeRoomName));
       if (!target) {
+        clearMovementState(creep);
         return false;
       }
 
@@ -454,6 +461,7 @@ export const remoteMiningCarrierRole: RoleFactory = (targetRoom: string, sourceI
         moveToTarget(creep, target, 1);
         return false;
       }
+      clearMovementState(creep);
 
       if (isEmpty(creep)) {
         retireIfLowTtl(creep);

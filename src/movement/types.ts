@@ -31,6 +31,8 @@ export interface MultiRoomTravelSegment {
 }
 
 export interface MoveToTargetOptions {
+  /** routing 的房内出口步仍属于此旅行；普通房内目标会结束旧旅行状态。 */
+  travelTargetRoom?: string;
   swampCost?: number;
   plainCost?: number;
   reusePath?: number;
@@ -52,6 +54,7 @@ export interface MoveToRoomOptions extends MoveToTargetOptions {
 export type MovementOptions = MoveToRoomOptions;
 
 export interface TravelState {
+  exitTarget?: { key: string; x: number; y: number; expiresAt: number };
   targetRoom: string;
   lastPosKey?: string;
   lastWasExit?: boolean;

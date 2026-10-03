@@ -1,0 +1,101 @@
+import { moveToTargetRoom, clearRoutingCachesForTest } from "@/movement/routing";
+import { moveToTarget, buildRoomMovementMatrix, getRoomStaticMatrix, clearRoomBaseCostMatrixCacheForTest } from "@/movement/pathing";
+import { clearCreepMovementStateForTest, ensureCreepMovementState, getCreepMovementState } from "@/movement/creepState";
+import { MockRoomPosition, createRoom, createCreep, resetRuntimeServices, setupRoomPositionGlobal, setupPathFinderGlobal, setDefaultMapMocks } from "@mock/movement";
+
+jest.mock("@/runtime/roomPlannerConstruction", () => ({ getSourceContainerPositionsForRoom: jest.fn(() => []) }));
+
+describe("外出 creep 与常驻 creep 的统一房内寻路", () => {
+  beforeEach(() => {
+    Game.time += 1;
+    Game.rooms = {}; Game.creeps = {}; Game.powerCreeps = {};
+    Memory.data = {} as NonNullable<Memory["data"]>; Memory.runtime = {};
+    resetRuntimeServices(); clearRoutingCachesForTest(); clearCreepMovementStateForTest();
+    setupRoomPositionGlobal(); setupPathFinderGlobal(); setDefaultMapMocks();
+    Game.map.describeExits = jest.fn((name: string) => name === "W1N1" ? { [RIGHT]: "W0N1", [TOP]: "W1N2" } : { [LEFT]: "W1N1" });
+    Game.map.findRoute = jest.fn(() => [{ exit: RIGHT, room: "W0N1" }]);
+  });
+
+  function traveler(role = "remoteMiningCarrier") {
+    const units: Creep[] = [];
+    const room = createRoom("W1N1", units);
+    room.findExitTo = jest.fn(() => RIGHT);
+    const creep = createCreep("traveler", role as CreepMemory["role"], 10, 10, room);
+    units.push(creep); Game.creeps[creep.name] = creep;
+    const choose = jest.spyOn(creep.pos, "findClosestByPath").mockReturnValue(new MockRoomPosition(49, 10, room.name) as unknown as RoomPosition);
+    const search = jest.spyOn(creep.pos, "findPathTo").mockImplementation((_goal, options) => {
+      options?.costCallback?.(room.name, new PathFinder.CostMatrix());
+      return [{ x: 11, y: 10, dx: 1, dy: 0, direction: RIGHT }, { x: 12, y: 10, dx: 1, dy: 0, direction: RIGHT }];
+    });
+    return { room, creep, choose, search, units };
+  }
+
+  it.each(["remoteMiningCarrier", "remoteCarrier", "remoteWorker", "powerBankAttacker", "powerBankHealer", "scout", "depositHarvester"])("%s 走出口使用房内缓存和交通执行器", (role) => {
+    const { creep, search } = traveler(role);
+    expect(moveToTargetRoom(creep, "W0N1", "W1N1|W0N1")).toBe(OK);
+    expect(search).toHaveBeenCalledWith(expect.objectContaining({ x: 49, y: 10 }), expect.objectContaining({ maxRooms: 1, range: 0 }));
+    expect(creep.move).toHaveBeenCalledWith(RIGHT);
+    expect(PathFinder.search).not.toHaveBeenCalled();
+    expect(getCreepMovementState(creep)?.movePathState?.targetX).toBe(49);
+    expect(getCreepMovementState(creep)?.travelState?.multiRoomSegment).toBeUndefined();
+  });
+
+  it("下一tick复用同一房内路径，位置变化才推进游标", () => {
+    const { creep, search, choose } = traveler();
+    moveToTargetRoom(creep, "W0N1", "W1N1|W0N1");
+    Game.time += 1;
+    creep.pos = new MockRoomPosition(11, 10, creep.room.name) as unknown as RoomPosition;
+    moveToTargetRoom(creep, "W0N1", "W1N1|W0N1");
+    expect(search).toHaveBeenCalledTimes(1); expect(choose).toHaveBeenCalledTimes(1);
+    expect(getCreepMovementState(creep)?.movePathState?.cursor).toBe(0);
+  });
+
+  it("载货回到母房卸货时结束旧旅行，不再被旧出口目标影响", () => {
+    const { creep, search } = traveler();
+    moveToTargetRoom(creep, "W0N1", "W1N1|W0N1");
+    Game.time += 1;
+    moveToTarget(creep, new MockRoomPosition(20, 20, creep.room.name) as unknown as RoomPosition, 1);
+    expect(getCreepMovementState(creep)?.travelState).toBeUndefined();
+    expect(search).toHaveBeenLastCalledWith(expect.objectContaining({ x: 20, y: 20 }), expect.objectContaining({ range: 1 }));
+  });
+
+  it("改为撤退时清理旧房内目标和旧私有segment，选择返程出口", () => {
+    const { creep, room, search, choose } = traveler();
+    moveToTargetRoom(creep, "W0N1", "W1N1|W0N1");
+    const state = ensureCreepMovementState(creep);
+    state.travelState!.multiRoomSegment = { key: "stale" } as never;
+    room.findExitTo = jest.fn(() => TOP);
+    choose.mockReturnValue(new MockRoomPosition(10, 0, room.name) as unknown as RoomPosition);
+    Game.time += 1;
+    moveToTargetRoom(creep, "W1N2", "W1N1|W1N2");
+    expect(search).toHaveBeenLastCalledWith(expect.objectContaining({ y: 0 }), expect.objectContaining({ maxRooms: 1 }));
+    expect(state.travelState?.targetRoom).toBe("W1N2");
+    expect(state.travelState?.multiRoomSegment).toBeUndefined();
+  });
+
+  it("常驻与外出共用静态矩阵clone，动态障碍不污染缓存", () => {
+    const { creep, room, units } = traveler();
+    const blocker = createCreep("blocker", "worker", 11, 10, room); units.push(blocker);
+    const base = getRoomStaticMatrix(room.name);
+    const dynamic = buildRoomMovementMatrix(creep, room, room.name, base, { ignoreCreeps: false }, creep.pos);
+    expect(dynamic.get(11, 10)).toBe(254);
+    expect(getRoomStaticMatrix(room.name).get(11, 10)).not.toBe(254);
+  });
+
+  it("没有可达出口时报告无路，不发移动或改走未确认出口", () => {
+    const { creep, choose, search } = traveler(); choose.mockReturnValue(null);
+    expect(moveToTargetRoom(creep, "W0N1", "W1N1|W0N1")).toBe(ERR_NO_PATH);
+    expect(creep.move).not.toHaveBeenCalled(); expect(search).not.toHaveBeenCalled();
+  });
+
+  it("到达目标房后不复用旧房路径，global reset后可重建", () => {
+    const { creep } = traveler(); moveToTargetRoom(creep, "W0N1", "W1N1|W0N1");
+    clearCreepMovementStateForTest(); clearRoomBaseCostMatrixCacheForTest();
+    Game.time += 1;
+    expect(moveToTargetRoom(creep, "W0N1", "W1N1|W0N1")).toBe(OK);
+    creep.room = createRoom("W0N1");
+    expect(moveToTargetRoom(creep, "W0N1")).toBe(OK);
+    expect(getCreepMovementState(creep)?.travelState).toBeUndefined();
+    expect(getCreepMovementState(creep)?.movePathState).toBeUndefined();
+  });
+});
