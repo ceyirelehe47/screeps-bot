@@ -181,6 +181,67 @@ describe("Power Bank 静态完整路径测量", () => {
     expect(search).toHaveBeenCalledTimes(3);
   });
 
+  it("pending 退避跨中转房视野变化仍复用，让另一来源获得完整测量预算", () => {
+    const origin = "W1N0", transit = "W0N0", target = "E0N0";
+    Game.rooms = { W1N1: visibleRoom("W1N1"), [origin]: visibleRoom(origin), [target]: visibleRoom(target) };
+    const candidate = {
+      ...input(), sourceSpawnPos: pos(49, 10, origin), bankPos: pos(2, 10, target),
+      returnTargetPos: pos(48, 10, origin), routeRooms: [origin, transit, target],
+    };
+    search.mockImplementation((source: RoomPosition, goal: { pos: RoomPosition; range: number }) => source.roomName === origin
+      ? { path: [pos(0, 10, transit)], incomplete: true, ops: 6_000, cost: 1 }
+      : straightSameRoom(source, goal));
+    const deferred = measure(candidate);
+    expect(deferred).toEqual({ status: "pending", reason: "path_incomplete", retryAt: 1_005 });
+    expect(canMeasure()).toBe(false);
+
+    Game.time += 1;
+    Game.rooms[transit] = visibleRoom(transit);
+    topology.mockReturnValue("transit-now-visible");
+    topology.mockClear();
+    (Game.map.getRoomStatus as jest.Mock).mockClear();
+    expect(measure(candidate)).toBe(deferred);
+    expect(topology).not.toHaveBeenCalled();
+    expect(Game.map.getRoomStatus).not.toHaveBeenCalled();
+    expect(canMeasure()).toBe(true);
+    expect(measure(input()).status).toBe("ready");
+    expect(search).toHaveBeenCalledTimes(4);
+
+    Game.time += 1;
+    delete Game.rooms[transit];
+    topology.mockReturnValue("transit-lost-again");
+    expect(measure(candidate)).toBe(deferred);
+    expect(canMeasure()).toBe(true);
+    expect(search).toHaveBeenCalledTimes(4);
+    Game.time = 1_005;
+    expect(measure(candidate)).toEqual({ status: "pending", reason: "path_incomplete", retryAt: 1_010 });
+    expect(search).toHaveBeenCalledTimes(5);
+  });
+
+  it("pending 退避只复用完整输入 key，Bank 位置改变仍需新测量", () => {
+    search.mockReturnValue({ path: [], incomplete: true, ops: 6_000, cost: 0 });
+    expect(measure(input())).toMatchObject({ status: "pending", retryAt: 1_005 });
+    Game.time += 1;
+    search.mockImplementation(straightSameRoom);
+    expect(measure({ ...input(), bankPos: pos(14) }).status).toBe("ready");
+    expect(search).toHaveBeenCalledTimes(4);
+    expect(canMeasure()).toBe(false);
+  });
+
+  it("pending 命中前仍要求有效输入与当前端点视野", () => {
+    search.mockReturnValue({ path: [], incomplete: true, ops: 6_000, cost: 0 });
+    const candidate = input();
+    const deferred = measure(candidate);
+    Game.time += 1;
+    delete Game.rooms.W1N1;
+    expect(measure(candidate)).toMatchObject({ status: "pending", reason: "endpoint_not_visible" });
+    Game.rooms.W1N1 = visibleRoom("W1N1");
+    expect(measure({ ...candidate, bankPos: pos(50) })).toMatchObject({ status: "pending", reason: "invalid_input" });
+    expect(measure(candidate)).toBe(deferred);
+    expect(search).toHaveBeenCalledTimes(1);
+    expect(canMeasure()).toBe(true);
+  });
+
   it("合法 range 1 内的零路径成立，并从实际 origin 做返程", () => {
     const candidate = { ...input(), bankPos: pos(11), returnTargetPos: pos(10) };
     expect(measure(candidate)).toEqual({

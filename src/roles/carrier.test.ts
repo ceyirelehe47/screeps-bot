@@ -514,6 +514,139 @@ describe("carrierRole mineral hauling", () => {
 
   beforeEach(resetCarrierFixture);
 
+  it("低能量 Tower 可从 Storage/proto 取能，但不继承 Spawn 的 Terminal bootstrap 授权", () => {
+    const createLowTower = (room: Room): StructureTower => ({
+      id: `${room.name}-low-tower`,
+      structureType: STRUCTURE_TOWER,
+      room,
+      pos: { x: 12, y: 10, roomName: room.name },
+      store: {
+        getUsedCapacity: () => 394,
+        getCapacity: () => 1_000,
+        getFreeCapacity: () => 606,
+      },
+    } as unknown as StructureTower);
+
+    // 只有 Storage 中存在可取能量的 RCL8：取货后实际进入 target 补塔。
+    {
+      const room = createRoom("W130N2", { level: 8, terminal: null });
+      const storage = room.storage as StructureStorage;
+      Object.assign(storage, {
+        room,
+        pos: { x: 10, y: 10, roomName: room.name },
+        store: {
+          getUsedCapacity: (resource?: ResourceConstant) => resource === undefined || resource === RESOURCE_ENERGY ? 10_000 : 0,
+          getFreeCapacity: () => 100_000,
+        },
+      });
+      let carried = 0;
+      let towerEnergy = 394;
+      const tower = createLowTower(room);
+      Object.assign(tower, {
+        store: {
+          getUsedCapacity: () => towerEnergy,
+          getCapacity: () => 1_000,
+          getFreeCapacity: () => 1_000 - towerEnergy,
+        },
+      });
+      const creep = createCreep(room);
+      Object.assign(creep, {
+        store: {
+          getUsedCapacity: (resource?: ResourceConstant) => resource === undefined || resource === RESOURCE_ENERGY ? carried : 0,
+          getFreeCapacity: () => 400 - carried,
+        },
+        withdraw: jest.fn(() => { carried = 400; return OK; }),
+        transfer: jest.fn(() => { towerEnergy += carried; carried = 0; return OK; }),
+      });
+      Game.creeps[creep.name] = creep;
+      installCarrierTaskTestObjects([storage, tower]);
+      getEnergyStoreTarget.mockReturnValue(tower);
+      useActualEnergyPickupReservationsForTest();
+
+      expect(carrierRole().source(creep)).toBe(true);
+      expect(creep.withdraw).toHaveBeenCalledWith(storage, RESOURCE_ENERGY);
+      Game.time += 1;
+      expect(carrierRole().target(creep)).toBe(true);
+      expect(creep.transfer).toHaveBeenCalledWith(tower, RESOURCE_ENERGY);
+      expect(towerEnergy).toBe(794);
+    }
+
+    // 低 RCL 尚无 Storage，规划 Storage 格上的 proto container 也可供塔。
+    {
+      resetCarrierFixture();
+      const room = createRoom("W131N2", { level: 2, storage: null, terminal: null });
+      const proto = createCarrierTaskTestContainer(room, "tower-proto-storage", 10, { energy: 1_000 });
+      Object.assign(proto.pos, {
+        isEqualTo: (position: RoomPosition) => position.x === proto.pos.x && position.y === proto.pos.y,
+      });
+      Object.assign(room, {
+        find: jest.fn((type: FindConstant) => type === FIND_STRUCTURES ? [proto] : []),
+      });
+      const tower = createLowTower(room);
+      const creep = createCreep(room);
+      Game.creeps[creep.name] = creep;
+      getPlannedStoragePos.mockReturnValue(proto.pos);
+      getProtoStorageContainer.mockReturnValue(proto);
+      getEnergyStoreTarget.mockReturnValue(tower);
+      installCarrierTaskTestObjects([proto, tower]);
+      useActualEnergyPickupReservationsForTest();
+
+      carrierRole().source(creep);
+      expect(creep.withdraw).toHaveBeenCalledWith(proto, RESOURCE_ENERGY);
+    }
+
+    // bootstrap-only grant 允许 Spawn 使用较低 reserve，却不能让 Tower
+    // 绕过 terminalPickupRooms=false，也不能让已允许的 Tower 继承低 reserve。
+    for (const terminalPickupEnabled of [false, true]) {
+      resetCarrierFixture();
+      const { room, creep } = installTerminalBootstrapEnergyScenario("W132N2", {
+        terminalEnergy: 21_000,
+        terminalReserve: 20_000,
+      });
+      Memory.cfg!.energyPickup!.terminalPickupRooms = { [room.name]: terminalPickupEnabled };
+      getEnergyStoreTarget.mockReturnValue(createLowTower(room));
+      useActualEnergyPickupReservationsForTest();
+
+      carrierRole().source(creep);
+      expect(creep.withdraw).not.toHaveBeenCalled();
+      expect(Memory.runtime?.energyPickup?.terminalBootstrapRecovery?.[room.name]?.lastRecoveryPickupAt)
+        .toBeUndefined();
+    }
+
+    // 通用 Terminal 授权在默认 50,000 reserve 之外可补塔，不记为 bootstrap pickup。
+    {
+      resetCarrierFixture();
+      const { room, terminal, creep } = installTerminalBootstrapEnergyScenario("W133N2", {
+        terminalEnergy: 50_400,
+        terminalReserve: 20_000,
+      });
+      Memory.cfg!.energyPickup!.terminalPickupRooms = { [room.name]: true };
+      getEnergyStoreTarget.mockReturnValue(createLowTower(room));
+      useActualEnergyPickupReservationsForTest();
+
+      carrierRole().source(creep);
+      expect(creep.withdraw).toHaveBeenCalledWith(terminal, RESOURCE_ENERGY, 400);
+      expect(Memory.runtime?.energyPickup?.terminalBootstrapRecovery?.[room.name]?.lastRecoveryPickupAt)
+        .toBeUndefined();
+    }
+
+    // Spawn 保留现有显式 bootstrap 例外和对应 reserve/记录。
+    {
+      resetCarrierFixture();
+      const { room, terminal, creep } = installTerminalBootstrapEnergyScenario("W134N2", {
+        terminalEnergy: 21_000,
+        terminalReserve: 20_000,
+      });
+      Memory.cfg!.energyPickup!.terminalPickupRooms = { [room.name]: false };
+      useActualEnergyPickupReservationsForTest();
+
+      carrierRole().source(creep);
+      expect(creep.withdraw).toHaveBeenCalledWith(terminal, RESOURCE_ENERGY, 800);
+      expect(Memory.runtime?.energyPickup?.terminalBootstrapRecovery?.[room.name]?.lastRecoveryPickupAt)
+        .toBe(Game.time);
+    }
+  });
+
 
   it("caps two same-tick recovery withdraw intents to their actual 800/200 claims without market exposure", () => {
     const {

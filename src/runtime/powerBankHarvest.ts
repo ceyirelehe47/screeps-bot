@@ -401,6 +401,34 @@ function findSafeRoute(fromRoom: string, toRoom: string): string[] | null {
   return rooms;
 }
 
+let admissionRouteMemoGame: Game | undefined;
+let admissionRouteMemoTick = -1;
+let admissionRouteMemoMap: GameMap | undefined;
+let admissionRouteMemoReader: GameMap["findRoute"] | undefined;
+const admissionRouteMemo = new Map<string, readonly string[] | null>();
+
+/** 同 tick 复用房间级 route；危险集合变化必须重新规划，不缓存资源准入。 */
+function getAdmissionSafeRoute(fromRoom: string, toRoom: string): string[] | null {
+  if (admissionRouteMemoGame !== Game || admissionRouteMemoTick !== Game.time ||
+    admissionRouteMemoMap !== Game.map || admissionRouteMemoReader !== Game.map.findRoute) {
+    admissionRouteMemo.clear();
+    admissionRouteMemoGame = Game;
+    admissionRouteMemoTick = Game.time;
+    admissionRouteMemoMap = Game.map;
+    admissionRouteMemoReader = Game.map.findRoute;
+  }
+  const key = JSON.stringify([fromRoom, toRoom, getActiveDangerRooms(toRoom).sort()]);
+  const cached = admissionRouteMemo.get(key);
+  if (cached !== undefined) return cached === null ? null : [...cached];
+  const route = findSafeRoute(fromRoom, toRoom);
+  if (admissionRouteMemo.size >= 64) {
+    const oldest = admissionRouteMemo.keys().next().value as string | undefined;
+    if (oldest !== undefined) admissionRouteMemo.delete(oldest);
+  }
+  admissionRouteMemo.set(key, route === null ? null : Object.freeze([...route]));
+  return route;
+}
+
 function getRouteDistance(fromRoom: string, toRoom: string): number {
   const route = findSafeRoute(fromRoom, toRoom);
   return route ? Math.max(0, route.length - 1) : Infinity;
@@ -518,7 +546,24 @@ function evaluateSourceCandidates(task: PowerBankHarvestTask): {
   const rejectionReasons: string[] = [];
   let pendingRetryAt: number | undefined;
 
+  // 只做房间级安全路线与来源基本资格预评估。先尝试短走廊，防止每 tick
+  // 重测靠前的远来源，把有限 PF 配额耗尽后永远到不了已可行的近来源。
+  const sourceRoutes: Array<{ room: Room; routeRooms: string[] }> = [];
   for (const room of getTickContextService().getMyRooms()) {
+    if (!room.controller || room.controller.level < 6 || isDefenseMode(room.name)) continue;
+    if (!getTickContextService().getSpawnsByRoom(room.name)
+      .some((spawn) => typeof spawn.isActive !== "function" || spawn.isActive())) continue;
+    const routeRooms = getAdmissionSafeRoute(room.name, task.targetRoom);
+    if (!routeRooms) {
+      rejectionReasons.push(`${room.name}:no_safe_route`);
+      continue;
+    }
+    sourceRoutes.push({ room, routeRooms });
+  }
+  sourceRoutes.sort((left, right) => left.routeRooms.length - right.routeRooms.length ||
+    left.room.name.localeCompare(right.room.name));
+
+  for (const { room, routeRooms } of sourceRoutes) {
     if (!canMeasurePowerBankTravelThisTick()) {
       pendingRetryAt = Math.min(pendingRetryAt ?? Infinity, Game.time + 1);
       break;
@@ -528,12 +573,6 @@ function evaluateSourceCandidates(task: PowerBankHarvestTask): {
 
     const spawnReadyIn = getSpawnReadyIn(room.name);
     if (spawnReadyIn.length === 0) continue;
-
-    const routeRooms = findSafeRoute(room.name, task.targetRoom);
-    if (!routeRooms) {
-      rejectionReasons.push(`${room.name}:no_safe_route`);
-      continue;
-    }
 
     const tierResult = selectBodyTier(room.energyCapacityAvailable);
     if (!tierResult) {
@@ -842,20 +881,20 @@ function processDiscovered(task: PowerBankHarvestTask): void {
   updatePowerBankObservation(task, bank);
   task.bankPos = { x: bank.pos.x, y: bank.pos.y };
   // 预算只允许一次新几何测量。等待阶段不能在每个 discovered 任务上
-  // 重做全部来源的 findRoute、Lab、预留与物流扫描；下一 tick 再完整
-  // 新鲜评估全部来源，任何未评估项都不能被当作已通过。
+  // 重做来源评估；有预算后再评估，只有本来源所有 Spawn 的完整证据
+  // 与新鲜资源门通过时才允许它进入已证明候选。
   if (!canMeasurePowerBankTravelThisTick()) {
     requestPowerBankObservation(task.targetRoom);
     setPowerBankBlocker(task, "path_measurement_pending", 1);
     return;
   }
   const evaluation = evaluateSourceCandidates(task);
-  if (evaluation.pendingRetryAt !== undefined) {
+  const selected = evaluation.candidates[0];
+  if (!selected && evaluation.pendingRetryAt !== undefined) {
     requestPowerBankObservation(task.targetRoom);
     setPowerBankBlocker(task, "path_measurement_pending", Math.max(1, evaluation.pendingRetryAt - Game.time));
     return;
   }
-  const selected = evaluation.candidates[0];
   if (!selected) {
     const reasons = evaluation.rejectionReasons.length > 0
       ? evaluation.rejectionReasons.join(",")
@@ -863,6 +902,9 @@ function processDiscovered(task: PowerBankHarvestTask): void {
     transitionToTerminal(task, "failed", reasons);
     return;
   }
+
+  // 只声明当前已证明候选中的最佳来源。其他来源尚未获得完整几何证据
+  // 不等于不可达，也不能无限否决此来源所有 Spawn 已完成的准入证明。
 
   task.sourceRoom = selected.roomName;
   task.tier = selected.tier;

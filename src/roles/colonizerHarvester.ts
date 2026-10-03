@@ -1,13 +1,13 @@
 import { createHarvesterRole } from "@/roles/harvester";
 import { moveToTargetRoom } from "@/roles/shared";
 import type { RoleFactory } from "@/types/system";
-import { shouldPauseEnergyExtraction } from "@/runtime/energyInflowGuard";
+import { shouldPauseRemoteEnergyExtraction } from "@/runtime/energyInflowGuard";
 
 function shouldSkipFullContainerHarvestIntent(creep: Creep): boolean {
   const configName = creep.memory?.configName;
   if (
     configName?.includes(":remoteMine:") &&
-    shouldPauseEnergyExtraction(configName.split(":")[0])
+    shouldPauseRemoteEnergyExtraction(configName.split(":")[0])
   ) {
     return true;
   }

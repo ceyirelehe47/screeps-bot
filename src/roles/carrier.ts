@@ -1001,6 +1001,8 @@ function pickupEnergyDemandForCarrier(
 ): { switched: boolean; picked: boolean; outOfRange: boolean } {
   delete ensureCreepAssignmentState(creep.name).carrierStorageOnlyMode;
   const isSupplyingSpawnOrExtension = isSpawnOrExtensionTarget(target);
+  const isSupplyingEssentialEnergy = isSupplyingSpawnOrExtension ||
+    target.structureType === STRUCTURE_TOWER;
 
   if (creep.store.getUsedCapacity() === 0 && hasNewerLiveReplacement(creep) &&
       (getAssignedCarrierRoom(creep)?.controller?.level ?? 0) > 2) {
@@ -1011,12 +1013,12 @@ function pickupEnergyDemandForCarrier(
   }
 
   const pickup = pickupEnergyForCarrier(creep, {
-    includeStorage: isSupplyingSpawnOrExtension,
-    includeProtoStorage: isSupplyingSpawnOrExtension,
+    includeStorage: isSupplyingEssentialEnergy,
+    includeProtoStorage: isSupplyingEssentialEnergy,
     includeTerminal:
-      isSupplyingSpawnOrExtension &&
+      isSupplyingEssentialEnergy &&
       (
-        terminalBootstrapReserve !== undefined ||
+        (isSupplyingSpawnOrExtension && terminalBootstrapReserve !== undefined) ||
         isTerminalPickupEnabledForRoom(assignedRoomName)
       ),
     terminalEnergyReserve: isSupplyingSpawnOrExtension

@@ -33,3 +33,20 @@ export function shouldPauseEnergyExtraction(homeRoomName: string): boolean {
     terminalEnergy >= (state.terminalEnergyReserve ?? 0) + 1_000
   );
 }
+
+/** 外矿只按母房 Storage 的实际接收余量暂停，不沿用本地库存目标。 */
+export function shouldPauseRemoteEnergyExtraction(homeRoomName: string): boolean {
+  const room = Game.rooms[homeRoomName];
+  const storage = room?.storage;
+  if (!room?.controller?.my || !storage || typeof storage.store?.getFreeCapacity !== "function") return false;
+  const free = storage.store.getFreeCapacity();
+  if (typeof free !== "number" || !Number.isFinite(free)) return false;
+
+  const control = Memory.runtime?.resourceControl;
+  const state = control?.updatedAt === Game.time ? control.rooms?.[homeRoomName] : undefined;
+  const commitment = (value: unknown): number =>
+    typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : 0;
+  const available = Math.max(0, free) - commitment(state?.localOffloadCapacityCommitment) -
+    commitment(state?.capacityReservation?.committed);
+  return available < 5_000;
+}

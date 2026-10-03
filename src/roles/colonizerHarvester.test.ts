@@ -60,6 +60,7 @@ function createSource(workPos: RoomPosition): Source {
 function createCreep(roomName: string, pos: RoomPosition, carry = false): Creep {
   return {
     room: { name: roomName },
+    memory: {},
     pos,
     body: [
       { type: WORK, hits: 100 },
@@ -79,6 +80,8 @@ function bindSource(workPos: RoomPosition): Source {
 describe("colonizerHarvesterRole", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    Game.rooms = {};
+    Memory.runtime = {};
     Game.getObjectById = jest.fn(() => null) as typeof Game.getObjectById;
   });
 
@@ -109,5 +112,50 @@ describe("colonizerHarvesterRole", () => {
     );
     expect(unrelatedPos.lookFor).not.toHaveBeenCalled();
     expect(creep.harvest).not.toHaveBeenCalled();
+  });
+
+  it("外矿母房超本地库存目标仍采集，只有实际 Storage 空间不足时停并随空间恢复继续", () => {
+    let free = 100_000;
+    Game.rooms.E1N57 = {
+      controller: { my: true }, energyAvailable: 12_000, energyCapacityAvailable: 12_900,
+      storage: { store: { getUsedCapacity: () => 327_000, getFreeCapacity: () => free } },
+      terminal: { store: { getUsedCapacity: () => 243_000 } },
+    } as unknown as Room;
+    Memory.runtime = {
+      resourceControl: { updatedAt: Game.time, rooms: { E1N57: {
+        capacityState: "pressure", energyFloor: 120_000, energyTarget: 200_000,
+        terminalEnergyReserve: 20_000,
+      } } },
+    } as unknown as NonNullable<Memory["runtime"]>;
+    const workPos = createPosition(10, 10, [createContainer(1000)]);
+    const creep = createCreep("W1N0", workPos);
+    creep.memory.configName = "E1N57:remoteMine:W1N0:harvester:source-a";
+    bindSource(workPos);
+    const role = colonizerHarvesterRole("W1N0", "source-a");
+
+    role.source?.(creep);
+    expect(creep.harvest).toHaveBeenCalledTimes(1);
+    free = 4_999;
+    Game.time += 1;
+    role.source?.(creep);
+    expect(creep.harvest).toHaveBeenCalledTimes(1);
+    free = 5_000;
+    Game.time += 1;
+    role.source?.(creep);
+    expect(creep.harvest).toHaveBeenCalledTimes(2);
+    expect(mockedMoveToTarget).not.toHaveBeenCalled();
+  });
+
+  it("外矿有母房余量时仍保留源容器满且无 CARRY 的不掉落保护", () => {
+    Game.rooms.E1N57 = {
+      controller: { my: true }, storage: { store: { getFreeCapacity: () => 100_000 } },
+    } as unknown as Room;
+    const workPos = createPosition(10, 10, [createContainer(0)]);
+    const creep = createCreep("W1N0", workPos);
+    creep.memory.configName = "E1N57:remoteMine:W1N0:harvester:source-a";
+    bindSource(workPos);
+    colonizerHarvesterRole("W1N0", "source-a").source?.(creep);
+    expect(creep.harvest).not.toHaveBeenCalled();
+    expect(mockedMoveToTarget).not.toHaveBeenCalled();
   });
 });

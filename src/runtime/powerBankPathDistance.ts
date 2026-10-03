@@ -174,8 +174,15 @@ export function measurePowerBankTravel(input: PowerBankTravelMeasurementInput): 
     measurements.delete(key);
     cached = undefined;
   }
+  if (cached?.result.status === "pending") {
+    // 退避只表示尚无完整路径证据，不授权投入；中转房失去视野不应让
+    // 同一失败输入反复抢走唯一测量名额。输入、端点和 avoid 门已校验。
+    measurements.delete(key);
+    measurements.set(key, cached);
+    return cached.result;
+  }
   const availableBudget = canMeasurePowerBankTravelThisTick();
-  // 无既有证据且配额已用完时，不扫描其它候选的状态或拓扑。已知缓存仍
+  // 无既有证据且配额已用完时，不扫描其它候选的状态或拓扑。已知 ready 仍
   // 需要当次状态和几何校验；预算耗尽不能让 stale ready 绕过这些门。
   if (!cached && !availableBudget) return pending("budget", 1);
 
