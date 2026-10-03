@@ -4,7 +4,7 @@ import { getHarvesterBody, spawnProfiles } from "@/config/spawnProfiles";
 import { recordFixedCpuAction } from "@/runtime/cpuPhaseProfiler";
 import { getCreepConfigService } from "@/runtime/runtimeServices";
 import { isRcl8MaintenanceUpgraderConfig } from "@/runtime/upgraderPolicy";
-import type { RoleName } from "@/types/system";
+import type { CreepConfig, RoleName } from "@/types/system";
 import { canSpawnDepositConfig } from "@/runtime/depositHarvest";
 
 let spawnNameGame: typeof Game | undefined;

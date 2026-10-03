@@ -33,6 +33,8 @@ describe("mountSpawn", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    Game.time += 1;
+    Game.creeps = {};
     delete (global as typeof global & { __runtimeServices?: unknown }).__runtimeServices;
     Object.assign(global, { StructureSpawn: function StructureSpawn() {} });
     mountSpawn();

@@ -5,7 +5,7 @@ import { getTickContextService } from "@/runtime/runtimeServices";
 import { getRoomTopologyRevision } from "@/movement/roomTopologyRevision";
 import { isPositionAllowedForCreep, shouldRestrictToSafeZone } from "@/runtime/safeZoneHelpers";
 import { getPosKey, getTargetPos, isExitTile, isStandardCreep } from "@/movement/common";
-import { moveOffExit, moveToAdjacentPosition } from "@/movement/traffic";
+import { getMoveIntentDestination, moveOffExit, moveToAdjacentPosition } from "@/movement/traffic";
 import { buildStaticRoomCostMatrix, collectStaticRoomMatrixSources } from "@/movement/staticRoomMatrix";
 import { getSourceContainerPositionsForRoom } from "@/runtime/roomPlannerConstruction";
 import type { MovePathState, MoveToTargetOptions, RoomCostMatrixCacheEntry, WorkAnchor } from "@/movement/types";
@@ -68,7 +68,7 @@ export function moveToTarget(
 
   if (sameRoomNonEdgeMoveNeedsExitRecovery(creep, targetPos)) {
     recordMovementMetric("exitRecoveries", room.name);
-    const exitRecoveryCode = moveOffExit(creep);
+    const exitRecoveryCode = moveOffExit(creep, true, (_direction, pos) => options.canMoveStep?.(pos) ?? true);
     if (exitRecoveryCode === OK || exitRecoveryCode === ERR_TIRED) {
       return exitRecoveryCode;
     }
@@ -116,7 +116,7 @@ export function moveToTarget(
         // 位置连续多 tick 无进展：路径视为失效，落入下方重新寻路（ignoreCreeps 已被强制为 false）。
         delete movementState.movePathState;
       } else {
-        const cachedMoveCode = followStoredRoomPath(creep, movePathState, targetPos, range);
+        const cachedMoveCode = followStoredRoomPath(creep, movePathState, targetPos, range, options);
         if (cachedMoveCode === OK || cachedMoveCode === ERR_TIRED || cachedMoveCode === ERR_BUSY) {
           recordMovementMetric("pathCacheHits", room.name);
           return cachedMoveCode;
@@ -155,7 +155,7 @@ export function moveToTarget(
         expiresAt: noCacheReuse ? Game.time : (reusePath === 0 ? Game.time : Game.time + Math.max(MOVE_PATH_CACHE_TTL, reusePath)),
       };
 
-      const followPathCode = followStoredRoomPath(creep, movementState.movePathState, targetPos, range);
+      const followPathCode = followStoredRoomPath(creep, movementState.movePathState, targetPos, range, options);
       if (followPathCode === OK || followPathCode === ERR_TIRED || followPathCode === ERR_BUSY) {
         return followPathCode;
       }
@@ -330,6 +330,7 @@ function followStoredRoomPath(
   movePathState: MovePathState,
   targetPos: RoomPosition,
   range: 0 | 1 | 2 | 3,
+  options: MoveToTargetOptions,
 ): ScreepsReturnCode {
   if (creep.pos.getRangeTo(targetPos) <= range) {
     return OK;
@@ -339,6 +340,10 @@ function followStoredRoomPath(
   if (!nextPos) {
     delete ensureCreepMovementState(creep).movePathState;
     return ERR_NO_PATH;
+  }
+  if (options.canMoveStep) {
+    const destination = getMoveIntentDestination(creep.pos, creep.pos.getDirectionTo(nextPos));
+    if (!destination || !options.canMoveStep(new RoomPosition(destination.x, destination.y, destination.roomName))) return ERR_NO_PATH;
   }
 
   // ERR_BUSY 是暂时性阻塞（对位换位/推动失败），保留路径交由 stuckTicks

@@ -1,5 +1,5 @@
 import { remoteCarrierRole, isInvaderSalvageRoomClear, isInvaderSalvagePositionSafe } from "@/roles/remoteCarrier";
-import { moveToTargetRoom } from "@/roles/shared";
+import { moveToTarget, moveToTargetRoom } from "@/roles/shared";
 import { clearRoleLifecycleCacheForTest, mountCreep } from "@/mount/mountCreep";
 import { requestCombatObservation } from "@/runtime/powerBankObserver";
 import { clearMarketActionArbiterForTest } from "@/runtime/marketActionArbiter";
@@ -197,121 +197,70 @@ describe("remoteCarrierRole", () => {
     expect(isInvaderSalvagePositionSafe(currentRoom, position(44, 16))).toBe(false);
   });
 
-  it.each(["jump", "wrong_goal", "unsafe_middle", "incomplete"] as const)("INVADER 完整路径的 %s 证据失败时不发布一步", (failure) => {
-    const position = (x: number, y: number) => new RoomPosition(x, y, "W5N5");
+  it("INVADER 走近资源委托共用寻路，禁区策略拒绝Keeper与巢穴附近下一步", () => {
+    const position = (x: number, y: number, roomName = "W5N5") => new RoomPosition(x, y, roomName);
     const keeper = { owner: { username: "Source Keeper" }, pos: position(40, 10) } as Creep;
     const lair = { structureType: STRUCTURE_KEEPER_LAIR, pos: position(30, 10) } as StructureKeeperLair;
     const drop = { amount: 50, resourceType: RESOURCE_ENERGY, pos: position(44, 17) } as Resource;
     const world = salvageFixture({ drops: [drop], hostiles: [keeper], structures: [lair] });
     Object.assign(world.creep, { pos: position(44, 19), pickup: jest.fn(() => ERR_NOT_IN_RANGE) });
-    Game.map.getRoomStatus = jest.fn(() => ({ status: "normal" as const, timestamp: null }));
-    const path = failure === "jump" ? [position(44, 17)]
-      : failure === "wrong_goal" ? [position(44, 20)]
-        : failure === "unsafe_middle" ? [position(44, 18), position(43, 17), position(43, 16), position(43, 15), position(44, 16)]
-          : [position(44, 18)];
-    (PathFinder.search as jest.Mock).mockReturnValue({ incomplete: failure === "incomplete", path, ops: 1, cost: 1 });
     world.role.source(world.creep);
+    expect(moveToTarget).toHaveBeenCalledWith(world.creep, drop.pos, 1, expect.objectContaining({ costCallback: expect.any(Function), canMoveStep: expect.any(Function) }));
+    const options = (moveToTarget as jest.Mock).mock.calls[0][3];
+    expect(options.canMoveStep(position(44, 18))).toBe(true);
+    expect(options.canMoveStep(position(40, 15))).toBe(false);
+    expect(options.canMoveStep(position(30, 15))).toBe(false);
+    const costs = new Map<string, number>();
+    const matrix = { set: (x: number, y: number, value: number) => costs.set(`${x}:${y}`, value) };
+    options.costCallback("W5N5", matrix);
+    expect(costs.get("40:15")).toBe(255); expect(costs.get("30:15")).toBe(255);
+    expect(PathFinder.search).not.toHaveBeenCalled();
     expect(world.creep.move).not.toHaveBeenCalled();
-    expect(PathFinder.search).toHaveBeenCalledWith(world.creep.pos, { pos: drop.pos, range: 1 },
-      expect.objectContaining({ maxOps: 6_000, maxRooms: 16 }));
   });
 
-  it("INVADER 未知未来房间仅为几何路径，跨房下一步需 fresh 视野再放行", () => {
-    const position = (x: number, roomName: string) => new RoomPosition(x, 18, roomName);
+  it("INVADER 跨房委托共用路由，未知或危险下一房没有放行许可", () => {
     const drop = { amount: 50, resourceType: RESOURCE_ENERGY, pos: new RoomPosition(44, 17, "W5N5") } as Resource;
-    const world = salvageFixture({ drops: [drop], homeRoomName: "W3N5" });
-    Object.assign(world.creep, { room: world.home, pos: position(2, "W3N5") });
-    Game.map.getRoomStatus = jest.fn(() => ({ status: "normal" as const, timestamp: null }));
-    const frontierPath = [...Array.from({ length: 50 }, (_, index) => position(49 - index, "W4N5")),
-      ...Array.from({ length: 6 }, (_, index) => position(49 - index, "W5N5"))];
-    (PathFinder.search as jest.Mock).mockReturnValue({ incomplete: false,
-      path: [position(1, "W3N5"), position(0, "W3N5"), ...frontierPath], ops: 1, cost: 1 });
+    const world = salvageFixture({ drops: [drop], homeRoomName: "W4N5" });
+    Object.assign(world.creep, { room: world.home, pos: new RoomPosition(48, 18, "W4N5") });
     world.role.source(world.creep);
-    expect(world.creep.move).toHaveBeenCalledWith(LEFT);
-    expect(Game.rooms.W4N5).toBeUndefined();
-    Game.time += 1;
-    (world.creep.move as jest.Mock).mockClear();
-    Object.assign(world.creep, { pos: position(0, "W3N5") });
-    (PathFinder.search as jest.Mock).mockReturnValue({ incomplete: false, path: frontierPath, ops: 1, cost: 1 });
-    world.role.source(world.creep);
-    expect(world.creep.move).not.toHaveBeenCalled();
-    expect(requestCombatObservation).toHaveBeenCalledWith("W4N5");
-    Game.time += 1;
-    Game.rooms.W4N5 = { name: "W4N5", find: jest.fn(() => []) } as unknown as Room;
-    world.role.source(world.creep);
-    expect(world.creep.move).toHaveBeenCalledWith(LEFT);
-    for (const hazard of ["keeper", "lair", "core"] as const) {
-      Game.time += 1;
-      (world.creep.move as jest.Mock).mockClear();
-      Game.rooms.W4N5 = { name: "W4N5", find: jest.fn((type: FindConstant) => {
-        if (type === FIND_HOSTILE_CREEPS && hazard === "keeper") {
-          return [{ owner: { username: "Source Keeper" }, pos: position(49, "W4N5") }];
-        }
-        if (type === FIND_STRUCTURES && hazard !== "keeper") {
-          return [{ structureType: hazard === "lair" ? STRUCTURE_KEEPER_LAIR : STRUCTURE_INVADER_CORE,
-            pos: position(49, "W4N5") }];
-        }
-        return [];
-      }) } as unknown as Room;
-      world.role.source(world.creep);
-      expect(world.creep.move).not.toHaveBeenCalled();
-    }
+    expect(moveToTargetRoom).toHaveBeenCalledWith(world.creep, "W5N5", undefined, expect.objectContaining({ canMoveStep: expect.any(Function) }));
+    const options = (moveToTargetRoom as jest.Mock).mock.calls[0][3];
+    expect(options.canMoveStep(new RoomPosition(0, 18, "W3N5"))).toBe(false);
+    expect(requestCombatObservation).toHaveBeenCalledWith("W3N5");
+    expect(options.canMoveStep(new RoomPosition(0, 18, "W5N5"))).toBe(true);
+    const previous = world.room.find;
+    world.room.find = jest.fn((type: FindConstant) => type === FIND_STRUCTURES ? [{ structureType: STRUCTURE_INVADER_CORE, pos: drop.pos }] : [] ) as Room["find"];
+    expect(options.canMoveStep(new RoomPosition(0, 18, "W5N5"))).toBe(false);
+    world.room.find = previous;
+    expect(PathFinder.search).not.toHaveBeenCalled();
   });
 
-  it("INVADER 无 escort 的 mounted 安全走近、次 tick 取货、跨房返仓与卸货闭环", () => {
+  it("INVADER mounted走近、取货、归仓卸货使用同一移动入口与真实Store相位", () => {
     const position = (x: number, y: number, roomName = "W5N5") => new RoomPosition(x, y, roomName);
-    const keeper = { owner: { username: "Source Keeper" }, pos: position(40, 10) } as Creep;
-    const lair = { structureType: STRUCTURE_KEEPER_LAIR, pos: position(30, 10) } as StructureKeeperLair;
     const drop = { amount: 50, resourceType: RESOURCE_ENERGY, pos: position(44, 17) } as Resource;
-    const world = salvageFixture({ drops: [drop], hostiles: [keeper], structures: [lair], homeRoomName: "W4N5" });
-    Object.assign(world.home.storage!, { pos: position(1, 18, world.home.name) });
-    Object.assign(world.creep, { pos: position(44, 19), memory: { ...world.creep.memory, ready: true, working: false },
-      pickup: jest.fn() });
-    // RoomPosition mock 的实际坐标决定 intent 返回；OK 后 Store 仍等下一 tick。
-    (world.creep.pickup as jest.Mock).mockImplementation(() =>
-      Math.max(Math.abs(world.creep.pos.x - drop.pos.x), Math.abs(world.creep.pos.y - drop.pos.y)) <= 1 ? OK : ERR_NOT_IN_RANGE);
-    Game.map.getRoomStatus = jest.fn(() => ({ status: "normal" as const, timestamp: null }));
-    (PathFinder.search as jest.Mock).mockImplementation((origin: RoomPosition, goal: { pos: RoomPosition }) => {
-      const path = goal.pos.roomName === "W5N5" ? [position(44, 18)]
-        : [...Array.from({ length: 49 - origin.x }, (_, index) => position(origin.x + index + 1, 18)),
-          ...Array.from({ length: 6 }, (_, index) => position(index, 18, "W4N5"))];
-      return { incomplete: false, path, ops: 1, cost: 1 };
-    });
+    const world = salvageFixture({ drops: [drop], homeRoomName: "W4N5" });
+    Object.assign(world.home.storage!, { pos: position(1, 18, "W4N5") });
+    Object.assign(world.creep, { pos: position(44, 19), memory: { ...world.creep.memory, ready: true, working: false } });
+    (world.creep.pickup as jest.Mock).mockReturnValue(ERR_NOT_IN_RANGE);
     mountCreep();
     const work = (): void => { Creep.prototype.work.call(world.creep); };
     work();
-    expect(world.creep.move).toHaveBeenLastCalledWith(TOP);
-    Game.time += 1;
-    Object.assign(world.creep, { pos: position(44, 18) });
-    work();
+    expect(moveToTarget).toHaveBeenCalledWith(world.creep, drop.pos, 1, expect.any(Object));
+    Game.time += 1; Object.assign(world.creep, { pos: position(44, 18) });
+    (world.creep.pickup as jest.Mock).mockReturnValue(OK);
+    work(); work();
     expect(world.creep.pickup).toHaveBeenCalledTimes(2);
     expect(world.creep.store.getUsedCapacity()).toBe(0);
-    work();
-    expect(world.creep.pickup).toHaveBeenCalledTimes(2);
-    Game.time += 1;
-    world.resources.energy = 50;
-    Object.assign(drop, { amount: 0 });
+    Game.time += 1; world.resources.energy = 50; Object.assign(drop, { amount: 0 });
     work();
     expect(world.creep.memory.working).toBe(true);
-    expect(world.creep.move).toHaveBeenLastCalledWith(RIGHT);
-    for (let x = 45; x <= 49; x += 1) {
-      Game.time += 1;
-      Object.assign(world.creep, { pos: position(x, 18) });
-      work();
-      expect(world.creep.move).toHaveBeenLastCalledWith(RIGHT);
-    }
-    Game.time += 1;
-    Object.assign(world.creep, { room: world.home, pos: position(0, 18, world.home.name) });
-    work();
+    expect(moveToTargetRoom).toHaveBeenCalledWith(world.creep, "W4N5", undefined, expect.any(Object));
+    Game.time += 1; Object.assign(world.creep, { room: world.home, pos: position(0, 18, "W4N5") });
+    work(); work();
     expect(world.creep.transfer).toHaveBeenCalledTimes(1);
     expect(world.creep.store.getUsedCapacity()).toBe(50);
-    work();
-    expect(world.creep.transfer).toHaveBeenCalledTimes(1);
-    Game.time += 1;
-    world.resources.energy = 0;
-    work();
-    expect(world.creep.memory.working).toBe(false);
-    expect(world.creep.suicide).not.toHaveBeenCalled();
+    Game.time += 1; world.resources.energy = 0; work();
+    expect(world.creep.memory.working).toBe(false); expect(world.creep.suicide).not.toHaveBeenCalled();
   });
 
   it("leaves home when lifetime can cover a round trip plus buffer", () => {

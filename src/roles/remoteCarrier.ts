@@ -9,7 +9,7 @@ import {
 import type { RoleFactory } from "@/types/system";
 import { getCreepConfigService } from "@/runtime/runtimeServices";
 import { requestCombatObservation } from "@/runtime/powerBankObserver";
-import { getCachedStaticTravelMatrix } from "@/movement/routing";
+import { getMoveIntentReceipt } from "@/movement/traffic";
 
 type RemoteHaulTarget = AnyStoreStructure | Ruin | Tombstone | Resource;
 const SALVAGE_MODE = "invaderSalvage";
@@ -46,19 +46,6 @@ function outsideSalvageHazards(pos: RoomPosition, hazards: readonly RoomPosition
     Math.max(Math.abs(hazard.x - pos.x), Math.abs(hazard.y - pos.y)) >= 6);
 }
 
-function salvageWorldPosition(pos: RoomPosition): [number, number] | undefined {
-  if (!pos || !Number.isSafeInteger(pos.x) || pos.x < 0 || pos.x > 49 ||
-    !Number.isSafeInteger(pos.y) || pos.y < 0 || pos.y > 49) return undefined;
-  const match = /^([EW])(0|[1-9]\d*)([NS])(0|[1-9]\d*)$/.exec(pos.roomName);
-  if (!match) return undefined;
-  const horizontal = Number(match[2]); const vertical = Number(match[4]);
-  const maximum = Math.floor(Number.MAX_SAFE_INTEGER / 50) - 1;
-  if (!Number.isSafeInteger(horizontal) || !Number.isSafeInteger(vertical) ||
-    horizontal > maximum || vertical > maximum) return undefined;
-  return [(match[1] === "E" ? horizontal : -horizontal - 1) * 50 + pos.x,
-    (match[3] === "S" ? vertical : -vertical - 1) * 50 + pos.y];
-}
-
 /** 只接受当前 Game 的可见房间；历史 Memory 情报不构成清场许可。 */
 export function isInvaderSalvageRoomClear(room: Room | undefined): room is Room {
   return !!room && Game.rooms[room.name] === room &&
@@ -82,69 +69,37 @@ function markSalvageIntent(creep: Creep): void {
   salvageIntentTicks.set(creep, Game.time);
 }
 
-/** 全路径证明几何与已可见禁区；未知未来房间不代表安全，只发布 fresh 下一步。 */
+/** 回收业务只提供禁区与新鲜视野门，移动执行复用统一房内寻路。 */
 function moveSalvageSafely(creep: Creep, goal: RoomPosition, range = 1): void {
   if (salvageSearchTick !== Game.time || salvageSearchGame !== Game) {
     salvageSearchTick = Game.time; salvageSearchGame = Game; salvageSearches = 0;
   }
   if (salvageSearches >= 2) return;
   salvageSearches += 1;
-  try {
-    const matrices = new Map<string, CostMatrix | false>();
-    const hazardsByRoom = new Map<string, readonly RoomPosition[]>();
-    const matrixFor = (roomName: string): CostMatrix | false => {
-      const cached = matrices.get(roomName);
-      if (cached !== undefined) return cached;
-      const status = Game.map.getRoomStatus(roomName);
-      if (!status || status.status === "closed") return false;
+  const options = {
+    plainCost: 2, swampCost: 10, ignoreCreeps: false, reusePath: 0,
+    costCallback: (roomName: string, matrix: CostMatrix): CostMatrix => {
       const room = Game.rooms[roomName];
-      if (room && roomName !== creep.room.name && !isInvaderSalvageRoomClear(room)) return false;
-      const matrix = getCachedStaticTravelMatrix(roomName).clone();
-      const hazards = room ? getInvaderSalvageHazards(room) : [];
-      hazardsByRoom.set(roomName, hazards);
-      for (const hazard of hazards) {
-        for (let dx = -5; dx <= 5; dx += 1) for (let dy = -5; dy <= 5; dy += 1) {
+      if (!room) return matrix;
+      for (const hazard of getInvaderSalvageHazards(room)) {
+        for (let dx = -5; dx <= 5; dx++) for (let dy = -5; dy <= 5; dy++) {
           const x = hazard.x + dx; const y = hazard.y + dy;
           if (x >= 0 && x < 50 && y >= 0 && y < 50) matrix.set(x, y, 255);
         }
       }
-      matrices.set(roomName, matrix);
       return matrix;
-    };
-    const path = PathFinder.search(creep.pos, { pos: goal, range }, {
-      plainCost: 2, swampCost: 10, maxRooms: 16, maxOps: 6_000, roomCallback: matrixFor,
-    });
-    if (path.incomplete || !Array.isArray(path.path) || path.path.length === 0) return;
-    const origin = salvageWorldPosition(creep.pos);
-    const target = salvageWorldPosition(goal);
-    if (!origin || !target) return;
-    let previous = origin;
-    for (const step of path.path) {
-      const world = salvageWorldPosition(step);
-      const matrix = matrixFor(step.roomName);
-      if (!world || Math.max(Math.abs(world[0] - previous[0]), Math.abs(world[1] - previous[1])) !== 1 ||
-        Math.abs(Math.floor(world[0] / 50) - Math.floor(previous[0] / 50)) +
-          Math.abs(Math.floor(world[1] / 50) - Math.floor(previous[1] / 50)) > 1 ||
-        !matrix || matrix.get(step.x, step.y) === 255 ||
-        (Game.rooms[step.roomName] && !outsideSalvageHazards(step, hazardsByRoom.get(step.roomName) ?? []))) return;
-      previous = world;
-    }
-    const final = path.path[path.path.length - 1];
-    if (final.roomName !== goal.roomName ||
-      Math.max(Math.abs(previous[0] - target[0]), Math.abs(previous[1] - target[1])) > range) return;
-    const next = path.path[0];
-    const nextRoom = Game.rooms[next.roomName];
-    if (!nextRoom) { requestCombatObservation(next.roomName); return; }
-    if (next.roomName !== creep.room.name && !isInvaderSalvageRoomClear(nextRoom)) return;
-    const matrix = matrixFor(next.roomName);
-    if (!matrix || matrix.get(next.x, next.y) === 255 || !isInvaderSalvagePositionSafe(nextRoom, next)) return;
-    const [x, y] = origin; const [nx, ny] = salvageWorldPosition(next)!;
-    const dx = Math.sign(nx - x); const dy = Math.sign(ny - y);
-    const direction = dy < 0 ? (dx < 0 ? TOP_LEFT : dx > 0 ? TOP_RIGHT : TOP)
-      : dy > 0 ? (dx < 0 ? BOTTOM_LEFT : dx > 0 ? BOTTOM_RIGHT : BOTTOM)
-        : dx < 0 ? LEFT : RIGHT;
-    if (measureCreepIntent(() => creep.move(direction)) === OK) markSalvageIntent(creep);
-  } catch { /* incomplete/unknown safety 保持等待，不发布未经证明的步。 */ }
+    },
+    canMoveStep: (destination: RoomPosition): boolean => {
+      const room = Game.rooms[destination.roomName];
+      if (!room) { requestCombatObservation(destination.roomName); return false; }
+      return (room.name === creep.room.name || isInvaderSalvageRoomClear(room)) &&
+        isInvaderSalvagePositionSafe(room, destination);
+    },
+  };
+  if (creep.room.name === goal.roomName) {
+    moveToTarget(creep, goal, Math.min(3, Math.max(0, range)) as 0 | 1 | 2 | 3, options);
+  } else moveToTargetRoom(creep, goal.roomName, undefined, options);
+  if (getMoveIntentReceipt(creep)) markSalvageIntent(creep);
 }
 
 const T3_RESOURCES = new Set<ResourceConstant>([

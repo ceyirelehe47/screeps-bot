@@ -88,6 +88,22 @@ describe("外出 creep 与常驻 creep 的统一房内寻路", () => {
     expect(creep.move).not.toHaveBeenCalled(); expect(search).not.toHaveBeenCalled();
   });
 
+  it("同房路径、缓存命中和出口过房都执行当帧业务下一步安全门", () => {
+    const { creep } = traveler();
+    const allow = jest.fn(() => false);
+    expect(moveToTargetRoom(creep, "W0N1", "W1N1|W0N1", { canMoveStep: allow })).toBe(ERR_NO_PATH);
+    expect(creep.move).not.toHaveBeenCalled();
+    allow.mockReturnValue(true);
+    Game.time += 1;
+    expect(moveToTargetRoom(creep, "W0N1", "W1N1|W0N1", { canMoveStep: allow })).toBe(OK);
+    (creep.move as jest.Mock).mockClear();
+    allow.mockReturnValue(false); Game.time += 1;
+    creep.pos = new MockRoomPosition(49, 10, creep.room.name) as unknown as RoomPosition;
+    expect(moveToTargetRoom(creep, "W0N1", "W1N1|W0N1", { canMoveStep: allow })).toBe(ERR_NO_PATH);
+    expect(creep.move).not.toHaveBeenCalled();
+    expect(allow).toHaveBeenLastCalledWith(expect.objectContaining({ roomName: "W0N1", x: 0 }));
+  });
+
   it("到达目标房后不复用旧房路径，global reset后可重建", () => {
     const { creep } = traveler(); moveToTargetRoom(creep, "W0N1", "W1N1|W0N1");
     clearCreepMovementStateForTest(); clearRoomBaseCostMatrixCacheForTest();

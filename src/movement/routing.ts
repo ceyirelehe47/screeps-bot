@@ -5,7 +5,7 @@ import { getRoomTopologyRevision } from "@/movement/roomTopologyRevision";
 import { getPosKey, isExitTile, parseEncodedRouteRooms } from "@/movement/common";
 import { recordMovementMetric } from "@/movement/metrics";
 import { buildRoomMovementMatrix, clearRoomBaseCostMatrixCacheForTest, getRoomStaticMatrix, moveToTarget } from "@/movement/pathing";
-import { issueMove } from "@/movement/traffic";
+import { getMoveIntentDestination, issueMove } from "@/movement/traffic";
 import { getSourceContainerPositionsForRoom } from "@/runtime/roomPlannerConstruction";
 import type {
   DynamicRouteCacheEntry,
@@ -185,6 +185,10 @@ export function moveToTargetRoom(
     return ERR_NO_PATH;
   }
   if (isOnExitDirection(creep.pos, exitDirection as DirectionConstant)) {
+    if (options.canMoveStep) {
+      const destination = getMoveIntentDestination(creep.pos, exitDirection as DirectionConstant);
+      if (!destination || !options.canMoveStep(new RoomPosition(destination.x, destination.y, destination.roomName))) return ERR_NO_PATH;
+    }
     const result = issueMove(creep, exitDirection as DirectionConstant);
     updateTravelState(creep, travelState);
     return result;
