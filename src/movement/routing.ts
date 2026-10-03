@@ -5,7 +5,7 @@ import { getRoomTopologyRevision } from "@/movement/roomTopologyRevision";
 import { getPosKey, isExitTile, parseEncodedRouteRooms } from "@/movement/common";
 import { recordMovementMetric } from "@/movement/metrics";
 import { buildRoomMovementMatrix, clearRoomBaseCostMatrixCacheForTest, getRoomStaticMatrix, moveToTarget } from "@/movement/pathing";
-import { getMoveIntentDestination, issueMove } from "@/movement/traffic";
+import { getMoveIntentDestination, issueMove, moveOffExit } from "@/movement/traffic";
 import { getSourceContainerPositionsForRoom } from "@/runtime/roomPlannerConstruction";
 import type {
   DynamicRouteCacheEntry,
@@ -190,6 +190,12 @@ export function moveToTargetRoom(
       if (!destination || !options.canMoveStep(new RoomPosition(destination.x, destination.y, destination.roomName))) return ERR_NO_PATH;
     }
     const result = issueMove(creep, exitDirection as DirectionConstant);
+    updateTravelState(creep, travelState);
+    return result;
+  }
+  // 迁房入口0/49不可沿边等待；先用共用交通层离开错误边缘，再走房内出口路径。
+  if (isExitTile(creep.pos)) {
+    const result = moveOffExit(creep, true, (_direction, pos) => options.canMoveStep?.(pos) ?? true);
     updateTravelState(creep, travelState);
     return result;
   }

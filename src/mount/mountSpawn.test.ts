@@ -154,6 +154,7 @@ describe("mountSpawn", () => {
 
     // The failure fixture is rebuilt from scratch so the first scenario cannot leak queue/config state.
     {
+      Game.time += 1;
       const room = {
         name: "E5N59",
         energyAvailable: 200,
