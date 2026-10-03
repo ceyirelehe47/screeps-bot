@@ -1,5 +1,6 @@
 import { clearMovementState, moveToTarget, moveToTargetRoom } from "@/roles/shared";
 import { prepareCombatBoost } from "@/roles/combatBoosts";
+import { runTowerDrainPair } from "@/roles/towerDrainPair";
 import {
   isWarCounterstrikeCoordinationValid,
   shouldWarHealerHoldForCounterstrike,
@@ -163,15 +164,15 @@ function followMovingWarAttacker(creep: Creep, attacker: Creep): void {
   measureCreepIntent(() => creep.move(direction));
 }
 
-function moveWithWarAttackerFormation(creep: Creep, targetRoom: string, encodedRouteRooms?: string): boolean {
+function moveWithWarAttackerFormation(creep: Creep, targetRoom: string, encodedRouteRooms?: string, towerDrain = false): boolean {
   if (!expectsWarAttacker(creep)) return false;
 
   const attacker = findPairedWarAttacker(creep);
   if (!attacker) return true;
 
   healAttacker(creep, attacker);
-  if (coordinateCounterstrike(creep, attacker)) return true;
-  if (shouldWarHealerHoldForCounterstrike(attacker, creep, targetRoom)) return true;
+  if (!towerDrain && coordinateCounterstrike(creep, attacker)) return true;
+  if (!towerDrain && shouldWarHealerHoldForCounterstrike(attacker, creep, targetRoom)) return true;
 
   if (creep.room.name === targetRoom && attacker.room.name !== targetRoom) {
     if (isPoisedToCrossInto(attacker, targetRoom)) {
@@ -183,7 +184,8 @@ function moveWithWarAttackerFormation(creep: Creep, targetRoom: string, encodedR
   }
 
   if (creep.room.name === targetRoom && attacker.room.name === targetRoom && isOnRoomExit(creep.pos)) {
-    moveOffExit(creep);
+    if (towerDrain) followMovingWarAttacker(creep, attacker);
+    else moveOffExit(creep);
     return true;
   }
 
@@ -243,6 +245,7 @@ export const healerRole: RoleFactory = (
   boostTaskId?: string,
   encodedBoostCompounds?: string,
   partnerConfigName?: string,
+  tactic?: string,
 ) => ({
   prepare: (creep): boolean => {
     synchronizeWarPartnerConfigName(creep, partnerConfigName);
@@ -250,7 +253,8 @@ export const healerRole: RoleFactory = (
   },
   source: (creep): boolean => {
     synchronizeWarPartnerConfigName(creep, partnerConfigName);
-    if (targetRoom && moveWithWarAttackerFormation(creep, targetRoom, encodedRouteRooms)) return false;
+    if (tactic === "towerDrainDuo" && targetRoom && runTowerDrainPair(creep, targetRoom, partnerConfigName ?? "")) return false;
+    if (targetRoom && moveWithWarAttackerFormation(creep, targetRoom, encodedRouteRooms, tactic === "towerDrainDuo")) return false;
 
     if (targetRoom && creep.room.name !== targetRoom) {
       moveToTargetRoom(creep, targetRoom, encodedRouteRooms, TRAVEL_OPTIONS);
@@ -261,7 +265,8 @@ export const healerRole: RoleFactory = (
   },
   target: (creep): boolean => {
     synchronizeWarPartnerConfigName(creep, partnerConfigName);
-    if (targetRoom && moveWithWarAttackerFormation(creep, targetRoom, encodedRouteRooms)) return false;
+    if (tactic === "towerDrainDuo" && targetRoom && runTowerDrainPair(creep, targetRoom, partnerConfigName ?? "")) return false;
+    if (targetRoom && moveWithWarAttackerFormation(creep, targetRoom, encodedRouteRooms, tactic === "towerDrainDuo")) return false;
 
     if (targetRoom && creep.room.name !== targetRoom) {
       moveToTargetRoom(creep, targetRoom, encodedRouteRooms, TRAVEL_OPTIONS);

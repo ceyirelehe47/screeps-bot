@@ -2,6 +2,7 @@ import { clearMovementState, moveToTarget, moveToTargetRoom } from "@/roles/shar
 import { isWalkableStructure, parseEncodedRouteRooms } from "@/movement/common";
 import { moveOffExit } from "@/movement/traffic";
 import { prepareCombatBoost } from "@/roles/combatBoosts";
+import { constrainTowerDrainBreachPath, moveTowerDrainBorderAttack, runTowerDrainPair } from "@/roles/towerDrainPair";
 import { measureCreepDecision, measureCreepIntent } from "@/runtime/cpuPhaseProfiler";
 import type { RoleFactory } from "@/types/system";
 
@@ -22,10 +23,12 @@ function moveWarAttackerToTarget(
   target: RoomPosition | { pos: RoomPosition },
   range: 0 | 1 | 2 | 3,
   options: Parameters<typeof moveToTarget>[3],
+  towerDrain = false,
 ): ScreepsReturnCode {
   const targetPos = "pos" in target ? target.pos : target;
   const wasOutOfRange = creep.pos.getRangeTo(targetPos) > range;
-  const code = moveToTarget(creep, target, range, options);
+  const drainMove = towerDrain ? moveTowerDrainBorderAttack(creep, targetPos, range) : undefined;
+  const code = drainMove === undefined ? moveToTarget(creep, target, range, options) : drainMove;
   if (code === OK && wasOutOfRange) {
     creep.memory._warMoveIntentAt = Game.time;
   }
@@ -38,11 +41,14 @@ function getHostileCreeps(room: Room): Creep[] {
   });
 }
 
-function getHostileStructures(room: Room): Structure[] {
-  return room.find(FIND_HOSTILE_STRUCTURES, {
+function getHostileStructures(room: Room, includeNeutralWalls = false): Structure[] {
+  const hostile: Structure<StructureConstant>[] = room.find(FIND_HOSTILE_STRUCTURES, {
     filter: (structure) =>
       structure.structureType !== STRUCTURE_CONTROLLER && structure.structureType !== STRUCTURE_KEEPER_LAIR,
   });
+  if (!includeNeutralWalls) return hostile;
+  const ids = new Set(hostile.map((structure) => structure.id));
+  return [...hostile, ...room.find(FIND_STRUCTURES).filter((structure) => structure.structureType === STRUCTURE_WALL && !ids.has(structure.id))];
 }
 
 export function findTarget(creep: Creep): Creep | Structure | null {
@@ -80,9 +86,9 @@ export function findTarget(creep: Creep): Creep | Structure | null {
   return creep.pos.findClosestByRange(hostileStructures);
 }
 
-export function findWarObjectiveTarget(creep: Creep): Creep | Structure | null {
+export function findWarObjectiveTarget(creep: Creep, includeNeutralWalls = false): Creep | Structure | null {
   const hostileCreeps = getHostileCreeps(creep.room);
-  const hostileStructures = getHostileStructures(creep.room);
+  const hostileStructures = getHostileStructures(creep.room, includeNeutralWalls);
   const rampartPositions = new Set(
     hostileStructures
       .filter((structure) => structure.structureType === STRUCTURE_RAMPART)
@@ -686,19 +692,19 @@ function findPairedWarHealer(creep: Creep): Creep | null {
   return null;
 }
 
-function getTargetRoomMoveOptions(creep: Creep) {
+function getTargetRoomMoveOptions(creep: Creep, towerDrain = false) {
   const healer = findPairedWarHealer(creep);
-  if (!healer || healer.room.name !== creep.room.name) {
+  if ((!healer || healer.room.name !== creep.room.name) && !towerDrain) {
     return TARGET_ROOM_MOVE_OPTIONS;
   }
 
   return {
     ...TARGET_ROOM_MOVE_OPTIONS,
     costCallback: (roomName: string, matrix: CostMatrix): CostMatrix => {
-      if (roomName === healer.room.name) {
+      if (healer && roomName === healer.room.name) {
         matrix.set(healer.pos.x, healer.pos.y, 1);
       }
-      return matrix;
+      return towerDrain ? constrainTowerDrainBreachPath(creep, roomName, matrix) : matrix;
     },
   };
 }
@@ -831,6 +837,7 @@ export const meleeAttackerRole: RoleFactory = (
   boostTaskId?: string,
   encodedBoostCompounds?: string,
   partnerConfigName?: string,
+  tactic?: string,
 ) => ({
   prepare: (creep): boolean => {
     synchronizeWarPartnerConfigName(creep, partnerConfigName);
@@ -838,6 +845,7 @@ export const meleeAttackerRole: RoleFactory = (
   },
   source: (creep): boolean => {
     synchronizeWarPartnerConfigName(creep, partnerConfigName);
+    if (tactic === "towerDrainDuo" && targetRoom && runTowerDrainPair(creep, targetRoom, partnerConfigName ?? "")) return false;
     if (targetRoom && waitForWarHealerFormation(creep, targetRoom, encodedRouteRooms)) {
       attackAdjacentWhileHoldingFormation(creep, creep.room.name === targetRoom);
       return false;
@@ -852,6 +860,7 @@ export const meleeAttackerRole: RoleFactory = (
   },
   target: (creep): boolean => {
     synchronizeWarPartnerConfigName(creep, partnerConfigName);
+    if (tactic === "towerDrainDuo" && targetRoom && runTowerDrainPair(creep, targetRoom, partnerConfigName ?? "")) return false;
     if (targetRoom && waitForWarHealerFormation(creep, targetRoom, encodedRouteRooms)) {
       attackAdjacentWhileHoldingFormation(creep, creep.room.name === targetRoom);
       return false;
@@ -867,14 +876,14 @@ export const meleeAttackerRole: RoleFactory = (
       return false;
     }
 
-    if (targetRoom && creep.room.name === targetRoom && runCounterstrikeApproach(creep)) return false;
+    if (tactic !== "towerDrainDuo" && targetRoom && creep.room.name === targetRoom && runCounterstrikeApproach(creep)) return false;
 
-    const targetMoveOptions = targetRoom ? getTargetRoomMoveOptions(creep) : TARGET_ROOM_MOVE_OPTIONS;
-    const target = measureCreepDecision(() => (targetRoom ? findWarObjectiveTarget(creep) : findTarget(creep)));
+    const targetMoveOptions = targetRoom ? getTargetRoomMoveOptions(creep, tactic === "towerDrainDuo") : TARGET_ROOM_MOVE_OPTIONS;
+    const target = measureCreepDecision(() => (targetRoom ? findWarObjectiveTarget(creep, tactic === "towerDrainDuo") : findTarget(creep)));
     if (!target) {
       delete creep.memory._warBreachTargetId;
       if (targetRoom) {
-        moveWarAttackerToTarget(creep, new RoomPosition(25, 25, targetRoom), 3, targetMoveOptions);
+        moveWarAttackerToTarget(creep, new RoomPosition(25, 25, targetRoom), 3, targetMoveOptions, tactic === "towerDrainDuo");
       }
       return false;
     }
@@ -887,7 +896,7 @@ export const meleeAttackerRole: RoleFactory = (
         creep.memory._warBreachTargetId = plannedBreach.id;
         const breachCode = measureCreepIntent(() => creep.attack(plannedBreach));
         if (breachCode === ERR_NOT_IN_RANGE) {
-          moveWarAttackerToTarget(creep, plannedBreach, 1, targetMoveOptions);
+          moveWarAttackerToTarget(creep, plannedBreach, 1, targetMoveOptions, tactic === "towerDrainDuo");
         }
         return false;
       }
@@ -896,7 +905,7 @@ export const meleeAttackerRole: RoleFactory = (
 
     const code = measureCreepIntent(() => creep.attack(target));
     if (code === ERR_NOT_IN_RANGE) {
-      const moveCode = moveWarAttackerToTarget(creep, target, 1, targetMoveOptions);
+      const moveCode = moveWarAttackerToTarget(creep, target, 1, targetMoveOptions, tactic === "towerDrainDuo");
       if (moveCode === ERR_NO_PATH && creep.room.name === target.pos.roomName) {
         attackAdjacentBreachTarget(creep, target);
       }
@@ -904,11 +913,11 @@ export const meleeAttackerRole: RoleFactory = (
     }
 
     if (code === ERR_INVALID_TARGET && (target as Creep | Structure).id) {
-      const fallback = creep.pos.findClosestByRange(getHostileStructures(creep.room));
+      const fallback = creep.pos.findClosestByRange(getHostileStructures(creep.room, tactic === "towerDrainDuo"));
       if (fallback) {
         const fallbackCode = measureCreepIntent(() => creep.attack(fallback));
         if (fallbackCode === ERR_NOT_IN_RANGE) {
-          moveWarAttackerToTarget(creep, fallback, 1, targetMoveOptions);
+          moveWarAttackerToTarget(creep, fallback, 1, targetMoveOptions, tactic === "towerDrainDuo");
         }
       }
     }

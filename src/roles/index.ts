@@ -24,6 +24,7 @@ import { remoteDefenderRole } from "@/roles/remoteDefender";
 import { remoteWorkerRole } from "@/roles/remoteWorker";
 import { scoutRole } from "@/roles/scout";
 import { workerRole } from "@/roles/worker";
+import { depositHarvesterRole } from "@/roles/depositHarvester";
 import type { RoleFactory, RoleName } from "@/types/system";
 
 export const roleRegistry: Record<RoleName, RoleFactory> = {
@@ -54,4 +55,5 @@ export const roleRegistry: Record<RoleName, RoleFactory> = {
   powerBankAttacker: powerBankAttackerRole,
   powerBankHealer: powerBankHealerRole,
   powerBankHauler: powerBankHaulerRole,
+  depositHarvester: depositHarvesterRole,
 };

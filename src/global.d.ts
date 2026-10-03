@@ -1,4 +1,5 @@
 import type { CreepApi, RoleName } from "@/types/system";
+import type { DepositHarvesterMemory } from "@/runtime/depositHarvest";
 import type { HubProgressSnapshot } from "@/runtime/hubProgress";
 import type { CpuMonitorHeapSnapshot } from "@/runtime/cpuMonitor";
 import type { AddFactoryTaskResult, CancelFactoryTaskResult, FactoryTask } from "@/runtime/factoryControl";
@@ -231,7 +232,7 @@ declare global {
     | string;
   var stopWar: (targetRoom: string, suicide?: boolean) => string;
   var stopWarRaw: (targetRoom: string, options?: StopWarOptions) => StopWarResult | string;
-  var startWar: (targetRoom: string, sourceRoom: string, squad?: "standard" | "t3Duo", routeRooms?: string[] | string, oneShot?: boolean) => string;
+  var startWar: (targetRoom: string, sourceRoom: string, squad?: "standard" | "t3Duo" | "towerDrainDuo", routeRooms?: string[] | string, oneShot?: boolean) => string;
   var startWarRaw: (targetRoom: string, sourceRoom: string, options?: StartWarOptions) => StartWarResult | string;
   var startWarPatrol: (sourceRoom: string, targetRooms: string[] | string, intervalTicks?: number) => string;
   var startWarPatrolRaw: (sourceRoom: string, targetRooms: string[] | string, options?: StartWarPatrolOptions) => StartWarPatrolResult | string;
@@ -430,6 +431,8 @@ declare global {
   var remoteDefenseStatusRaw: (targetRoom: string) => RemoteDefenseStatusSnapshot | string;
   var powerBankStatus: () => string;
   var powerBankStatusRaw: () => PowerBankStatusSnapshot;
+  var depositStatus: typeof import("@/runtime/depositStatus").depositStatusCommand;
+  var depositStatusRaw: typeof import("@/runtime/depositStatus").depositStatusRaw;
 
   type PowerBankHarvestStatus =
     | "discovered"
@@ -674,7 +677,7 @@ declare global {
     analytics?: ScreepsMemoryAnalytics;
   }
 
-  interface CreepMemory {
+  interface CreepMemory extends DepositHarvesterMemory {
     role?: RoleName;
     roleArgs?: string[];
     configName?: string;
@@ -713,6 +716,7 @@ declare global {
     _warPartnerConfigName?: string;
     _warDetached?: boolean;
     _warQueued?: boolean;
+    _warTowerDrain?: import("@/roles/towerDrainPair").TowerDrainPairState;
     _move?: {
       dest?: {
         x: number;

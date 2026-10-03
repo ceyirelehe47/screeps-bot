@@ -23,7 +23,7 @@ const WAR_STATUSES = new Set([
 
 const WAR_GENERATION_PHASES = new Set(["preparing", "assembling", "deployed"]);
 const WAR_REASONS = new Set(["npc_reservation", "manual"]);
-const WAR_SQUADS = new Set(["standard", "t3Duo"]);
+const WAR_SQUADS = new Set(["standard", "t3Duo", "towerDrainDuo"]);
 const WAR_BOOST_TIERS = new Set(["t3"]);
 
 type UnknownRecord = Record<string, unknown>;

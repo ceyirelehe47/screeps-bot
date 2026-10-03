@@ -11,6 +11,7 @@ import {
   stopCpuProfilerExport,
   stopCpuProfilerRaw,
 } from "@/runtime/console/cpuProfilerCommands";
+import { depositStatusRaw, depositStatusCommand } from "@/runtime/depositStatus";
 import {
   registerOperationsConsoleCommands,
   spawnMaxCarrier,
@@ -176,6 +177,8 @@ export function memoryAudit(): string {
 }
 
 export function registerConsoleCommands(): void {
+  global.depositStatus = depositStatusCommand;
+  global.depositStatusRaw = depositStatusRaw;
   registerOperationsConsoleCommands();
   registerTelemetryConsoleCommands();
   registerCpuProfilerConsoleCommands();
@@ -237,6 +240,8 @@ export {
   remoteDefenseStatusRaw,
   powerBankStatusCommand,
   powerBankStatusRaw,
+  depositStatusCommand,
+  depositStatusRaw,
   spawnMaxCarrier,
   spawnMaxCarrierCommand,
   spawnMaxCarrierRaw,

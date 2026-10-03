@@ -7,8 +7,111 @@ import {
   getTerminalAmountOutsideMarketSaleExposure,
 } from "@/runtime/marketSaleExposure";
 import type { RoleFactory } from "@/types/system";
+import { getCreepConfigService } from "@/runtime/runtimeServices";
+import { requestCombatObservation } from "@/runtime/powerBankObserver";
+import { getCachedStaticTravelMatrix } from "@/movement/routing";
 
-type RemoteHaulTarget = AnyStoreStructure | Ruin;
+type RemoteHaulTarget = AnyStoreStructure | Ruin | Tombstone | Resource;
+const SALVAGE_MODE = "invaderSalvage";
+const COMBAT_PARTS: readonly BodyPartConstant[] = [ATTACK, RANGED_ATTACK, HEAL, WORK];
+const salvageIntentTicks = new WeakMap<Creep, number>();
+let salvageSearchTick = -1;
+let salvageSearchGame: Game | undefined;
+let salvageSearches = 0;
+
+function isDrop(target: RemoteHaulTarget): target is Resource {
+  return "amount" in target && "resourceType" in target;
+}
+
+function hasCombatParts(creep: Creep): boolean {
+  if (typeof creep.getActiveBodyparts === "function") {
+    return COMBAT_PARTS.some((part) => creep.getActiveBodyparts(part) > 0);
+  }
+  if (!Array.isArray(creep.body)) return true;
+  return creep.body.some((part) => part.hits > 0 && COMBAT_PARTS.includes(part.type));
+}
+
+export function getInvaderSalvageKeepers(room: Room): Creep[] {
+  return room.find(FIND_HOSTILE_CREEPS).filter((creep) => creep.owner?.username === "Source Keeper");
+}
+
+/** 只接受当前 Game 的可见房间；历史 Memory 情报不构成清场许可。 */
+export function isInvaderSalvageRoomClear(room: Room | undefined): room is Room {
+  return !!room && Game.rooms[room.name] === room &&
+    !room.find(FIND_STRUCTURES).some((structure) => structure.structureType === STRUCTURE_INVADER_CORE ||
+      (structure.structureType === STRUCTURE_TOWER && (structure as StructureTower).my !== true)) &&
+    room.find(FIND_HOSTILE_POWER_CREEPS).length === 0 &&
+    !room.find(FIND_HOSTILE_CREEPS).some((creep) => creep.owner?.username !== "Source Keeper" && hasCombatParts(creep));
+}
+
+export function isInvaderSalvagePositionSafe(room: Room, pos: RoomPosition): boolean {
+  const keepers = getInvaderSalvageKeepers(room);
+  if (keepers.some((keeper) => keeper.pos.getRangeTo(pos) < 6)) return false;
+  if (keepers.length === 0) return true;
+  return room.find(FIND_MY_CREEPS).some((escort) => escort.pos.getRangeTo(pos) <= 3 &&
+    typeof escort.getActiveBodyparts === "function" &&
+    (escort.getActiveBodyparts(ATTACK) > 0 || escort.getActiveBodyparts(RANGED_ATTACK) > 0));
+}
+
+function salvageTaskActive(creep: Creep): boolean {
+  const config = creep.memory.configName ? getCreepConfigService().get(creep.memory.configName) : undefined;
+  return !!config?.roomName && config.args[2] === SALVAGE_MODE;
+}
+
+function markSalvageIntent(creep: Creep): void {
+  salvageIntentTicks.set(creep, Game.time);
+}
+
+/** 有 Keeper 时只发布当前安全矩阵证明过的一个相邻步，不沿用旧路线。 */
+function moveSalvageSafely(creep: Creep, goal: RoomPosition, range = 1): void {
+  if (salvageSearchTick !== Game.time || salvageSearchGame !== Game) {
+    salvageSearchTick = Game.time; salvageSearchGame = Game; salvageSearches = 0;
+  }
+  if (salvageSearches >= 2) return;
+  salvageSearches += 1;
+  try {
+    const matrices = new Map<string, CostMatrix>();
+    const matrixFor = (roomName: string): CostMatrix | false => {
+      const status = Game.map.getRoomStatus(roomName);
+      if (!status || status.status === "closed") return false;
+      const room = Game.rooms[roomName];
+      if (room && roomName !== creep.room.name && !isInvaderSalvageRoomClear(room)) return false;
+      let matrix = matrices.get(roomName);
+      if (!matrix) {
+        matrix = getCachedStaticTravelMatrix(roomName).clone();
+        for (const keeper of room ? getInvaderSalvageKeepers(room) : []) {
+          for (let dx = -5; dx <= 5; dx += 1) for (let dy = -5; dy <= 5; dy += 1) {
+            const x = keeper.pos.x + dx; const y = keeper.pos.y + dy;
+            if (x >= 0 && x < 50 && y >= 0 && y < 50) matrix.set(x, y, 255);
+          }
+        }
+        matrices.set(roomName, matrix);
+      }
+      return matrix;
+    };
+    const path = PathFinder.search(creep.pos, { pos: goal, range }, {
+      plainCost: 2, swampCost: 10, maxRooms: 16, maxOps: 6_000, roomCallback: matrixFor,
+    });
+    if (path.incomplete || path.path.length === 0) return;
+    const next = path.path[0];
+    const nextRoom = Game.rooms[next.roomName];
+    const matrix = matrixFor(next.roomName);
+    if (!matrix || matrix.get(next.x, next.y) === 255 ||
+      (nextRoom && getInvaderSalvageKeepers(nextRoom).some((keeper) => keeper.pos.getRangeTo(next) < 6))) return;
+    const world = (pos: RoomPosition): [number, number] => {
+      const match = /^([EW])(\d+)([NS])(\d+)$/.exec(pos.roomName)!;
+      return [(match[1] === "E" ? Number(match[2]) : -Number(match[2]) - 1) * 50 + pos.x,
+        (match[3] === "S" ? Number(match[4]) : -Number(match[4]) - 1) * 50 + pos.y];
+    };
+    const [x, y] = world(creep.pos); const [nx, ny] = world(next);
+    if (Math.max(Math.abs(nx - x), Math.abs(ny - y)) !== 1) return;
+    const dx = Math.sign(nx - x); const dy = Math.sign(ny - y);
+    const direction = dy < 0 ? (dx < 0 ? TOP_LEFT : dx > 0 ? TOP_RIGHT : TOP)
+      : dy > 0 ? (dx < 0 ? BOTTOM_LEFT : dx > 0 ? BOTTOM_RIGHT : BOTTOM)
+        : dx < 0 ? LEFT : RIGHT;
+    if (measureCreepIntent(() => creep.move(direction)) === OK) markSalvageIntent(creep);
+  } catch { /* incomplete/unknown safety 保持等待，不发布未经证明的步。 */ }
+}
 
 const T3_RESOURCES = new Set<ResourceConstant>([
   RESOURCE_CATALYZED_UTRIUM_ACID,
@@ -43,6 +146,7 @@ function getAvailableResourceAmount(
   target: RemoteHaulTarget,
   resource: ResourceConstant,
 ): number {
+  if (isDrop(target)) return target.resourceType === resource ? target.amount : 0;
   const stored = target.store.getUsedCapacity(resource);
   if (!isTerminalTarget(target)) return stored;
   return Math.min(
@@ -56,6 +160,7 @@ function getAvailableResourceAmount(
 }
 
 function getBestResource(target: RemoteHaulTarget): ResourceConstant | null {
+  if (isDrop(target)) return target.amount > 0 ? target.resourceType : null;
   const resources = getStoredResources(target.store)
     .filter(resource => getAvailableResourceAmount(target, resource) > 0);
   if (resources.length === 0) {
@@ -92,7 +197,7 @@ function isWithdrawTarget(structure: Structure<StructureConstant>): structure is
   return (structure as AnyStoreStructure).store.getUsedCapacity() > 0;
 }
 
-function getRemoteHaulTargets(room: Room): RemoteHaulTarget[] {
+function getRemoteHaulTargets(room: Room, salvage = false): RemoteHaulTarget[] {
   const structures = room.find(FIND_STRUCTURES, {
     filter: isWithdrawTarget,
   }) as AnyStoreStructure[];
@@ -100,12 +205,16 @@ function getRemoteHaulTargets(room: Room): RemoteHaulTarget[] {
     filter: (ruin) => ruin.store.getUsedCapacity() > 0,
   });
 
-  return [...structures, ...ruins];
+  if (!salvage) return [...structures, ...ruins];
+  return [...structures.filter((structure) => structure.structureType === STRUCTURE_CONTAINER), ...ruins,
+    ...room.find(FIND_TOMBSTONES).filter((target) => target.store.getUsedCapacity() > 0),
+    ...room.find(FIND_DROPPED_RESOURCES).filter((target) => target.amount > 0)];
 }
 
-function selectPickupTarget(creep: Creep): { target: RemoteHaulTarget; resource: ResourceConstant } | null {
+function selectPickupTarget(creep: Creep, salvage = false): { target: RemoteHaulTarget; resource: ResourceConstant } | null {
   return measureCreepDecision(() => {
-    const candidates = getRemoteHaulTargets(creep.room)
+    const candidates = getRemoteHaulTargets(creep.room, salvage)
+      .filter((target) => !salvage || isInvaderSalvagePositionSafe(creep.room, target.pos))
       .map((target) => ({
         target,
         resource: getBestResource(target),
@@ -191,8 +300,14 @@ function shouldRetireBeforeDeparture(creep: Creep, targetRoom: string): boolean 
   return creep.ticksToLive < estimateOutboundTravelTicks(startPos, targetRoom) * 2 + 50;
 }
 
-export const remoteCarrierRole: RoleFactory = (targetRoom: string, targetX?: string, targetY?: string) => ({
+export const remoteCarrierRole: RoleFactory = (targetRoom: string, targetX?: string, targetY?: string) => {
+  const salvage = targetY === SALVAGE_MODE;
+  return ({
   prepare: (creep): boolean => {
+    if (salvage) {
+      requestCombatObservation(targetRoom);
+      return true; // source/target 每 tick 根据实际 Store 决定，不能提前离开准备门。
+    }
     if (creep.store.getUsedCapacity() > 0) {
       return true;
     }
@@ -211,6 +326,22 @@ export const remoteCarrierRole: RoleFactory = (targetRoom: string, targetX?: str
     return true;
   },
   source: (creep): boolean => {
+    if (salvage) {
+      requestCombatObservation(targetRoom);
+      if (salvageIntentTicks.get(creep) === Game.time) return false;
+      const room = Game.rooms[targetRoom];
+      if (!salvageTaskActive(creep) || !isInvaderSalvageRoomClear(room)) {
+        if (creep.store.getUsedCapacity() > 0) return true;
+        const home = getHomeRoomName(creep);
+        if (creep.room.name !== home) moveSalvageSafely(creep, new RoomPosition(25, 25, home), 20);
+        return false;
+      }
+      if (creep.room.name !== targetRoom) {
+        const candidate = getRemoteHaulTargets(room, true).find((target) => isInvaderSalvagePositionSafe(room, target.pos));
+        if (candidate) moveSalvageSafely(creep, candidate.pos);
+        return false;
+      }
+    }
     if (creep.store.getUsedCapacity() > 0 && isCarryStoreFull(creep)) {
       return true;
     }
@@ -226,17 +357,24 @@ export const remoteCarrierRole: RoleFactory = (targetRoom: string, targetX?: str
       return false;
     }
 
-    const assignment = selectPickupTarget(creep);
+    const assignment = selectPickupTarget(creep, salvage);
     if (!assignment) {
       if (creep.store.getUsedCapacity() > 0) {
         return true;
       }
 
+      if (salvage) return false;
       const x = Number(targetX);
       const y = Number(targetY);
       if (Number.isFinite(x) && Number.isFinite(y)) {
         moveToTarget(creep, new RoomPosition(x, y, targetRoom), 3);
       }
+      return false;
+    }
+
+    if (salvage && getInvaderSalvageKeepers(creep.room).some((keeper) => keeper.pos.getRangeTo(creep.pos) < 6)) {
+      if (creep.store.getUsedCapacity() > 0) return true;
+      moveSalvageSafely(creep, assignment.target.pos);
       return false;
     }
 
@@ -247,6 +385,7 @@ export const remoteCarrierRole: RoleFactory = (targetRoom: string, targetX?: str
     try {
       code = measureCreepIntent(() => {
         if (!isTerminalTarget(assignment.target)) {
+          if (isDrop(assignment.target)) return creep.pickup(assignment.target);
           return creep.withdraw(assignment.target, assignment.resource);
         }
 
@@ -279,16 +418,19 @@ export const remoteCarrierRole: RoleFactory = (targetRoom: string, targetX?: str
     }
     if (code === ERR_NOT_IN_RANGE) {
       exposureClaim?.release();
-      moveToTarget(creep, assignment.target);
+      if (salvage) moveSalvageSafely(creep, assignment.target.pos);
+      else moveToTarget(creep, assignment.target);
       return false;
     }
     if (code !== OK) {
       exposureClaim?.release();
     }
-
+    if (salvage && code === OK) { markSalvageIntent(creep); return false; }
     return isCarryStoreFull(creep);
   },
   target: (creep): boolean => {
+    if (salvage) requestCombatObservation(targetRoom);
+    if (salvage && salvageIntentTicks.get(creep) === Game.time) return false;
     const resource = getFirstCarriedResource(creep);
     if (!resource) {
       return true;
@@ -296,7 +438,8 @@ export const remoteCarrierRole: RoleFactory = (targetRoom: string, targetX?: str
 
     const homeRoomName = getHomeRoomName(creep);
     if (creep.room.name !== homeRoomName) {
-      moveToTargetRoom(creep, homeRoomName, undefined, { travelRange: 3, reusePath: 10 });
+      if (salvage) moveSalvageSafely(creep, new RoomPosition(25, 25, homeRoomName), 20);
+      else moveToTargetRoom(creep, homeRoomName, undefined, { travelRange: 3, reusePath: 10 });
       return false;
     }
 
@@ -307,10 +450,12 @@ export const remoteCarrierRole: RoleFactory = (targetRoom: string, targetX?: str
 
     const code = measureCreepIntent(() => executeTreasuryFencedTerminalCargo(target, () => creep.transfer(target, resource)));
     if (code === ERR_NOT_IN_RANGE) {
-      moveToTarget(creep, target);
+      if (salvage) moveSalvageSafely(creep, target.pos);
+      else moveToTarget(creep, target);
       return false;
     }
-
+    if (salvage && code === OK) { markSalvageIntent(creep); return false; }
     return creep.store.getUsedCapacity() === 0;
   },
-});
+  });
+};

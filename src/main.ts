@@ -28,6 +28,7 @@ import { runTowerControl } from "@/runtime/towerControl";
 import { runWarControl } from "@/runtime/warControl";
 import { runPowerBankObserver } from "@/runtime/powerBankObserver";
 import { runPowerBankHarvest } from "@/runtime/powerBankHarvest";
+import { runDepositHarvest } from "@/runtime/depositHarvest";
 import { runPowerCreepControl } from "@/runtime/powerCreepControl";
 import { runPowerSpawnControl } from "@/runtime/powerSpawnControl";
 import { runNukerControl } from "@/runtime/nukerControl";
@@ -92,6 +93,7 @@ function gameLoop(): void {
     cpuProfiler.measure("warControl", runWarControl);
     cpuProfiler.measure("powerBankObserver", runPowerBankObserver);
     cpuProfiler.measure("powerBankHarvest", runPowerBankHarvest);
+    cpuProfiler.measure("depositHarvest", runDepositHarvest);
     cpuProfiler.measure("powerCreepControl", runPowerCreepControl);
     cpuProfiler.measure("powerSpawnControl", runPowerSpawnControl);
     cpuProfiler.measure("roomPlannerConstruction", runRoomPlannerConstruction);

@@ -16,9 +16,11 @@ import type {
   MarketBaseResourceContinuousReviewSnapshot,
 } from "@/runtime/marketSaleAutomation";
 import type { RemoteMiningTask } from "@/runtime/remoteMining";
+import type { DepositHarvestTask } from "@/runtime/depositHarvest";
 
 declare global {
   interface ScreepsMemoryData {
+    depositHarvest?: Record<string, DepositHarvestTask>;
     creepConfigs?: Record<string, CreepConfig>;
     manualUpgraders?: Record<
       string,
@@ -267,7 +269,7 @@ declare global {
         status: "queued" | "staging" | "clearing" | "downgrading" | "patrol_waiting" | "done" | "failed";
         reason: "npc_reservation" | "manual";
         routeRooms?: string[];
-        squad?: "standard" | "t3Duo";
+        squad?: "standard" | "t3Duo" | "towerDrainDuo";
         boostTier?: "t3";
         boostLabs?: string[];
         boostStatus?: "preparing" | "ready" | "failed";

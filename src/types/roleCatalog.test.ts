@@ -29,6 +29,7 @@ const EXPECTED_ROLES = [
   "powerBankAttacker",
   "powerBankHealer",
   "powerBankHauler",
+  "depositHarvester",
   "remoteMiningReserver",
   "remoteWorker",
   "remoteDefender",

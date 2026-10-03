@@ -2,6 +2,8 @@ import { isDefenseMode } from "@/runtime/defenseMode";
 import { buildStandardCarrierBody } from "@/runtime/carrierBodyPolicy";
 import { getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
 import type { CreepConfig } from "@/types/system";
+import { requestCombatObservation } from "@/runtime/powerBankObserver";
+import { isInvaderSalvageRoomClear, isInvaderSalvagePositionSafe } from "@/roles/remoteCarrier";
 
 interface FlagHaulTask {
   targetRoom: string;
@@ -11,6 +13,7 @@ interface FlagHaulTask {
   targetY: number;
   createdAt: number;
   updatedAt: number;
+  emptyObservedAt?: number;
 }
 
 interface HaulableResourceSummary {
@@ -20,6 +23,10 @@ interface HaulableResourceSummary {
 
 const FLAG_PREFIX = "HAUL";
 const REMOTE_CARRIER_COUNT = 3;
+
+function isInvaderFlag(flagName: string): boolean {
+  return /^HAUL_[WE]\d+[NS]\d+_INVADER_/.test(flagName);
+}
 
 function getBodyCost(body: BodyPartConstant[]): number {
   return body.reduce((sum, part) => sum + BODYPART_COST[part], 0);
@@ -68,7 +75,7 @@ function addStoreResources(summary: HaulableResourceSummary, store: StoreDefinit
   }
 }
 
-function getHaulableResourceSummary(room: Room): HaulableResourceSummary {
+function getHaulableResourceSummary(room: Room, salvage = false): HaulableResourceSummary {
   const summary: HaulableResourceSummary = {
     energyAmount: 0,
     nonEnergyAmount: 0,
@@ -76,6 +83,7 @@ function getHaulableResourceSummary(room: Room): HaulableResourceSummary {
 
   const structures = room.find(FIND_STRUCTURES, { filter: isRemoteHaulStructure });
   for (const structure of structures) {
+    if (salvage && structure.structureType !== STRUCTURE_CONTAINER) continue;
     addStoreResources(summary, structure.store);
   }
 
@@ -84,6 +92,14 @@ function getHaulableResourceSummary(room: Room): HaulableResourceSummary {
   });
   for (const ruin of ruins) {
     addStoreResources(summary, ruin.store);
+  }
+
+  if (salvage) {
+    for (const tombstone of room.find(FIND_TOMBSTONES)) addStoreResources(summary, tombstone.store);
+    for (const resource of room.find(FIND_DROPPED_RESOURCES)) {
+      if (resource.resourceType === RESOURCE_ENERGY) summary.energyAmount += resource.amount;
+      else summary.nonEnergyAmount += resource.amount;
+    }
   }
 
   return summary;
@@ -129,7 +145,7 @@ function getOwnedSpawnRooms(): string[] {
   return [...roomNames];
 }
 
-function selectSourceRoom(targetRoom: string, preferredRoom?: string): string | null {
+function selectSourceRoom(targetRoom: string, preferredRoom?: string, requirePreferred = false): string | null {
   const ownedSpawnRooms = getOwnedSpawnRooms();
   if (ownedSpawnRooms.length === 0) {
     return null;
@@ -138,6 +154,7 @@ function selectSourceRoom(targetRoom: string, preferredRoom?: string): string | 
   if (preferredRoom && ownedSpawnRooms.includes(preferredRoom)) {
     return preferredRoom;
   }
+  if (requirePreferred) return null;
 
   let bestRoom: string | null = null;
   let minDistance = Infinity;
@@ -252,7 +269,9 @@ function upsertFlagHaulConfig(task: FlagHaulTask, configName: string): void {
   const body = buildStandardCarrierBody(room.energyCapacityAvailable);
   const nextConfig: CreepConfig = {
     role: "remoteCarrier",
-    args: [task.targetRoom, String(task.targetX), String(task.targetY)],
+    args: isInvaderFlag(task.flagName)
+      ? [task.targetRoom, `${task.targetX},${task.targetY}`, "invaderSalvage"]
+      : [task.targetRoom, String(task.targetX), String(task.targetY)],
     roomName: task.sourceRoom,
     body,
   };
@@ -278,24 +297,29 @@ function upsertFlagHaulConfigs(task: FlagHaulTask): void {
 
 function upsertFlagHaulTask(flag: Flag): boolean {
   const targetRoom = flag.pos.roomName;
+  const salvage = isInvaderFlag(flag.name);
+  if (salvage) {
+    requestCombatObservation(targetRoom);
+    if (!flag.name.endsWith(`_INVADER_${targetRoom}`)) return false;
+  }
   const targetRoomVisible = Game.rooms[targetRoom];
   if (targetRoomVisible?.controller?.my) {
     return true;
   }
 
-  const resourceSummary = targetRoomVisible ? getHaulableResourceSummary(targetRoomVisible) : null;
-  if (resourceSummary && !hasHaulableResources(resourceSummary)) {
+  const resourceSummary = targetRoomVisible ? getHaulableResourceSummary(targetRoomVisible, salvage) : null;
+  if (!salvage && resourceSummary && !hasHaulableResources(resourceSummary)) {
     flag.remove();
     return true;
   }
 
-  const sourceRoom = selectSourceRoom(targetRoom, getPreferredSourceFromFlagName(flag.name));
+  const sourceRoom = selectSourceRoom(targetRoom, getPreferredSourceFromFlagName(flag.name), salvage);
   if (!sourceRoom) {
     return false;
   }
 
   const sourceRoomVisible = Game.rooms[sourceRoom];
-  if (resourceSummary && sourceRoomVisible && shouldCancelForSmallEnergyOnly(resourceSummary, sourceRoomVisible)) {
+  if (!salvage && resourceSummary && sourceRoomVisible && shouldCancelForSmallEnergyOnly(resourceSummary, sourceRoomVisible)) {
     flag.remove();
     return true;
   }
@@ -316,6 +340,7 @@ function upsertFlagHaulTask(flag: Flag): boolean {
     targetY: flag.pos.y,
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
+    ...(existing?.emptyObservedAt === undefined ? {} : { emptyObservedAt: existing.emptyObservedAt }),
   };
 
   if (!existing) {
@@ -326,6 +351,46 @@ function upsertFlagHaulTask(flag: Flag): boolean {
 }
 
 function processFlagHaulTask(task: FlagHaulTask): boolean {
+  if (isInvaderFlag(task.flagName)) {
+    requestCombatObservation(task.targetRoom);
+    const store = getMemoryService().getCreepConfigStore();
+    const pause = (): void => {
+      for (const name of getConfigNames(task)) {
+        removeQueuedConfig(task, name);
+        if (store[name]) delete store[name].roomName;
+        for (const creep of getLiveCreepsByConfig(name)) {
+          if (creep.store.getUsedCapacity() > 0) creep.memory.working = true;
+        }
+      }
+    };
+    const room = Game.rooms[task.targetRoom];
+    if (isDefenseMode(task.sourceRoom) || !isInvaderSalvageRoomClear(room)) {
+      pause(); delete task.emptyObservedAt; task.updatedAt = Game.time; return true;
+    }
+    const summary = getHaulableResourceSummary(room, true);
+    if (!hasHaulableResources(summary)) {
+      pause();
+      task.emptyObservedAt ??= Game.time;
+      if (task.emptyObservedAt < Game.time && getConfigNames(task).every((name) =>
+        !isConfigSpawning(name) && getLiveCreepsByConfig(name).every((creep) => creep.store.getUsedCapacity() === 0))) {
+        Game.flags[task.flagName]?.remove();
+        return cleanupFlagHaulConfig(task);
+      }
+      return true;
+    }
+    delete task.emptyObservedAt;
+    const positions = [
+      ...room.find(FIND_STRUCTURES).filter((structure) => structure.structureType === STRUCTURE_CONTAINER &&
+        "store" in structure && (structure as StructureContainer).store.getUsedCapacity() > 0),
+      ...room.find(FIND_RUINS).filter((target) => target.store.getUsedCapacity() > 0),
+      ...room.find(FIND_TOMBSTONES).filter((target) => target.store.getUsedCapacity() > 0),
+      ...room.find(FIND_DROPPED_RESOURCES).filter((target) => target.amount > 0),
+    ];
+    if (!positions.some((target) => isInvaderSalvagePositionSafe(room, target.pos))) {
+      pause(); return true;
+    }
+    upsertFlagHaulConfigs(task); task.updatedAt = Game.time; return true;
+  }
   if (isDefenseMode(task.sourceRoom)) {
     cleanupFlagHaulConfig(task);
     task.updatedAt = Game.time;

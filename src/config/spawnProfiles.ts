@@ -6,6 +6,7 @@ import {
 } from "@/runtime/powerBankConstants";
 import { buildStandardCarrierBody } from "@/runtime/carrierBodyPolicy";
 import { getRegenSourceLevelForRoom } from "@/runtime/powerCreepControl";
+import { DEPOSIT_BODY } from "@/runtime/depositViability";
 
 type SpawnBodyGenerator = (room: Room) => BodyPartConstant[];
 
@@ -306,6 +307,7 @@ export const spawnProfiles: Record<RoleName, SpawnBodyGenerator> = {
   powerBankAttacker: powerBankAttackerBody,
   powerBankHealer: powerBankHealerBody,
   powerBankHauler: powerBankHaulerBody,
+  depositHarvester: () => [...DEPOSIT_BODY],
   remoteWorker: remoteWorkerBody,
   remoteDefender: remoteDefenderBody,
 };

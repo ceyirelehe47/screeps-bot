@@ -1,6 +1,7 @@
 import { getCreepConfigService, getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
 import { isOwnedManagedRoom } from "@/runtime/roomTypes";
 import { isDefenseMode } from "@/runtime/defenseMode";
+import { requestRemoteObservation } from "@/runtime/powerBankObserver";
 
 export type RemoteMiningStatus = "scouting" | "active" | "suspended" | "defending" | "abandoned";
 
@@ -81,6 +82,91 @@ export const REMOTE_MINING_DEFAULTS: RemoteMiningConfig = {
  */
 export const REMOTE_INVADER_CORE_MIN_SOURCE_CAPACITY = 5300;
 const INVADER_USERNAME = "Invader";
+const REMOTE_OBSERVER_SCOUT_GRACE = 25;
+const REMOTE_OBSERVER_LEASE_LIMIT = 64;
+const REMOTE_OBSERVER_LEASE_TTL = 500;
+
+interface RemoteObserverLease {
+  sourceRoom: string;
+  targetRoom: string;
+  assignedAt: number;
+  firstAcceptedAt: number;
+  lastRequestedAt: number;
+  lastSeenAt?: number;
+}
+
+// 临时租约不写入 Memory；排队成功只给一次宽限，实际视野才续租。
+const remoteObserverLeases = new Map<string, RemoteObserverLease>();
+let remoteObserverGame: Game | undefined;
+let remoteObserverTick: number | undefined;
+let remoteObserverShard: string | undefined;
+
+function syncRemoteObserverLeases(store: Record<string, RemoteMiningTask>): void {
+  const now = Game.time;
+  const shard = Game.shard?.name;
+  // 正常前进的 tick 可以重建 Game；同 tick 换世界或时间倒退才清空租约。
+  if (
+    remoteObserverTick !== undefined &&
+    (now < remoteObserverTick ||
+      (now === remoteObserverTick && Game !== remoteObserverGame) ||
+      shard !== remoteObserverShard)
+  ) {
+    remoteObserverLeases.clear();
+  }
+  remoteObserverGame = Game;
+  remoteObserverTick = now;
+  remoteObserverShard = shard;
+
+  for (const [key, lease] of remoteObserverLeases) {
+    const task = store[lease.targetRoom];
+    if (
+      now - lease.lastRequestedAt > REMOTE_OBSERVER_LEASE_TTL ||
+      lease.firstAcceptedAt > now ||
+      !task ||
+      task.status === "abandoned" ||
+      task.sourceRoom !== lease.sourceRoom ||
+      task.assignedAt !== lease.assignedAt
+    ) {
+      remoteObserverLeases.delete(key);
+    } else if (Game.rooms[lease.targetRoom]) {
+      lease.lastSeenAt = now;
+    }
+  }
+}
+
+function observerCanReplaceScout(sourceRoom: string, targetRoom: string): boolean {
+  const store = ensureRemoteMiningStore();
+  syncRemoteObserverLeases(store);
+  const key = `${sourceRoom}:${targetRoom}`;
+  if (!requestRemoteObservation(targetRoom)) {
+    remoteObserverLeases.delete(key);
+    return false;
+  }
+
+  const task = store[targetRoom];
+  if (!task || task.status === "abandoned" || task.sourceRoom !== sourceRoom) {
+    return false;
+  }
+  let lease = remoteObserverLeases.get(key);
+  if (!lease) {
+    // 满额时直接回退，不淘汰活跃租约来反复重开首次宽限。
+    if (remoteObserverLeases.size >= REMOTE_OBSERVER_LEASE_LIMIT) return false;
+    lease = {
+      sourceRoom,
+      targetRoom,
+      assignedAt: task.assignedAt,
+      firstAcceptedAt: Game.time,
+      lastRequestedAt: Game.time,
+    };
+    remoteObserverLeases.set(key, lease);
+  }
+  lease.lastRequestedAt = Game.time;
+  if (Game.rooms[targetRoom]) lease.lastSeenAt = Game.time;
+  return (
+    (lease.lastSeenAt !== undefined && Game.time - lease.lastSeenAt <= REMOTE_OBSERVER_SCOUT_GRACE) ||
+    Game.time - lease.firstAcceptedAt <= REMOTE_OBSERVER_SCOUT_GRACE
+  );
+}
 
 // Only cardinal neighbours (1/3/5/7) are candidates — diagonal rooms require multi-hop
 // logistics and are excluded to keep CPU and carrier travel time bounded.
@@ -447,6 +533,10 @@ function countSourceRoomRemotes(store: Record<string, RemoteMiningTask>, sourceR
 }
 
 export function upsertScoutConfig(sourceRoom: string, targetRoom: string): void {
+  if (observerCanReplaceScout(sourceRoom, targetRoom)) {
+    removeScoutConfigAndSpawnQueues(sourceRoom, targetRoom);
+    return;
+  }
   const configName = getRemoteMiningScoutConfigName(sourceRoom, targetRoom);
   getCreepConfigService().upsert(configName, "scout", [targetRoom], sourceRoom);
 }
@@ -1678,6 +1768,7 @@ export function processRemoteConfigLifecycle(
 export function runRemoteMining(): void {
   const config = getRemoteMiningConfig();
   if (!config.enabled) {
+    remoteObserverLeases.clear();
     return;
   }
 
@@ -1689,6 +1780,7 @@ export function runRemoteMining(): void {
   }
 
   const store = ensureRemoteMiningStore();
+  syncRemoteObserverLeases(store);
 
   processScoutLifecycle(store, config);
   processRemoteConstruction(store, config);

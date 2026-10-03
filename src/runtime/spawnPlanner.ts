@@ -9,6 +9,7 @@ import { getSafeZone } from "@/runtime/safeZone";
 import { isInsideSafeZone } from "@/runtime/safeZoneHelpers";
 import { isRcl8MaintenanceUpgraderConfig } from "@/runtime/upgraderPolicy";
 import { getPowerBankConfigName, POWER_BANK_STATUS } from "@/runtime/powerBankConstants";
+import { canSpawnDepositConfig } from "@/runtime/depositHarvest";
 import { reconcileSpawnQueueOwnership } from "@/runtime/spawnQueueOwnership";
 import type { CreepConfig } from "@/types/system";
 
@@ -49,6 +50,8 @@ function getSpawnRolePriority(role: CreepConfig["role"] | undefined): number {
   if (role === "powerBankHauler") {
     return 1;
   }
+
+  if (role === "depositHarvester") return 3;
 
   return 3;
 }
@@ -544,7 +547,8 @@ function isOutboundNonWarRole(role: CreepConfig["role"]): boolean {
     role === "powerBankScout" ||
     role === "powerBankAttacker" ||
     role === "powerBankHealer" ||
-    role === "powerBankHauler";
+    role === "powerBankHauler" ||
+    role === "depositHarvester";
 }
 
 function isWorkPositionOutsideSafeZone(roomName: string, workPos: RoomPosition | null): boolean {
@@ -1037,6 +1041,8 @@ export function scheduleSpawnTasks(): void {
     if (initialHarvesterRooms.has(config.roomName)) {
       continue;
     }
+
+    if (config.role === "depositHarvester" && !canSpawnDepositConfig(configName, config)) continue;
 
     if (config.role === "powerBankHauler") {
       queuePowerBankHaulerConfig(spawnsByRoom.get(config.roomName) ?? [], configName, config, planningContext);

@@ -1,10 +1,11 @@
 import { getCreepConfigService, getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
 import { prepareBoosts, releaseBoostLabs } from "@/runtime/powerBankBoost";
+import { requestCombatObservation } from "@/runtime/powerBankObserver";
 import { clearMovementState } from "@/roles/shared";
 import type { CreepConfig } from "@/types/system";
 
 type WarStatus = "queued" | "staging" | "clearing" | "downgrading" | "patrol_waiting" | "done" | "failed";
-export type WarSquad = "standard" | "t3Duo";
+export type WarSquad = "standard" | "t3Duo" | "towerDrainDuo";
 export type WarBoostTier = "t3";
 type WarRole = "meleeAttacker" | "healer";
 type WarGenerationPhase = "preparing" | "assembling" | "deployed";
@@ -176,8 +177,8 @@ export interface WarStatusSnapshot {
 
 const MELEE_COUNT = 2;
 const HEALER_COUNT = 1;
-const T3_DUO_MELEE_COUNT = 1;
-const T3_DUO_HEALER_COUNT = 1;
+const DUO_MELEE_COUNT = 1;
+const DUO_HEALER_COUNT = 1;
 const MAX_STAGING_TICKS = 2500;
 const CONTROLLER_ATTACKER_QUEUE_INTERVAL = 1000;
 const WAR_CLEAR_DEBOUNCE_TICKS = 20;
@@ -207,6 +208,17 @@ const T3_HEALER_BODY: BodyPartConstant[] = [
   HEAL, HEAL, HEAL, HEAL, HEAL, HEAL, HEAL, HEAL, HEAL, HEAL,
   HEAL, HEAL, HEAL, HEAL, HEAL, HEAL, HEAL, HEAL, HEAL, HEAL,
   MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE,
+];
+
+const TOWER_DRAIN_ATTACKER_BODY: BodyPartConstant[] = [
+  ...Array<BodyPartConstant>(25).fill(ATTACK),
+  ...Array<BodyPartConstant>(25).fill(MOVE),
+];
+// 前部承伤时保留完整移动能力，尾部治疗部件供退房后的恢复使用。
+const TOWER_DRAIN_HEALER_BODY: BodyPartConstant[] = [
+  ...Array<BodyPartConstant>(20).fill(HEAL),
+  ...Array<BodyPartConstant>(25).fill(MOVE),
+  ...Array<BodyPartConstant>(5).fill(HEAL),
 ];
 
 const T3_ATTACKER_BOOSTS: ResourceConstant[] = [WAR_T3_MOVE, WAR_T3_TOUGH, WAR_T3_ATTACK];
@@ -272,15 +284,23 @@ function getGenerationBoostTaskId(task: WarTask, generationId: number): string {
 }
 
 function isT3DuoTask(task: WarTask): boolean {
-  return task.squad === "t3Duo" || task.boostTier === "t3";
+  return !isTowerDrainDuoTask(task) && (task.squad === "t3Duo" || task.boostTier === "t3");
+}
+
+function isTowerDrainDuoTask(task: WarTask): boolean {
+  return task.squad === "towerDrainDuo";
+}
+
+function isDuoTask(task: WarTask): boolean {
+  return isTowerDrainDuoTask(task) || isT3DuoTask(task);
 }
 
 function getMeleeCount(task: WarTask): number {
-  return isT3DuoTask(task) ? T3_DUO_MELEE_COUNT : MELEE_COUNT;
+  return isDuoTask(task) ? DUO_MELEE_COUNT : MELEE_COUNT;
 }
 
 function getHealerCount(task: WarTask): number {
-  return isT3DuoTask(task) ? T3_DUO_HEALER_COUNT : HEALER_COUNT;
+  return isDuoTask(task) ? DUO_HEALER_COUNT : HEALER_COUNT;
 }
 
 function getLegacyWarBoostTaskId(task: WarTask): string {
@@ -306,6 +326,9 @@ function getRoleArgs(
   boostTaskId = getLegacyWarBoostTaskId(task),
   partnerConfigName = "",
 ): string[] {
+  if (isTowerDrainDuoTask(task)) {
+    return [task.targetRoom, encodedRoute, "", "", partnerConfigName, "towerDrainDuo"];
+  }
   if (!isT3DuoTask(task)) {
     return [task.targetRoom, encodedRoute, "", "", partnerConfigName];
   }
@@ -320,7 +343,7 @@ function getRoleArgs(
 }
 
 function getCombatPartnerConfigName(task: WarTask, role: WarRole, index: number): string {
-  if (isT3DuoTask(task)) {
+  if (isDuoTask(task)) {
     const generation = ensureActiveGeneration(task);
     return role === "meleeAttacker"
       ? generation.configNames.healer
@@ -334,6 +357,9 @@ function getCombatPartnerConfigName(task: WarTask, role: WarRole, index: number)
 }
 
 function getRoleBody(task: WarTask, role: WarRole): BodyPartConstant[] | undefined {
+  if (isTowerDrainDuoTask(task)) {
+    return role === "meleeAttacker" ? [...TOWER_DRAIN_ATTACKER_BODY] : [...TOWER_DRAIN_HEALER_BODY];
+  }
   if (!isT3DuoTask(task)) return undefined;
   return role === "meleeAttacker" ? [...T3_ATTACKER_BODY] : [...T3_HEALER_BODY];
 }
@@ -345,6 +371,7 @@ function resetWarCreepTargetState(creep: Creep): void {
   delete creep.memory._warCounterstrike;
   delete creep.memory._warCounterstrikeSuppressedTargetIds;
   delete creep.memory._warQueued;
+  delete creep.memory._warTowerDrain;
 }
 
 function synchronizeGenerationRoleArgs(task: WarTask, resetTargets: boolean): void {
@@ -431,7 +458,7 @@ function completePatrolTarget(task: WarTask): boolean {
 }
 
 function getExpectedTaskConfigNames(task: WarTask): string[] {
-  if (isT3DuoTask(task) && task.activeGeneration) {
+  if (isDuoTask(task) && task.activeGeneration) {
     return Object.values(task.activeGeneration.configNames);
   }
 
@@ -637,19 +664,32 @@ function isHostileReservation(room: Room): boolean {
   return reservation.username !== myUser;
 }
 
-function getHostilePresence(room: Room): HostilePresenceSnapshot {
+function getHostilePresence(room: Room, task?: WarTask): HostilePresenceSnapshot {
   const hostileCreeps = room.find(FIND_HOSTILE_CREEPS, {
     filter: (creep) => creep.owner.username !== "Source Keeper",
   });
 
-  const hostileStructures = room.find(FIND_HOSTILE_STRUCTURES, {
+  const hostileStructures: Structure<StructureConstant>[] = room.find(FIND_HOSTILE_STRUCTURES, {
     filter: (structure) =>
       structure.structureType !== STRUCTURE_CONTROLLER && structure.structureType !== STRUCTURE_KEEPER_LAIR,
   });
 
+  if (task && isTowerDrainDuoTask(task)) {
+    const seen = new Set(hostileStructures.map((structure) => structure.id));
+    for (const wall of room.find(FIND_STRUCTURES, {
+      filter: (structure) => structure.structureType === STRUCTURE_WALL,
+    })) {
+      if (!seen.has(wall.id)) {
+        seen.add(wall.id);
+        hostileStructures.push(wall);
+      }
+    }
+  }
+
   const hostileReservation = isHostileReservation(room);
   return {
-    present: hostileCreeps.length > 0 || hostileStructures.length > 0 || hostileReservation,
+    present: hostileCreeps.length > 0 || hostileStructures.length > 0
+      || (hostileReservation && !(task && isTowerDrainDuoTask(task))),
     hostileCreeps: hostileCreeps.length,
     hostileStructures: hostileStructures.length,
     hostileReservation,
@@ -668,7 +708,7 @@ function setTaskStatus(task: WarTask, status: WarStatus): void {
 function createGeneration(task: WarTask, id: number): WarGenerationState {
   return {
     id,
-    phase: "preparing",
+    phase: isTowerDrainDuoTask(task) ? "assembling" : "preparing",
     createdAt: Game.time,
     boostTaskId: getGenerationBoostTaskId(task, id),
     configNames: {
@@ -707,7 +747,7 @@ function ensureActiveGeneration(task: WarTask): WarGenerationState {
       phase: deployed ? "deployed" : "assembling",
       createdAt: Game.time,
       boostTaskId: getLegacyWarBoostTaskId(task),
-      boostGateOpenedAt: Game.time,
+      boostGateOpenedAt: isT3DuoTask(task) ? Game.time : undefined,
       deployedAt: deployed ? Game.time : undefined,
       configNames: legacyConfigNames,
     };
@@ -724,7 +764,7 @@ function ensureActiveGeneration(task: WarTask): WarGenerationState {
 }
 
 function getCombatConfigName(task: WarTask, role: WarRole, index: number): string {
-  if (isT3DuoTask(task)) {
+  if (isDuoTask(task)) {
     return ensureActiveGeneration(task).configNames[role];
   }
   return getConfigName(task, role, index);
@@ -837,7 +877,7 @@ function clearControllerAttackConfig(task: WarTask): void {
 function ensureCombatConfigs(task: WarTask): void {
   const store = ensureConfigStore();
   const encodedRoute = task.routeRooms?.join("|") || "";
-  const generation = isT3DuoTask(task) ? ensureActiveGeneration(task) : undefined;
+  const generation = isDuoTask(task) ? ensureActiveGeneration(task) : undefined;
   if (generation?.phase === "deployed") return;
 
   for (let i = 0; i < getMeleeCount(task); i++) {
@@ -854,7 +894,7 @@ function ensureCombatConfigs(task: WarTask): void {
       ),
       roomName: task.sourceRoom,
       body: getRoleBody(task, "meleeAttacker"),
-      spawnOnce: task.oneShot ? (existing?.spawnOnce ?? {}) : undefined,
+      spawnOnce: task.oneShot || isTowerDrainDuoTask(task) ? (existing?.spawnOnce ?? {}) : undefined,
     };
   }
 
@@ -872,7 +912,7 @@ function ensureCombatConfigs(task: WarTask): void {
       ),
       roomName: task.sourceRoom,
       body: getRoleBody(task, "healer"),
-      spawnOnce: task.oneShot ? (existing?.spawnOnce ?? {}) : undefined,
+      spawnOnce: task.oneShot || isTowerDrainDuoTask(task) ? (existing?.spawnOnce ?? {}) : undefined,
     };
   }
 
@@ -923,7 +963,7 @@ function cleanupGenerationConfigs(task: WarTask, generation: WarGenerationState)
 }
 
 function reconcileGenerationLifecycle(task: WarTask): boolean {
-  if (!isT3DuoTask(task)) return false;
+  if (!isDuoTask(task)) return false;
 
   const generation = ensureActiveGeneration(task);
   const generationCreeps = getGenerationCreeps(generation);
@@ -935,16 +975,29 @@ function reconcileGenerationLifecycle(task: WarTask): boolean {
   ) {
     generation.phase = "deployed";
     generation.deployedAt = Game.time;
-    releaseBoostLabs(generation.boostTaskId, task.sourceRoom);
-    task.boostLabs = [];
+    if (isT3DuoTask(task)) {
+      releaseBoostLabs(generation.boostTaskId, task.sourceRoom);
+      task.boostLabs = [];
+    }
     cleanupGenerationConfigs(task, generation);
   }
 
-  if (generation.phase !== "deployed" || isGenerationComplete(generation)) {
+  // 每个耗塔 generation 的角色只生成一次。排队/生成中不是损失；
+  // 已排队过而当前完全没有活动的角色，才表示本代在出发前耗尽。
+  const exhaustedBeforeDeployment = isTowerDrainDuoTask(task)
+    && generation.phase === "assembling"
+    && Object.values(generation.configNames).some((configName) =>
+      ensureConfigStore()[configName]?.spawnOnce?.queuedAt !== undefined
+      && !hasConfigActivity(task, configName)
+    );
+  if (!exhaustedBeforeDeployment && (generation.phase !== "deployed" || isGenerationComplete(generation))) {
     return false;
   }
 
-  detachWarTaskCreeps(new Set(Object.values(generation.configNames)), isPatrolTask(task));
+  const generationConfigs = new Set(Object.values(generation.configNames));
+  const unfinishedSpawns = isTowerDrainDuoTask(task) ? collectSpawningForConfigs(generationConfigs) : [];
+  detachWarTaskCreeps(generationConfigs, isPatrolTask(task));
+  for (const spawn of unfinishedSpawns) spawn.cancel();
   cleanupGenerationConfigs(task, generation);
 
   if (task.oneShot) {
@@ -955,7 +1008,7 @@ function reconcileGenerationLifecycle(task: WarTask): boolean {
   const nextId = Math.max(task.generationCounter ?? generation.id, generation.id) + 1;
   task.generationCounter = nextId;
   task.activeGeneration = createGeneration(task, nextId);
-  task.boostStatus = "preparing";
+  task.boostStatus = isT3DuoTask(task) ? "preparing" : undefined;
   task.failReason = undefined;
   return true;
 }
@@ -997,7 +1050,15 @@ function getGenerationRemainingBoostAmounts(
   return amounts;
 }
 
-function prepareT3DuoBoosts(task: WarTask): boolean {
+function prepareCombatSquad(task: WarTask): boolean {
+  if (isTowerDrainDuoTask(task)) {
+    const generation = ensureActiveGeneration(task);
+    if (generation.phase === "preparing") generation.phase = "assembling";
+    task.boostTier = undefined;
+    task.boostStatus = undefined;
+    task.boostLabs = undefined;
+    return true;
+  }
   if (!isT3DuoTask(task)) return true;
 
   const generation = ensureActiveGeneration(task);
@@ -1176,7 +1237,7 @@ function getTaskCreeps(task: WarTask): WarStatusCreepSnapshot[] {
 
 function buildTaskStatusSnapshot(task: WarTask): WarStatusTaskSnapshot {
   const room = Game.rooms[task.targetRoom];
-  const hostile = room ? getHostilePresence(room) : undefined;
+  const hostile = room ? getHostilePresence(room, task) : undefined;
   const sourceRoom = Game.rooms[task.sourceRoom];
   const generation = task.activeGeneration;
   const controller = room?.controller;
@@ -1238,12 +1299,13 @@ function writeWarTelemetry(): void {
 }
 
 function processTask(task: WarTask): void {
+  if (isTowerDrainDuoTask(task)) requestCombatObservation(task.targetRoom);
   task.statusSince ??= task.createdAt;
 
   if (task.status === "patrol_waiting") {
     if (reconcileGenerationLifecycle(task)) return;
     if (Game.time < (task.patrolNextSweepAt ?? Game.time)) {
-      if (!prepareT3DuoBoosts(task)) return;
+      if (!prepareCombatSquad(task)) return;
       ensureCombatConfigs(task);
       return;
     }
@@ -1262,6 +1324,7 @@ function processTask(task: WarTask): void {
 
   if (
     room
+    && !isTowerDrainDuoTask(task)
     && task.reason === "manual"
     && !isPatrolTask(task)
     && isControllerDefeated(room)
@@ -1278,15 +1341,15 @@ function processTask(task: WarTask): void {
   if (!room) {
     setTaskStatus(task, "staging");
     task.clearSince = undefined;
-    if (!prepareT3DuoBoosts(task)) return;
+    if (!prepareCombatSquad(task)) return;
     ensureCombatConfigs(task);
     return;
   }
 
-  const hostile = getHostilePresence(room);
-  if (task.reason === "manual" && !isPatrolTask(task) && isControllerDowngradeReady(room)) {
+  const hostile = getHostilePresence(room, task);
+  if (!isTowerDrainDuoTask(task) && task.reason === "manual" && !isPatrolTask(task) && isControllerDowngradeReady(room)) {
     task.clearSince = undefined;
-    const combatReady = prepareT3DuoBoosts(task);
+    const combatReady = prepareCombatSquad(task);
     if (combatReady) ensureCombatConfigs(task);
     setTaskStatus(task, "downgrading");
     ensureControllerAttackConfig(task);
@@ -1298,7 +1361,7 @@ function processTask(task: WarTask): void {
     task.clearSince ??= Game.time;
     if (Game.time - task.clearSince + 1 < WAR_CLEAR_DEBOUNCE_TICKS) {
       setTaskStatus(task, "clearing");
-      if (!prepareT3DuoBoosts(task)) return;
+      if (!prepareCombatSquad(task)) return;
       ensureCombatConfigs(task);
       return;
     }
@@ -1312,7 +1375,7 @@ function processTask(task: WarTask): void {
   task.lastHostileSeenAt = Game.time;
   task.clearSince = undefined;
   setTaskStatus(task, "clearing");
-  if (!prepareT3DuoBoosts(task)) return;
+  if (!prepareCombatSquad(task)) return;
   ensureCombatConfigs(task);
 }
 
@@ -1361,7 +1424,10 @@ export function requestWarRoomClear(
   const store = ensureWarStore();
   const existing = store[targetRoom];
   const now = Game.time;
-  const restart = !existing || existing.status === "done" || existing.status === "failed" || existing.sourceRoom !== sourceRoom;
+  const squad = options?.squad ?? existing?.squad;
+  const changedSquad = !!existing && options?.squad !== undefined && existing.squad !== squad;
+  const restart = !existing || existing.status === "done" || existing.status === "failed"
+    || existing.sourceRoom !== sourceRoom || changedSquad;
   const nextStatus: WarStatus = restart ? "staging" : existing.status;
   const nextAttempts = restart ? (existing?.attempts ?? 0) + 1 : (existing?.attempts ?? 1);
 
@@ -1375,8 +1441,8 @@ export function requestWarRoomClear(
     status: nextStatus,
     reason: options?.reason ?? existing?.reason ?? "npc_reservation",
     routeRooms: options?.routeRooms ?? existing?.routeRooms,
-    squad: options?.squad ?? existing?.squad,
-    boostTier: options?.boostTier ?? existing?.boostTier,
+    squad,
+    boostTier: squad === "towerDrainDuo" ? undefined : options?.boostTier ?? existing?.boostTier,
     boostLabs: restart ? undefined : existing?.boostLabs,
     boostStatus: restart ? undefined : existing?.boostStatus,
     oneShot: options?.oneShot ?? existing?.oneShot,
@@ -1391,7 +1457,9 @@ export function requestWarRoomClear(
     assetsReleasedAt: restart ? undefined : existing?.assetsReleasedAt,
     controllerAttackerLastQueuedAt: restart ? undefined : existing?.controllerAttackerLastQueuedAt,
     generationCounter: restart
-      ? (existing?.sourceRoom === sourceRoom ? existing?.generationCounter : undefined)
+      ? (existing?.sourceRoom === sourceRoom
+        ? Math.max(existing.generationCounter ?? 0, existing.activeGeneration?.id ?? 0)
+        : undefined)
       : existing?.generationCounter,
     activeGeneration: restart ? undefined : existing?.activeGeneration,
   };
@@ -1403,7 +1471,7 @@ export function startWarRoom(targetRoom: string, sourceRoom: string, options: St
   }
 
   const squad = options.squad ?? "t3Duo";
-  const boostTier = options.boostTier ?? (squad === "t3Duo" ? "t3" : undefined);
+  const boostTier = squad === "towerDrainDuo" ? undefined : options.boostTier ?? (squad === "t3Duo" ? "t3" : undefined);
   const oneShot = options.oneShot ?? true;
 
   requestWarRoomClear(targetRoom, sourceRoom, {
@@ -1594,9 +1662,10 @@ export function runWarControl(): void {
     const candidates = sourceTasks.filter(
       (task) => task.status !== "done" && task.status !== "failed",
     );
-    const active = candidates.find((task) => task.status !== "queued") ?? candidates[0];
+    const serialCandidates = candidates.filter((task) => !isTowerDrainDuoTask(task));
+    const active = serialCandidates.find((task) => task.status !== "queued") ?? serialCandidates[0];
 
-    for (const task of candidates) {
+    for (const task of serialCandidates) {
       if (task !== active) {
         parkQueuedFrontline(task);
       }
@@ -1605,6 +1674,11 @@ export function runWarControl(): void {
     if (active) {
       activateFrontline(active);
       processTask(active);
+    }
+    // 耗塔任务使用各自的双人 generation，允许同母房多个目标并行。
+    for (const task of candidates.filter(isTowerDrainDuoTask)) {
+      activateFrontline(task);
+      processTask(task);
     }
   }
 

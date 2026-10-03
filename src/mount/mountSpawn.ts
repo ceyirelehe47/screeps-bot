@@ -4,6 +4,7 @@ import { recordFixedCpuAction } from "@/runtime/cpuPhaseProfiler";
 import { getCreepConfigService } from "@/runtime/runtimeServices";
 import { isRcl8MaintenanceUpgraderConfig } from "@/runtime/upgraderPolicy";
 import type { RoleName } from "@/types/system";
+import { canSpawnDepositConfig } from "@/runtime/depositHarvest";
 
 function isTransientConfigName(configName: string): boolean {
   return configName.includes(":manual:") || configName.includes(":emergency:");
@@ -267,6 +268,8 @@ export function mountSpawn(): void {
     if (!config) {
       return true;
     }
+
+    if (config.role === "depositHarvester" && !canSpawnDepositConfig(configName, config)) return false;
 
     const body = chooseBody(this, configName);
     const name = config.name || `${getCreepNamePrefix(config.role)}-${Game.time}`;

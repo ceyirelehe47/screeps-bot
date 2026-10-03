@@ -1,7 +1,9 @@
 import type { RoomType } from "@/types/system";
+import type { DepositHarvestConfig } from "@/runtime/depositHarvest";
 
 declare global {
   interface ScreepsMemoryConfig {
+    depositHarvest?: Partial<DepositHarvestConfig>;
     rooms?: Record<
       string,
       {

@@ -24,6 +24,7 @@ export const ROLE_CATALOG = Object.freeze({
   powerBankAttacker: "active",
   powerBankHealer: "active",
   powerBankHauler: "active",
+  depositHarvester: "active",
   remoteMiningReserver: "active",
   remoteWorker: "active",
   remoteDefender: "active",

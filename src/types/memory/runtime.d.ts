@@ -597,6 +597,11 @@ declare global {
       coveredRooms: string[];
       /** 已发现 Bank 的有界复看请求：房间 -> 首次请求 tick。 */
       requestedRooms?: Record<string, number>;
+      combatRequestedRooms?: Record<string, number>;
+      depositRequestedRooms?: Record<string, number>;
+      remoteRequestedRooms?: Record<string, number>;
+      priorityKindCursor?: number;
+      singleObserverKindCursor?: number;
     };
     remoteMining?: {
       lastScanAt?: number;

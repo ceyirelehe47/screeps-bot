@@ -10,9 +10,10 @@ const MEMORY_BRANCHES = {
   cfg: {
     declaration: "src/types/memory/cfg.d.ts",
     interfaceName: "ScreepsMemoryConfig",
-    schemaFingerprint: "2387e78f2a0639ee822d599374c3c9c9c5d4ffd4d4e27bb872a0a3cdd960ef51",
-    imports: ["@/types/system:RoomType"],
+    schemaFingerprint: "4c9c00824220c59b60e8e20e390ab8c3673e3395f2a9577d970bd0ee17c0f4b3",
+    imports: ["@/runtime/depositHarvest:DepositHarvestConfig", "@/types/system:RoomType"],
     fields: [
+      "depositHarvest",
       "rooms",
       "worker",
       "energyPickup",
@@ -36,7 +37,7 @@ const MEMORY_BRANCHES = {
   runtime: {
     declaration: "src/types/memory/runtime.d.ts",
     interfaceName: "ScreepsMemoryRuntime",
-    schemaFingerprint: "215be7f038daa49cfab81eece090c512538e8557ae0a49c392743068c4f38132",
+    schemaFingerprint: "94bb40fbe770b1535ed6837795caaaf5094653c24b04d370c79a3cfa36441401",
     imports: [
       "@/runtime/hubPlanner:AllocationLedgerEntry",
       "@/runtime/hubPlanner:DirectRouteDecision",
@@ -80,8 +81,9 @@ const MEMORY_BRANCHES = {
   data: {
     declaration: "src/types/memory/data.d.ts",
     interfaceName: "ScreepsMemoryData",
-    schemaFingerprint: "e67962e577670078cbfb6befb8446d02259d1fd20323d1e49c4cd9f40a1f03b7",
+    schemaFingerprint: "e0311b2225019a4e2ab3361a73768b56af1e77e141643dab4340180e7f2bb4cb",
     imports: [
+      "@/runtime/depositHarvest:DepositHarvestTask",
       "@/runtime/marketActionArbiter:MarketAccountClaim",
       "@/runtime/marketActionArbiter:MarketActionJournalEntry",
       "@/runtime/marketBaseResourceAutomation:MarketBaseResourceV3RuntimeState",
@@ -96,6 +98,7 @@ const MEMORY_BRANCHES = {
       "@/types/system:CreepConfig",
     ],
     fields: [
+      "depositHarvest",
       "creepConfigs",
       "manualUpgraders",
       "marketSaleAutomation",
