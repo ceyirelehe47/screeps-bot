@@ -37,7 +37,7 @@ const MEMORY_BRANCHES = {
   runtime: {
     declaration: "src/types/memory/runtime.d.ts",
     interfaceName: "ScreepsMemoryRuntime",
-    schemaFingerprint: "94bb40fbe770b1535ed6837795caaaf5094653c24b04d370c79a3cfa36441401",
+    schemaFingerprint: "f7cde348dbdb3fef507f80214e383f4238dad22d7e3491230f547180a205b270",
     imports: [
       "@/runtime/hubPlanner:AllocationLedgerEntry",
       "@/runtime/hubPlanner:DirectRouteDecision",
@@ -76,6 +76,7 @@ const MEMORY_BRANCHES = {
       "remoteMining",
       "transitDangerRooms",
       "powerBankPermanentDangerRooms",
+      "powerBankOwnedRoomIntel",
     ],
   },
   data: {
