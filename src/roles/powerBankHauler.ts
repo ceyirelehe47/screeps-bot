@@ -474,9 +474,7 @@ function deliverPower(creep: Creep, fallbackEncodedRoute?: string): boolean {
     // journey to source when a test/old runtime snapshot has no source vision.
     const sourceRoom = getSourceRoomName(creep);
     if (!Game.rooms[sourceRoom] && creep.room.name !== sourceRoom) {
-      const route = task
-        ? getPowerBankEncodedRouteBetween(task, creep.room.name, sourceRoom, fallbackEncodedRoute)
-        : fallbackEncodedRoute;
+      const route = getPowerBankEncodedRouteBetween(task, creep.room.name, sourceRoom, fallbackEncodedRoute);
       moveToTargetRoom(creep, sourceRoom, route, {
         travelRange: 3,
         reusePath: 10,
@@ -495,9 +493,7 @@ function deliverPower(creep: Creep, fallbackEncodedRoute?: string): boolean {
   if (creep.room.name !== candidate.roomName) {
     const sourceRoom = getSourceRoomName(creep);
     const encodedRoute = candidate.roomName === sourceRoom
-      ? task
-        ? getPowerBankEncodedRouteBetween(task, creep.room.name, sourceRoom, fallbackEncodedRoute)
-        : fallbackEncodedRoute
+      ? getPowerBankEncodedRouteBetween(task, creep.room.name, sourceRoom, fallbackEncodedRoute)
       : undefined;
     moveToTargetRoom(creep, candidate.roomName, encodedRoute, {
       travelRange: 3,

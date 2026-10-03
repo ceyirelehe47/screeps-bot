@@ -241,6 +241,38 @@ describe("powerBankHaulerRole", () => {
       expect(task.routeRooms).toBeUndefined();
     });
 
+    it.each([
+      { label: "a visible source room", sourceVisible: true },
+      { label: "a source room without vision", sourceVisible: false },
+    ])("returns taskless cargo from the middle toward $label using the reversed role route", ({ sourceVisible }) => {
+      setupTask("hauling", { sourceRoom: routeSource });
+      const hauler = createHauler({ roomName: middleRoom, store: { [RESOURCE_POWER]: 100 } });
+      hauler.memory.configName = `${routeSource}:powerbank:${TARGET_ROOM}:hauler:0`;
+      hauler.memory.roleArgs = [TARGET_ROOM, corridor.join("|")];
+      // 模拟 terminalCleanup 已释放任务绑定与记录，但保留载货和原 roleArgs。
+      delete (hauler.memory as CreepMemory & { taskId?: string }).taskId;
+      delete Memory.data!.powerBankHarvest![TASK_ID];
+      (hauler as Creep & { ticksToLive: number }).ticksToLive = 1000;
+      if (sourceVisible) {
+        Game.rooms[routeSource] = createDeliveryRoom(routeSource, { terminalFree: 1000 });
+      }
+      (Game.map.findRoute as jest.Mock).mockReturnValue([{ exit: TOP, room: routeSource }]);
+
+      const role = powerBankHaulerRole(...hauler.memory.roleArgs);
+      expect(role.source(hauler)).toBe(false);
+      expect(moveToTargetRoom).toHaveBeenCalledTimes(1);
+      expect(moveToTargetRoom).toHaveBeenCalledWith(
+        hauler, routeSource, [middleRoom, routeSource].join("|"),
+        expect.objectContaining({ travelRange: 3, reusePath: 10, avoidRooms: [] }),
+      );
+      expect(hauler.transfer).not.toHaveBeenCalled();
+      expect(hauler.suicide).not.toHaveBeenCalled();
+      expect(hauler.store.getUsedCapacity(RESOURCE_POWER)).toBe(100);
+      expect((hauler.memory as CreepMemory & { taskId?: string }).taskId).toBeUndefined();
+      expect(Memory.data!.powerBankHarvest![TASK_ID]).toBeUndefined();
+      expect(hauler.memory.roleArgs).toEqual([TARGET_ROOM, corridor.join("|")]);
+    });
+
     it("directs legacy fallback toward a combat partner without overriding a current task corridor", () => {
       const task = setupTask("travelling", { sourceRoom: routeSource });
       expect(getPowerBankEncodedRouteBetween(task, middleRoom, TARGET_ROOM, corridor.join("|")))

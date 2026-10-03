@@ -141,13 +141,14 @@ export function getPowerBankEncodedRoute(task: RuntimePowerBankTask, fallback?: 
 }
 
 export function getPowerBankEncodedRouteBetween(
-  task: RuntimePowerBankTask,
+  task: Pick<RuntimePowerBankTask, "routeRooms"> | null | undefined,
   fromRoom: string,
   targetRoom: string,
   fallback?: string,
 ): string | undefined {
-  const routeRooms = Array.isArray(task.routeRooms) && task.routeRooms.length > 0
-    ? task.routeRooms
+  const taskRouteRooms = task?.routeRooms;
+  const routeRooms = Array.isArray(taskRouteRooms) && taskRouteRooms.length > 0
+    ? taskRouteRooms
     : fallback?.split("|").filter((roomName) => roomName.length > 0) ?? [];
   if (routeRooms.length === 0) return undefined;
 

@@ -171,7 +171,13 @@ export function updatePowerBankObservation(
 
   if (task.lastBankHits === undefined || bank.hits < task.lastBankHits) {
     task.lastBankProgressAt = Game.time;
-    markPowerBankProgress(task);
+    if (task.status === POWER_BANK_STATUS.DISCOVERED) {
+      // Observer 看到他人攻击也属于观测进展，不代表本任务已经通过视野、
+      // 威胁或测路门。保留准入等待与重试时间，避免恢复旧 500-tick 超时。
+      task.lastProgressAt = Game.time;
+    } else {
+      markPowerBankProgress(task);
+    }
   }
   task.lastBankHits = bank.hits;
   task.hits = bank.hits;

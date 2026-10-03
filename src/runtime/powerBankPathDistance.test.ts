@@ -34,7 +34,7 @@ function profile(): PowerBankTierProfile {
     tier: 6,
     attacker: { body: [ATTACK, MOVE] },
     healer: { body: [HEAL, MOVE] },
-  } as PowerBankTierProfile;
+  } as unknown as PowerBankTierProfile;
 }
 
 function input(): PowerBankTravelMeasurementInput {

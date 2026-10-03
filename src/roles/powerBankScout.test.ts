@@ -69,7 +69,7 @@ describe("powerBankScoutRole", () => {
     const creep = createMockCreep("E5N55");
     powerBankScoutRole().source?.(creep);
     const target = moveToTargetRoom.mock.calls[0][1];
-    creep.room.name = "E6N55";
+    creep.room = createMockCreep("E6N55").room;
     powerBankScoutRole().source?.(creep);
     expect(moveToTargetRoom.mock.calls[1][1]).toBe(target);
   });

@@ -5,6 +5,7 @@ import {
   cleanupStaleDiscoveries,
 } from "@/runtime/powerBankDiscovery";
 import { createMockPowerBank } from "@mock/powerBank";
+import { getPowerBankLifecycleFailure } from "@/runtime/powerBankTaskState";
 
 class MockRoomPosition {
   constructor(
@@ -80,5 +81,43 @@ describe("powerBankDiscovery", () => {
     Game.time = 700;
     cleanupStaleDiscoveries();
     expect(ensureDiscoveryStore()[task.id]).toBe(task);
+  });
+
+  it.each(["target_combat_threat", "path_measurement_pending"])("等待 %s 超过500 tick后他人攻击Bank不清除准入门", (blocker) => {
+    Game.time = 100;
+    Game.map.getRoomTerrain = jest.fn(() => createMockTerrain(Array.from({ length: 50 }, () => Array(50).fill(0))) as any);
+    recordPowerBankDiscovery(createMockPowerBank({ id: "pb-wait-progress", roomName: "E3N60", hits: 2_000_000, ticksToDecay: 4000 }));
+    const task = ensureDiscoveryStore()["pb-wait-progress"];
+    task.blocker = blocker;
+    task.nextAttemptAt = 705;
+
+    // 等同 Observer 在 Harvest 之前 record 可见、正在被他人击打的Bank。
+    Game.time = 700;
+    recordPowerBankDiscovery(createMockPowerBank({ id: task.id, roomName: "E3N60", hits: 1_000_000, ticksToDecay: 3400 }));
+    expect(task).toMatchObject({
+      status: "discovered", blocker, nextAttemptAt: 705, stageEnteredAt: 100,
+      lastSeenTick: 700, lastBankProgressAt: 700, lastProgressAt: 700,
+      hits: 1_000_000, bankExpiresAt: 4100,
+    });
+    expect(getPowerBankLifecycleFailure(task)).toBeUndefined();
+    expect(getPowerBankLifecycleFailure({ ...task, blocker: undefined })).toBe("stage_timeout:discovered");
+    Game.time = 4100;
+    expect(getPowerBankLifecycleFailure(task)).toBe("bank_expired");
+  });
+
+  it("活动任务的Bank hit进展仍清理blocker与retry", () => {
+    Game.time = 100;
+    Game.map.getRoomTerrain = jest.fn(() => createMockTerrain(Array.from({ length: 50 }, () => Array(50).fill(0))) as any);
+    recordPowerBankDiscovery(createMockPowerBank({ id: "pb-active-progress", roomName: "E3N60", hits: 2_000_000 }));
+    const task = ensureDiscoveryStore()["pb-active-progress"];
+    task.status = "attacking";
+    task.blocker = "attack_no_progress";
+    task.nextAttemptAt = 105;
+    Game.time = 101;
+    recordPowerBankDiscovery(createMockPowerBank({ id: task.id, roomName: "E3N60", hits: 1_000_000 }));
+    expect(task.lastBankProgressAt).toBe(101);
+    expect(task.lastProgressAt).toBe(101);
+    expect(task.blocker).toBeUndefined();
+    expect(task.nextAttemptAt).toBeUndefined();
   });
 });
