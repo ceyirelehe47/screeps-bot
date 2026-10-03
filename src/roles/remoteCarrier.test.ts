@@ -138,8 +138,8 @@ describe("remoteCarrierRole", () => {
   it("缺视野、残余 core/敌塔或非 Keeper 战斗时不取货，已有货只切返程", () => {
     for (const threat of ["vision", "core", "tower", "combat"] as const) {
       const structures = threat === "core" ? [{ structureType: STRUCTURE_INVADER_CORE } as Structure]
-        : threat === "tower" ? [{ structureType: STRUCTURE_TOWER, my: false } as Structure] : [];
-      const hostiles = threat === "combat" ? [{ owner: { username: "Invader" }, getActiveBodyparts: () => 1 } as Creep] : [];
+        : threat === "tower" ? [{ structureType: STRUCTURE_TOWER, my: false } as unknown as Structure] : [];
+      const hostiles = threat === "combat" ? [{ owner: { username: "Invader" }, getActiveBodyparts: () => 1 } as unknown as Creep] : [];
       const world = salvageFixture({ structures, hostiles });
       if (threat === "vision") delete Game.rooms[world.room.name];
       expect(isInvaderSalvageRoomClear(Game.rooms[world.room.name])).toBe(false);

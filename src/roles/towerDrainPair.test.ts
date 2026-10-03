@@ -133,7 +133,7 @@ describe("towerDrainDuo 公共战术门", () => {
     const { attacker, healer } = pair(true, towers);
     // 1980*2后只余1040；连续平地退房还须保留尾部5HEAL和5MOVE的1000余量。
     // 再加operateTower的小幅增伤，仍能存活却不足保持移动的入口必须拒绝。
-    for (const threat of towers) threat.effects = [{ effect: PWR_OPERATE_TOWER, level: 1, ticksRemaining: 20 }];
+    for (const threat of towers) threat.effects = [{ effect: PWR_OPERATE_TOWER, power: PWR_OPERATE_TOWER, level: 1, ticksRemaining: 20 }];
     runTowerDrainPair(attacker, TARGET, GREEN_CONFIG);
     runTowerDrainPair(healer, TARGET, RED_CONFIG);
     expect(attacker.move).not.toHaveBeenCalled();

@@ -406,8 +406,9 @@ export const remoteCarrierRole: RoleFactory = (targetRoom: string, targetX?: str
           roomName,
         ) || undefined;
         if (!exposureClaim) return ERR_NOT_ENOUGH_RESOURCES;
-        return executeTreasuryFencedTerminalCargo(assignment.target, () => creep.withdraw(
-          assignment.target,
+        const terminalTarget = assignment.target;
+        return executeTreasuryFencedTerminalCargo(terminalTarget, () => creep.withdraw(
+          terminalTarget,
           assignment.resource,
           exposureClaim.amount,
         ));

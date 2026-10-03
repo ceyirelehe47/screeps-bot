@@ -130,8 +130,8 @@ describe("runFlagHaulingByFlag", () => {
     Game.time += 1;
     if (threat === "vision") delete Game.rooms[world.target.name];
     if (threat === "core") world.objects.structures.push({ structureType: STRUCTURE_INVADER_CORE } as Structure);
-    if (threat === "tower") world.objects.structures.push({ structureType: STRUCTURE_TOWER, my: false } as Structure);
-    if (threat === "combat") world.objects.hostiles.push({ owner: { username: "Invader" }, getActiveBodyparts: () => 1 } as Creep);
+    if (threat === "tower") world.objects.structures.push({ structureType: STRUCTURE_TOWER, my: false } as unknown as Structure);
+    if (threat === "combat") world.objects.hostiles.push({ owner: { username: "Invader" }, getActiveBodyparts: () => 1 } as unknown as Creep);
     runFlagHaulingByFlag();
     expect(requestCombatObservation).toHaveBeenCalledWith(world.target.name);
     expect(Object.values(getCreepConfigService().list()).every((config) => config.roomName === undefined)).toBe(true);
