@@ -362,6 +362,7 @@ function resetPowerBankFixture(): void {
     haulerOutboundTravelTicks: 100,
     haulerReturnTravelTicks: 100,
   });
+  jest.spyOn(powerBankPathDistance, "canMeasurePowerBankTravelThisTick").mockReturnValue(true);
 }
 
 describe("powerBankHarvest", () => {
@@ -443,6 +444,87 @@ describe("powerBankHarvest", () => {
     const measuredTravel = { ...task, status: POWER_BANK_STATUS.TRAVELLING, combatTravelTicks: 700, routeDistance: 1 };
     expect(getPowerBankStageTimeout(measuredTravel)).toBe(950);
     expect(getPowerBankStageTimeout({ ...measuredTravel, combatTravelTicks: undefined })).toBe(300);
+  });
+
+  it("预算用尽仍先校验当前视野、Bank与威胁，但不扫描来源", () => {
+    const source = setupOwnedRoom(SOURCE_ROOM);
+    jest.spyOn(powerBankObserver, "hasPowerBankObserverCoverage").mockReturnValue(true);
+    jest.mocked(powerBankPathDistance.canMeasurePowerBankTravelThisTick).mockReturnValue(false);
+    const task = makeTask({ bankExpiresAt: Game.time + 5000 });
+    addTask(task);
+
+    runPowerBankHarvest();
+    expect(task.blocker).toBe("target_not_visible");
+    expect(powerBankPathDistance.canMeasurePowerBankTravelThisTick).not.toHaveBeenCalled();
+    Game.time += 1;
+    setupTargetRoom();
+    runPowerBankHarvest();
+    expect(task.blocker).toBe("target_bank_unconfirmed");
+    expect(powerBankPathDistance.canMeasurePowerBankTravelThisTick).not.toHaveBeenCalled();
+    Game.time += 1;
+    setupDiscoveredBank(task);
+    jest.mocked(powerBankObserver.getPowerBankRoomThreat).mockReturnValue(true);
+    runPowerBankHarvest();
+    expect(task.blocker).toBe("target_combat_threat");
+    expect(powerBankPathDistance.canMeasurePowerBankTravelThisTick).not.toHaveBeenCalled();
+
+    Game.time += 5;
+    jest.mocked(powerBankObserver.getPowerBankRoomThreat).mockReturnValue(false);
+    runPowerBankHarvest();
+    expect(task).toMatchObject({ status: "discovered", sourceRoom: "", blocker: "path_measurement_pending", nextAttemptAt: Game.time + 1 });
+    expect(task.lastSeenTick).toBe(Game.time);
+    expect(powerBankPathDistance.measurePowerBankTravel).not.toHaveBeenCalled();
+    expect(Game.map.findRoute).not.toHaveBeenCalled();
+    expect(source.find).not.toHaveBeenCalled();
+    expect(Memory.data?.powerBankHarvestHistory).toEqual([]);
+  });
+
+  it("新测量耗尽预算即停止后续来源前置工作，跨tick fresh全量收敛后才准入", () => {
+    setupOwnedRoom(SOURCE_ROOM, { spawnCount: 2 });
+    setupOwnedRoom(SECONDARY_SOURCE_ROOM);
+    jest.spyOn(powerBankObserver, "hasPowerBankObserverCoverage").mockReturnValue(true);
+    const task = makeTask({ hits: 100_000, power: 1000, bankExpiresAt: Game.time + 5000 });
+    setupDiscoveredBank(task);
+    addTask(task);
+    let available = true;
+    const measured = new Set<string>();
+    jest.mocked(powerBankPathDistance.canMeasurePowerBankTravelThisTick).mockImplementation(() => available);
+    jest.mocked(powerBankPathDistance.measurePowerBankTravel).mockImplementation((input) => {
+      const key = `${input.sourceSpawnPos.roomName}:${input.sourceSpawnPos.x}`;
+      if (!measured.has(key)) {
+        measured.add(key);
+        available = false;
+      }
+      const secondary = input.sourceSpawnPos.roomName === SECONDARY_SOURCE_ROOM;
+      return { status: "ready", pathDistance: secondary ? 80 : 400,
+        combatTravelTicks: secondary ? 120 : 600,
+        haulerOutboundTravelTicks: secondary ? 80 : 400,
+        haulerReturnTravelTicks: secondary ? 140 : 650 };
+    });
+
+    runPowerBankHarvest();
+    expect(powerBankPathDistance.measurePowerBankTravel).toHaveBeenCalledTimes(1);
+    expect(Game.map.findRoute).toHaveBeenCalledTimes(1);
+    expect(task).toMatchObject({ status: "discovered", sourceRoom: "", blocker: "path_measurement_pending" });
+    expect(task.pathDistance).toBeUndefined();
+
+    Game.time += 1;
+    available = true;
+    runPowerBankHarvest();
+    expect(powerBankPathDistance.measurePowerBankTravel).toHaveBeenCalledTimes(3);
+    expect(Game.map.findRoute).toHaveBeenCalledTimes(2);
+    expect(task).toMatchObject({ status: "discovered", sourceRoom: "", blocker: "path_measurement_pending" });
+    expect(task.pathDistance).toBeUndefined();
+
+    Game.time += 1;
+    available = true;
+    runPowerBankHarvest();
+    expect(powerBankPathDistance.measurePowerBankTravel).toHaveBeenCalledTimes(6);
+    expect(Game.map.findRoute).toHaveBeenCalledTimes(4);
+    expect(task).toMatchObject({ status: "preparing_boosts", sourceRoom: SECONDARY_SOURCE_ROOM,
+      pathDistance: 80, combatTravelTicks: 120, haulerOutboundTravelTicks: 80, haulerReturnTravelTicks: 140 });
+    expect(measured.size).toBe(3);
+    expect(Memory.data?.powerBankHarvestHistory).toEqual([]);
   });
 
   it("writes task ownership when a boosted pair transitions to travelling", () => {

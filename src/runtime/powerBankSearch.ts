@@ -1,10 +1,15 @@
 import { isPowerBankSearchRoom } from "@/runtime/powerBankConstants";
-import { getTickContextService } from "@/runtime/runtimeServices";
 
 /** 普通 Observer 的原生范围；这是搜索半径，不是固定房间名单。 */
 export const POWER_BANK_SEARCH_RADIUS = 10;
 
 interface WorldRoomCoordinates { x: number; y: number }
+
+let searchMemoGame: Game | undefined;
+let searchMemoTick: number | undefined;
+let searchMemoMap: GameMap | undefined;
+let searchMemoStatusReader: GameMap["getRoomStatus"] | undefined;
+const searchMemo = new Map<string, readonly string[]>();
 
 function parseWorldRoom(roomName: string): WorldRoomCoordinates | undefined {
   const match = /^([EW])(0|[1-9]\d*)([NS])(0|[1-9]\d*)$/.exec(roomName);
@@ -37,12 +42,27 @@ function isOpenWorldRoom(roomName: string): boolean {
  * 使用同一集合，但此集合不作为已接受任务的生命周期许可。
  */
 export function getPowerBankSearchRooms(originRoomName?: string): string[] {
-  const origins = originRoomName ? [originRoomName] : getTickContextService().getMyRooms()
-    .filter((room) => (room.controller?.level ?? 0) >= 6)
-    .map((room) => room.name);
-  const worldSize = typeof Game.map.getWorldSize === "function" ? Game.map.getWorldSize() : undefined;
-  const worldMinimum = worldSize !== undefined && Number.isSafeInteger(worldSize) && worldSize > 0
-    ? -Math.floor(worldSize / 2) : undefined;
+  // 这里只读少量来源；不能沿用仅按 tick 缓存的来源列表，否则同 tick 的
+  // Game 身份或来源成员变化会让完整输入 key 仍指向旧集合。
+  const origins = [...new Set(originRoomName ? [originRoomName] : Object.values(Game.rooms)
+    .filter((room) => room.controller?.my && (room.controller.level ?? 0) >= 6)
+    .map((room) => room.name))].sort();
+  const observedWorldSize = typeof Game.map.getWorldSize === "function" ? Game.map.getWorldSize() : undefined;
+  const worldSize = observedWorldSize !== undefined && Number.isSafeInteger(observedWorldSize) && observedWorldSize > 0
+    ? observedWorldSize : undefined;
+  const statusReader = typeof Game.map.getRoomStatus === "function" ? Game.map.getRoomStatus : undefined;
+  if (searchMemoGame !== Game || searchMemoTick !== Game.time ||
+      searchMemoMap !== Game.map || searchMemoStatusReader !== statusReader) {
+    searchMemo.clear();
+    searchMemoGame = Game;
+    searchMemoTick = Game.time;
+    searchMemoMap = Game.map;
+    searchMemoStatusReader = statusReader;
+  }
+  const key = JSON.stringify([POWER_BANK_SEARCH_RADIUS, origins, worldSize ?? null]);
+  const cached = searchMemo.get(key);
+  if (cached) return [...cached];
+  const worldMinimum = worldSize !== undefined ? -Math.floor(worldSize / 2) : undefined;
   const rooms = new Set<string>();
   for (const origin of origins) {
     const coordinates = parseWorldRoom(origin);
@@ -60,5 +80,7 @@ export function getPowerBankSearchRooms(originRoomName?: string): string[] {
       }
     }
   }
-  return [...rooms].filter(isOpenWorldRoom).sort();
+  const result = [...rooms].filter(isOpenWorldRoom).sort();
+  searchMemo.set(key, result);
+  return [...result];
 }

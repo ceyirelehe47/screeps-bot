@@ -34,6 +34,7 @@ export type PowerBankTravelMeasurementResult =
 
 interface CacheEntry {
   expiresAt: number;
+  worldKey: string;
   result: PowerBankTravelMeasurementResult;
 }
 
@@ -98,11 +99,17 @@ function refreshBudget(): void {
   }
 }
 
+/** 只读本 tick 的新测量预算；不消耗配额，也不读取地图或路径缓存。 */
+export function canMeasurePowerBankTravelThisTick(): boolean {
+  refreshBudget();
+  return measurementsThisTick < MAX_MEASUREMENTS_PER_TICK && searchesThisTick < MAX_SEARCHES_PER_TICK;
+}
+
 function pending(reason: string, retryTicks = RETRY_TICKS): PowerBankTravelMeasurementResult {
   return Object.freeze({ status: "pending", reason, retryAt: Game.time + retryTicks });
 }
 
-function remember(key: string, result: PowerBankTravelMeasurementResult): PowerBankTravelMeasurementResult {
+function remember(key: string, worldKey: string, result: PowerBankTravelMeasurementResult): PowerBankTravelMeasurementResult {
   measurements.delete(key);
   while (measurements.size >= CACHE_LIMIT) {
     const oldest = measurements.keys().next().value as string | undefined;
@@ -111,6 +118,7 @@ function remember(key: string, result: PowerBankTravelMeasurementResult): PowerB
   }
   measurements.set(key, {
     expiresAt: result.status === "ready" ? Game.time + CACHE_TTL : result.retryAt,
+    worldKey,
     result,
   });
   return result;
@@ -141,16 +149,11 @@ export function measurePowerBankTravel(input: PowerBankTravelMeasurementInput): 
   const allowedRooms = new Set(input.routeRooms);
   const avoidedRooms = new Set(input.avoidRooms);
   const endpointRooms = new Set([input.sourceSpawnPos.roomName, input.bankPos.roomName]);
-  const safeRoom = (roomName: string): boolean => {
-    if (!allowedRooms.has(roomName) || (!endpointRooms.has(roomName) && avoidedRooms.has(roomName))) return false;
-    const status = Game.map.getRoomStatus(roomName);
-    // novice/respawn 并不等于闭房；能否跨边界继续由安全 route 与 PF 地形
-    // 屏障证明，不能仅因区域标签而拒绝同区域内可达路径。
-    return status != null && status.status !== "closed";
-  };
+  if (input.routeRooms.some((room) => !endpointRooms.has(room) && avoidedRooms.has(room))) {
+    return pending("unsafe_route");
+  }
   let key: string;
   try {
-    if (input.routeRooms.some((room) => !safeRoom(room))) return pending("unsafe_route");
     key = JSON.stringify([
       ALGORITHM_REVISION,
       [input.sourceSpawnPos.roomName, input.sourceSpawnPos.x, input.sourceSpawnPos.y],
@@ -162,20 +165,46 @@ export function measurePowerBankTravel(input: PowerBankTravelMeasurementInput): 
       input.profile.attacker.body,
       input.profile.healer.body,
       input.haulerCarryParts,
-      input.routeRooms.map((room) => [room, Boolean(Game.rooms[room]), getRoomTopologyRevision(room)]),
     ]);
   } catch {
     return pending("route_observation_failed");
   }
-  const cached = measurements.get(key);
-  if (cached && Game.time < cached.expiresAt) {
+  let cached = measurements.get(key);
+  if (cached && Game.time >= cached.expiresAt) {
+    measurements.delete(key);
+    cached = undefined;
+  }
+  const availableBudget = canMeasurePowerBankTravelThisTick();
+  // 无既有证据且配额已用完时，不扫描其它候选的状态或拓扑。已知缓存仍
+  // 需要当次状态和几何校验；预算耗尽不能让 stale ready 绕过这些门。
+  if (!cached && !availableBudget) return pending("budget", 1);
+
+  const roomSafety = new Map<string, boolean>();
+  const safeRoom = (roomName: string): boolean => {
+    if (!allowedRooms.has(roomName) || (!endpointRooms.has(roomName) && avoidedRooms.has(roomName))) return false;
+    const cachedSafety = roomSafety.get(roomName);
+    if (cachedSafety !== undefined) return cachedSafety;
+    const status = Game.map.getRoomStatus(roomName);
+    // novice/respawn 并不等于闭房；能否跨边界继续由安全 route 与 PF 地形
+    // 屏障证明，不能仅因区域标签而拒绝同区域内可达路径。
+    const safe = status != null && status.status !== "closed";
+    roomSafety.set(roomName, safe);
+    return safe;
+  };
+  let worldKey: string;
+  try {
+    if (input.routeRooms.some((room) => !safeRoom(room))) return pending("unsafe_route");
+    worldKey = JSON.stringify(input.routeRooms.map((room) => [room, Boolean(Game.rooms[room]), getRoomTopologyRevision(room)]));
+  } catch {
+    return pending("route_observation_failed");
+  }
+  if (cached && cached.worldKey === worldKey) {
     measurements.delete(key);
     measurements.set(key, cached);
     return cached.result;
   }
   measurements.delete(key);
-  refreshBudget();
-  if (measurementsThisTick >= MAX_MEASUREMENTS_PER_TICK || searchesThisTick >= MAX_SEARCHES_PER_TICK) {
+  if (!availableBudget) {
     // 未测量的候选不能占 LRU：大量 source/spawn 在预算用尽后排队时，
     // 若把它们全部缓存，会驱逐已测 ready 并阻止完整 source 集合收敛。
     return pending("budget", 1);
@@ -184,6 +213,8 @@ export function measurePowerBankTravel(input: PowerBankTravelMeasurementInput): 
 
   const matrices = new Map<string, CostMatrix>();
   const roads = new Map<string, Set<string>>();
+  const terrains = new Map<string, RoomTerrain>();
+  const fatigueByRoom = new Map<string, Map<number, number>>();
   const matrixFor = (roomName: string): CostMatrix => {
     let matrix = matrices.get(roomName);
     if (!matrix) {
@@ -220,6 +251,14 @@ export function measurePowerBankTravel(input: PowerBankTravelMeasurementInput): 
     return result.path;
   };
   const terrainFatigue = (pos: RoomPosition): number => {
+    let fatigue = fatigueByRoom.get(pos.roomName);
+    if (!fatigue) {
+      fatigue = new Map();
+      fatigueByRoom.set(pos.roomName, fatigue);
+    }
+    const cellIndex = pos.y * 50 + pos.x;
+    const cachedFatigue = fatigue.get(cellIndex);
+    if (cachedFatigue !== undefined) return cachedFatigue;
     let roomRoads = roads.get(pos.roomName);
     if (!roomRoads) {
       const room = Game.rooms[pos.roomName];
@@ -230,20 +269,29 @@ export function measurePowerBankTravel(input: PowerBankTravelMeasurementInput): 
         .map((structure) => `${structure.pos.x}:${structure.pos.y}`));
       roads.set(pos.roomName, roomRoads);
     }
-    if (roomRoads.has(`${pos.x}:${pos.y}`)) return 1;
-    return Game.map.getRoomTerrain(pos.roomName).get(pos.x, pos.y) & TERRAIN_MASK_SWAMP ? 10 : 2;
+    let value = 1;
+    if (!roomRoads.has(`${pos.x}:${pos.y}`)) {
+      let terrain = terrains.get(pos.roomName);
+      if (!terrain) {
+        terrain = Game.map.getRoomTerrain(pos.roomName);
+        terrains.set(pos.roomName, terrain);
+      }
+      value = terrain.get(pos.x, pos.y) & TERRAIN_MASK_SWAMP ? 10 : 2;
+    }
+    fatigue.set(cellIndex, value);
+    return value;
   };
   const travelTicks = (path: readonly RoomPosition[], body: MovementBody): number => path.reduce(
     (total, pos) => total + Math.max(1, Math.ceil(body.weight * terrainFatigue(pos) / (body.moves * 2))), 0,
   );
   try {
     const combat = search(input.sourceSpawnPos, input.bankPos, 2, 8);
-    if (!combat) return remember(key, pending("path_incomplete"));
+    if (!combat) return remember(key, worldKey, pending("path_incomplete"));
     const outbound = search(input.sourceSpawnPos, input.bankPos, 1, 1);
-    if (!outbound) return remember(key, pending("path_incomplete"));
+    if (!outbound) return remember(key, worldKey, pending("path_incomplete"));
     const returnOrigin = outbound[outbound.length - 1] ?? input.sourceSpawnPos;
     const loadedReturn = search(returnOrigin, input.returnTargetPos, 1, 5);
-    if (!loadedReturn) return remember(key, pending("path_incomplete"));
+    if (!loadedReturn) return remember(key, worldKey, pending("path_incomplete"));
     const result: PowerBankTravelMeasurementResult = Object.freeze({
       status: "ready",
       pathDistance: outbound.length,
@@ -251,8 +299,8 @@ export function measurePowerBankTravel(input: PowerBankTravelMeasurementInput): 
       haulerOutboundTravelTicks: outbound.length,
       haulerReturnTravelTicks: travelTicks(loadedReturn, { weight: input.haulerCarryParts, moves: input.haulerCarryParts }),
     });
-    return remember(key, result);
+    return remember(key, worldKey, result);
   } catch {
-    return remember(key, pending("path_search_failed"));
+    return remember(key, worldKey, pending("path_search_failed"));
   }
 }

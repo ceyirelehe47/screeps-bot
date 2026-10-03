@@ -72,6 +72,7 @@ const boundaryCases: Array<[
 
 describe("Power Bank 静态完整路径测量", () => {
   let measure: typeof import("@/runtime/powerBankPathDistance").measurePowerBankTravel;
+  let canMeasure: typeof import("@/runtime/powerBankPathDistance").canMeasurePowerBankTravelThisTick;
   let search: jest.Mock;
   let staticMatrix: TestCostMatrix;
   let topology: jest.Mock;
@@ -92,8 +93,9 @@ describe("Power Bank 静态完整路径测量", () => {
     routing.getCachedStaticTravelMatrix.mockReturnValue(staticMatrix);
     topology = (jest.requireMock("@/movement/roomTopologyRevision") as { getRoomTopologyRevision: jest.Mock })
       .getRoomTopologyRevision;
-    measure = (require("@/runtime/powerBankPathDistance") as typeof import("@/runtime/powerBankPathDistance"))
-      .measurePowerBankTravel;
+    const module = require("@/runtime/powerBankPathDistance") as typeof import("@/runtime/powerBankPathDistance");
+    measure = module.measurePowerBankTravel;
+    canMeasure = module.canMeasurePowerBankTravelThisTick;
   });
 
   it("三段独立搜索使用实际空车末点返程，时间来自负重地形而非 PF cost", () => {
@@ -128,6 +130,30 @@ describe("Power Bank 静态完整路径测量", () => {
     Game.rooms.W1N1 = visibleRoom("W1N1", [{ structureType: STRUCTURE_ROAD, pos: pos(11) } as Structure]);
     topology.mockReturnValue("road-built");
     expect(measure(input())).toMatchObject({ combatTravelTicks: 6, haulerReturnTravelTicks: 6 });
+  });
+
+  it("单次测量复用房间状态、地形与每格疲劳，三段和两种战斗身体仍完整计时", () => {
+    const terrain = { get: jest.fn((x: number) => x === 11 ? TERRAIN_MASK_SWAMP : 0) };
+    (Game.map.getRoomTerrain as jest.Mock).mockReturnValue(terrain);
+    const candidate = input();
+    candidate.profile = {
+      ...candidate.profile,
+      attacker: { ...candidate.profile.attacker, body: [ATTACK, TOUGH, TOUGH, MOVE] },
+    };
+    search.mockImplementation((origin: RoomPosition, goal: { pos: RoomPosition; range: number }, options: PathFinderOpts) => {
+      expect(options.roomCallback?.(origin.roomName)).not.toBe(false);
+      return straightSameRoom(origin, goal);
+    });
+
+    expect(measure(candidate)).toEqual({
+      status: "ready", pathDistance: 2, combatTravelTicks: 18,
+      haulerOutboundTravelTicks: 2, haulerReturnTravelTicks: 6,
+    });
+    expect(search).toHaveBeenCalledTimes(3);
+    expect(Game.map.getRoomStatus).toHaveBeenCalledTimes(1);
+    expect(Game.map.getRoomTerrain).toHaveBeenCalledTimes(1);
+    expect(Game.rooms.W1N1.find).toHaveBeenCalledTimes(1);
+    expect(terrain.get.mock.calls).toEqual([[11, 10], [12, 10], [10, 10]]);
   });
 
   it.each([
@@ -196,14 +222,64 @@ describe("Power Bank 静态完整路径测量", () => {
     expect(search).toHaveBeenCalledTimes(6);
   });
 
+  it("预算查询不读地图、不耗配额，tick 与 Game 换代刷新配额", () => {
+    expect(canMeasure()).toBe(true);
+    expect(canMeasure()).toBe(true);
+    expect(Game.map.getRoomStatus).not.toHaveBeenCalled();
+    expect(topology).not.toHaveBeenCalled();
+    expect(search).not.toHaveBeenCalled();
+    expect(measure(input()).status).toBe("ready");
+    expect(canMeasure()).toBe(false);
+    Game.time += 1;
+    expect(canMeasure()).toBe(true);
+    expect(measure({ ...input(), bankPos: pos(14) }).status).toBe("ready");
+    expect(canMeasure()).toBe(false);
+
+    const previousGame = Game;
+    Object.assign(global, { Game: { ...Game } });
+    try {
+      expect(canMeasure()).toBe(true);
+      expect(measure({ ...input(), bankPos: pos(15) }).status).toBe("ready");
+      expect(canMeasure()).toBe(false);
+    } finally {
+      Object.assign(global, { Game: previousGame });
+    }
+    expect(search).toHaveBeenCalledTimes(9);
+  });
+
+  it("预算耗尽仍对已缓存 ready 新读拓扑，变更后拒绝旧证据并等下一 tick", () => {
+    const candidate = input();
+    expect(measure(candidate).status).toBe("ready");
+    expect(canMeasure()).toBe(false);
+    topology.mockClear();
+    (Game.map.getRoomStatus as jest.Mock).mockClear();
+    topology.mockReturnValue("changed-after-ready");
+
+    expect(measure(candidate)).toEqual({ status: "pending", reason: "budget", retryAt: 1_001 });
+    expect(topology).toHaveBeenCalledTimes(1);
+    expect(Game.map.getRoomStatus).toHaveBeenCalledTimes(1);
+    expect(search).toHaveBeenCalledTimes(3);
+    Game.time += 1;
+    expect(measure(candidate).status).toBe("ready");
+    expect(search).toHaveBeenCalledTimes(6);
+  });
+
   it("超过 64 个未测预算候选不会驱逐已测 ready 证据", () => {
     const ready = input();
     expect(measure(ready).status).toBe("ready");
+    topology.mockClear();
+    (Game.map.getRoomStatus as jest.Mock).mockClear();
+    (Game.map.getRoomTerrain as jest.Mock).mockClear();
     for (let index = 1; index <= 80; index += 1) {
       expect(measure({ ...input(), bankPos: pos(14 + Math.floor(index / 25)), haulerCarryParts: index % 25 + 1 }))
         .toEqual({ status: "pending", reason: "budget", retryAt: 1_001 });
     }
+    expect(topology).not.toHaveBeenCalled();
+    expect(Game.map.getRoomStatus).not.toHaveBeenCalled();
+    expect(Game.map.getRoomTerrain).not.toHaveBeenCalled();
     expect(measure(ready).status).toBe("ready");
+    expect(topology).toHaveBeenCalledTimes(1);
+    expect(Game.map.getRoomStatus).toHaveBeenCalledTimes(1);
     expect(search).toHaveBeenCalledTimes(3);
   });
 

@@ -16,7 +16,7 @@ import {
 } from "@/runtime/powerBankBoostMemory";
 import { cleanupStaleDiscoveries, ensureDiscoveryStore } from "@/runtime/powerBankDiscovery";
 import { getPowerBankRoomThreat, hasPowerBankObserverCoverage, requestPowerBankObservation } from "@/runtime/powerBankObserver";
-import { measurePowerBankTravel } from "@/runtime/powerBankPathDistance";
+import { canMeasurePowerBankTravelThisTick, measurePowerBankTravel } from "@/runtime/powerBankPathDistance";
 import { getPowerBankSearchRooms } from "@/runtime/powerBankSearch";
 import { isDefenseMode } from "@/runtime/defenseMode";
 import { getCreepConfigService, getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
@@ -519,6 +519,10 @@ function evaluateSourceCandidates(task: PowerBankHarvestTask): {
   let pendingRetryAt: number | undefined;
 
   for (const room of getTickContextService().getMyRooms()) {
+    if (!canMeasurePowerBankTravelThisTick()) {
+      pendingRetryAt = Math.min(pendingRetryAt ?? Infinity, Game.time + 1);
+      break;
+    }
     if (!room.controller || room.controller.level < 6) continue;
     if (isDefenseMode(room.name)) continue;
 
@@ -585,6 +589,11 @@ function evaluateSourceCandidates(task: PowerBankHarvestTask): {
     const measurements: Array<Extract<ReturnType<typeof measurePowerBankTravel>, { status: "ready" }>> = [];
     let sourcePending = false;
     for (const spawn of spawns) {
+      if (!canMeasurePowerBankTravelThisTick()) {
+        sourcePending = true;
+        pendingRetryAt = Math.min(pendingRetryAt ?? Infinity, Game.time + 1);
+        break;
+      }
       if (!spawn.pos || !returnTarget?.pos) {
         sourcePending = true;
         pendingRetryAt = Math.min(pendingRetryAt ?? Infinity, Game.time + 5);
@@ -832,6 +841,14 @@ function processDiscovered(task: PowerBankHarvestTask): void {
   }
   updatePowerBankObservation(task, bank);
   task.bankPos = { x: bank.pos.x, y: bank.pos.y };
+  // 预算只允许一次新几何测量。等待阶段不能在每个 discovered 任务上
+  // 重做全部来源的 findRoute、Lab、预留与物流扫描；下一 tick 再完整
+  // 新鲜评估全部来源，任何未评估项都不能被当作已通过。
+  if (!canMeasurePowerBankTravelThisTick()) {
+    requestPowerBankObservation(task.targetRoom);
+    setPowerBankBlocker(task, "path_measurement_pending", 1);
+    return;
+  }
   const evaluation = evaluateSourceCandidates(task);
   if (evaluation.pendingRetryAt !== undefined) {
     requestPowerBankObservation(task.targetRoom);
