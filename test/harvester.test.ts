@@ -56,6 +56,7 @@ function makeSource(id: string, x: number, y: number, roomName: string) {
 function makeCreep(x: number, y: number, roomName: string) {
   return {
     pos: new MockPos(x, y, roomName),
+    room: { name: roomName },
     my: true,
     memory: { role: "harvester" },
     harvest: jest.fn() as jest.Mock<number, [unknown]>,

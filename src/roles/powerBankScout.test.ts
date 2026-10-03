@@ -47,8 +47,11 @@ describe("powerBankScoutRole", () => {
     jest.clearAllMocks();
     Memory.runtime = {};
     Memory.data = {};
-    Game.map.getWorldSize = jest.fn(() => 202);
-    Game.map.getRoomStatus = jest.fn(() => ({ status: "normal" as const, timestamp: null }));
+    Game.map = {
+      ...Game.map,
+      getWorldSize: jest.fn(() => 202),
+      getRoomStatus: jest.fn(() => ({ status: "normal" as const, timestamp: null })),
+    } as unknown as GameMap;
     Object.assign(global, {
       RoomPosition: MockRoomPosition,
     });

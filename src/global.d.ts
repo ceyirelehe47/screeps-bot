@@ -192,6 +192,18 @@ declare global {
   var marketBaseResourceStatus:
     | (() => unknown)
     | undefined;
+  var startMarketBaseResourceEgressTrialR2:
+    | typeof import("@/runtime/marketSaleAutomation").startMarketBaseResourceEgressTrialR2
+    | undefined;
+  var stopMarketBaseResourceEgressTrialR2:
+    | typeof import("@/runtime/marketSaleAutomation").stopMarketBaseResourceEgressTrialR2
+    | undefined;
+  var heartbeatMarketBaseResourceEgressTrialR2:
+    | typeof import("@/runtime/marketSaleAutomation").heartbeatMarketBaseResourceEgressTrialR2
+    | undefined;
+  var marketBaseResourceEgressTrialR2Status:
+    | typeof import("@/runtime/marketSaleAutomation").marketBaseResourceEgressTrialR2Status
+    | undefined;
   var spawnMaxCarrier:
     typeof import("@/runtime/console/operationsCommands").spawnMaxCarrierCommand;
   var spawnMaxCarrierRaw:

@@ -3,8 +3,11 @@ import { getPowerBankSearchRooms } from "@/runtime/powerBankSearch";
 
 describe("PowerBank 动态搜房", () => {
   beforeEach(() => {
-    Game.map.getWorldSize = jest.fn(() => 202);
-    Game.map.getRoomStatus = jest.fn(() => ({ status: "normal" as const, timestamp: null }));
+    Game.map = {
+      ...Game.map,
+      getWorldSize: jest.fn(() => 202),
+      getRoomStatus: jest.fn(() => ({ status: "normal" as const, timestamp: null })),
+    } as unknown as GameMap;
   });
 
   it.each(["E20N7", "W3S10", "W0N0", "E0S1"])("识别任意高速房 %s", (roomName) => {

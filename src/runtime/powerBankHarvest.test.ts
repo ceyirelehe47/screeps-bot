@@ -11,6 +11,7 @@ import {
   createMockPowerBank,
   createMockPowerBankCreep,
   createMockStore,
+  MockPos,
 } from "@mock/powerBank";
 import { clearCreepMovementStateForTest } from "@/movement/creepState";
 import * as powerBankPathDistance from "@/runtime/powerBankPathDistance";
@@ -339,6 +340,7 @@ function setupReadyReinforcementHandoff(options: {
 
 function resetPowerBankFixture(): void {
   jest.restoreAllMocks();
+  Object.assign(global, { RoomPosition: MockPos });
   clearCreepMovementStateForTest();
   resetRuntimeServices();
   registerRuntimeServices();

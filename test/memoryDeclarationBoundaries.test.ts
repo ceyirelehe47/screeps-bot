@@ -36,7 +36,7 @@ const MEMORY_BRANCHES = {
   runtime: {
     declaration: "src/types/memory/runtime.d.ts",
     interfaceName: "ScreepsMemoryRuntime",
-    schemaFingerprint: "2902adc63e9a0544dd0ff08f23bb005184953e0af82f9f3c804f3c6d51fe0985",
+    schemaFingerprint: "215be7f038daa49cfab81eece090c512538e8557ae0a49c392743068c4f38132",
     imports: [
       "@/runtime/hubPlanner:AllocationLedgerEntry",
       "@/runtime/hubPlanner:DirectRouteDecision",
@@ -732,6 +732,11 @@ const configReceiverStorageThreshold: number | undefined =
   config.resourceControl?.capacityBalancing?.receiverStorageMinFreeCapacity;
 const runtimeCapacityReservationRemaining: number | undefined =
   runtime.resourceControl?.rooms["E1N1"]?.capacityReservation?.remaining;
+const runtimePowerBankObservationRequestTick: number | undefined =
+  runtime.powerBankObserver?.requestedRooms?.["E1N0"];
+const legacyPowerBankObserver: NonNullable<RuntimeRoot["powerBankObserver"]> = {
+  patrolIndex: 0, updatedAt: 0, lastObservedRooms: [], coveredRooms: [],
+};
 const dataBlockedReason:
   | "receiver_capacity"
   | "source_depleted"
