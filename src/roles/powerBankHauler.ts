@@ -1,10 +1,11 @@
 import { executeTreasuryFencedTerminalCargo } from "@/runtime/treasuryTerminalCargo";
 import { moveToTarget, moveToTargetRoom } from "@/roles/shared";
-import { POWER_BANK_STATUS, isPowerBankPatrolRoom } from "@/runtime/powerBankConstants";
+import { POWER_BANK_STATUS, isPowerBankSearchRoom } from "@/runtime/powerBankConstants";
 import { measureCreepIntent } from "@/runtime/cpuPhaseProfiler";
 import { getCreepMovementState } from "@/movement/creepState";
 import { getPositionAtDirection } from "@/movement/common";
 import { findMyCreepAt } from "@/movement/traffic";
+import { getPowerBankEncodedRouteBetween } from "@/roles/powerBankCombatPair";
 import type { RoleFactory } from "@/types/system";
 
 const HAULING_EMPTY_CONFIRM_TICKS = 100;
@@ -473,7 +474,10 @@ function deliverPower(creep: Creep, fallbackEncodedRoute?: string): boolean {
     // journey to source when a test/old runtime snapshot has no source vision.
     const sourceRoom = getSourceRoomName(creep);
     if (!Game.rooms[sourceRoom] && creep.room.name !== sourceRoom) {
-      moveToTargetRoom(creep, sourceRoom, getTaskEncodedRoute(task, fallbackEncodedRoute), {
+      const route = task
+        ? getPowerBankEncodedRouteBetween(task, creep.room.name, sourceRoom, fallbackEncodedRoute)
+        : fallbackEncodedRoute;
+      moveToTargetRoom(creep, sourceRoom, route, {
         travelRange: 3,
         reusePath: 10,
         avoidRooms: getTaskDangerRooms(task),
@@ -491,7 +495,9 @@ function deliverPower(creep: Creep, fallbackEncodedRoute?: string): boolean {
   if (creep.room.name !== candidate.roomName) {
     const sourceRoom = getSourceRoomName(creep);
     const encodedRoute = candidate.roomName === sourceRoom
-      ? getTaskEncodedRoute(task, fallbackEncodedRoute)
+      ? task
+        ? getPowerBankEncodedRouteBetween(task, creep.room.name, sourceRoom, fallbackEncodedRoute)
+        : fallbackEncodedRoute
       : undefined;
     moveToTargetRoom(creep, candidate.roomName, encodedRoute, {
       travelRange: 3,
@@ -538,7 +544,7 @@ function salvagePower(creep: Creep, targetRoom?: string, encodedRouteRooms?: str
     return true;
   }
 
-  if (!isPowerBankPatrolRoom(resolvedTargetRoom)) {
+  if (!isPowerBankSearchRoom(resolvedTargetRoom)) {
     return true;
   }
 
@@ -688,7 +694,7 @@ export const powerBankHaulerRole: RoleFactory = (targetRoom?: string, encodedRou
         return false;
       }
       // Switch back to source phase
-      return false;
+      return true;
     }
 
     return true;

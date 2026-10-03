@@ -146,8 +146,10 @@ export function getPowerBankEncodedRouteBetween(
   targetRoom: string,
   fallback?: string,
 ): string | undefined {
-  const routeRooms = task.routeRooms;
-  if (!Array.isArray(routeRooms) || routeRooms.length === 0) return fallback;
+  const routeRooms = Array.isArray(task.routeRooms) && task.routeRooms.length > 0
+    ? task.routeRooms
+    : fallback?.split("|").filter((roomName) => roomName.length > 0) ?? [];
+  if (routeRooms.length === 0) return undefined;
 
   const fromIndex = routeRooms.lastIndexOf(fromRoom);
   const targetIndex = routeRooms.lastIndexOf(targetRoom);

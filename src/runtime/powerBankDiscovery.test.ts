@@ -2,6 +2,7 @@ import {
   countFreeAdjacentTiles,
   recordPowerBankDiscovery,
   ensureDiscoveryStore,
+  cleanupStaleDiscoveries,
 } from "@/runtime/powerBankDiscovery";
 import { createMockPowerBank } from "@mock/powerBank";
 
@@ -41,6 +42,14 @@ describe("powerBankDiscovery", () => {
 
   describe("recordPowerBankDiscovery", () => {
 
+    it("接受原名单外高速房的Bank，拒绝非高速房", () => {
+      Game.map.getRoomTerrain = jest.fn(() => createMockTerrain(Array.from({ length: 50 }, () => Array(50).fill(0))) as any);
+      recordPowerBankDiscovery(createMockPowerBank({ id: "pb-outside-list", roomName: "W20S7" }));
+      recordPowerBankDiscovery(createMockPowerBank({ id: "pb-invalid-room", roomName: "E3N59" }));
+      expect(ensureDiscoveryStore()["pb-outside-list"]).toMatchObject({ targetRoom: "W20S7", status: "discovered" });
+      expect(ensureDiscoveryStore()["pb-invalid-room"]).toBeUndefined();
+    });
+
     it("updates lastSeenTick and stats on duplicate sightings", () => {
       Game.map.getRoomTerrain = jest.fn(() => createMockTerrain(Array.from({ length: 50 }, () => Array(50).fill(0))) as any);
 
@@ -60,5 +69,16 @@ describe("powerBankDiscovery", () => {
       expect(task.hits).toBe(1500000);
       expect(task.ticksToDecay).toBe(3800);
     });
+  });
+
+  it("旧清理周期不丢弃正在等待Observer的发现任务", () => {
+    Game.time = 100;
+    Game.map.getRoomTerrain = jest.fn(() => createMockTerrain(Array.from({ length: 50 }, () => Array(50).fill(0))) as any);
+    recordPowerBankDiscovery(createMockPowerBank({ id: "pb-await-vision", roomName: "E3N60", ticksToDecay: 4000 }));
+    const task = ensureDiscoveryStore()["pb-await-vision"];
+    task.blocker = "target_not_visible";
+    Game.time = 700;
+    cleanupStaleDiscoveries();
+    expect(ensureDiscoveryStore()[task.id]).toBe(task);
   });
 });

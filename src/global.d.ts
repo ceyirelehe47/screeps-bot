@@ -494,8 +494,16 @@ declare global {
     compoundTransferTaskIds: string[];
     /** Body tier (RCL number) selected by viability assessment. */
     tier?: PowerBankHarvestTier;
-    /** Linear distance from source room to target room. */
+    /** 安全 routeRooms 的房间跳数；保留旧任务语义，不存 tile 距离。 */
     routeDistance?: number;
+    /** 空载 Hauler 完整路径的 tile 步数。 */
+    pathDistance?: number;
+    /** 攻击手/治疗手按地形、道路与身体负重计算的单程时间上界。 */
+    combatTravelTicks?: number;
+    /** 空载 Hauler 到 PB 邻格的单程时间。 */
+    haulerOutboundTravelTicks?: number;
+    /** 满载返回来源房名义接收结构的时间，不用于备用接收房。 */
+    haulerReturnTravelTicks?: number;
     /** Number of haulers needed to collect the dropped power. */
     haulerCount?: number;
     /** Viability failure reason(s), set when status becomes failed. */
@@ -585,6 +593,10 @@ declare global {
     status: PowerBankHarvestStatus;
     sourceRoom: string;
     targetRoom: string;
+    pathDistance: number | null;
+    combatTravelTicks: number | null;
+    haulerOutboundTravelTicks: number | null;
+    haulerReturnTravelTicks: number | null;
     stageAge: number;
     expiresIn: number | null;
     lastProgressAge: number;
@@ -664,7 +676,7 @@ declare global {
     colonizationLastHadHostileCreepAttack?: boolean;
     colonizationDeathHandled?: boolean;
     scoutVisitedRooms?: string[];
-    _patrol?: { patrolIndex?: number };
+    _patrol?: { patrolIndex?: number; patrolDirection?: 1 | -1; originRoomName?: string };
     _lastHits?: number;
     _rmcWait?: { ticks: number };
     _rmcSelectedSource?: string;

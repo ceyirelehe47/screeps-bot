@@ -1,5 +1,6 @@
 import type { RoleFactory } from "@/types/system";
-import { POWER_BANK_PATROL_ROOMS, isPowerBankPatrolRoom } from "@/runtime/powerBankConstants";
+import { isPowerBankSearchRoom } from "@/runtime/powerBankConstants";
+import { getPowerBankSearchRooms } from "@/runtime/powerBankSearch";
 import { recordPowerBankDiscovery } from "@/runtime/powerBankDiscovery";
 import { moveToTargetRoom } from "@/roles/shared";
 
@@ -8,6 +9,7 @@ const TRANSIT_DANGER_TTL = 500;
 interface PatrolMemory {
   patrolIndex?: number;
   patrolDirection?: 1 | -1;
+  originRoomName?: string;
 }
 
 function ensurePatrolMemory(creep: Creep): PatrolMemory {
@@ -17,13 +19,13 @@ function ensurePatrolMemory(creep: Creep): PatrolMemory {
   return creep.memory._patrol as PatrolMemory;
 }
 
-function getCurrentPatrolTarget(patrol: PatrolMemory): string {
-  const index = patrol.patrolIndex ?? 0;
-  return POWER_BANK_PATROL_ROOMS[index % POWER_BANK_PATROL_ROOMS.length];
+function getCurrentPatrolTarget(patrol: PatrolMemory, rooms: readonly string[]): string {
+  const index = Number.isSafeInteger(patrol.patrolIndex) ? patrol.patrolIndex! : 0;
+  return rooms[((index % rooms.length) + rooms.length) % rooms.length];
 }
 
-function advancePatrol(patrol: PatrolMemory): void {
-  const length = POWER_BANK_PATROL_ROOMS.length;
+function advancePatrol(patrol: PatrolMemory, rooms: readonly string[]): void {
+  const length = rooms.length;
   if (length <= 1) return;
 
   const rawIndex = patrol.patrolIndex ?? 0;
@@ -48,7 +50,7 @@ function advancePatrol(patrol: PatrolMemory): void {
 }
 
 function scanRoomForPowerBanks(creep: Creep): void {
-  if (!isPowerBankPatrolRoom(creep.room.name)) {
+  if (!isPowerBankSearchRoom(creep.room.name)) {
     return;
   }
 
@@ -114,10 +116,6 @@ export function getActiveTransitDangerRooms(): string[] {
   const permanent = runtime.powerBankPermanentDangerRooms;
   if (permanent) {
     for (const room of Object.keys(permanent)) {
-      if (isPowerBankPatrolRoom(room)) {
-        delete permanent[room];
-        continue;
-      }
       active.add(room);
     }
   }
@@ -125,7 +123,7 @@ export function getActiveTransitDangerRooms(): string[] {
   const temporary = runtime.transitDangerRooms;
   if (temporary) {
     for (const [room, expiresAt] of Object.entries(temporary)) {
-      if (expiresAt <= now || isPowerBankPatrolRoom(room)) {
+      if (expiresAt <= now) {
         delete temporary[room];
         continue;
       }
@@ -138,8 +136,6 @@ export function getActiveTransitDangerRooms(): string[] {
 
 function checkAndMarkTransitDanger(creep: Creep): void {
   const roomName = creep.room.name;
-  if (isPowerBankPatrolRoom(roomName)) return;
-
   const lastHits = creep.memory._lastHits;
   const currentHits = creep.hits;
   creep.memory._lastHits = currentHits;
@@ -156,16 +152,30 @@ function checkAndMarkTransitDanger(creep: Creep): void {
 export const powerBankScoutRole: RoleFactory = () => ({
   source: (creep: Creep): boolean => {
     const patrol = ensurePatrolMemory(creep);
-    const targetRoom = getCurrentPatrolTarget(patrol);
+    const configName = creep.memory.configName;
+    const configuredOrigin = configName ? Memory.data?.creepConfigs?.[configName]?.roomName : undefined;
+    const origin = configuredOrigin || patrol.originRoomName || creep.room.name;
+    if (patrol.originRoomName !== origin) {
+      patrol.originRoomName = origin;
+      patrol.patrolIndex = 0;
+      patrol.patrolDirection = 1;
+    }
 
     checkAndMarkTransitDanger(creep);
     scanRoomForPowerBanks(creep);
 
     const avoidRooms = getActiveTransitDangerRooms();
+    const danger = new Set(avoidRooms);
+    // 补盲覆盖所有己方来源的并集；无来源上下文的旧 Scout 才使用稳定原点。
+    const sourceRooms = getPowerBankSearchRooms();
+    const rooms = (sourceRooms.length > 0 ? sourceRooms : getPowerBankSearchRooms(origin))
+      .filter((roomName) => !danger.has(roomName));
+    if (rooms.length === 0) return false;
+    const targetRoom = getCurrentPatrolTarget(patrol, rooms);
 
     if (creep.room.name === targetRoom) {
-      advancePatrol(patrol);
-      const nextTarget = getCurrentPatrolTarget(patrol);
+      advancePatrol(patrol, rooms);
+      const nextTarget = getCurrentPatrolTarget(patrol, rooms);
       moveToTargetRoom(creep, nextTarget, undefined, { plainCost: 1, swampCost: 1, reusePath: 5, avoidRooms });
       return false;
     }

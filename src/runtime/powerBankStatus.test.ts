@@ -60,6 +60,10 @@ describe("powerBankStatus", () => {
       plannedDps: 1920,
       plannedHps: 300,
       plannedTtk: 521,
+      pathDistance: 180,
+      combatTravelTicks: 240,
+      haulerOutboundTravelTicks: 180,
+      haulerReturnTravelTicks: 260,
       plannedHaulerSpawnStartTick: 130,
       plannedHaulerArrivalTick: 230,
       observedPower: 3000,
@@ -87,6 +91,10 @@ describe("powerBankStatus", () => {
       reinforcementBlocker: "reinforcement_travel_no_progress",
       blocker: "active_pair_not_adjacent",
       plannedDps: 1920,
+      pathDistance: 180,
+      combatTravelTicks: 240,
+      haulerOutboundTravelTicks: 180,
+      haulerReturnTravelTicks: 260,
       haulerSpawnIn: 30,
       haulerArrivalIn: 130,
       deliveredPower: 500,
@@ -99,6 +107,10 @@ describe("powerBankStatus", () => {
     Memory.data!.powerBankHarvest![task.id] = task;
 
     expect(powerBankStatusRaw().tasks[0]).toMatchObject({
+      pathDistance: null,
+      combatTravelTicks: null,
+      haulerOutboundTravelTicks: null,
+      haulerReturnTravelTicks: null,
       reinforcementGeneration: null,
       reinforcementStage: null,
       reinforcementCombatReady: false,

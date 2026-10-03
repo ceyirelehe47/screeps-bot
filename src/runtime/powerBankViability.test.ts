@@ -146,4 +146,47 @@ describe("powerBankViability", () => {
     expect(underCapacity.viable).toBe(false);
     expect(underCapacity.reasons).toContain("insufficient_energy_capacity");
   });
+
+  it("区分 combat、空载去程与满载返程，测路值覆盖房间数但不取消 TTL 门", () => {
+    const profile = derivePowerBankTierProfile(8)!;
+    const input: ViabilityInput = {
+      energyCapacity: 7500,
+      bankHits: 192_000,
+      bankPower: 1250,
+      ticksToDecay: 600,
+      freeTiles: 8,
+      routeDistance: 12,
+      currentTick: 100,
+      combatTravelTicks: 240,
+      haulerOutboundTravelTicks: 180,
+      haulerReturnTravelTicks: 260,
+      hasCompounds: { xgho2: true, xuh2o: true, xlho2: true },
+      isDefenseMode: false,
+      haulerCapacity: 1250,
+      spawnReadyIn: [0, 0],
+    };
+    const plan = planPowerBankTimeline({ ...input, profile });
+    expect(plan).toMatchObject({
+      travelTime: 240,
+      haulerOutboundTravelTime: 180,
+      haulerReturnTravelTime: 260,
+      combatReadyTick: 320,
+      combatArrivalTick: 560,
+      killTick: 660,
+      haulerSpawnStartTick: 560,
+      haulerArrivalTick: 890,
+    });
+    expect(assessViability(input).viable).toBe(true);
+    expect(assessViability({ ...input, haulerReturnTravelTicks: 1270 }).reasons)
+      .toContain("insufficient_hauler_ttl");
+    expect(assessViability({ ...input, combatTravelTicks: 1500 }).reasons)
+      .toContain("insufficient_combat_ttl");
+    expect(assessViability({ ...input, haulerOutboundTravelTicks: NaN }).reasons)
+      .toContain("invalid_travel_time");
+    const legacy = planPowerBankTimeline({ ...input, profile, routeDistance: 3,
+      combatTravelTicks: undefined, haulerOutboundTravelTicks: undefined, haulerReturnTravelTicks: undefined });
+    expect(legacy.travelTime).toBe(150);
+    expect(legacy.haulerOutboundTravelTime).toBe(150);
+    expect(legacy.haulerReturnTravelTime).toBe(150);
+  });
 });

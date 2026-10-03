@@ -1,4 +1,4 @@
-import { POWER_BANK_STATUS, isPowerBankPatrolRoom } from "@/runtime/powerBankConstants";
+import { POWER_BANK_STATUS, isPowerBankSearchRoom } from "@/runtime/powerBankConstants";
 import { updatePowerBankObservation } from "@/runtime/powerBankTaskState";
 
 export function ensureDiscoveryStore(): Record<string, PowerBankHarvestTask> {
@@ -33,7 +33,7 @@ export function countFreeAdjacentTiles(pos: RoomPosition): number {
 }
 
 export function recordPowerBankDiscovery(bank: StructurePowerBank): void {
-  if (!isPowerBankPatrolRoom(bank.pos.roomName)) {
+  if (!isPowerBankSearchRoom(bank.pos.roomName)) {
     return;
   }
 
@@ -91,6 +91,9 @@ export function cleanupStaleDiscoveries(): void {
       task.status === POWER_BANK_STATUS.DISCOVERED &&
       now - task.lastSeenTick > STALE_DISCOVERY_THRESHOLD
     ) {
+      // 等待测距或复看不能提前丢弃；过期仍交由 manager 的绝对截止门收尾。
+      if (task.blocker && ["target_not_visible", "target_bank_unconfirmed", "target_combat_threat", "path_measurement_pending"].includes(task.blocker) &&
+          task.bankExpiresAt !== undefined && Number.isFinite(task.bankExpiresAt)) continue;
       delete store[id];
     }
   }

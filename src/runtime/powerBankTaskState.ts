@@ -90,7 +90,7 @@ export function setPowerBankBlocker(
 
 export function getPowerBankStageTimeout(task: PowerBankHarvestTask): number | undefined {
   if (task.status === POWER_BANK_STATUS.TRAVELLING) {
-    return Math.max(250, Math.ceil((task.routeDistance ?? 5) * 50) + 250);
+    return Math.max(250, Math.ceil(task.combatTravelTicks ?? ((task.routeDistance ?? 5) * 50)) + 250);
   }
   if (task.status === POWER_BANK_STATUS.HAULING) {
     return HAULING_TIMEOUT_TICKS;
@@ -107,6 +107,18 @@ export function getPowerBankLifecycleFailure(task: PowerBankHarvestTask): string
     Game.time >= task.bankExpiresAt
   ) {
     return "bank_expired";
+  }
+
+  // 视野、战斗威胁或有界测路仍未证实时，不把旧 500-tick 准备超时
+  // 解释成不可达。bankExpiresAt 在本分支之前保持严格的绝对截止时间。
+  if (
+    task.status === POWER_BANK_STATUS.DISCOVERED &&
+    (task.blocker === "target_not_visible" ||
+      task.blocker === "target_bank_unconfirmed" ||
+      task.blocker === "target_combat_threat" ||
+      task.blocker === "path_measurement_pending")
+  ) {
+    return undefined;
   }
 
   const timeout = getPowerBankStageTimeout(task);

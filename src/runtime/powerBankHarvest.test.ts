@@ -13,6 +13,9 @@ import {
   createMockStore,
 } from "@mock/powerBank";
 import { clearCreepMovementStateForTest } from "@/movement/creepState";
+import * as powerBankPathDistance from "@/runtime/powerBankPathDistance";
+import * as powerBankObserver from "@/runtime/powerBankObserver";
+import { getPowerBankLifecycleFailure, getPowerBankStageTimeout } from "@/runtime/powerBankTaskState";
 
 type RuntimeGlobal = typeof global & {
   __runtimeServices?: unknown;
@@ -49,6 +52,10 @@ function makeTask(overrides: Partial<PowerBankHarvestTask> = {}): PowerBankHarve
     compoundTransferTaskIds: overrides.compoundTransferTaskIds ?? [],
     tier: overrides.tier,
     routeDistance: overrides.routeDistance ?? 5,
+    pathDistance: overrides.pathDistance,
+    combatTravelTicks: overrides.combatTravelTicks,
+    haulerOutboundTravelTicks: overrides.haulerOutboundTravelTicks,
+    haulerReturnTravelTicks: overrides.haulerReturnTravelTicks,
     haulerCount: overrides.haulerCount,
     failReason: overrides.failReason,
     terminalTick: overrides.terminalTick,
@@ -117,15 +124,16 @@ function setupOwnedRoom(
     name: roomName,
     controller: { my: true, level: opts.rcl ?? 8 },
     energyCapacityAvailable: opts.energyCapacity ?? 12_000,
-    storage: { store: createMockStore(storageResources, opts.storeCapacity ?? 100_000) },
-    terminal: { store: createMockStore({}, opts.storeCapacity ?? 50_000), cooldown: 0 },
-    find: jest.fn(() => labs),
+    storage: { pos: new RoomPosition(20, 20, roomName), store: createMockStore(storageResources, opts.storeCapacity ?? 100_000) },
+    terminal: { pos: new RoomPosition(21, 20, roomName), store: createMockStore({}, opts.storeCapacity ?? 50_000), cooldown: 0 },
+    find: jest.fn((type: FindConstant) => type === FIND_STRUCTURES || type === FIND_MY_STRUCTURES ? labs : []),
   } as unknown as Room;
   Game.rooms[roomName] = room;
 
   for (let index = 1; index <= (opts.spawnCount ?? 1); index += 1) {
     Game.spawns[`${roomName}-spawn${index}`] = {
       name: `${roomName}-spawn${index}`,
+      pos: new RoomPosition(10 + index, 10, roomName),
       room,
       memory: { spawnList: [] },
       spawning: null,
@@ -142,6 +150,20 @@ function setupSourceRoom(options: { energyCapacity?: number; spawnCount?: number
 
 function setupTargetRoom(): void {
   Game.rooms[TARGET_ROOM] = { name: TARGET_ROOM, find: () => [] } as unknown as Room;
+}
+
+function setupDiscoveredBank(task: PowerBankHarvestTask): void {
+  const bank = createMockPowerBank({
+    id: task.bankId,
+    roomName: task.targetRoom,
+    hits: task.hits,
+    power: task.power,
+    ticksToDecay: task.ticksToDecay,
+  });
+  Game.rooms[task.targetRoom] = {
+    name: task.targetRoom,
+    find: jest.fn((type: FindConstant) => type === FIND_STRUCTURES ? [bank] : []),
+  } as unknown as Room;
 }
 
 function setupGameMap(): void {
@@ -329,11 +351,96 @@ function resetPowerBankFixture(): void {
   setupStore();
   clearDefenseModeCacheForTest();
   mockPrepareBoosts("ready");
+  jest.spyOn(powerBankObserver, "requestPowerBankObservation").mockReturnValue(true);
+  jest.spyOn(powerBankObserver, "getPowerBankRoomThreat").mockReturnValue(false);
+  jest.spyOn(powerBankPathDistance, "measurePowerBankTravel").mockReturnValue({
+    status: "ready",
+    pathDistance: 100,
+    combatTravelTicks: 100,
+    haulerOutboundTravelTicks: 100,
+    haulerReturnTravelTicks: 100,
+  });
 }
 
 describe("powerBankHarvest", () => {
   beforeEach(() => {
     resetPowerBankFixture();
+  });
+
+  it("取得当前 PB 视野且排除战斗威胁后才测路，等待不冒充失败", () => {
+    setupSourceRoom();
+    jest.spyOn(powerBankObserver, "hasPowerBankObserverCoverage").mockReturnValue(true);
+    const task = makeTask({ bankExpiresAt: Game.time + 5000 });
+    addTask(task);
+
+    runPowerBankHarvest();
+    expect(getTask(task.id)).toMatchObject({ status: "discovered", blocker: "target_not_visible" });
+    expect(powerBankObserver.requestPowerBankObservation).toHaveBeenCalledWith(TARGET_ROOM);
+    expect(powerBankPathDistance.measurePowerBankTravel).not.toHaveBeenCalled();
+    task.stageEnteredAt = Game.time - 600;
+    expect(getPowerBankLifecycleFailure(task)).toBeUndefined();
+    expect(getPowerBankLifecycleFailure({ ...task, bankExpiresAt: Game.time })).toBe("bank_expired");
+
+    Game.time += 1;
+    setupTargetRoom();
+    runPowerBankHarvest();
+    expect(getTask(task.id)?.blocker).toBe("target_bank_unconfirmed");
+    expect(powerBankPathDistance.measurePowerBankTravel).not.toHaveBeenCalled();
+
+    Game.time += 1;
+    setupDiscoveredBank(task);
+    jest.mocked(powerBankObserver.getPowerBankRoomThreat).mockReturnValue(true);
+    runPowerBankHarvest();
+    expect(getTask(task.id)).toMatchObject({ status: "discovered", blocker: "target_combat_threat" });
+    expect(powerBankPathDistance.measurePowerBankTravel).not.toHaveBeenCalled();
+    expect(Memory.data?.powerBankHarvestHistory).toEqual([]);
+  });
+
+  it("所有来源及 active Spawn 测完才选择，使用完整测路时间并兼容旧 travelling watchdog", () => {
+    setupOwnedRoom(SOURCE_ROOM, { spawnCount: 2 });
+    setupOwnedRoom(SECONDARY_SOURCE_ROOM);
+    jest.spyOn(powerBankObserver, "hasPowerBankObserverCoverage").mockReturnValue(true);
+    const task = makeTask({ hits: 100_000, power: 1000, bankExpiresAt: Game.time + 5000 });
+    setupDiscoveredBank(task);
+    addTask(task);
+    let allMeasured = false;
+    jest.mocked(powerBankPathDistance.measurePowerBankTravel).mockImplementation((input) => {
+      if (!allMeasured && input.sourceSpawnPos.roomName === SOURCE_ROOM && input.sourceSpawnPos.x === 12) {
+        return { status: "pending", reason: "budget", retryAt: Game.time + 1 };
+      }
+      const secondary = input.sourceSpawnPos.roomName === SECONDARY_SOURCE_ROOM;
+      return {
+        status: "ready",
+        pathDistance: secondary ? 80 : 400,
+        combatTravelTicks: secondary ? 120 : 600,
+        haulerOutboundTravelTicks: secondary ? 80 : 400,
+        haulerReturnTravelTicks: secondary ? 140 : 650,
+      };
+    });
+
+    runPowerBankHarvest();
+    expect(powerBankPathDistance.measurePowerBankTravel).toHaveBeenCalledTimes(3);
+    expect(getTask(task.id)).toMatchObject({ status: "discovered", blocker: "path_measurement_pending", sourceRoom: "" });
+    expect(getTask(task.id)?.pathDistance).toBeUndefined();
+    expect(Memory.data?.powerBankHarvestHistory).toEqual([]);
+    task.stageEnteredAt = Game.time - 600;
+    expect(getPowerBankLifecycleFailure(task)).toBeUndefined();
+
+    allMeasured = true;
+    Game.time += 1;
+    runPowerBankHarvest();
+    expect(getTask(task.id)).toMatchObject({
+      status: "preparing_boosts",
+      sourceRoom: SECONDARY_SOURCE_ROOM,
+      routeDistance: 2,
+      pathDistance: 80,
+      combatTravelTicks: 120,
+      haulerOutboundTravelTicks: 80,
+      haulerReturnTravelTicks: 140,
+    });
+    const measuredTravel = { ...task, status: POWER_BANK_STATUS.TRAVELLING, combatTravelTicks: 700, routeDistance: 1 };
+    expect(getPowerBankStageTimeout(measuredTravel)).toBe(950);
+    expect(getPowerBankStageTimeout({ ...measuredTravel, combatTravelTicks: undefined })).toBe(300);
   });
 
   it("writes task ownership when a boosted pair transitions to travelling", () => {
@@ -429,7 +536,7 @@ describe("powerBankHarvest", () => {
                 { room: TARGET_ROOM, exit: FIND_EXIT_RIGHT },
               ];
         }) as typeof Game.map.findRoute;
-        addTask(makeTask({
+        const discovered = makeTask({
           id: `pb-source-${rejectedBy}`,
           hits: 100_000,
           power: 1000,
@@ -437,7 +544,9 @@ describe("powerBankHarvest", () => {
           discoveredTick: Game.time,
           lastSeenTick: Game.time,
           bankExpiresAt: Game.time + 5000,
-        }));
+        });
+        setupDiscoveredBank(discovered);
+        addTask(discovered);
 
         runPowerBankHarvest();
 

@@ -1,4 +1,4 @@
-import { POWER_BANK_STATUS, POWER_BANK_BODY_TIERS, POWER_BANK_BOOST_REQUIREMENTS, POWER_BANK_PATROL_ROOMS, getPowerBankConfigName, isPowerBankPatrolRoom } from "@/runtime/powerBankConstants";
+import { POWER_BANK_STATUS, POWER_BANK_BODY_TIERS, POWER_BANK_BOOST_REQUIREMENTS, getPowerBankConfigName, isPowerBankSearchRoom } from "@/runtime/powerBankConstants";
 import {
   ATTACK_POWER,
   POWER_BANK_ROOM_TRAVEL_TICKS,
@@ -15,7 +15,9 @@ import {
   getPowerBankBoostPrep,
 } from "@/runtime/powerBankBoostMemory";
 import { cleanupStaleDiscoveries, ensureDiscoveryStore } from "@/runtime/powerBankDiscovery";
-import { hasPowerBankObserverCoverage } from "@/runtime/powerBankObserver";
+import { getPowerBankRoomThreat, hasPowerBankObserverCoverage, requestPowerBankObservation } from "@/runtime/powerBankObserver";
+import { measurePowerBankTravel } from "@/runtime/powerBankPathDistance";
+import { getPowerBankSearchRooms } from "@/runtime/powerBankSearch";
 import { isDefenseMode } from "@/runtime/defenseMode";
 import { getCreepConfigService, getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
 import { clearMovementState, moveToTarget } from "@/roles/shared";
@@ -494,6 +496,10 @@ interface PowerBankSourceCandidate {
   profile: PowerBankTierProfile;
   energyCapacity: number;
   distance: number;
+  pathDistance: number;
+  combatTravelTicks: number;
+  haulerOutboundTravelTicks: number;
+  haulerReturnTravelTicks: number;
   routeRooms: string[];
   avoidRooms: string[];
   spawnReadyIn: number[];
@@ -506,9 +512,11 @@ interface PowerBankSourceCandidate {
 function evaluateSourceCandidates(task: PowerBankHarvestTask): {
   candidates: PowerBankSourceCandidate[];
   rejectionReasons: string[];
+  pendingRetryAt?: number;
 } {
   const candidates: PowerBankSourceCandidate[] = [];
   const rejectionReasons: string[] = [];
+  let pendingRetryAt: number | undefined;
 
   for (const room of getTickContextService().getMyRooms()) {
     if (!room.controller || room.controller.level < 6) continue;
@@ -542,8 +550,71 @@ function evaluateSourceCandidates(task: PowerBankHarvestTask): {
       compoundAvailability.set(compound, hasCompoundSupply(room, compound, amount, ownerId));
     }
 
+    // 已能证明不可投入的资源/设施条件先完成评估，既不消耗测路预算，
+    // 也不让一个没有 Lab energy 或接收设施的来源阻塞其余合格来源。
+    const receivingHeadroom = getPowerReceivingHeadroom(room);
+    const resourceReasons: string[] = [];
+    if ([...profile.requiredCompounds.keys()].some((compound) => !compoundAvailability.get(compound))) {
+      resourceReasons.push("insufficient_boost_compound");
+    }
+    if (availableLabCount < profile.requiredCompounds.size) resourceReasons.push("insufficient_labs");
+    const requiredLabEnergy = [...profile.requiredCompounds.values()]
+      .reduce((sum, mineralAmount) =>
+        sum + Math.ceil(mineralAmount / LAB_BOOST_MINERAL) * LAB_BOOST_ENERGY, 0);
+    if (getLocalCompoundStock(room, RESOURCE_ENERGY, ownerId) < requiredLabEnergy) {
+      resourceReasons.push("insufficient_lab_energy");
+    }
+    if (receivingHeadroom <= 0 && !getTickContextService().getMyRooms()
+      .some((candidate) => getPowerReceivingHeadroom(candidate) > 0)) {
+      resourceReasons.push("insufficient_power_headroom");
+    }
+    if (resourceReasons.length > 0) {
+      rejectionReasons.push(...resourceReasons.map((reason) => `${room.name}:${reason}`));
+      continue;
+    }
+
     const distance = Math.max(0, routeRooms.length - 1);
     const haulerCapacity = getPowerBankHaulerCapacity(room.energyCapacityAvailable);
+    const returnTarget = getStructurePowerHeadroom(room.terminal) > 0
+      ? room.terminal
+      : getStructurePowerHeadroom(room.storage) > 0
+        ? room.storage
+        : room.terminal ?? room.storage;
+    const spawns = getTickContextService().getSpawnsByRoom(room.name)
+      .filter((spawn) => typeof spawn.isActive !== "function" || spawn.isActive());
+    const measurements: Array<Extract<ReturnType<typeof measurePowerBankTravel>, { status: "ready" }>> = [];
+    let sourcePending = false;
+    for (const spawn of spawns) {
+      if (!spawn.pos || !returnTarget?.pos) {
+        sourcePending = true;
+        pendingRetryAt = Math.min(pendingRetryAt ?? Infinity, Game.time + 5);
+        continue;
+      }
+      const measurement = measurePowerBankTravel({
+        sourceSpawnPos: spawn.pos,
+        bankPos: new RoomPosition(task.bankPos.x, task.bankPos.y, task.targetRoom),
+        returnTargetPos: returnTarget.pos,
+        routeRooms,
+        avoidRooms: getActiveDangerRooms(task.targetRoom),
+        profile,
+        haulerCarryParts: Math.ceil(haulerCapacity / CARRY_CAPACITY),
+      });
+      if (measurement.status === "pending") {
+        sourcePending = true;
+        pendingRetryAt = Math.min(pendingRetryAt ?? Infinity, measurement.retryAt);
+      } else {
+        measurements.push(measurement);
+      }
+    }
+    if (sourcePending || measurements.length !== spawns.length) continue;
+    // 任一 active Spawn 都可能承接配置；全部测完后取保守上界，不能只用
+    // 最先命中预算的近 Spawn 掩盖另一个尚未证实的来源。
+    const travel = {
+      pathDistance: Math.max(...measurements.map((value) => value.pathDistance)),
+      combatTravelTicks: Math.max(...measurements.map((value) => value.combatTravelTicks)),
+      haulerOutboundTravelTicks: Math.max(...measurements.map((value) => value.haulerOutboundTravelTicks)),
+      haulerReturnTravelTicks: Math.max(...measurements.map((value) => value.haulerReturnTravelTicks)),
+    };
     const viability = assessViability({
       energyCapacity: room.energyCapacityAvailable,
       bankHits: task.hits,
@@ -551,6 +622,7 @@ function evaluateSourceCandidates(task: PowerBankHarvestTask): {
       ticksToDecay: Math.max(0, (task.bankExpiresAt ?? (Game.time + task.ticksToDecay)) - Game.time),
       freeTiles: task.freeTiles,
       routeDistance: distance,
+      ...travel,
       currentTick: Game.time,
       hasCompounds: {
         xgho2: compoundAvailability.get(RESOURCE_CATALYZED_GHODIUM_ALKALIDE) ?? true,
@@ -569,23 +641,11 @@ function evaluateSourceCandidates(task: PowerBankHarvestTask): {
       bankPower: task.power,
       freeTiles: task.freeTiles,
       routeDistance: distance,
+      ...travel,
       haulerCapacity,
       spawnReadyIn,
     });
-    const receivingHeadroom = getPowerReceivingHeadroom(room);
     const reasons = [...viability.reasons];
-    if (availableLabCount < profile.requiredCompounds.size) reasons.push("insufficient_labs");
-    const requiredLabEnergy = [...profile.requiredCompounds.values()]
-      .reduce((sum, mineralAmount) =>
-        sum + Math.ceil(mineralAmount / LAB_BOOST_MINERAL) * LAB_BOOST_ENERGY, 0);
-    if (getLocalCompoundStock(room, RESOURCE_ENERGY, ownerId) < requiredLabEnergy) {
-      reasons.push("insufficient_lab_energy");
-    }
-    if (receivingHeadroom <= 0) {
-      const empireHeadroom = getTickContextService().getMyRooms()
-        .some((candidate) => getPowerReceivingHeadroom(candidate) > 0);
-      if (!empireHeadroom) reasons.push("insufficient_power_headroom");
-    }
     if (reasons.length > 0) {
       rejectionReasons.push(...reasons.map((reason) => `${room.name}:${reason}`));
       continue;
@@ -599,6 +659,7 @@ function evaluateSourceCandidates(task: PowerBankHarvestTask): {
       profile,
       energyCapacity: room.energyCapacityAvailable,
       distance,
+      ...travel,
       routeRooms,
       avoidRooms: getActiveDangerRooms(task.targetRoom),
       spawnReadyIn,
@@ -612,10 +673,11 @@ function evaluateSourceCandidates(task: PowerBankHarvestTask): {
   candidates.sort((left, right) =>
     right.slack - left.slack ||
     right.receivingHeadroom - left.receivingHeadroom ||
+    left.pathDistance - right.pathDistance ||
     left.distance - right.distance ||
     left.roomName.localeCompare(right.roomName),
   );
-  return { candidates, rejectionReasons: [...new Set(rejectionReasons)] };
+  return { candidates, rejectionReasons: [...new Set(rejectionReasons)], pendingRetryAt };
 }
 
 function getPowerBankHaulerCapacity(energyCapacity: number): number {
@@ -650,6 +712,7 @@ function estimateHaulerBatchSpawnTicks(task: PowerBankHarvestTask, energyCapacit
 }
 
 function estimateOneWayRoomTravelTicks(task: PowerBankHarvestTask): number {
+  if (task.haulerOutboundTravelTicks !== undefined) return task.haulerOutboundTravelTicks;
   const routeDistance = task.routeDistance ?? getRouteDistance(task.sourceRoom, task.targetRoom);
   if (!Number.isFinite(routeDistance)) {
     return Infinity;
@@ -748,7 +811,33 @@ function getAssignableCreepByConfigName(configName: string, taskId: string): Cre
 }
 
 function processDiscovered(task: PowerBankHarvestTask): void {
+  const targetRoom = Game.rooms[task.targetRoom];
+  if (!targetRoom) {
+    requestPowerBankObservation(task.targetRoom);
+    setPowerBankBlocker(task, "target_not_visible", 1);
+    return;
+  }
+  const bank = targetRoom.find(FIND_STRUCTURES).find(
+    (structure): structure is StructurePowerBank => structure.structureType === STRUCTURE_POWER_BANK && structure.id === task.bankId,
+  );
+  if (!bank) {
+    requestPowerBankObservation(task.targetRoom);
+    setPowerBankBlocker(task, "target_bank_unconfirmed", 1);
+    return;
+  }
+  if (getPowerBankRoomThreat(targetRoom)) {
+    requestPowerBankObservation(task.targetRoom);
+    setPowerBankBlocker(task, "target_combat_threat", 5);
+    return;
+  }
+  updatePowerBankObservation(task, bank);
+  task.bankPos = { x: bank.pos.x, y: bank.pos.y };
   const evaluation = evaluateSourceCandidates(task);
+  if (evaluation.pendingRetryAt !== undefined) {
+    requestPowerBankObservation(task.targetRoom);
+    setPowerBankBlocker(task, "path_measurement_pending", Math.max(1, evaluation.pendingRetryAt - Game.time));
+    return;
+  }
   const selected = evaluation.candidates[0];
   if (!selected) {
     const reasons = evaluation.rejectionReasons.length > 0
@@ -761,6 +850,10 @@ function processDiscovered(task: PowerBankHarvestTask): void {
   task.sourceRoom = selected.roomName;
   task.tier = selected.tier;
   task.routeDistance = selected.distance;
+  task.pathDistance = selected.pathDistance;
+  task.combatTravelTicks = selected.combatTravelTicks;
+  task.haulerOutboundTravelTicks = selected.haulerOutboundTravelTicks;
+  task.haulerReturnTravelTicks = selected.haulerReturnTravelTicks;
   task.routeRooms = selected.routeRooms;
   task.avoidRooms = selected.avoidRooms;
   task.haulerCount = selected.timeline.haulerCount;
@@ -1066,7 +1159,7 @@ function isCreepBoosted(creep: Creep): boolean {
 
 function getMinimumCombatTtl(task: PowerBankHarvestTask): number {
   if (task.minimumCombatTtl !== undefined) return task.minimumCombatTtl;
-  const travel = Math.ceil((task.routeDistance ?? 5) * POWER_BANK_ROOM_TRAVEL_TICKS);
+  const travel = task.combatTravelTicks ?? Math.ceil((task.routeDistance ?? 5) * POWER_BANK_ROOM_TRAVEL_TICKS);
   return Math.min(CREEP_LIFE_TIME - 25, travel + 100);
 }
 
@@ -1427,6 +1520,9 @@ function estimateReinforcementLeadTicks(task: PowerBankHarvestTask): number {
     bankPower: 0,
     freeTiles: Math.max(1, task.freeTiles),
     routeDistance: task.routeDistance ?? 5,
+    combatTravelTicks: task.combatTravelTicks,
+    haulerOutboundTravelTicks: task.haulerOutboundTravelTicks,
+    haulerReturnTravelTicks: task.haulerReturnTravelTicks,
     haulerCapacity: getPowerBankHaulerCapacity(sourceRoom.energyCapacityAvailable),
     spawnReadyIn,
   });
@@ -1848,8 +1944,8 @@ function processTask(task: PowerBankHarvestTask): void {
   initializePowerBankTaskRuntime(task);
   if (isTerminalPowerBankStatus(task.status)) return;
 
-  if (!isPowerBankPatrolRoom(task.targetRoom)) {
-    transitionToTerminal(task, "aborted", "outside_powerbank_patrol_rooms");
+  if (!isPowerBankSearchRoom(task.targetRoom)) {
+    transitionToTerminal(task, "aborted", "outside_powerbank_search_rooms");
     return;
   }
 
@@ -1963,10 +2059,13 @@ function maintainPatrolScout(): void {
 
   let sourceRoom = eligibleRooms[0].name;
   let sourceMinDist = Infinity;
+  const patrolRooms = getPowerBankSearchRooms();
+  if (patrolRooms.length === 0) return;
   for (const room of eligibleRooms) {
     let minDist = Infinity;
-    for (const patrolRoom of POWER_BANK_PATROL_ROOMS) {
-      const dist = getRouteDistance(room.name, patrolRoom);
+    for (const patrolRoom of patrolRooms) {
+      // 这里只选择侦察起点；扩大扫描集合后不能对每个组合发布 findRoute 搜索。
+      const dist = Game.map.getRoomLinearDistance(room.name, patrolRoom);
       if (dist < minDist) minDist = dist;
     }
     if (minDist < sourceMinDist) {

@@ -53,16 +53,16 @@ export const POWER_BANK_BODY_TIERS: Record<number, PowerBankBodyTier> = {
 };
 
 // ---------------------------------------------------------------------------
-// Patrol rooms — highway rooms where power banks can spawn
+// PowerBank 搜索房间：按房名识别高速公路，不维护固定巡逻白名单。
 // ---------------------------------------------------------------------------
 
-export const POWER_BANK_PATROL_ROOMS: string[] = [
-  "E0N60", "E1N60", "E2N60", "E3N60", "E4N60",
-  "E5N60", "E6N60", "E7N60", "E8N60", "E9N60",
-];
-
-export function isPowerBankPatrolRoom(roomName: string): boolean {
-  return POWER_BANK_PATROL_ROOMS.includes(roomName);
+export function isPowerBankSearchRoom(roomName: string): boolean {
+  const coordinates = /^[EW](0|[1-9]\d*)[NS](0|[1-9]\d*)$/.exec(roomName);
+  if (!coordinates) return false;
+  const horizontal = Number(coordinates[1]);
+  const vertical = Number(coordinates[2]);
+  return Number.isSafeInteger(horizontal) && Number.isSafeInteger(vertical) &&
+    (horizontal % 10 === 0 || vertical % 10 === 0);
 }
 
 // ---------------------------------------------------------------------------

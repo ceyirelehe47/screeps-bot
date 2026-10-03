@@ -7,6 +7,8 @@ jest.mock("@/runtime/powerBankDiscovery", () => ({
 }));
 
 import { powerBankScoutRole, getActiveTransitDangerRooms } from "@/roles/powerBankScout";
+import { isPowerBankSearchRoom } from "@/runtime/powerBankConstants";
+import * as powerBankSearch from "@/runtime/powerBankSearch";
 
 const { moveToTargetRoom } = jest.requireMock("@/roles/shared") as {
   moveToTargetRoom: jest.Mock;
@@ -41,23 +43,44 @@ function createMockCreep(roomName: string, memory: any = {}, hits = 1000, hitsMa
 
 describe("powerBankScoutRole", () => {
   beforeEach(() => {
+    jest.restoreAllMocks();
     jest.clearAllMocks();
+    Memory.runtime = {};
+    Memory.data = {};
+    Game.map.getWorldSize = jest.fn(() => 202);
+    Game.map.getRoomStatus = jest.fn(() => ({ status: "normal" as const, timestamp: null }));
     Object.assign(global, {
       RoomPosition: MockRoomPosition,
     });
   });
 
-  it("moves to first patrol room when no memory", () => {
+  it("使用来源位置生成高速房，不依赖固定巡逻名单", () => {
     const creep = createMockCreep("E5N55");
 
     powerBankScoutRole().source?.(creep);
 
-    expect(moveToTargetRoom).toHaveBeenCalledWith(
-      creep,
-      "E0N60",
-      undefined,
-      expect.objectContaining({ plainCost: 1, swampCost: 1 }),
-    );
+    expect(moveToTargetRoom).toHaveBeenCalledWith(creep, expect.any(String), undefined,
+      expect.objectContaining({ plainCost: 1, swampCost: 1 }));
+    expect(isPowerBankSearchRoom(moveToTargetRoom.mock.calls[0][1])).toBe(true);
+    expect(moveToTargetRoom.mock.calls[0][1]).not.toBe("E0N60");
+  });
+
+  it("跨房移动不会把搜索来源改成当前位置", () => {
+    const creep = createMockCreep("E5N55");
+    powerBankScoutRole().source?.(creep);
+    const target = moveToTargetRoom.mock.calls[0][1];
+    creep.room.name = "E6N55";
+    powerBankScoutRole().source?.(creep);
+    expect(moveToTargetRoom.mock.calls[1][1]).toBe(target);
+  });
+
+  it("补盲使用所有来源周边的并集", () => {
+    const search = jest.spyOn(powerBankSearch, "getPowerBankSearchRooms")
+      .mockImplementation((origin) => origin ? ["E0N60"] : ["E40N40"]);
+    const creep = createMockCreep("E5N55");
+    powerBankScoutRole().source?.(creep);
+    expect(moveToTargetRoom).toHaveBeenCalledWith(creep, "E40N40", undefined, expect.any(Object));
+    expect(search).toHaveBeenCalledWith();
   });
 
   describe("getActiveTransitDangerRooms", () => {
@@ -72,6 +95,12 @@ describe("powerBankScoutRole", () => {
       expect(rooms).toEqual(["E3N57"]);
       expect(Memory.runtime!.transitDangerRooms!["E2N54"]).toBeUndefined();
       expect((Memory.runtime as any).powerBankPermanentDangerRooms?.E3N57).toBe(true);
+    });
+
+    it("高速搜索房不豁免仍有效的危险记录", () => {
+      Memory.runtime!.transitDangerRooms = { E0N60: Game.time + 100 };
+      expect(getActiveTransitDangerRooms()).toContain("E0N60");
+      expect(Memory.runtime!.transitDangerRooms.E0N60).toBe(Game.time + 100);
     });
   });
 });

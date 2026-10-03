@@ -595,6 +595,8 @@ declare global {
       updatedAt: number;
       lastObservedRooms: string[];
       coveredRooms: string[];
+      /** 已发现 Bank 的有界复看请求：房间 -> 首次请求 tick。 */
+      requestedRooms?: Record<string, number>;
     };
     remoteMining?: {
       lastScanAt?: number;
