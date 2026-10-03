@@ -236,11 +236,8 @@ function setupOwnedCombatPair(options: {
       configName: attackerConfigName,
       pairGeneration: generation,
     } as Partial<CreepMemory>,
-    body: [
-      { type: TOUGH as BodyPartConstant, hits: 100 },
-      { type: ATTACK as BodyPartConstant, hits: 100 },
-      { type: MOVE as BodyPartConstant, hits: 100 },
-    ],
+    body: POWER_BANK_BODY_TIERS[8].attacker.map((type) => ({ type, hits: 100,
+      boost: type === ATTACK ? RESOURCE_CATALYZED_UTRIUM_ACID : type === TOUGH ? RESOURCE_CATALYZED_GHODIUM_ALKALIDE : undefined })),
   });
   const healer = createMockPowerBankCreep("powerBankHealer", {
     name: `healer-g${generation}`,
@@ -254,10 +251,7 @@ function setupOwnedCombatPair(options: {
       configName: healerConfigName,
       pairGeneration: generation,
     } as Partial<CreepMemory>,
-    body: [
-      { type: HEAL as BodyPartConstant, hits: 100 },
-      { type: MOVE as BodyPartConstant, hits: 100 },
-    ],
+    body: POWER_BANK_BODY_TIERS[8].healer.map((type) => ({ type, hits: 100 })),
   });
   if (options.ticksToLive !== undefined) {
     (attacker as Creep & { ticksToLive: number }).ticksToLive = options.ticksToLive;
@@ -633,6 +627,29 @@ describe("powerBankHarvest", () => {
 
     expect(getTask("pb-single-enough")?.reinforcement).toBeUndefined();
     expect(Object.keys(Memory.data?.creepConfigs ?? {}).some((name) => name.includes(":attacker:1:") || name.includes(":healer:1:"))).toBe(false);
+  });
+
+  it.each(["healthy", "unboosted", "damaged"] as const)("增援寿命门按现役有效 ATTACK 计算，而不是预设四倍强化：%s", (condition) => {
+    Game.time = 400;
+    setupSourceRoom();
+    const taskId = `pb-actual-dps-${condition}`;
+    const pair = setupOwnedCombatPair({ taskId, ticksToLive: 250 });
+    let activeAttacks = 0;
+    for (const part of pair.attacker.body) {
+      if (part.type !== ATTACK) continue;
+      if (condition === "unboosted") delete part.boost;
+      if (condition === "damaged" && activeAttacks++ > 0) part.hits = 0;
+    }
+    const bank = createMockPowerBank({ id: taskId + "-bank", hits: 100_000, ticksToDecay: 5000 });
+    mockObjects(pair.attacker, pair.healer, bank);
+    addTask(makeTask({ id: taskId, status: POWER_BANK_STATUS.ATTACKING, sourceRoom: SOURCE_ROOM,
+      bankId: bank.id, tier: 8, attackerId: pair.attacker.id, healerId: pair.healer.id,
+      activeGeneration: 0, activeIndex: 0, combatReady: true, routeDistance: 2,
+      lastBankHits: bank.hits, lastBankProgressAt: Game.time, stageEnteredAt: Game.time,
+      bankExpiresAt: Game.time + 5000 }));
+    runPowerBankHarvest();
+    if (condition === "healthy") expect(getTask(taskId)?.reinforcement).toBeUndefined();
+    else expect(getTask(taskId)?.reinforcement).toMatchObject({ generation: 1, stage: "spawning" });
   });
 
   it("requests recovery at 100 idle ticks and fails closed after the 250-tick progress deadline", () => {

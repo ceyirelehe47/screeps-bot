@@ -770,18 +770,17 @@ function estimateOneWayRoomTravelTicks(task: PowerBankHarvestTask): number {
   return Math.ceil(routeDistance * POWER_BANK_ROOM_TRAVEL_TICKS);
 }
 
-function estimateRemainingAttackTicks(task: PowerBankHarvestTask, bank: StructurePowerBank): number {
-  const tier = task.tier ?? 6;
-  const tierBody = POWER_BANK_BODY_TIERS[tier] ?? POWER_BANK_BODY_TIERS[6];
-  const attackParts = tierBody.attacker.filter((part) => part === ATTACK).length;
-  const boostedDamage = attackParts * ATTACK_POWER * 4;
-  if (boostedDamage <= 0) {
-    return Infinity;
-  }
-  return Math.ceil(bank.hits / boostedDamage);
+function estimateRemainingAttackTicks(bank: StructurePowerBank, attacker: Creep): number {
+  const boosts = BOOSTS[ATTACK] as Record<string, { attack?: number } | undefined>;
+  const damage = attacker.body.reduce((sum, part) => {
+    if (part.type !== ATTACK || part.hits <= 0) return sum;
+    const multiplier = part.boost ? boosts[part.boost]?.attack ?? 1 : 1;
+    return sum + ATTACK_POWER * multiplier;
+  }, 0);
+  return damage > 0 ? Math.ceil(bank.hits / damage) : Infinity;
 }
 
-function shouldSpawnHaulers(task: PowerBankHarvestTask, bank: StructurePowerBank): boolean {
+function shouldSpawnHaulers(task: PowerBankHarvestTask, bank: StructurePowerBank, attacker: Creep): boolean {
   if (
     task.plannedHaulerSpawnStartTick !== undefined &&
     Game.time >= task.plannedHaulerSpawnStartTick
@@ -793,7 +792,7 @@ function shouldSpawnHaulers(task: PowerBankHarvestTask, bank: StructurePowerBank
   const energyCapacity = sourceRoom?.energyCapacityAvailable ?? 0;
   const spawnTime = estimateHaulerBatchSpawnTicks(task, energyCapacity);
   const travelTime = estimateOneWayRoomTravelTicks(task);
-  const remainingAttackTicks = estimateRemainingAttackTicks(task, bank);
+  const remainingAttackTicks = estimateRemainingAttackTicks(bank, attacker);
   if (!Number.isFinite(travelTime) || !Number.isFinite(remainingAttackTicks)) {
     return false;
   }
@@ -1475,7 +1474,7 @@ function shouldProactivelyHandoff(
     !reinforcement.healerId
   ) return false;
 
-  const remainingAttackTicks = estimateRemainingAttackTicks(task, bank);
+  const remainingAttackTicks = estimateRemainingAttackTicks(bank, pair.attacker);
   if (!Number.isFinite(remainingAttackTicks)) return false;
   const pairTtl = Math.min(
     pair.attacker.ticksToLive ?? CREEP_LIFE_TIME,
@@ -1564,7 +1563,7 @@ function processAttacking(task: PowerBankHarvestTask): void {
   );
   processReinforcement(task);
   if (!task.reinforcement) cleanupInactiveCombatConfigs(task);
-  if (shouldSpawnHaulers(task, bank)) ensureHaulerConfigs(task);
+  if (shouldSpawnHaulers(task, bank, pair.attacker)) ensureHaulerConfigs(task);
 }
 
 function estimateReinforcementLeadTicks(task: PowerBankHarvestTask): number {
@@ -1601,11 +1600,11 @@ function maybeRequestReinforcement(
     pair.attacker.ticksToLive ?? CREEP_LIFE_TIME,
     pair.healer.ticksToLive ?? CREEP_LIFE_TIME,
   );
-  const remainingAttackTicks = estimateRemainingAttackTicks(task, bank);
+  const remainingAttackTicks = estimateRemainingAttackTicks(bank, pair.attacker);
   // 主队能独立完成时无需接班队，不能把接班队的准备时间加到击破寿命门。
   if (!force && pairTtl > remainingAttackTicks + REINFORCEMENT_TTL_BUFFER) return;
   const leadTicks = estimateReinforcementLeadTicks(task);
-  if (!Number.isFinite(remainingAttackTicks) || !Number.isFinite(leadTicks)) return;
+  if (!Number.isFinite(leadTicks) || !force && !Number.isFinite(remainingAttackTicks)) return;
   // 确需接班时按现役剩余寿命预留孵化/强化/行军提前量。
   if (!force && pairTtl > leadTicks + REINFORCEMENT_TTL_BUFFER) return;
 
