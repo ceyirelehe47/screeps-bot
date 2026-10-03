@@ -5,6 +5,7 @@ import { getCachedStaticTravelMatrix, getNextTravelRoom } from "@/movement/routi
 import { getPowerBankOwnedAvoidRooms, isPowerBankTransitRoomAllowed, powerBankTransitOptions } from "@/runtime/powerBankTransit";
 import {
   cancelMoveIntent, getMoveIntentAttemptedPosition, getMoveIntentDestination, getMoveIntentReceipt, issueMove, moveToAdjacentPosition,
+  hasMoveDestinationConflict, isBlockerActivelyMoving,
   moveOffExit, type MoveIntentReceipt,
 } from "@/movement/traffic";
 
@@ -213,7 +214,7 @@ const PAIR_DIRECTIONS: readonly DirectionConstant[] = [TOP, TOP_RIGHT, RIGHT, BO
 let pairMovementGame: typeof Game | undefined;
 let pairMovementTick = -1;
 let pairMovementCalls = new WeakMap<Creep, { task: RuntimePowerBankTask; healer: Creep; generation?: number }>();
-let pairTileChecks = new WeakMap<Creep, { healer: Creep; values: Map<string, boolean> }>();
+let pairTileChecks = new WeakMap<Creep, { healer: Creep; values: Map<string, { staticOpen: boolean; occupants: AnyCreep[] }> }>();
 let pairOccupants: AnyCreep[] = [];
 
 type PairPosition = Readonly<{ x: number; y: number; roomName: string }>;
@@ -234,34 +235,36 @@ function canPairMemberMove(creep: Creep): boolean {
 }
 
 function holdPairMember(creep: Creep): void {
-  if (!hasForeignMovement(creep)) clearMovementState(creep);
+  // 等搭档仍属于原旅行，沿用普通寻路的状态；不能清成 idle 再被交通推走。
+  if (hasForeignMovement(creep)) return;
+  const state = getCreepMovementState(creep);
+  if (state?.travelState && state.travelState.targetRoom !== creep.room.name) state.pathingRequestedAt = Game.time;
+  else clearMovementState(creep);
 }
 
-/** 共享静态矩阵保留地形/自然物/结构校验，动态占位仍每次读取。 */
+/** 同帧缓存静态格和帧初占位；当前已提交意图始终走共同交通的新鲜判断。 */
 function isPairTileOpen(pos: PairPosition, pair: PowerBankPairContext): boolean {
   if (pos.roomName !== pair.attacker.room.name && !isPowerBankTransitRoomAllowed(pos.roomName)) return false;
+  if (hasMoveDestinationConflict(pos, [pair.attacker, pair.healer])) return false;
   let cache = pairTileChecks.get(pair.attacker);
   if (!cache || cache.healer !== pair.healer) {
     cache = { healer: pair.healer, values: new Map() };
     pairTileChecks.set(pair.attacker, cache);
   }
-  const key = `${pos.roomName}:${pos.x}:${pos.y}`;
-  const cached = cache.values.get(key);
-  if (cached !== undefined) return cached;
-  if (getCachedStaticTravelMatrix(pos.roomName).get(pos.x, pos.y) >= 255) {
-    cache.values.set(key, false);
-    return false;
+  const key = pos.roomName + ':' + pos.x + ':' + pos.y;
+  let tile = cache.values.get(key);
+  if (!tile) {
+    const staticOpen = getCachedStaticTravelMatrix(pos.roomName).get(pos.x, pos.y) < 255;
+    const occupants = staticOpen ? [...pairOccupants] : [];
+    const room = Game.rooms[pos.roomName];
+    if (staticOpen && room && typeof room.lookForAt === 'function') {
+      occupants.push(...room.lookForAt(LOOK_CREEPS, pos.x, pos.y));
+      occupants.push(...room.lookForAt(LOOK_POWER_CREEPS, pos.x, pos.y));
+    }
+    tile = { staticOpen, occupants: occupants.filter(creep => creep !== pair.attacker && creep !== pair.healer && samePairPosition(creep.pos, pos)) };
+    cache.values.set(key, tile);
   }
-  const occupants = [...pairOccupants];
-  const room = Game.rooms[pos.roomName];
-  if (room && typeof room.lookForAt === "function") {
-    occupants.push(...room.lookForAt(LOOK_CREEPS, pos.x, pos.y));
-    occupants.push(...room.lookForAt(LOOK_POWER_CREEPS, pos.x, pos.y));
-  }
-  const open = !occupants.some((creep) =>
-    creep !== pair.attacker && creep !== pair.healer && samePairPosition(creep.pos, pos));
-  cache.values.set(key, open);
-  return open;
+  return tile.staticOpen && !tile.occupants.some(creep => !isBlockerActivelyMoving(creep));
 }
 
 function markPairMoving(pair: PowerBankPairContext): void {
@@ -272,20 +275,20 @@ function markPairMoving(pair: PowerBankPairContext): void {
 function movePairFollowerToAttacker(pair: PowerBankPairContext): void {
   holdPairMember(pair.attacker);
   if (!canPairMemberMove(pair.healer)) return;
-  const options = { ...PAIR_TRAVEL_OPTIONS, ignoreCreeps: false, reusePath: 0, maxRooms: 1 };
+  const options = { ...PAIR_TRAVEL_OPTIONS, travelTargetRoom: pair.task.targetRoom, ignoreCreeps: false, reusePath: 0, maxRooms: 1 };
   const result = moveToTarget(pair.healer, pair.attacker, 1, options);
   if (result === ERR_NO_PATH) moveToTarget(pair.healer, pair.attacker, 1, { ...options, ignoreCreeps: true });
 }
 
 function cancelPairAdvance(pair: PowerBankPairContext, receipt: MoveIntentReceipt): boolean {
   const canceled = cancelMoveIntent(pair.attacker, receipt);
-  // 撤销成功即无 receipt，可以清理 active 占位；撤销失败仍保留红的真实意图。
+  // 只撤销当前移动；等待搭档仍保留与普通旅行相同的路径状态。
   holdPairMember(pair.attacker);
   holdPairMember(pair.healer);
   return canceled;
 }
 
-/** 双意图的第二次提交失败时，只撤销协调器刚提交的领队意图。 */
+/** 房内允许两格临时分离；跨房失败仍撤销本协调器持有的领队意图。 */
 function completePairStep(
   pair: PowerBankPairContext,
   leaderReceipt: MoveIntentReceipt,
@@ -293,25 +296,39 @@ function completePairStep(
   followerDirection?: DirectionConstant,
 ): void {
   const leaderTo = leaderReceipt.to;
+  const waitForFollower = (): void => {
+    if (pair.stage === "travelling" && leaderTo?.roomName === pair.attacker.room.name && leaderTo.roomName === pair.healer.room.name &&
+        Math.max(Math.abs(leaderTo.x - pair.healer.pos.x), Math.abs(leaderTo.y - pair.healer.pos.y)) <= 2) {
+      holdPairMember(pair.healer);
+    } else cancelPairAdvance(pair, leaderReceipt);
+  };
   // 分队重聚也逐成员检查：红已经误入敌房不能成为把绿带进去的许可。
   if ((leaderTo && leaderTo.roomName !== pair.attacker.room.name && !isPowerBankTransitRoomAllowed(leaderTo.roomName)) ||
       (followerDestination.roomName !== pair.healer.room.name && !isPowerBankTransitRoomAllowed(followerDestination.roomName))) {
     cancelPairAdvance(pair, leaderReceipt);
     return;
   }
+  if (!leaderTo || !leaderReceipt.attempted || !isPairTileOpen(leaderReceipt.attempted, pair) || !isPairTileOpen(leaderTo, pair)) {
+    cancelPairAdvance(pair, leaderReceipt);
+    return;
+  }
   const direction = followerDirection ?? pair.healer.pos.getDirectionTo(new RoomPosition(followerDestination.x, followerDestination.y, followerDestination.roomName));
   const followerAttempted = getMoveIntentAttemptedPosition(pair.healer.pos, direction);
-  if (!leaderTo || !leaderReceipt.attempted || !followerAttempted ||
-      !isPairTileOpen(leaderReceipt.attempted, pair) || !isPairTileOpen(followerAttempted, pair) || !isPairTileOpen(leaderTo, pair) || !isPairTileOpen(followerDestination, pair) ||
+  if (!followerAttempted || !isPairTileOpen(followerAttempted, pair) || !isPairTileOpen(followerDestination, pair) ||
       samePairPosition(leaderTo, followerDestination) || leaderTo.roomName !== followerDestination.roomName ||
       Math.max(Math.abs(leaderTo.x - followerDestination.x), Math.abs(leaderTo.y - followerDestination.y)) > 1) {
-    cancelPairAdvance(pair, leaderReceipt);
+    waitForFollower();
+    return;
+  }
+  const existingFollowerMove = getMoveIntentReceipt(pair.healer);
+  if (existingFollowerMove) {
+    if (!existingFollowerMove.to || !samePairPosition(existingFollowerMove.to, followerDestination)) waitForFollower();
     return;
   }
   const code = followerDirection === undefined
     ? moveToAdjacentPosition(pair.healer, new RoomPosition(followerDestination.x, followerDestination.y, followerDestination.roomName))
     : issueMove(pair.healer, followerDirection);
-  if (code !== OK) cancelPairAdvance(pair, leaderReceipt);
+  if (code !== OK) waitForFollower();
 }
 
 function nextPairRouteRoom(pair: PowerBankPairContext, fallback?: string): string | undefined {
@@ -438,6 +455,12 @@ export function coordinatePowerBankPairMovement(pair: PowerBankPairContext, fall
     pairMovementCalls = new WeakMap();
     pairTileChecks = new WeakMap();
     pairOccupants = [...Object.values(Game.creeps), ...Object.values(Game.powerCreeps || {}).filter((creep) => creep.ticksToLive != null)];
+  }
+  if (pairReadyForTravel(pair)) for (const member of [pair.attacker, pair.healer]) {
+    if (member.room.name !== pair.task.targetRoom) {
+      const state = ensureCreepMovementState(member);
+      if (state.travelState?.targetRoom !== pair.task.targetRoom) state.travelState = { targetRoom: pair.task.targetRoom, stuckTicks: 0 };
+    }
   }
   const previous = pairMovementCalls.get(pair.attacker);
   if (previous?.task === pair.task && previous.healer === pair.healer && previous.generation === pair.generation) {

@@ -9,7 +9,7 @@ jest.mock("@/runtime/powerBankObserver", () => ({ requestCombatObservation: jest
 import { powerBankAttackerRole } from "@/roles/powerBankAttacker";
 import { powerBankHealerRole } from "@/roles/powerBankHealer";
 import { clearCreepMovementStateForTest, clearCreepMovementState, ensureCreepMovementState, getCreepMovementState } from "@/movement/creepState";
-import { getMoveIntentReceipt, issueMove, isBlockerActivelyMoving } from "@/movement/traffic";
+import { getMoveIntentReceipt, issueMove, isBlockerActivelyMoving, moveToAdjacentPosition } from "@/movement/traffic";
 import { getCachedStaticTravelMatrix, getNextTravelRoom } from "@/movement/routing";
 import { getTickContextService } from "@/runtime/runtimeServices";
 import { createMockPowerBankCreep, createMockPowerBank } from "@mock/powerBank";
@@ -133,6 +133,32 @@ beforeEach(() => {
 });
 
 describe("PowerBank same-frame pair movement", () => {
+  it.each(["attacker-first", "healer-first"] as const)("线形道路让路后领队继续前进，尾随短暂分离再用共同交通补位：%s", (order) => {
+    const blocker = createMockPowerBankCreep("worker", { name: "worker", id: "worker" });
+    place(blocker, 11, 10); Game.creeps.worker = blocker;
+    (blocker.move as jest.Mock).mockImplementation((direction: DirectionConstant) => { pending.set(blocker, direction); return OK; });
+    Game.map.getRoomTerrain = jest.fn(() => ({ get: (_x: number, y: number) => y === 10 ? 0 : TERRAIN_MASK_WALL })) as typeof Game.map.getRoomTerrain;
+    (moveToTargetRoom as jest.Mock).mockImplementation((creep: Creep) =>
+      moveToAdjacentPosition(creep, new PairPos(creep.pos.x + 1, 10, SOURCE) as RoomPosition));
+    (moveToTarget as jest.Mock).mockImplementation((creep: Creep, target: Creep, range: number) =>
+      creep.pos.getRangeTo(target) <= range ? OK : moveToAdjacentPosition(creep, new PairPos(creep.pos.x + 1, 10, SOURCE) as RoomPosition));
+    calls(order);
+    expect(attacker.cancelOrder).not.toHaveBeenCalled();
+    expect(pending.get(attacker)).toBe(RIGHT);
+    commitFrame();
+    expect(position(attacker)).toEqual({ x: 11, y: 10, roomName: SOURCE });
+    expect(position(healer)).toEqual({ x: 9, y: 10, roomName: SOURCE });
+    expect(position(blocker)).toEqual({ x: 10, y: 10, roomName: SOURCE });
+    calls(order); commitFrame();
+    expect(position(attacker)).toEqual({ x: 11, y: 10, roomName: SOURCE });
+    expect(position(healer)).toEqual({ x: 10, y: 10, roomName: SOURCE });
+    calls(order); commitFrame();
+    expect(position(attacker)).toEqual({ x: 12, y: 10, roomName: SOURCE });
+    expect(position(healer)).toEqual({ x: 11, y: 10, roomName: SOURCE });
+    const occupied = Object.values(Game.creeps).map(c => `${c.pos.roomName}:${c.pos.x}:${c.pos.y}`);
+    expect(new Set(occupied).size).toBe(occupied.length);
+  });
+
   it.each(["attacker-first", "healer-first"] as const)("advances both each tick, independent of %s and source/target reentry", (order) => {
     for (let frame = 0; frame < 2; frame += 1) {
       const redBefore = position(attacker), greenBefore = position(healer);
@@ -201,19 +227,20 @@ describe("PowerBank same-frame pair movement", () => {
   });
 
   it.each([ERR_TIRED, ERR_NO_BODYPART, ERR_BUSY])("cancels only the leader's owned move when follower submission returns %s", (code) => {
+    place(attacker, 48, 25); place(healer, 48, 26);
     (healer.move as jest.Mock).mockReturnValue(code);
     calls("attacker-first"); calls("healer-first");
     expect(attacker.cancelOrder).toHaveBeenCalledTimes(1); expect(attacker.cancelOrder).toHaveBeenCalledWith("move");
     expect(getMoveIntentReceipt(attacker)).toBeUndefined(); expect(pending.size).toBe(0);
-    expect(getCreepMovementState(attacker)).toBeUndefined();
-    expect(getCreepMovementState(healer)).toBeUndefined();
-    expect(isBlockerActivelyMoving(attacker)).toBe(false);
+    expect(getCreepMovementState(attacker)?.travelState?.targetRoom).toBe(TARGET);
+    expect(getCreepMovementState(healer)?.travelState?.targetRoom).toBe(TARGET);
     commitFrame();
-    expect(position(attacker)).toEqual({ x: 10, y: 10, roomName: SOURCE });
-    expect(position(healer)).toEqual({ x: 9, y: 10, roomName: SOURCE });
+    expect(position(attacker)).toEqual({ x: 48, y: 25, roomName: SOURCE });
+    expect(position(healer)).toEqual({ x: 48, y: 26, roomName: SOURCE });
   });
 
   it("does not fake a canceled move when native cancellation fails", () => {
+    place(attacker, 48, 25); place(healer, 48, 26);
     (healer.move as jest.Mock).mockReturnValue(ERR_TIRED);
     (attacker.cancelOrder as jest.Mock).mockReturnValue(ERR_NOT_FOUND);
     calls("healer-first");

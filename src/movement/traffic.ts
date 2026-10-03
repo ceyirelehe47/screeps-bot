@@ -43,6 +43,8 @@ export function findMyOwnedUnitAt(pos: RoomPosition, exclude?: AnyCreep): AnyCre
 // ─── Push ─────────────────────────────────────────────────────────────────────
 
 export function isBlockerActivelyMoving(blocker: AnyCreep): boolean {
+  const receipt = getMoveIntentReceipt(blocker);
+  if (receipt?.to && (receipt.to.roomName !== blocker.pos.roomName || receipt.to.x !== blocker.pos.x || receipt.to.y !== blocker.pos.y)) return true;
   const state = getCreepMovementState(blocker);
   if (!state) {
     return false;
@@ -86,6 +88,10 @@ export function moveToAdjacentPosition(creep: AnyCreep, nextPos: RoomPosition): 
   }
 
   const direction = creep.pos.getDirectionTo(nextPos);
+  const attempted = getMoveIntentAttemptedPosition(creep.pos, direction);
+  if (!attempted || attempted.roomName !== nextPos.roomName || attempted.x !== nextPos.x || attempted.y !== nextPos.y) return ERR_NO_PATH;
+  const destination = getMoveIntentDestination(creep.pos, direction);
+  if (destination && hasMoveDestinationConflict(destination, [creep])) return ERR_BUSY;
   const blockingCreep = findMyOwnedUnitAt(nextPos, creep);
   if (!blockingCreep) {
     return issueMove(creep, direction);
@@ -124,14 +130,32 @@ export interface MoveIntentReceipt {
 let receiptGame: typeof Game | undefined;
 let receiptTick = -1;
 let moveReceipts = new WeakMap<AnyCreep, MoveIntentReceipt>();
+let destinationActors = new Map<string, Set<AnyCreep>>();
 
 function currentMoveReceipts(): WeakMap<AnyCreep, MoveIntentReceipt> {
   if (receiptGame !== Game || receiptTick !== Game.time) {
     receiptGame = Game;
     receiptTick = Game.time;
     moveReceipts = new WeakMap<AnyCreep, MoveIntentReceipt>();
+    destinationActors = new Map();
   }
   return moveReceipts;
+}
+
+const destinationKey = (pos: Readonly<{ x: number; y: number; roomName: string }>): string => `${pos.roomName}:${pos.x}:${pos.y}`;
+
+/** 所有角色共享当帧已提交的落点；让路不能再把另一个单位推入这些格。 */
+export function hasMoveDestinationConflict(pos: Readonly<{ x: number; y: number; roomName: string }>, except: readonly AnyCreep[] = []): boolean {
+  currentMoveReceipts();
+  return [...(destinationActors.get(destinationKey(pos)) ?? [])].some(actor => !except.includes(actor));
+}
+
+function removeMoveDestination(actor: AnyCreep, receipt: MoveIntentReceipt | undefined): void {
+  if (!receipt?.to) return;
+  const key = destinationKey(receipt.to);
+  const actors = destinationActors.get(key);
+  actors?.delete(actor);
+  if (actors?.size === 0) destinationActors.delete(key);
 }
 
 const MOVE_RECEIPT_OFFSETS: Record<DirectionConstant, readonly [number, number]> = {
@@ -183,11 +207,19 @@ export function issueMove(creep: AnyCreep, direction: DirectionConstant): CreepM
     ? measureCreepIntent(() => creep.move(direction))
     : creep.move(direction);
   if (code === OK) {
-    currentMoveReceipts().set(creep, Object.freeze({
+    const receipts = currentMoveReceipts();
+    removeMoveDestination(creep, receipts.get(creep));
+    const receipt = Object.freeze({
       tick: Game.time, actorId: creep.id ?? creep.name, direction, from,
       attempted: getMoveIntentAttemptedPosition(from, direction),
       to: getMoveIntentDestination(from, direction),
-    }));
+    });
+    receipts.set(creep, receipt);
+    if (receipt.to) {
+      const key = destinationKey(receipt.to);
+      const actors = destinationActors.get(key) ?? new Set<AnyCreep>();
+      actors.add(creep); destinationActors.set(key, actors);
+    }
   }
   return code;
 }
@@ -197,6 +229,7 @@ export function cancelMoveIntent(creep: Creep, receipt: MoveIntentReceipt): bool
   const receipts = currentMoveReceipts();
   if (receipts.get(creep) !== receipt || typeof creep.cancelOrder !== "function") return false;
   if (creep.cancelOrder("move") !== OK) return false;
+  removeMoveDestination(creep, receipt);
   receipts.delete(creep);
   return true;
 }
@@ -266,7 +299,7 @@ function getYieldCandidatePositions(pusher: AnyCreep, blocker: AnyCreep): RoomPo
 
   for (const direction of ALL_DIRECTIONS) {
     const pos = getPositionAtDirection(blocker.pos, direction);
-    if (!pos || !isYieldTileWalkable(pos, blocker)) {
+    if (!pos || !isYieldTileWalkable(pos, blocker) || hasMoveDestinationConflict(pos, [blocker])) {
       continue;
     }
     if (haulerPair && pos.x === pusher.pos.x && pos.y === pusher.pos.y) {

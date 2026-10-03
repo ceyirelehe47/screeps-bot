@@ -1,5 +1,5 @@
 import { clearCreepMovementStateForTest, ensureCreepMovementState } from "@/movement/creepState";
-import { moveToAdjacentPosition } from "@/movement/traffic";
+import { cancelMoveIntent, getMoveIntentReceipt, issueMove, moveToAdjacentPosition } from "@/movement/traffic";
 
 jest.mock("@/runtime/runtimeServices", () => ({
   getTickContextService: jest.fn(),
@@ -104,6 +104,36 @@ describe("moveToAdjacentPosition", () => {
 
     expect(result).toBe(ERR_BUSY);
     expect(blocker.move).toHaveBeenCalled();
+  });
+
+  it("实际下一格空闲时不会推动身后或其它邻格的 creep", () => {
+    const actor = makeCreep("actor", 10, 10), behind = makeCreep("heal", 9, 10), beside = makeCreep("worker", 11, 11);
+    setupRoomContext([actor, behind, beside]);
+    expect(moveToAdjacentPosition(actor, new MockRoomPosition(11, 10, "W1N1") as RoomPosition)).toBe(OK);
+    expect(actor.move).toHaveBeenCalledWith(RIGHT);
+    expect(behind.move).not.toHaveBeenCalled(); expect(beside.move).not.toHaveBeenCalled();
+  });
+
+  it("已提交让路移动的挡位者只移动一次，不因帧初坐标再次被推回去", () => {
+    const actor = makeCreep("actor", 10, 10), blocker = makeCreep("blocker", 11, 10);
+    setupRoomContext([actor, blocker]);
+    expect(issueMove(blocker, RIGHT)).toBe(OK);
+    expect(moveToAdjacentPosition(actor, blocker.pos)).toBe(OK);
+    expect(blocker.move).toHaveBeenCalledTimes(1);
+    expect(blocker.move).toHaveBeenCalledWith(RIGHT);
+  });
+
+  it("普通单位也遵守已提交的下一格，取消真实意图后该落点才重新可用", () => {
+    const actor = makeCreep("actor", 10, 10), other = makeCreep("other", 11, 11);
+    setupRoomContext([actor, other]);
+    Object.assign(other, { cancelOrder: jest.fn(() => OK) });
+    issueMove(other, TOP);
+    const destination = new MockRoomPosition(11, 10, "W1N1") as RoomPosition;
+    expect(moveToAdjacentPosition(actor, destination)).toBe(ERR_BUSY);
+    expect(actor.move).not.toHaveBeenCalled(); expect(other.move).toHaveBeenCalledTimes(1);
+    expect(cancelMoveIntent(other, getMoveIntentReceipt(other)!)).toBe(true);
+    expect(moveToAdjacentPosition(actor, destination)).toBe(OK);
+    expect(actor.move).toHaveBeenCalledWith(RIGHT);
   });
 
   it("fails closed when only one War member points at the other", () => {
