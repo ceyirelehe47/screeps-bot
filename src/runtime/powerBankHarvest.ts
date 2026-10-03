@@ -37,6 +37,7 @@ import {
 } from "@/runtime/powerBankTaskState";
 import { recordPowerBankHistory } from "@/runtime/powerBankStatus";
 import { spawnProfiles } from "@/config/spawnProfiles";
+import { getPowerBankOwnedAvoidRooms } from "@/runtime/powerBankTransit";
 
 const PATROL_SCOUT_CONFIG_NAME = "powerbank:patrol:scout:0";
 
@@ -382,11 +383,12 @@ function getActiveDangerRooms(targetRoom?: string): string[] {
     .filter(([, expiresAt]) => expiresAt > Game.time)
     .map(([roomName]) => roomName);
   const permanent = Object.keys(Memory.runtime?.powerBankPermanentDangerRooms ?? {});
-  return [...new Set([...transient, ...permanent])]
+  return [...new Set([...transient, ...permanent, ...getPowerBankOwnedAvoidRooms()])]
     .filter((roomName) => roomName !== targetRoom);
 }
 
 function findSafeRoute(fromRoom: string, toRoom: string): string[] | null {
+  if (getPowerBankOwnedAvoidRooms().includes(toRoom)) return null;
   const avoidRooms = new Set(getActiveDangerRooms(toRoom));
   const route = Game.map.findRoute(fromRoom, toRoom, {
     routeCallback: (roomName) => avoidRooms.has(roomName) ? Infinity : 1,

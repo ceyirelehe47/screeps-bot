@@ -211,6 +211,14 @@ function completeCombatOrigins(world: Scenario, room: string): number[] {
 }
 
 describe("PB 来源准入使用真实有界 PF 缓存", () => {
+  it("原生路径即使能穿过中转有主房，也不授予来源生产许可", () => {
+    const world = scenario((origin, goal) => origin.roomName !== NEAR_SOURCE && goal.roomName === TARGET);
+    Game.rooms.W0N57 = { name: "W0N57", controller: { my: false, owner: { username: "enemy" } }, find: jest.fn(() => []) } as unknown as Room;
+    world.runUntilSelected(6);
+    expect(world.task.status).toBe("discovered");
+    expect(completeCombatOrigins(world, NEAR_SOURCE)).toEqual([]);
+  });
+
   it("首个短 source 永远 incomplete，真实五 tick 负缓存给其它三 Spawn 来源留下测量机会", () => {
     const world = scenario((origin, goal) => origin.roomName === SHORT_SOURCE && goal.roomName === TARGET);
     world.runUntilSelected();

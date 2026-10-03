@@ -2,6 +2,7 @@ import { clearMovementState, moveToTarget, moveToTargetRoom } from "@/roles/shar
 import { ensureCreepMovementState, getCreepMovementState } from "@/movement/creepState";
 import { isExitTile } from "@/movement/common";
 import { getCachedStaticTravelMatrix } from "@/movement/routing";
+import { getPowerBankOwnedAvoidRooms, isPowerBankTransitRoomAllowed, powerBankTransitOptions } from "@/runtime/powerBankTransit";
 import {
   cancelMoveIntent, getMoveIntentAttemptedPosition, getMoveIntentDestination, getMoveIntentReceipt, issueMove, moveToAdjacentPosition,
   moveOffExit, type MoveIntentReceipt,
@@ -160,6 +161,8 @@ export function getPowerBankEncodedRouteBetween(
     ? taskRouteRooms
     : fallback?.split("|").filter((roomName) => roomName.length > 0) ?? [];
   if (routeRooms.length === 0) return undefined;
+  const ownedRooms = new Set(getPowerBankOwnedAvoidRooms());
+  if (routeRooms.some((roomName) => roomName !== fromRoom && ownedRooms.has(roomName))) return undefined;
 
   const fromIndex = routeRooms.lastIndexOf(fromRoom);
   const targetIndex = routeRooms.lastIndexOf(targetRoom);
@@ -184,7 +187,7 @@ export function getPowerBankNextRouteRoom(task: RuntimePowerBankTask, currentRoo
 }
 
 export function getPowerBankAvoidRooms(task: RuntimePowerBankTask): string[] {
-  const avoidRooms = new Set<string>();
+  const avoidRooms = new Set<string>(getPowerBankOwnedAvoidRooms());
   if (Array.isArray(task.avoidRooms)) {
     for (const roomName of task.avoidRooms) {
       if (typeof roomName === "string" && roomName.length > 0) avoidRooms.add(roomName);
@@ -234,6 +237,7 @@ function holdPairMember(creep: Creep): void {
 
 /** 共享静态矩阵保留地形/自然物/结构校验，动态占位仍每次读取。 */
 function isPairTileOpen(pos: PairPosition, pair: PowerBankPairContext): boolean {
+  if (pos.roomName !== pair.attacker.room.name && !isPowerBankTransitRoomAllowed(pos.roomName)) return false;
   if (getCachedStaticTravelMatrix(pos.roomName).get(pos.x, pos.y) >= 255) return false;
   const occupants: AnyCreep[] = [
     ...Object.values(Game.creeps),
@@ -296,6 +300,13 @@ function nextPairRouteRoom(pair: PowerBankPairContext, fallback?: string): strin
   const encoded = getPowerBankEncodedRouteBetween(pair.task, pair.attacker.room.name, pair.task.targetRoom, fallback);
   const next = encoded?.split("|")[1];
   if (next) return next;
+  const avoids = new Set(getPowerBankAvoidRooms(pair.task));
+  if (typeof Game.map.findRoute === "function") {
+    const route = Game.map.findRoute(pair.attacker.room.name, pair.task.targetRoom, {
+      routeCallback: (name) => name !== pair.attacker.room.name && avoids.has(name) ? Infinity : 1,
+    });
+    return Array.isArray(route) ? route[0]?.room : undefined;
+  }
   const exit = pair.attacker.room.findExitTo?.(pair.task.targetRoom);
   return exit && exit > 0 ? Game.map.describeExits(pair.attacker.room.name)?.[exit as ExitConstant] : undefined;
 }
@@ -392,7 +403,7 @@ export function coordinatePowerBankPairMovement(pair: PowerBankPairContext, fall
     if (canPairMemberMove(pair.healer)) {
       moveToTargetRoom(pair.healer, pair.attacker.room.name,
         getPowerBankEncodedRouteBetween(pair.task, pair.healer.room.name, pair.attacker.room.name, fallbackEncodedRoute),
-        { ...PAIR_TRAVEL_OPTIONS, avoidRooms: getPowerBankAvoidRooms(pair.task) });
+        powerBankTransitOptions(pair.healer, { ...PAIR_TRAVEL_OPTIONS, avoidRooms: getPowerBankAvoidRooms(pair.task) }));
     }
     return;
   }
@@ -418,7 +429,7 @@ export function coordinatePowerBankPairMovement(pair: PowerBankPairContext, fall
   } else if (travelling) {
     moveToTargetRoom(pair.attacker, pair.task.targetRoom,
       getPowerBankEncodedRouteBetween(pair.task, pair.attacker.room.name, pair.task.targetRoom, fallbackEncodedRoute),
-      { ...PAIR_TRAVEL_OPTIONS, avoidRooms: getPowerBankAvoidRooms(pair.task) });
+      powerBankTransitOptions(pair.attacker, { ...PAIR_TRAVEL_OPTIONS, avoidRooms: getPowerBankAvoidRooms(pair.task) }));
   } else if (pair.stage === "attacking" && pairReadyForCombat(pair)) {
     const bank = Game.getObjectById(pair.task.bankId as Id<StructurePowerBank>);
     if (bank && pair.attacker.pos.getRangeTo(bank) > 1) {

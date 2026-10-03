@@ -113,6 +113,9 @@ function setupPair(
     },
   });
   Game.creeps = { [attacker.name]: attacker, [healer.name]: healer };
+  // 原生有己方 creep 的房间必然可见，夹具保留同样的视野合同。
+  Game.rooms[attacker.room.name] = attacker.room;
+  Game.rooms[healer.room.name] = healer.room;
   return { attacker, healer };
 }
 

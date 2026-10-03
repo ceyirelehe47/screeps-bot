@@ -4,6 +4,7 @@ jest.mock("@/roles/shared", () => ({
 jest.mock("@/movement/routing", () => ({ getCachedStaticTravelMatrix: jest.fn() }));
 jest.mock("@/runtime/runtimeServices", () => ({ getTickContextService: jest.fn() }));
 jest.mock("@/runtime/cpuPhaseProfiler", () => ({ measureCreepIntent: (fn: () => unknown) => fn() }));
+jest.mock("@/runtime/powerBankObserver", () => ({ requestCombatObservation: jest.fn(() => true) }));
 
 import { powerBankAttackerRole } from "@/roles/powerBankAttacker";
 import { powerBankHealerRole } from "@/roles/powerBankHealer";
@@ -99,6 +100,7 @@ beforeEach(() => {
   attacker = createMockPowerBankCreep("powerBankAttacker", { id: "red", name: "red", memory: { taskId: TASK, pairGeneration: 1 } as Partial<PowerBankAttackerMemory> });
   healer = createMockPowerBankCreep("powerBankHealer", { id: "green", name: "green", memory: { taskId: TASK, pairGeneration: 1 } as Partial<PowerBankHealerMemory> });
   place(attacker, 10, 10); place(healer, 9, 10);
+  Game.rooms[TARGET] = { name: TARGET, lookForAt: jest.fn(() => []) } as unknown as Room;
   for (const creep of [attacker, healer]) {
     (creep.move as jest.Mock).mockImplementation((direction: DirectionConstant) => { pending.set(creep, direction); return OK; });
     Object.assign(creep, { cancelOrder: jest.fn((method: string) => {
@@ -236,6 +238,7 @@ describe("PowerBank same-frame pair movement", () => {
   ])("crosses direction $direction with both members in one native frame", ({ direction, from, to, red, green, finalRed, finalGreen }) => {
     const task = Memory.data!.powerBankHarvest![TASK];
     task.sourceRoom = from; task.targetRoom = to; task.routeRooms = [from, to];
+    Game.rooms[to] = { name: to, lookForAt: jest.fn(() => []) } as unknown as Room;
     Game.map.describeExits = jest.fn((room: string) => room === from ? { [direction]: to } : { [((direction + 3) % 8) + 1]: from }) as typeof Game.map.describeExits;
     place(attacker, red[0], red[1], from); place(healer, green[0], green[1], from);
     routeDirection = direction as DirectionConstant;
@@ -244,6 +247,23 @@ describe("PowerBank same-frame pair movement", () => {
     commitFrame();
     expect(position(attacker)).toEqual({ x: finalRed[0], y: finalRed[1], roomName: to });
     expect(position(healer)).toEqual({ x: finalGreen[0], y: finalGreen[1], roomName: to });
+  });
+
+  it("保存路线上的目标已被其他玩家占领时，两人的跨房意图都不发布", () => {
+    place(attacker, 48, 25); place(healer, 48, 26);
+    Game.rooms[TARGET].controller = { my: false, owner: { username: "enemy" } } as StructureController;
+    calls("healer-first");
+    expect(pending.size).toBe(0);
+    commitFrame();
+    expect(attacker.room.name).toBe(SOURCE);
+    expect(healer.room.name).toBe(SOURCE);
+  });
+
+  it("下一房失去视野时，两人等待观察而不跨入未知房", () => {
+    place(attacker, 48, 25); place(healer, 48, 26);
+    delete Game.rooms[TARGET];
+    calls("attacker-first");
+    expect(pending.size).toBe(0);
   });
 
   it("moves both inside after landing, rather than bouncing the follower into the previous room", () => {

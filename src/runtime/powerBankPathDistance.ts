@@ -188,6 +188,8 @@ export function measurePowerBankTravel(input: PowerBankTravelMeasurementInput): 
 
   const roomSafety = new Map<string, boolean>();
   const safeRoom = (roomName: string): boolean => {
+    const room = Game.rooms[roomName];
+    if (room?.controller?.owner && !room.controller.my) return false;
     if (!allowedRooms.has(roomName) || (!endpointRooms.has(roomName) && avoidedRooms.has(roomName))) return false;
     const cachedSafety = roomSafety.get(roomName);
     if (cachedSafety !== undefined) return cachedSafety;
