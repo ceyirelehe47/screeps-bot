@@ -105,7 +105,8 @@ describe("共享清剿多余成员撤回回收", () => {
     Object.setPrototypeOf(creep, Creep.prototype); Game.creeps[creep.name] = creep;
     const { moveToTargetRoom } = jest.requireMock("@/roles/shared") as { moveToTargetRoom: jest.Mock };
     creep.work();
-    expect(moveToTargetRoom).toHaveBeenCalledWith(creep, source.name, undefined, { routePurpose: kind === "war" ? "combat" : "normal" });
+    expect(moveToTargetRoom).toHaveBeenCalledWith(creep, source.name, undefined, kind === "war" ? { routePurpose: "combat" }
+      : expect.objectContaining({ routePurpose: "normal", avoidRooms: expect.any(Array), canMoveStep: expect.any(Function) }));
     creep.room = source;
     const spawn = { room: source, pos: new MockPos(25, 25, source.name), isActive: () => true, recycleCreep: jest.fn(() => OK) } as unknown as StructureSpawn;
     Game.spawns.Spawn1 = spawn; creep.pos = new MockPos(24, 25, source.name) as unknown as RoomPosition;

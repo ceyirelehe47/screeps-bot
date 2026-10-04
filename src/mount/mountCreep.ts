@@ -4,6 +4,7 @@ import { clearMovementState, moveToTarget, moveToTargetRoom } from "@/roles/shar
 import { decodeCrossShardTravelerName } from "@/runtime/crossShardNaming";
 import { isPerCreepPhaseTimingEnabled, measureCpuPhase } from "@/runtime/cpuPhaseProfiler";
 import { getCreepConfigService } from "@/runtime/runtimeServices";
+import { powerBankTransitOptions } from "@/runtime/powerBankTransit";
 import { recordMovementGauge, recordMovementMetric } from "@/movement/metrics";
 import type { RoleFactory } from "@/types/system";
 
@@ -215,7 +216,9 @@ export function mountCreep(): void {
       if (this.spawning) return;
       if (this.hits < this.hitsMax && this.getActiveBodyparts(HEAL) > 0) this.heal(this);
       if (this.room.name !== retireRoom) {
-        moveToTargetRoom(this, retireRoom, undefined, { routePurpose: this.memory._recycleToRoom ? "normal" : "combat" });
+        moveToTargetRoom(this, retireRoom, undefined, this.memory._recycleToRoom
+          ? powerBankTransitOptions(this, { routePurpose: "normal" })
+          : { routePurpose: "combat" });
       } else {
         const spawns = Object.values(Game.spawns).filter((spawn) => spawn.room.name === retireRoom && spawn.isActive());
         const spawn = this.pos.findClosestByRange(spawns);
