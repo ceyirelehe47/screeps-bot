@@ -110,12 +110,12 @@ describe("moveToTargetRoom", () => {
     const unsafe = new MockRoomPosition(49, 20, "W1N1") as unknown as RoomPosition;
     const safe = new MockRoomPosition(49, 30, "W1N1") as unknown as RoomPosition;
     const choose = jest.fn((_exit: ExitConstant, opts: FindPathOpts & { filter: (p: RoomPosition) => boolean }) => {
-      const matrix = opts.costCallback!("W1N1", new RealCostMatrix() as CostMatrix) as CostMatrix;
+      const matrix = opts.costCallback!("W1N1", new RealCostMatrix() as unknown as CostMatrix) as CostMatrix;
       expect(matrix.get(49, 20)).toBe(255);
       expect(opts.filter(unsafe)).toBe(false); expect(opts.filter(safe)).toBe(true);
       return [unsafe, safe].find(opts.filter) ?? null;
     });
-    creep.pos.findClosestByPath = choose as RoomPosition["findClosestByPath"];
+    creep.pos.findClosestByPath = choose as unknown as RoomPosition["findClosestByPath"];
     moveToTargetRoom(creep, "W1N2", undefined, { routePolicyKey: "salvage", routeRoomCost: () => 1,
       costCallback: (_room, matrix) => { matrix.set(49, 20, 255); return matrix; } });
     expect(choose).toHaveBeenCalledTimes(1);
@@ -133,7 +133,7 @@ describe("moveToTargetRoom", () => {
     creep.pos.findClosestByPath = jest.fn((exit: ExitConstant) => {
       directions.push(exit);
       return exit === RIGHT ? null : new MockRoomPosition(25, 0, "W1N1");
-    }) as RoomPosition["findClosestByPath"];
+    }) as unknown as RoomPosition["findClosestByPath"];
     const opts = { routePolicyKey: "salvage", routeRoomCost: () => 1 };
     expect(moveToTargetRoom(creep, "W1N2", undefined, opts)).toBe(ERR_NO_PATH);
     Game.time++; moveToTargetRoom(creep, "W1N2", undefined, opts);

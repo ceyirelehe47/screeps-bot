@@ -112,7 +112,7 @@ describe("三个NPC目标共享一支清剿小队", () => {
     const room = Game.rooms.E3N57;
     const ruin = { id: "npc-loot", pos: new MockPos(44, 17, room.name), store: createMockStore({ energy: 239 }) } as unknown as Ruin;
     room.find = jest.fn((kind: FindConstant) => kind === FIND_RUINS ? [ruin] : []) as Room["find"];
-    room.createFlag = jest.fn((_pos: RoomPosition, name: string) => name) as Room["createFlag"];
+    room.createFlag = jest.fn((_pos: RoomPosition, name: string) => name) as unknown as Room["createFlag"];
     Game.time++; runWarControl();
     expect(room.createFlag).not.toHaveBeenCalled();
     Game.time += 19; runWarControl();
