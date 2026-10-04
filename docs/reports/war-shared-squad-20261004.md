@@ -60,7 +60,7 @@ E7N57 的 `carrier-74119828` 在 tick 74119905 仍由 Spawn23 孵化，剩余 43
 - tick 74120647 已确认四笔 `powerProcessing:nearby` 自动终端运输完成：E3N59 → E4N58 500、E3N59 → E1N57 500、E7N57 → E5N59 500、E7N57 → E6N59 208。接收房已实际持有 Power，部分 PowerSpawn 也已装入处理库存。
 - tick 74120671，先前停在母房的 `remoteCarrier-74119660` 已走到 E6N57 `(8,24)`；PowerBank 搬运者带 593 Power 走到 E10N56 `(6,38)`。E3N53 最后 rampart 血量从 tick 74120657 的 54401 降至 4001，继续拆除。
 - tick 74120692 E3N53 战斗清空通过 20 tick 去抖；tick 74120697 同一对 `meleeAttacker-74119896` / `healer-74119896` 已转交 E2N54 g10 并移动到 E3N53 `(29,25)` / `(30,26)`，原出生时间保留、没有新增孵化。E3N53 继续控制器攻击，E3N57 排队；多余成员已返回 E1N57。
-- 原桌面心跳在应用中不存在，更新失败后通过工具恢复同范围、每 15 分钟的 ACTIVE 监视，ID 为 `automation`。正常不通知，游戏内观察与唯一共享任务负责实际补剿；心跳只核验与必要修复。
+- 原桌面心跳更新时工具未找到任务；创建工具曾返回同范围、每 15 分钟 ACTIVE、ID 为 `automation`，但后续更新仍报任务不存在，持久状态未确认，没有继续重复创建。游戏内 Observer 和唯一共享任务负责实际补剿，独立于桌面心跳。
 
 冻结发布清单、构建结果、测试 JSON/日志、上传读回证据位于 `/Users/forst/Downloads/screeps-shared-squad-v15-20261004/`；现场 console 执行证据位于 `/Users/forst/Downloads/screeps-handoff-20261004/v15-*-events.json`。私有备份不得公开。
 
