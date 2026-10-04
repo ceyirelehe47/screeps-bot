@@ -14,6 +14,34 @@ function makeRoom(energyCapacityAvailable: number): Room {
 }
 
 describe("spawnProfiles", () => {
+  it.each(["worker", "colonizerWorker", "crossShardColonizerWorker"] as const)(
+    "%s 在高容量房间保留 16 个完整工作组",
+    role => {
+      for (const capacity of [3_400, 5_600, 12_900]) {
+        const body = spawnProfiles[role](makeRoom(capacity));
+        expect(body).toHaveLength(48);
+        expect(body.filter(part => part === WORK)).toHaveLength(16);
+        expect(body.filter(part => part === CARRY)).toHaveLength(16);
+        expect(body.filter(part => part === MOVE)).toHaveLength(16);
+        expect(bodyCost(body)).toBe(3_200);
+      }
+    },
+  );
+
+  it("worker 在能量与体型边界按完整组缩放", () => {
+    for (const [capacity, units] of [
+      [300, 1], [399, 1], [400, 2], [3_199, 15], [3_200, 16], [3_399, 16],
+    ]) {
+      const body = spawnProfiles.worker(makeRoom(capacity));
+      expect(body).toHaveLength(units * 3);
+      expect(body.filter(part => part === WORK)).toHaveLength(units);
+      expect(body.filter(part => part === CARRY)).toHaveLength(units);
+      expect(body.filter(part => part === MOVE)).toHaveLength(units);
+      expect(bodyCost(body)).toBe(units * 200);
+      expect(bodyCost(body)).toBeLessThanOrEqual(capacity);
+    }
+  });
+
   it("keeps representative fixed and shared production body contracts", () => {
     const hubUpgrader = (
       spawnProfiles as unknown as Record<string, (room: Room) => BodyPartConstant[]>

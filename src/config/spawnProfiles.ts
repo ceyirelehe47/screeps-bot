@@ -39,7 +39,11 @@ function clampByCapacity(parts: BodyPartConstant[], room: Room): BodyPartConstan
 
 function oneOneOneBody(room: Room): BodyPartConstant[] {
   const tripletCost = BODYPART_COST[WORK] + BODYPART_COST[CARRY] + BODYPART_COST[MOVE];
-  const tripletCount = Math.max(1, Math.floor(room.energyCapacityAvailable / tripletCost));
+  // 按完整组限制体型，避免 50 节截断把最后一组的 MOVE 切掉。
+  const tripletCount = Math.max(1, Math.min(
+    Math.floor(MAX_BODY_SIZE / 3),
+    Math.floor(room.energyCapacityAvailable / tripletCost),
+  ));
   const parts: BodyPartConstant[] = [];
 
   for (let i = 0; i < tripletCount; i++) {
