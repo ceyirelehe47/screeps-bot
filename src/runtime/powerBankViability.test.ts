@@ -13,6 +13,29 @@ import {
 } from "@/runtime/powerBankViability";
 
 describe("powerBankViability", () => {
+  const distantInput = (travel: number, hits = 2_000_000): ViabilityInput => ({
+    energyCapacity: 7500, bankHits: hits, bankPower: 2346, ticksToDecay: 5000, freeTiles: 4,
+    routeDistance: 8, combatTravelTicks: travel, haulerOutboundTravelTicks: 366, haulerReturnTravelTicks: 370,
+    currentTick: 100, hasCompounds: { xgho2: true, xuh2o: true, xlho2: false }, isDefenseMode: false,
+    haulerCapacity: 1250, spawnReadyIn: [0, 0],
+  });
+
+  it("拒绝实际374tick去程加1042tick战斗的极限任务，Bank不衰减也不能靠接班队准入", () => {
+    const result = assessViability(distantInput(374));
+    expect(result.estimates.ttk).toBe(1042);
+    expect(result.viable).toBe(false);
+    expect(result.reasons).toContain("insufficient_combat_ttl");
+    expect(result.reasons).not.toContain("decay_too_soon");
+  });
+
+  it.each([{ travel: 307, viable: true }, { travel: 308, viable: false }])("完整战斗与余量的寿命边界 travel=$travel", ({ travel, viable }) => {
+    expect(assessViability(distantInput(travel)).viable).toBe(viable);
+  });
+
+  it("按实际Bank血量而非固定房数收口：同一路线低血量可采，近处超长战斗拒绝", () => {
+    expect(assessViability(distantInput(374, 1_600_000)).viable).toBe(true);
+    expect(assessViability(distantInput(0, 3_000_000)).reasons).toContain("insufficient_combat_ttl");
+  });
   it("derives tier profiles and the exact RCL6 capacity boundary from runtime constants", () => {
     expect(POWER_BANK_ROOM_TRAVEL_TICKS).toBe(50);
     expect(selectBodyTier(2190)).toEqual({ attackerTier: "rcl6", healerTier: "rcl6" });

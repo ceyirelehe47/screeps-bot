@@ -3,6 +3,7 @@ import { POWER_BANK_STATUS, POWER_BANK_BODY_TIERS, POWER_BANK_BOOST_REQUIREMENTS
 import {
   ATTACK_POWER,
   POWER_BANK_ROOM_TRAVEL_TICKS,
+  POWER_BANK_COMBAT_TTL_MARGIN,
   derivePowerBankTierProfile,
   planPowerBankTimeline,
   selectBodyTier,
@@ -921,7 +922,7 @@ function processDiscovered(task: PowerBankHarvestTask): void {
   task.plannedHaulerArrivalTick = selected.timeline.haulerArrivalTick;
   task.minimumCombatTtl = Math.min(
     CREEP_LIFE_TIME - 25,
-    selected.timeline.travelTime + Math.min(selected.timeline.ttk, 900) + 100,
+    selected.timeline.travelTime + selected.timeline.ttk + selected.timeline.boostPrepTime + POWER_BANK_COMBAT_TTL_MARGIN,
   );
   task.activeGeneration = 0;
   task.activeIndex = 0;

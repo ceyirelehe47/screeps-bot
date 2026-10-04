@@ -9,6 +9,8 @@ export const CREEP_SPAWN_TIME = 3;
 export const POWER_BANK_HIT_BACK = 0.5;
 export const POWER_BANK_ROOM_TRAVEL_TICKS = 50;
 export const POWER_BANK_ATTACKER_COUNT = 1;
+/** 给协同、绕行及攻击空档留余量；不能预设第二支战斗队接班才能完成。 */
+export const POWER_BANK_COMBAT_TTL_MARGIN = 100;
 
 const TOUGH_HITS = 100;
 const DEFAULT_BOOST_PREP_TIME = 20;
@@ -588,7 +590,11 @@ export function assessViability(params: ViabilityInput): ViabilityResult {
   ) {
     reasons.push("invalid_travel_time");
   }
-  if (timeline.travelTime >= CREEP_LIFE_TIME) reasons.push("insufficient_combat_ttl");
+  const firstMemberReadyLowerBound = Math.min(...spawnReadyIn) + Math.min(profile.attacker.spawnTime, profile.healer.spawnTime);
+  const memberAssemblyWait = Math.max(0, timeline.pairSpawnTime - firstMemberReadyLowerBound);
+  if (memberAssemblyWait + timeline.travelTime + timeline.ttk + timeline.boostPrepTime + POWER_BANK_COMBAT_TTL_MARGIN >= CREEP_LIFE_TIME) {
+    reasons.push("insufficient_combat_ttl");
+  }
   if (
     timeline.haulerOutboundTravelTime + timeline.haulerReturnTravelTime + 50 >= CREEP_LIFE_TIME
   ) {
