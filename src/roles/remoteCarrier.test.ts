@@ -1,5 +1,5 @@
 import { remoteCarrierRole, isInvaderSalvageRoomClear, isInvaderSalvagePositionSafe } from "@/roles/remoteCarrier";
-import { moveToTarget, moveToTargetRoom } from "@/roles/shared";
+import { clearMovementState, moveToTarget, moveToTargetRoom } from "@/roles/shared";
 import { clearRoleLifecycleCacheForTest, mountCreep } from "@/mount/mountCreep";
 import { requestCombatObservation } from "@/runtime/powerBankObserver";
 import { clearMarketActionArbiterForTest } from "@/runtime/marketActionArbiter";
@@ -235,17 +235,29 @@ describe("remoteCarrierRole", () => {
     expect(PathFinder.search).not.toHaveBeenCalled();
   });
 
-  it("暂缺目标视野只等观察，不在途中反向往返；恢复后继续原目标", () => {
+  it("目标与下一房交替可见时逐房放行，不要求两房同帧可见或清空通路", () => {
     const drop = { amount: 50, resourceType: RESOURCE_ENERGY, pos: new RoomPosition(44, 17, "W5N5") } as Resource;
     const world = salvageFixture({ drops: [drop] });
     const transit = { name: "W4N5", find: jest.fn(() => []) } as unknown as Room;
     Game.rooms[transit.name] = transit; Object.assign(world.creep, { room: transit, pos: new RoomPosition(1, 21, transit.name) });
-    delete Game.rooms[world.room.name];
     expect(world.role.source(world.creep)).toBe(false);
-    expect(moveToTargetRoom).not.toHaveBeenCalled();
-    Game.time++; Game.rooms[world.room.name] = world.room;
+    const next = { name: "W3N5", find: jest.fn(() => []) } as unknown as Room;
+    const entry = new RoomPosition(49, 21, next.name);
+    const first = (moveToTargetRoom as jest.Mock).mock.calls[0][3];
+    expect(first.canMoveStep(entry)).toBe(false);
+    expect(requestCombatObservation).toHaveBeenCalledWith(next.name);
+    Game.time++; delete Game.rooms[world.room.name]; Game.rooms[next.name] = next;
     world.role.source(world.creep);
+    expect(moveToTargetRoom).toHaveBeenCalledTimes(2);
     expect(moveToTargetRoom).toHaveBeenCalledWith(world.creep, world.room.name, undefined, expect.any(Object));
+    const second = (moveToTargetRoom as jest.Mock).mock.calls[1][3];
+    expect(second.canMoveStep(entry)).toBe(true);
+    expect(second.canMoveStep(new RoomPosition(0, 21, world.room.name))).toBe(false);
+    next.find = jest.fn((type: FindConstant) => type === FIND_HOSTILE_CREEPS
+      ? [{ owner: { username: "Invader" }, getActiveBodyparts: () => 1 }] : []) as Room["find"];
+    expect(second.canMoveStep(entry)).toBe(false);
+    expect(clearMovementState).not.toHaveBeenCalled();
+    expect(world.creep.withdraw).not.toHaveBeenCalled();
   });
 
   it("三个回收成员轮转使用两次寻路预算，固定执行顺序不会饿死第三只", () => {

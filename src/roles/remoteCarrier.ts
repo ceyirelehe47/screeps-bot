@@ -1,5 +1,5 @@
 import { executeTreasuryFencedTerminalCargo, isTerminalCargoBlocked } from "@/runtime/treasuryTerminalCargo";
-import { clearMovementState, moveToTarget, moveToTargetRoom } from "@/roles/shared";
+import { moveToTarget, moveToTargetRoom } from "@/roles/shared";
 import { measureCreepDecision, measureCreepIntent } from "@/runtime/cpuPhaseProfiler";
 import { hasTerminalActionClaim } from "@/runtime/marketActionArbiter";
 import {
@@ -9,8 +9,7 @@ import {
 import type { RoleFactory } from "@/types/system";
 import { getCreepConfigService } from "@/runtime/runtimeServices";
 import { requestCombatObservation } from "@/runtime/powerBankObserver";
-import { getMoveIntentReceipt, moveOffExit } from "@/movement/traffic";
-import { isExitTile } from "@/movement/common";
+import { getMoveIntentReceipt } from "@/movement/traffic";
 
 type RemoteHaulTarget = AnyStoreStructure | Ruin | Tombstone | Resource;
 const SALVAGE_MODE = "invaderSalvage";
@@ -327,24 +326,20 @@ export const remoteCarrierRole: RoleFactory = (targetRoom: string, targetX?: str
       requestCombatObservation(targetRoom);
       if (salvageIntentTicks.get(creep) === Game.time) return false;
       const room = Game.rooms[targetRoom];
-      if (salvageTaskActive(creep) && !room) {
-        if (creep.store.getUsedCapacity() > 0) return true;
-        // Observer并不保证逐tick可见；暂缺视野只等待，不能每隔一tick改向母房。
-        clearMovementState(creep);
-        if (isExitTile(creep.pos) && moveOffExit(creep, true, (_direction, pos) => isInvaderSalvagePositionSafe(creep.room, pos)) === OK) markSalvageIntent(creep);
-        return false;
-      }
-      if (!salvageTaskActive(creep) || !isInvaderSalvageRoomClear(room)) {
+      if (!room && creep.store.getUsedCapacity() > 0) return true;
+      if (!salvageTaskActive(creep) || (room && !isInvaderSalvageRoomClear(room))) {
         if (creep.store.getUsedCapacity() > 0) return true;
         const home = getHomeRoomName(creep);
         if (creep.room.name !== home) moveSalvageSafely(creep, new RoomPosition(25, 25, home), 20);
         return false;
       }
       if (creep.room.name !== targetRoom) {
-        const candidate = getRemoteHaulTargets(room, true).find((target) => isInvaderSalvagePositionSafe(room, target.pos));
-        if (candidate) moveSalvageSafely(creep, candidate.pos);
+        // 远处目标和下一房不必同帧可见；实际落点仍须通过共用下一步的新鲜敌情门。
+        const candidate = room ? getRemoteHaulTargets(room, true).find((target) => isInvaderSalvagePositionSafe(room, target.pos)) : undefined;
+        if (!room || candidate) moveSalvageSafely(creep, candidate?.pos ?? new RoomPosition(25, 25, targetRoom));
         return false;
       }
+      if (!room) return false;
     }
     if (creep.store.getUsedCapacity() > 0 && isCarryStoreFull(creep)) {
       return true;
