@@ -378,7 +378,7 @@ describe("powerBankHarvest", () => {
     const taskId = "pb-live-hauler-window";
     const pair = setupOwnedCombatPair({ taskId, ticksToLive: 1450 });
     const dps = pair.attacker.body.filter(p => p.type === ATTACK).length * ATTACK_POWER * 4;
-    const bank = createMockPowerBank({ id: taskId + "-bank", roomName: TARGET_ROOM, x: 25, y: 25, hits: 2_000_000, ticksToDecay: 5000 });
+    const bank = createMockPowerBank({ id: taskId, roomName: TARGET_ROOM, x: 25, y: 25, hits: 2_000_000, ticksToDecay: 5000 });
     mockObjects(pair.attacker, pair.healer, bank);
     const task = makeTask({ id: taskId, bankId: bank.id, status: POWER_BANK_STATUS.ATTACKING, sourceRoom: SOURCE_ROOM,
       attackerId: pair.attacker.id, healerId: pair.healer.id, activeGeneration: 0, activeIndex: 0, combatReady: true,
