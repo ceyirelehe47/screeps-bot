@@ -652,6 +652,30 @@ describe("powerBankHarvest", () => {
     else expect(getTask(taskId)?.reinforcement).toMatchObject({ generation: 1, stage: "spawning" });
   });
 
+  it.each(["attack", "heal"] as const)("主队失去全部有效%s部件时，寿命充足也必须允许有界恢复", (lostRole) => {
+    Game.time = 400;
+    setupSourceRoom();
+    const taskId = `pb-recovery-${lostRole}`;
+    const pair = setupOwnedCombatPair({ taskId, ticksToLive: 1400 });
+    const disabled = lostRole === "attack" ? pair.attacker : pair.healer;
+    const partType = lostRole === "attack" ? ATTACK : HEAL;
+    for (const part of disabled.body) if (part.type === partType) part.hits = 0;
+    const bank = createMockPowerBank({ id: taskId + "-bank", hits: 100_000, ticksToDecay: 5000 });
+    mockObjects(pair.attacker, pair.healer, bank);
+    addTask(makeTask({ id: taskId, status: POWER_BANK_STATUS.ATTACKING, sourceRoom: SOURCE_ROOM,
+      bankId: bank.id, tier: 8, attackerId: pair.attacker.id, healerId: pair.healer.id,
+      activeGeneration: 0, activeIndex: 0, combatReady: true, routeDistance: 2,
+      lastBankHits: bank.hits, lastBankProgressAt: Game.time, stageEnteredAt: Game.time,
+      bankExpiresAt: Game.time + 5000 }));
+    runPowerBankHarvest();
+    expect(getTask(taskId)?.reinforcement).toMatchObject({ generation: 1, stage: "spawning" });
+    Game.time += 3;
+    resetRuntimeServices();
+    runPowerBankHarvest();
+    expect(getTask(taskId)?.reinforcement).toMatchObject({ generation: 1, stage: "spawning" });
+    expect(Object.keys(Memory.data?.creepConfigs ?? {}).some((name) => name.includes(":attacker:2:") || name.includes(":healer:2:"))).toBe(false);
+  });
+
   it("requests recovery at 100 idle ticks and fails closed after the 250-tick progress deadline", () => {
     Game.time = 400;
     setupSourceRoom();
