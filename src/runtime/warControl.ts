@@ -1344,7 +1344,8 @@ function processTask(task: WarTask): void {
     if (decision.reason === "entry_not_proven") { task.failReason = "npc_entry_not_proven"; return; }
     if (!decision.sufficient) {
       requestWarRoomClear(task.targetRoom, task.sourceRoom, { npcAuto: true });
-      processTask(ensureWarStore()[task.targetRoom]);
+      // 下一帧由源房调度器重新准入，不能绕过已有T3队伍的串行生产所有权。
+      setTaskStatus(ensureWarStore()[task.targetRoom], "queued");
       return;
     }
     if (task.failReason?.startsWith("npc_")) delete task.failReason;

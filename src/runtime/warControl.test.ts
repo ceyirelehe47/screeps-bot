@@ -453,6 +453,21 @@ describe("towerDrainDuo 战争控制", () => {
     expect(boosts).not.toHaveBeenCalled();
   });
 
+  it("无强化队伍动态升级T3后重新进入源房队列，不绕过已有T3的生产所有权", () => {
+    const room = createTargetRoom(); room.controller!.owner = { username: "TooAngel" };
+    Game.rooms[room.name] = room;
+    startWarRoom(room.name, "E1N57", { oneShot: false });
+    runWarControl();
+    startWarRoom("E4N57", "E1N57", { squad: "t3Duo", oneShot: false });
+    Game.rooms.E1N57.energyCapacityAvailable = 6000;
+    Game.time += 100; resetRuntimeServices(); runWarControl();
+    expect(Memory.data!.war![room.name].squad).toBe("t3Duo");
+    expect(Memory.data!.war![room.name].activeGeneration).toBeUndefined();
+    Game.time++; resetRuntimeServices(); runWarControl();
+    expect(Memory.data!.war![room.name].status).toBe("queued");
+    expect(Memory.data!.war![room.name].activeGeneration).toBeUndefined();
+  });
+
   it("地图路线记录跳数和当前敌情，经济危险名单不造成长绕行，显式路线不被刷新", () => {
     const threatened = createTargetRoom([], [{ structureType: STRUCTURE_TOWER, pos: new MockPos(25, 25, "E2N57"), store: createMockStore({ [RESOURCE_ENERGY]: 1000 }) } as unknown as StructureTower], [], "E2N57");
     Game.rooms.E2N57 = threatened;
