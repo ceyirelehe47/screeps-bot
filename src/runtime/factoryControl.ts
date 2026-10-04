@@ -9,6 +9,7 @@
  */
 
 import { normalizeBoolean, normalizeNumber } from "@/runtime/configNormalize";
+import { HUB_FACTORY_OWNER, planHubFactory } from "@/runtime/hubFactoryPlanner";
 import { getReservedProductionAmountExcludingHolder } from "@/runtime/resourceReservation";
 import {
   replaceCarrierTasksForProducerRoom,
@@ -68,6 +69,8 @@ interface RoomPlanConfig {
   resourceFloors: Partial<Record<ResourceConstant, number>>;
   productionCaps: Partial<Record<ResourceConstant, number>>;
   sleepTicks: number;
+  managedBy?: "hubFactoryPlanner";
+  drainOnly?: boolean;
 }
 
 interface FactoryControlConfig {
@@ -94,6 +97,9 @@ interface RoomRuntimeState {
   lastError?: string;
   lastTransitionAt: number;
   loadingSinceTick?: number;
+  lastProducedAt?: number;
+  lastProducedResource?: ResourceConstant;
+  producedAmount?: number;
 }
 
 interface FactoryControlRuntime {
@@ -299,6 +305,8 @@ function parseConfig(): FactoryControlConfig {
         resourceFloors: normalizeResourceMap(rc.resourceFloors),
         productionCaps: normalizeResourceMap(rc.productionCaps),
         sleepTicks: normalizeNumber(rc.sleepTicks, 0, 0, 10000),
+        managedBy: rc.managedBy === HUB_FACTORY_OWNER ? HUB_FACTORY_OWNER : undefined,
+        drainOnly: rc.drainOnly === true,
       };
     }
   }
@@ -731,7 +739,8 @@ function resolveFactoryUnloadTarget(
   if (room.terminal && room.terminal.store.getFreeCapacity(product) > 0) {
     return room.terminal;
   }
-  const isLowRisk = product === RESOURCE_ENERGY || product === RESOURCE_BATTERY;
+  const isLowRisk = product === RESOURCE_ENERGY || product === RESOURCE_BATTERY ||
+    Memory.cfg?.factoryControl?.rooms?.[room.name]?.managedBy === HUB_FACTORY_OWNER;
   if (isLowRisk && room.storage && room.storage.store.getFreeCapacity(product) > 0) {
     return room.storage;
   }
@@ -866,7 +875,7 @@ function executeBatteryDecompressTask(
       state.stage = "producing";
       if (factory.cooldown <= 0) {
         const factoryFree = factory.store.getFreeCapacity() ?? 0;
-        if (factoryFree < BATTERY_DECOMPRESS_BATCH_ENERGY) {
+        if (factoryFree + BATTERY_DECOMPRESS_BATCH_BATTERY < BATTERY_DECOMPRESS_BATCH_ENERGY) {
           state.stage = "blocked";
           state.sleepReason = "factory_output_full";
           state.lastError = "factory_full";
@@ -959,12 +968,19 @@ function executeProductionCycle(
       state.stage = "producing";
     } else {
       const factoryFree = factory.store.getFreeCapacity() ?? 0;
-      const hasOutputCapacity = factoryFree >= recipe.amount;
+      const consumed = Object.values(recipe.components).reduce((sum, amount) => sum + (amount ?? 0), 0);
+      const hasOutputCapacity = factoryFree + consumed >= recipe.amount;
       const unloadTarget = resolveFactoryUnloadTarget(room, product);
 
       if (hasOutputCapacity && unloadTarget) {
         state.stage = "producing";
         const result = factory.produce(product as CommodityConstant);
+        if (result === OK) {
+          state.lastProducedAt = Game.time;
+          state.lastProducedResource = product;
+          state.producedAmount = (state.producedAmount ?? 0) + recipe.amount;
+          state.lastError = undefined;
+        }
         if (result !== OK) {
           state.lastError = `produce_${result}`;
           if (result === ERR_NOT_ENOUGH_RESOURCES) {
@@ -1255,8 +1271,14 @@ function attemptRegionalRawPurchase(
 // ---------------------------------------------------------------------------
 
 export function runFactoryControl(): void {
+  planHubFactory();
   const config = parseConfig();
-  if (!config.enabled) return;
+  if (!config.enabled) {
+    for (const roomName of Object.keys(Memory.runtime?.factoryControl?.rooms ?? {})) {
+      replaceCarrierTasksForProducerRoom(FACTORY_CARRIER_TASK_PRODUCER, roomName, []);
+    }
+    return;
+  }
 
   const runtime = ensureRuntimeState();
   runtime.updatedAt = Game.time;
@@ -1266,7 +1288,10 @@ export function runFactoryControl(): void {
 
     const roomName = room.name;
     const roomCfg = config.rooms[roomName];
-    if (roomCfg && !roomCfg.enabled) continue;
+    if (roomCfg && !roomCfg.enabled) {
+      replaceCarrierTasksForProducerRoom(FACTORY_CARRIER_TASK_PRODUCER, roomName, []);
+      continue;
+    }
 
     const factory = findFactoryInRoom(room);
     if (!factory) continue;
@@ -1281,7 +1306,28 @@ export function runFactoryControl(): void {
       continue;
     }
 
-    const targetQueue = resolveTargetQueue(config, roomName);
+    // 已产出的成品先卸出；总库存达到目标不能让最后一批留在工厂。
+    // HUB 切换目标时同时清理不再需要的输入，避免残料堵满工厂。
+    const queued = resolveTargetQueue(config, roomName);
+    const nextRecipe = queued[0] ? getCommodityRecipe(queued[0].resource) : null;
+    const cleanup = Object.keys(factory.store).find(name => {
+      const resource = name as ResourceConstant;
+      if ((factory.store.getUsedCapacity(resource) ?? 0) <= 0) return false;
+      if (roomCfg?.drainOnly) return true;
+      if (resource === previousActiveTarget) return true;
+      return roomCfg?.managedBy === HUB_FACTORY_OWNER && !(nextRecipe?.components[resource]);
+    }) as ResourceConstant | undefined;
+    if (cleanup) {
+      const draft = generateFactoryUnloadDraft(room, factory, cleanup, roomName);
+      state.stage = draft ? "unloading" : "blocked";
+      state.sleepReason = draft ? undefined : "unload_target_full";
+      state.lastError = draft ? undefined : "unload_target_full";
+      state.sleepUntilTick = undefined;
+      replaceCarrierTasksForProducerRoom(FACTORY_CARRIER_TASK_PRODUCER, roomName, draft ? [draft] : []);
+      continue;
+    }
+
+    const targetQueue = roomCfg?.drainOnly ? [] : queued;
     const resourceFloors = resolveResourceFloors(config, roomName);
     const productionCaps = resolveProductionCaps(config, roomName);
 
@@ -1337,7 +1383,19 @@ export function runFactoryControl(): void {
 
       // Decompose to find what we actually need to produce
       const effectiveTarget = targetAmount > 0 ? targetAmount - currentStock : (effectiveCap > 0 ? effectiveCap - currentStock : 1);
-      const decomposition = decomposeTarget(
+      const recipe = getCommodityRecipe(resource);
+      // 自动 HUB 只做当前批次，缺压缩矿时直接等待内部调拨，避免压缩/解压成环。
+      const decomposition: DecompositionResult = roomCfg?.managedBy === HUB_FACTORY_OWNER && recipe
+        ? {
+            productionTarget: resource,
+            requiredLevel,
+            missing: Object.fromEntries(Object.entries(recipe.components).flatMap(([name, amount]) => {
+              const component = name as ResourceConstant;
+              const missing = (amount ?? 0) - computeSurplus(room, component, resourceFloors[component] ?? 0, holderId);
+              return missing > 0 ? [[component, missing]] : [];
+            })),
+          }
+        : decomposeTarget(
         resource,
         Math.max(1, effectiveTarget),
         room,
@@ -1400,7 +1458,7 @@ export function runFactoryControl(): void {
     }
 
     if (state.stage === "blocked" && state.missing) {
-      attemptRegionalRawPurchase(room, state, config, runtime, roomName);
+      if (roomCfg?.managedBy !== HUB_FACTORY_OWNER) attemptRegionalRawPurchase(room, state, config, runtime, roomName);
     }
 
     if (state.stage === "blocked") {

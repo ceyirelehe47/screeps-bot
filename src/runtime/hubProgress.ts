@@ -25,6 +25,7 @@ import {
 } from "@/visual/palette";
 
 export interface HubProgressInput {
+  factory?: HubFactoryProgress;
   hubConfig: {
     enabled?: boolean;
     hubRoomName?: string;
@@ -159,6 +160,7 @@ export interface HubT3CompoundStatus {
 }
 
 export interface HubProgressSnapshot {
+  factory?: HubFactoryProgress;
   updatedAt: number;
   enabled: boolean;
   hubRoomName: string;
@@ -204,6 +206,14 @@ export interface HubProgressSnapshot {
    * analytics。
    */
   committedProtectionMarker?: HubCommittedProtectionProgressMarker | null;
+}
+
+export interface HubFactoryProgress {
+  status: string;
+  stage: string;
+  product: string | null;
+  missing: Record<string, number>;
+  lastProducedAt: number | null;
 }
 
 export interface HubCommittedProtectionProgressMarker {
@@ -265,6 +275,7 @@ export interface HubVisualModel {
     activeRooms: number;
     blockedRooms: number;
   };
+  factory?: HubFactoryProgress;
   t3Reserve: {
     totalCompounds: number;
     stockedCompounds: number;
@@ -441,6 +452,7 @@ export function buildHubVisualModel(snapshot: HubProgressSnapshot): HubVisualMod
       overflow: Math.max(0, logisticsRows.length - MAX_LOGISTICS_ROWS),
     },
     production: { activeRooms, blockedRooms },
+    factory: snapshot.factory,
     t3Reserve: {
       totalCompounds: snapshot.t3ReserveStatus.compounds.length,
       stockedCompounds,
@@ -491,7 +503,8 @@ function hubPanelHeight(model: HubVisualModel): number {
   const reserveRows = model.t3Reserve.totalCompounds === 0 || model.t3Reserve.rows.length === 0
     ? 1
     : model.t3Reserve.rows.length + (model.t3Reserve.overflow > 0 ? 1 : 0);
-  return VISUAL_HEADER_STRIDE * 4 + alertRows * VISUAL_ROW_STRIDE + progressHeight + logisticsRows * VISUAL_ROW_STRIDE + reserveRows * VISUAL_ROW_STRIDE;
+  return VISUAL_HEADER_STRIDE * 4 + alertRows * VISUAL_ROW_STRIDE + progressHeight + logisticsRows * VISUAL_ROW_STRIDE + reserveRows * VISUAL_ROW_STRIDE +
+    (model.factory ? VISUAL_HEADER_STRIDE + VISUAL_ROW_STRIDE * (Object.keys(model.factory.missing).length > 0 ? 2 : 1) : 0);
 }
 
 function healthColor(model: HubVisualModel): string {
@@ -529,6 +542,13 @@ export function drawHubVisualPanel(rv: VisualSurface, model: HubVisualModel): nu
       font: 0.4,
       color: model.progressMode === "activity" ? VIS_OK : VIS_MUTED,
     });
+  }
+
+  if (model.factory) {
+    p.sectionHeader(`Factory · ${model.factory.status}`);
+    p.textRow(`${model.factory.product ?? "idle"} · ${model.factory.stage}`, { font: 0.35 });
+    const missing = Object.entries(model.factory.missing).slice(0, 4).map(([r, n]) => `${r}:${formatCompactAmount(n)}`);
+    if (missing.length > 0) p.textRow(`need ${missing.join(" ")}`, { font: 0.35, color: VIS_WARN });
   }
 
   const inboundCount = model.logistics.imports + model.logistics.reclaims;
@@ -1176,6 +1196,7 @@ export function buildHubProgressSnapshot(input: HubProgressInput): HubProgressSn
     hubLabInventory: input.hubLabInventory ?? {},
     hubCarrierCargo,
     synthesisTargetAmount: input.synthesisRuntime?.targetAmount,
+    factory: input.factory,
     productionRooms: buildProductionRooms(
       input.distributedSynthesis,
       input.synthesisControlRooms,
@@ -1224,6 +1245,15 @@ export function collectHubProgressSnapshot(): HubProgressSnapshot {
   const transferTasks = ensureResourceTransferTaskStore();
 
   const hubCarrierCargo = collectCarrierCargoInventory(hubRoomName);
+  const factoryPlan = Memory.runtime?.factoryControl?.hubPlan;
+  const factoryState = Memory.runtime?.factoryControl?.rooms?.[hubRoomName];
+  const factory: HubFactoryProgress | undefined = factoryPlan?.hubRoomName === hubRoomName ? {
+    status: factoryPlan.status,
+    stage: factoryState?.stage ?? "idle",
+    product: factoryState?.activeTarget ?? factoryPlan.targets[0]?.resource ?? null,
+    missing: { ...(factoryState?.missing ?? factoryPlan.missing) },
+    lastProducedAt: factoryState?.lastProducedAt ?? null,
+  } : undefined;
 
   const satelliteStores: Array<{
     roomName: string;
@@ -1251,6 +1281,7 @@ export function collectHubProgressSnapshot(): HubProgressSnapshot {
     hubTerminalStore,
     hubLabInventory,
     hubCarrierCargo,
+    factory,
     resourceControlRooms,
     transferTasks,
     currentTick: Game.time,

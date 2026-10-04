@@ -234,6 +234,15 @@ declare global {
     };
     factoryControl?: {
       enabled?: boolean;
+      hub?: {
+        enabled?: boolean;
+        planInterval?: number;
+        productTarget?: number;
+        mineralFloor?: number;
+        energyFloor?: number;
+        energyTarget?: number;
+        energyCompressionStart?: number;
+      };
       terminalEnergyReserve?: number;
       market?: {
         enabled?: boolean;
@@ -279,6 +288,8 @@ declare global {
           resourceFloors?: Partial<Record<ResourceConstant, number>>;
           productionCaps?: Partial<Record<ResourceConstant, number>>;
           sleepTicks?: number;
+          managedBy?: "hubFactoryPlanner";
+          drainOnly?: boolean;
         }
       >;
     };

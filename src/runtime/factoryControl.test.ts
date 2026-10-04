@@ -105,12 +105,12 @@ describe("cooldown and capacity", () => {
     clearCarrierTaskBoardForTest();
   });
 
-  it("blocks when factory has no free capacity for output", () => {
+  it("blocks when consumption still cannot free enough capacity for output", () => {
     const { room, factory } = createFactoryRoom({
       storageResources: { [RESOURCE_ENERGY]: 500000 },
       factoryOverrides: {
         level: 0,
-        store: createMockStore({ [RESOURCE_ENERGY]: 2999 }, 3000),
+        store: createMockStore({ [RESOURCE_BATTERY]: 50, H: 2949 }, 3000),
         cooldown: 0,
       },
     });
@@ -118,7 +118,7 @@ describe("cooldown and capacity", () => {
 
     setConfig({
       enabled: true,
-      targets: [{ resource: "battery", targetAmount: 100 }],
+      targets: [{ resource: "energy", targetAmount: 525500 }],
     });
 
     runFactoryControl();

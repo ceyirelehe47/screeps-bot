@@ -466,6 +466,15 @@ declare global {
     };
     factoryControl?: {
       updatedAt?: number;
+      hubPlan?: {
+        hubRoomName: string;
+        updatedAt: number;
+        signature: string;
+        status: "disabled" | "manual" | "unavailable" | "idle" | "acquiring" | "ready";
+        targets: Array<{ resource: ResourceConstant; targetAmount: number; cap: number }>;
+        missing: Partial<Record<ResourceConstant, number>>;
+        lastActions: string[];
+      };
       rooms: Record<
         string,
         {
@@ -477,6 +486,9 @@ declare global {
           lastError?: string;
           lastTransitionAt: number;
           loadingSinceTick?: number;
+          lastProducedAt?: number;
+          lastProducedResource?: ResourceConstant;
+          producedAmount?: number;
         }
       >;
       claimedOrders?: Array<{
