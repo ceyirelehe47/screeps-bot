@@ -11,14 +11,14 @@ class Pos {
 }
 const pos = (x: number, y: number) => new Pos(x, y, "W1N1") as unknown as RoomPosition;
 function link(id: string, x: number, y: number, room: Room): StructureLink {
-  return { id, pos: pos(x, y), room, structureType: STRUCTURE_LINK, isActive: () => true,
+  return { id, pos: pos(x, y), room, my: true, structureType: STRUCTURE_LINK, isActive: () => true,
     store: { getUsedCapacity: () => 800, getFreeCapacity: () => 0, getCapacity: () => 800 } } as unknown as StructureLink;
 }
 function world() {
   const links: StructureLink[] = [], sites: ConstructionSite[] = [];
   const room = { name: "W1N1", controller: { my: true, level: 8, pos: pos(20, 25) },
     storage: { pos: pos(10, 20), store: { getFreeCapacity: () => 100000 } },
-    find: (kind: FindConstant) => kind === FIND_STRUCTURES ? links : kind === FIND_CONSTRUCTION_SITES ? sites : [] } as unknown as Room;
+    find: (kind: FindConstant) => kind === FIND_STRUCTURES || kind === FIND_MY_STRUCTURES ? links : kind === FIND_CONSTRUCTION_SITES ? sites : [] } as unknown as Room;
   links.push(link("warehouse", 11, 20, room));
   const layout = { [STRUCTURE_LINK]: [{ x: 11, y: 20 }] } as Record<string, { x: number; y: number }[]>;
   Memory.data = { roomPlanner: { W1N1: { layout, timestamp: "", savedAt: 0 } }, remoteMining: {

@@ -74,7 +74,7 @@ function makeRoom(name: string, opts: { structures?: any[]; droppedResources?: a
     name,
     find: jest.fn((type: FindConstant, opts?: { filter?: (s: any) => boolean }) => {
       let raw: any[];
-      if (type === FIND_STRUCTURES) raw = structures;
+      if (type === FIND_STRUCTURES || type === FIND_MY_STRUCTURES) raw = structures;
       else if (type === FIND_DROPPED_RESOURCES) raw = droppedResources;
       else if (type === FIND_CONSTRUCTION_SITES) raw = constructionSites;
       else raw = [];
@@ -153,9 +153,9 @@ describe("外矿入口 link 卸载", () => {
     const home = makeRoom("W1N1", { structures });
     Object.assign(home, { controller: { my: true, level: 8, pos: makePos(20, 20, home.name) },
       storage: { id: "store", structureType: STRUCTURE_STORAGE, pos: makePos(10, 25, home.name), store: createStore({}, 1000000) } });
-    const entry = { id: "entry", structureType: STRUCTURE_LINK, room: home, pos: makePos(47, 19, home.name),
+    const entry = { id: "entry", my: true, structureType: STRUCTURE_LINK, room: home, pos: makePos(47, 19, home.name),
       isActive: () => true, store: createStore({ energy: 800 }, 800) } as unknown as StructureLink;
-    const receiver = { id: "receiver", structureType: STRUCTURE_LINK, room: home, pos: makePos(11, 25, home.name),
+    const receiver = { id: "receiver", my: true, structureType: STRUCTURE_LINK, room: home, pos: makePos(11, 25, home.name),
       isActive: () => true, store: createStore({}, 800) } as unknown as StructureLink;
     structures.push(entry, receiver);
     Game.rooms[home.name] = home;

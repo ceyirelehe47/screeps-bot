@@ -13,6 +13,7 @@ import { clearMarketSaleExposureReservationsForTest } from "@/runtime/marketSale
 import { clearLocalCarrierDestinationCapacityForTest } from "@/runtime/localCarrierDestinationCapacity";
 import { TREASURY_T1_RUN_ID, treasuryT1WorkKey } from "@/runtime/treasuryTaskCommitmentBridge";
 import { initializeTreasuryCoreStore } from "@/runtime/treasury/kernel/store";
+import { MockPos } from "@mock/powerBank";
 
 function installDrainedT1Fixture(): void {
   expect(initializeTreasuryCoreStore(Game.time).initialized).toBe(true);
@@ -518,14 +519,14 @@ describe("carrierRole mineral hauling", () => {
     useActualEnergyPickupReservationsForTest();
     const room = createRoom("W1N1", { terminal: null });
     const storage = room.storage!;
-    Object.assign(storage, { room, pos: new RoomPosition(10, 10, room.name) });
-    Object.assign(room.controller!, { pos: new RoomPosition(25, 25, room.name) });
+    Object.assign(storage, { room, pos: new MockPos(10, 10, room.name) });
+    Object.assign(room.controller!, { pos: new MockPos(25, 25, room.name) });
     let energy = 800, cargo = 0;
-    const receiver = { id: "receiver-link", structureType: STRUCTURE_LINK, room, pos: new RoomPosition(11, 10, room.name),
+    const receiver = { id: "receiver-link", my: true, structureType: STRUCTURE_LINK, room, pos: new MockPos(11, 10, room.name),
       store: { getUsedCapacity: () => energy, getFreeCapacity: () => 800 - energy, getCapacity: () => 800 } } as unknown as StructureLink;
-    room.find = jest.fn((kind: FindConstant) => kind === FIND_STRUCTURES ? [storage, receiver] : []) as Room["find"];
+    room.find = jest.fn((kind: FindConstant) => kind === FIND_STRUCTURES || kind === FIND_MY_STRUCTURES ? [storage, receiver] : []) as Room["find"];
     const creep = createCreep(room);
-    Object.assign(creep, { pos: new RoomPosition(10, 11, room.name), store: {
+    Object.assign(creep, { pos: new MockPos(10, 11, room.name), store: {
       getUsedCapacity: (resource?: ResourceConstant) => resource === undefined || resource === RESOURCE_ENERGY ? cargo : 0,
       getFreeCapacity: () => 1000 - cargo, getCapacity: () => 1000,
     } });
