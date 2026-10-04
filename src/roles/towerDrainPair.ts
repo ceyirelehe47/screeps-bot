@@ -18,7 +18,7 @@ export interface TowerDrainPairState {
   healingPower?: number;
 }
 
-const MOVE_OPTIONS = { plainCost: 2, swampCost: 8, reusePath: 0, maxRooms: 1, ignoreCreeps: false, avoidExitTiles: false, costCallback: plainOnlyMatrix } as const;
+const MOVE_OPTIONS = { plainCost: 2, swampCost: 8, reusePath: 0, maxRooms: 1, ignoreCreeps: false, avoidExitTiles: false } as const;
 const RETREAT_RATIO = 0.75;
 // 退路预算至少保留1000HP，并按可能受损后的真实MOVE/HEAL重算。
 const DAMAGE_RESERVE = 1000;

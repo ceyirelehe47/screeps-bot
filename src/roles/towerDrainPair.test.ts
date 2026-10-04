@@ -546,6 +546,24 @@ describe("towerDrainDuo 公共战术门", () => {
     expect(matrix.set).toHaveBeenCalledWith(3, 25, 255);
   });
 
+  it("目标房外集结使用普通沼泽代价，唯一通路含沼泽时仍能走到入口", () => {
+    const { attacker, healer } = pair(true, [tower("empty", 0)]);
+    attacker.pos = new MockPos(44, 25, RETREAT) as unknown as RoomPosition;
+    healer.pos = new MockPos(43, 25, RETREAT) as unknown as RoomPosition;
+    Game.map.getRoomTerrain = jest.fn((name) => ({ get: (x: number) => name === RETREAT && x === 45 ? TERRAIN_MASK_SWAMP : 0 })) as GameMap["getRoomTerrain"];
+    moveToTarget.mockImplementation((actor: Creep, _target: RoomPosition, _range: number, options: { costCallback?: (name: string, matrix: CostMatrix) => CostMatrix }) => {
+      const cells = new Uint8Array(2500);
+      const matrix = { set: (x: number, y: number, value: number) => { cells[x * 50 + y] = value; }, get: (x: number, y: number) => cells[x * 50 + y] } as CostMatrix;
+      options.costCallback?.(actor.room.name, matrix);
+      if (matrix.get(45, 25) === 255) return ERR_NO_PATH;
+      actor.move(RIGHT); return OK;
+    });
+    runTowerDrainPair(attacker, TARGET, GREEN_CONFIG);
+    expect(attacker.move).toHaveBeenCalledWith(RIGHT);
+    expect(moveToTarget).toHaveBeenCalledWith(attacker, expect.objectContaining({ roomName: RETREAT }), 0,
+      expect.objectContaining({ swampCost: 8, ignoreCreeps: false }));
+  });
+
   it("即使全部空塔也禁走沼泽，不把多轮MOVE疲劳藏入两轮退出余量", () => {
     const { attacker } = pair(false, [tower("empty", 0)]);
     runTowerDrainPair(attacker, TARGET, GREEN_CONFIG);
