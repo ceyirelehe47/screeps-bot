@@ -6,7 +6,7 @@ import { constrainTowerDrainBreachPath, moveTowerDrainBorderAttack, runTowerDrai
 import { measureCreepDecision, measureCreepIntent } from "@/runtime/cpuPhaseProfiler";
 import type { RoleFactory } from "@/types/system";
 
-const TRAVEL_OPTIONS = { plainCost: 2, swampCost: 8 } as const;
+const TRAVEL_OPTIONS = { plainCost: 2, swampCost: 8, routePurpose: "combat" } as const;
 const TARGET_ROOM_MOVE_OPTIONS = {
   plainCost: 2,
   swampCost: 8,
@@ -157,19 +157,6 @@ function isBreachTarget(structure: Structure): structure is StructureRampart | S
   return structure.structureType === STRUCTURE_RAMPART;
 }
 
-function getTrackedWarBreachTarget(creep: Creep): StructureRampart | StructureWall | null {
-  const targetId = creep.memory._warBreachTargetId;
-  if (!targetId) return null;
-
-  const target = Game.getObjectById(targetId);
-  if (!target || target.pos.roomName !== creep.room.name || !isBreachTarget(target)) {
-    delete creep.memory._warBreachTargetId;
-    return null;
-  }
-
-  return target;
-}
-
 function getCombatBreachCost(structure: StructureRampart | StructureWall, hostileCreeps: Creep[]): number {
   if (structure.structureType === STRUCTURE_RAMPART) return 0xfe;
   if (
@@ -182,65 +169,40 @@ function getCombatBreachCost(structure: StructureRampart | StructureWall, hostil
   return Math.min(0xfe, 20 + Math.ceil(structure.hits / 50_000));
 }
 
-function findFirstBreachOnCombatPath(creep: Creep, target: Creep | Structure): StructureRampart | StructureWall | null {
-  if (target.pos.roomName !== creep.room.name) return null;
+interface WarCombatApproach { open: boolean; breach: StructureRampart | StructureWall | null }
 
+/** 先证明开放路线；不把拆墙耗时折成少量移动代价，也不让旧破墙目标锁住现成通道。 */
+function findCombatApproach(creep: Creep, target: Creep | Structure): WarCombatApproach {
+  if (target.pos.roomName !== creep.room.name) return { open: false, breach: null };
   const structures = creep.room.find(FIND_STRUCTURES);
-  const breaches = structures.filter(
-    (structure): structure is StructureRampart | StructureWall =>
-      isBreachTarget(structure) && !(structure.structureType === STRUCTURE_RAMPART && structure.my),
-  );
-  if (breaches.length === 0) return null;
-
-  const coveringBreach = breaches.find(
-    (breach) => breach.pos.x === target.pos.x && breach.pos.y === target.pos.y,
-  );
-  if (coveringBreach) return coveringBreach;
-
+  const barriers = structures.filter((s): s is StructureRampart | StructureWall => isBreachTarget(s) && !(s.structureType === STRUCTURE_RAMPART && s.my));
+  const covering = barriers.find((s) => s.structureType === STRUCTURE_RAMPART && s.pos.x === target.pos.x && s.pos.y === target.pos.y);
+  if (covering) return { open: false, breach: covering };
+  if (barriers.length === 0) return { open: true, breach: null };
   const matrix = new PathFinder.CostMatrix();
-  for (const structure of structures) {
-    if (isBreachTarget(structure)) continue;
-    if (structure.structureType === STRUCTURE_ROAD) {
-      matrix.set(structure.pos.x, structure.pos.y, 1);
-      continue;
-    }
-    if (!isWalkableStructure(structure)) {
-      matrix.set(structure.pos.x, structure.pos.y, 0xff);
-    }
-  }
-
+  for (const structure of structures) if (structure.structureType === STRUCTURE_ROAD) matrix.set(structure.pos.x, structure.pos.y, 1);
+  for (const structure of structures) if (!isWalkableStructure(structure)) matrix.set(structure.pos.x, structure.pos.y, 0xff);
+  for (const natural of [...creep.room.find(FIND_SOURCES), ...creep.room.find(FIND_MINERALS), ...creep.room.find(FIND_DEPOSITS)]) matrix.set(natural.pos.x, natural.pos.y, 0xff);
+  const search = () => PathFinder.search(creep.pos, { pos: target.pos, range: 1 }, {
+    plainCost: 2, swampCost: 8, maxRooms: 1,
+    roomCallback: (roomName) => roomName === creep.room.name ? matrix : false,
+  });
+  const openPath = search();
+  if (!openPath.incomplete && openPath.path.every((step) => matrix.get(step.x, step.y) < 0xff)) return { open: true, breach: null };
   const breachByPosition = new Map<string, StructureRampart | StructureWall>();
   const hostileCreeps = getHostileCreeps(creep.room);
-  for (const breach of breaches) {
-    matrix.set(breach.pos.x, breach.pos.y, getCombatBreachCost(breach, hostileCreeps));
-    breachByPosition.set(`${breach.pos.x}:${breach.pos.y}`, breach);
+  for (const barrier of barriers) {
+    if (isWalkableStructure(barrier)) continue;
+    matrix.set(barrier.pos.x, barrier.pos.y, getCombatBreachCost(barrier, hostileCreeps));
+    breachByPosition.set(`${barrier.pos.x}:${barrier.pos.y}`, barrier);
   }
-  for (const otherCreep of creep.room.find(FIND_MY_CREEPS)) {
-    if (otherCreep.name !== creep.name) {
-      matrix.set(otherCreep.pos.x, otherCreep.pos.y, 0xfe);
-    }
-  }
-  for (const hostileCreep of hostileCreeps) {
-    matrix.set(hostileCreep.pos.x, hostileCreep.pos.y, 0xfe);
-  }
-
-  const result = PathFinder.search(
-    creep.pos,
-    { pos: target.pos, range: 1 },
-    {
-      plainCost: 2,
-      swampCost: 8,
-      maxRooms: 1,
-      roomCallback: (roomName) => (roomName === creep.room.name ? matrix : false),
-    },
-  );
-  if (result.incomplete) return null;
-
-  for (const step of result.path) {
+  for (const other of [...creep.room.find(FIND_MY_CREEPS), ...hostileCreeps]) if (other.name !== creep.name) matrix.set(other.pos.x, other.pos.y, 0xfe);
+  const result = search();
+  if (!result.incomplete) for (const step of result.path) {
     const breach = breachByPosition.get(`${step.x}:${step.y}`);
-    if (breach) return breach;
+    if (breach) return { open: false, breach };
   }
-  return null;
+  return { open: false, breach: null };
 }
 
 function findAdjacentStructures(creep: Creep): Structure[] {
@@ -888,10 +850,9 @@ export const meleeAttackerRole: RoleFactory = (
       return false;
     }
 
+    const approach = targetRoom ? measureCreepDecision(() => findCombatApproach(creep, target)) : undefined;
     if (targetRoom) {
-      const plannedBreach =
-        getTrackedWarBreachTarget(creep) ||
-        measureCreepDecision(() => findFirstBreachOnCombatPath(creep, target));
+      const plannedBreach = approach?.breach;
       if (plannedBreach) {
         creep.memory._warBreachTargetId = plannedBreach.id;
         const breachCode = measureCreepIntent(() => creep.attack(plannedBreach));
@@ -906,7 +867,7 @@ export const meleeAttackerRole: RoleFactory = (
     const code = measureCreepIntent(() => creep.attack(target));
     if (code === ERR_NOT_IN_RANGE) {
       const moveCode = moveWarAttackerToTarget(creep, target, 1, targetMoveOptions, tactic === "towerDrainDuo");
-      if (moveCode === ERR_NO_PATH && creep.room.name === target.pos.roomName) {
+      if (moveCode === ERR_NO_PATH && creep.room.name === target.pos.roomName && !approach?.open) {
         attackAdjacentBreachTarget(creep, target);
       }
       return false;

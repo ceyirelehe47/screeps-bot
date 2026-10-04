@@ -10,7 +10,7 @@ import { moveOffExit } from "@/movement/traffic";
 import { measureCreepDecision, measureCreepIntent } from "@/runtime/cpuPhaseProfiler";
 import type { RoleFactory } from "@/types/system";
 
-const TRAVEL_OPTIONS = { plainCost: 2, swampCost: 8 } as const;
+const TRAVEL_OPTIONS = { plainCost: 2, swampCost: 8, routePurpose: "combat" } as const;
 const TARGET_ROOM_MOVE_OPTIONS = {
   plainCost: 2,
   swampCost: 8,

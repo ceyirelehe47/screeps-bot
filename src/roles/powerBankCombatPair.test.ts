@@ -133,6 +133,18 @@ beforeEach(() => {
 });
 
 describe("PowerBank same-frame pair movement", () => {
+  it.each(["attacker-first", "healer-first"] as const)("已对齐出口直穿：单体斜向末步会送绿进下一墙格时仍前进，%s", (order) => {
+    place(attacker, 48, 17); place(healer, 48, 18);
+    walls.add(`${SOURCE}:49:19`); walls.add(`${TARGET}:0:19`);
+    routeDirection = BOTTOM_RIGHT;
+    calls(order);
+    commitFrame();
+    expect(position(attacker)).toEqual({ x: 0, y: 17, roomName: TARGET });
+    expect(position(healer)).toEqual({ x: 0, y: 18, roomName: TARGET });
+    expect(attacker.move).toHaveBeenCalledWith(RIGHT);
+    expect(healer.move).toHaveBeenCalledWith(RIGHT);
+  });
+
   it.each(["attacker-first", "healer-first"] as const)("线形道路让路后领队继续前进，尾随短暂分离再用共同交通补位：%s", (order) => {
     const blocker = createMockPowerBankCreep("worker", { name: "worker", id: "worker" });
     place(blocker, 11, 10); Game.creeps.worker = blocker;
@@ -419,9 +431,14 @@ describe("PowerBank same-frame pair movement", () => {
     expect(healer.pos.y).not.toBe(26);
   });
 
-  it("rejects an unproven corner crossing", () => {
+  it("拒绝含糊角落意图后动态选择已证明的其它双格方向", () => {
     place(attacker, 48, 1); place(healer, 48, 2); routeDirection = TOP_RIGHT;
-    calls("attacker-first"); expect(pending.size).toBe(0); expect(getMoveIntentReceipt(attacker)).toBeUndefined();
+    calls("attacker-first");
+    expect(getMoveIntentReceipt(attacker)?.direction).toBe(RIGHT);
+    expect(attacker.cancelOrder).toHaveBeenCalledWith("move");
+    commitFrame();
+    expect(position(attacker)).toEqual({ x: 0, y: 1, roomName: TARGET });
+    expect(position(healer)).toEqual({ x: 0, y: 2, roomName: TARGET });
   });
 
   it("rejoins a legacy split at a proven border with safe inward and follower crossing steps", () => {

@@ -26,6 +26,8 @@ interface WarTask {
   status: WarStatus;
   reason: "npc_reservation" | "manual";
   routeRooms?: string[];
+  routeOrigin?: "map" | "manual";
+  routePlannedAt?: number;
   squad?: WarSquad;
   boostTier?: "t3";
   boostLabs?: string[];
@@ -390,6 +392,7 @@ function synchronizeGenerationRoleArgs(task: WarTask, resetTargets: boolean): vo
       store[configName].args = args;
     }
     for (const creep of getLiveCreepsByConfig(configName)) {
+      if (creep.memory.roleArgs?.[1] !== undefined && creep.memory.roleArgs[1] !== encodedRoute) clearMovementState(creep);
       creep.memory.roleArgs = [...args];
       if (resetTargets) resetWarCreepTargetState(creep);
     }
@@ -1299,6 +1302,14 @@ function writeWarTelemetry(): void {
 }
 
 function processTask(task: WarTask): void {
+  if (task.routeOrigin === "map" && Game.time - (task.routePlannedAt ?? 0) >= 100) {
+    const route = defaultWarMapRoute(task.sourceRoom, task.targetRoom);
+    task.routePlannedAt = Game.time;
+    if (route && route.join("|") !== task.routeRooms?.join("|")) {
+      task.routeRooms = route;
+      synchronizeGenerationRoleArgs(task, false);
+    }
+  }
   if (isTowerDrainDuoTask(task)) requestCombatObservation(task.targetRoom);
   task.statusSince ??= task.createdAt;
 
@@ -1416,6 +1427,14 @@ function activateFrontline(task: WarTask): void {
   setTaskCreepsQueued(task, false);
 }
 
+function defaultWarMapRoute(sourceRoom: string, targetRoom: string): string[] | undefined {
+  if (!/^[WE]\d+[NS]\d+$/.test(sourceRoom) || !/^[WE]\d+[NS]\d+$/.test(targetRoom) || typeof Game.map?.findRoute !== "function") return undefined;
+  const route = Game.map.findRoute(sourceRoom, targetRoom);
+  if (!Array.isArray(route)) return undefined;
+  const rooms = [sourceRoom, ...route.map((step) => step.room)];
+  return rooms[rooms.length - 1] === targetRoom ? rooms : undefined;
+}
+
 export function requestWarRoomClear(
   targetRoom: string,
   sourceRoom: string,
@@ -1440,7 +1459,9 @@ export function requestWarRoomClear(
     sourceRoom,
     status: nextStatus,
     reason: options?.reason ?? existing?.reason ?? "npc_reservation",
-    routeRooms: options?.routeRooms ?? existing?.routeRooms,
+    routeRooms: options?.routeRooms ?? (existing?.sourceRoom === sourceRoom ? existing.routeRooms : undefined) ?? defaultWarMapRoute(sourceRoom, targetRoom),
+    routeOrigin: options?.routeRooms ? "manual" : existing?.sourceRoom === sourceRoom && existing.routeRooms ? existing.routeOrigin ?? "manual" : "map",
+    routePlannedAt: options?.routeRooms || !existing?.routeRooms ? now : existing.routePlannedAt,
     squad,
     boostTier: squad === "towerDrainDuo" ? undefined : options?.boostTier ?? existing?.boostTier,
     boostLabs: restart ? undefined : existing?.boostLabs,

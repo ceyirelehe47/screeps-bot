@@ -27,8 +27,9 @@ type DrainMemory = CreepMemory & { _warTowerDrain?: TowerDrainPairState };
 
 function plainOnlyMatrix(roomName: string, matrix: CostMatrix): CostMatrix {
   const terrain = Game.map.getRoomTerrain(roomName);
-  // 25 MOVE 的退出预算按平地计；宁可等待，不把沼泽产生的多轮疲劳藏在两轮余量内。
-  for (let x = 0; x < 50; x++) for (let y = 0; y < 50; y++) if (terrain.get(x, y) === TERRAIN_MASK_SWAMP) matrix.set(x, y, 0xff);
+  // 道路覆盖沼泽后按道路疲劳结算，不能把现成通道一起封掉。
+  const roads = new Set(Game.rooms[roomName]?.find(FIND_STRUCTURES).filter((s) => s.structureType === STRUCTURE_ROAD).map((s) => s.pos.x * 50 + s.pos.y) ?? []);
+  for (let x = 0; x < 50; x++) for (let y = 0; y < 50; y++) if (terrain.get(x, y) === TERRAIN_MASK_SWAMP && !roads.has(x * 50 + y)) matrix.set(x, y, 0xff);
   return matrix;
 }
 
@@ -148,6 +149,7 @@ function exitPaths(room: Room, state: TowerDrainPairState, entry: { x: number; y
   const perTower = towers.map(() => new Float64Array(2500).fill(-1));
   const blocked = new Uint8Array(2500);
   const terrain = Game.map.getRoomTerrain(room.name);
+  const roads = new Set(room.find(FIND_STRUCTURES).filter((s) => s.structureType === STRUCTURE_ROAD).map((s) => s.pos.x * 50 + s.pos.y));
   const index = (x: number, y: number): number => x * 50 + y;
   const damage = (x: number, y: number): number => {
     const at = index(x, y);
@@ -160,9 +162,10 @@ function exitPaths(room: Room, state: TowerDrainPairState, entry: { x: number; y
   for (let x = 0; x < 50; x++) for (let y = 0; y < 50; y++) {
     const atExit = x === 0 || x === 49 || y === 0 || y === 49;
     const onReturnSide = state.exitDirection === LEFT ? x === 0 : state.exitDirection === RIGHT ? x === 49 : state.exitDirection === TOP ? y === 0 : y === 49;
-    if (terrain.get(x, y) !== 0 || (atExit && (!onReturnSide || x === 0 && y === 0 || x === 49 && y === 49 || x === 0 && y === 49 || x === 49 && y === 0))) blocked[index(x, y)] = 1;
+    if ((terrain.get(x, y) !== 0 && !(terrain.get(x, y) === TERRAIN_MASK_SWAMP && roads.has(index(x, y)))) || (atExit && (!onReturnSide || x === 0 && y === 0 || x === 49 && y === 49 || x === 0 && y === 49 || x === 49 && y === 0))) blocked[index(x, y)] = 1;
   }
   for (const structure of room.find(FIND_STRUCTURES)) if (!isWalkableStructure(structure)) blocked[index(structure.pos.x, structure.pos.y)] = 1;
+  for (const natural of [...room.find(FIND_SOURCES), ...room.find(FIND_MINERALS), ...room.find(FIND_DEPOSITS)]) blocked[index(natural.pos.x, natural.pos.y)] = 1;
   for (const hostile of room.find(FIND_HOSTILE_CREEPS)) blocked[index(hostile.pos.x, hostile.pos.y)] = 1;
   const queue = new Uint16Array(2500);
   const start = index(entry.x, entry.y);
@@ -283,10 +286,12 @@ export function moveTowerDrainBorderAttack(creep: Creep, target: RoomPosition, w
 }
 
 function walkable(roomName: string, tile: { x: number; y: number }, room: Room | undefined): boolean {
-  if (Game.map.getRoomTerrain(roomName).get(tile.x, tile.y) !== 0) return false;
+  const terrain = Game.map.getRoomTerrain(roomName).get(tile.x, tile.y);
+  if (terrain !== 0 && !(terrain === TERRAIN_MASK_SWAMP && room?.find(FIND_STRUCTURES).some((s) => s.structureType === STRUCTURE_ROAD && s.pos.x === tile.x && s.pos.y === tile.y))) return false;
   if (!room) return true;
   const blocked = room.find(FIND_STRUCTURES).some((structure) => structure.pos.x === tile.x && structure.pos.y === tile.y && !isWalkableStructure(structure));
-  return !blocked && !room.find(FIND_HOSTILE_CREEPS).some((creep) => creep.pos.x === tile.x && creep.pos.y === tile.y);
+  const natural = [...room.find(FIND_SOURCES), ...room.find(FIND_MINERALS), ...room.find(FIND_DEPOSITS)].some((s) => s.pos.x === tile.x && s.pos.y === tile.y);
+  return !blocked && !natural && !room.find(FIND_HOSTILE_CREEPS).some((creep) => creep.pos.x === tile.x && creep.pos.y === tile.y);
 }
 
 function chooseEntry(state: TowerDrainPairState, attacker: Creep, healer: Creep, room: Room): boolean {
@@ -487,6 +492,7 @@ export function runTowerDrainPair(creep: Creep, targetRoom: string, partnerConfi
   }
   if (!state.retreatRoom && attacker.room.name !== targetRoom) {
     // 尚在路上：原双人 travel 继续负责途经房。
+    state.phase = "approach"; state.blocker = undefined;
     publish(state, attacker, healer);
     return false;
   }

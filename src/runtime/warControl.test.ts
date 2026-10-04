@@ -342,6 +342,30 @@ describe("towerDrainDuo 战争控制", () => {
     resetRuntimeServices();
   }
 
+  it("未指定路线时按当前地图生成，显式路线更新不重建世代或搭档", () => {
+    Game.map = { ...Game.map, findRoute: jest.fn(() => [{ exit: RIGHT, room: "E2N57" }, { exit: RIGHT, room: "E3N57" }]) } as GameMap;
+    startDrain(); runWarControl();
+    const original = Memory.data!.war!.E3N57.activeGeneration!;
+    expect(Memory.data!.war!.E3N57.routeRooms).toEqual(["E1N57", "E2N57", "E3N57"]);
+    const red = createWarCreep("red", "meleeAttacker", original.configNames.meleeAttacker, "E3N57");
+    const green = createWarCreep("green", "healer", original.configNames.healer, "E3N57");
+    red.memory.roleArgs = [...Memory.data!.creepConfigs![original.configNames.meleeAttacker].args];
+    green.memory.roleArgs = [...Memory.data!.creepConfigs![original.configNames.healer].args];
+    Game.creeps = { red, green };
+    Game.rooms.E3N57 = createTargetRoom([], [{ structureType: STRUCTURE_SPAWN, pos: new MockPos(25, 25, "E3N57") } as unknown as StructureSpawn]);
+    original.phase = "deployed";
+    const next = ["E1N57", "E1N56", "E2N56", "E2N57", "E3N57"];
+    startWarRoom("E3N57", "E1N57", { squad: "towerDrainDuo", routeRooms: next, oneShot: false });
+    nextTick(); runWarControl();
+    const generation = Memory.data!.war!.E3N57.activeGeneration!;
+    expect(generation.id).toBe(original.id);
+    expect(generation.configNames).toEqual(original.configNames);
+    expect(red.memory.roleArgs?.[1]).toBe(next.join("|"));
+    expect(green.memory.roleArgs?.[1]).toBe(next.join("|"));
+    expect(red.memory.roleArgs?.[4]).toBe(original.configNames.healer);
+    expect(green.memory.roleArgs?.[4]).toBe(original.configNames.meleeAttacker);
+  });
+
   it("生成精确 25 主部件双人队，空 boost 参数，并保留尾部移动与治疗", () => {
     const prepare = jest.spyOn(combatBoosts, "prepareBoosts");
     const release = jest.spyOn(combatBoosts, "releaseBoostLabs");

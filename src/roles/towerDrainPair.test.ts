@@ -509,6 +509,17 @@ describe("towerDrainDuo 公共战术门", () => {
     expect(fatigued.set).toHaveBeenCalledWith(1, 25, 255);
   });
 
+  it("铺路沼泽属于现成通道，保留道路可走并继续封住裸沼泽", () => {
+    const road = { structureType: STRUCTURE_ROAD, pos: new MockPos(2, 25, TARGET) } as unknown as StructureRoad;
+    const { attacker } = pair(false, [tower("empty", 0), road]);
+    attacker.memory._warTowerDrain = state("breaching");
+    Game.map.getRoomTerrain = jest.fn(() => ({ get: (x: number) => x === 2 || x === 3 ? TERRAIN_MASK_SWAMP : 0 })) as GameMap["getRoomTerrain"];
+    const matrix = { set: jest.fn() } as unknown as CostMatrix;
+    constrainTowerDrainBreachPath(attacker, TARGET, matrix);
+    expect(matrix.set).not.toHaveBeenCalledWith(2, 25, 255);
+    expect(matrix.set).toHaveBeenCalledWith(3, 25, 255);
+  });
+
   it("即使全部空塔也禁走沼泽，不把多轮MOVE疲劳藏入两轮退出余量", () => {
     const { attacker } = pair(false, [tower("empty", 0)]);
     runTowerDrainPair(attacker, TARGET, GREEN_CONFIG);

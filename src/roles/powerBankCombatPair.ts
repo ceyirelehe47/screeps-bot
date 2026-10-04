@@ -317,7 +317,13 @@ function completePairStep(
   if (!followerAttempted || !isPairTileOpen(followerAttempted, pair) || !isPairTileOpen(followerDestination, pair) ||
       samePairPosition(leaderTo, followerDestination) || leaderTo.roomName !== followerDestination.roomName ||
       Math.max(Math.abs(leaderTo.x - followerDestination.x), Math.abs(leaderTo.y - followerDestination.y)) > 1) {
-    waitForFollower();
+    // 只有已接受的斜向跨房末步几何失败时，撤销自己的意图再选已证明的直穿出口。
+    // 有效斜向、角落未证明及第二意图失败仍保持原回执/回滚语义。
+    if (leaderTo.roomName !== pair.attacker.room.name && leaderReceipt.direction % 2 === 0 &&
+        cancelPairAdvance(pair, leaderReceipt)) {
+      const exit = pairExitDirection(pair, leaderTo.roomName);
+      if (!tryProvenPairCrossing(pair, leaderTo.roomName, leaderReceipt.direction) && exit !== undefined) alignPairAtExit(pair, exit);
+    } else waitForFollower();
     return;
   }
   const existingFollowerMove = getMoveIntentReceipt(pair.healer);
@@ -348,6 +354,29 @@ function pairExitDirection(pair: PowerBankPairContext, nextRoom: string | undefi
 }
 
 /** 两人先在 1/48 的房内安全排位；0/49 是迁房入口，不可拿作等待格。 */
+/** 动态比较所有可达下一房的双人格方向；不把领队单格路线强加给跟随者。 */
+function tryProvenPairCrossing(pair: PowerBankPairContext, nextRoom: string, preferred?: DirectionConstant): boolean {
+  if (!isPowerBankTransitRoomAllowed(nextRoom)) return false;
+  const candidates = PAIR_DIRECTIONS.map((direction) => ({ direction,
+    redAttempt: getMoveIntentAttemptedPosition(pair.attacker.pos, direction),
+    greenAttempt: getMoveIntentAttemptedPosition(pair.healer.pos, direction),
+    red: getMoveIntentDestination(pair.attacker.pos, direction), green: getMoveIntentDestination(pair.healer.pos, direction),
+  })).filter((candidate) => candidate.red && candidate.green && candidate.redAttempt && candidate.greenAttempt &&
+    candidate.red.roomName === nextRoom && candidate.green.roomName === nextRoom && !samePairPosition(candidate.red, candidate.green) &&
+    Math.max(Math.abs(candidate.red.x - candidate.green.x), Math.abs(candidate.red.y - candidate.green.y)) <= 1 &&
+    [candidate.redAttempt, candidate.greenAttempt, candidate.red, candidate.green].every((pos) => pos && isPairTileOpen(pos, pair)));
+  const distance = (direction: DirectionConstant): number => preferred === undefined ? 0 : Math.min(Math.abs(direction - preferred), 8 - Math.abs(direction - preferred));
+  candidates.sort((left, right) => distance(left.direction) - distance(right.direction));
+  const selected = candidates[0];
+  if (!selected) return false;
+  markPairMoving(pair);
+  if (issueMove(pair.attacker, selected.direction) === OK) {
+    const receipt = getMoveIntentReceipt(pair.attacker);
+    if (receipt) completePairStep(pair, receipt, selected.green!, selected.direction);
+  } else { holdPairMember(pair.attacker); holdPairMember(pair.healer); }
+  return true;
+}
+
 function alignPairAtExit(pair: PowerBankPairContext, direction: DirectionConstant): boolean {
   const redDestination = getMoveIntentDestination(pair.attacker.pos, direction);
   const greenDestination = getMoveIntentDestination(pair.healer.pos, direction);
@@ -515,11 +544,19 @@ export function coordinatePowerBankPairMovement(pair: PowerBankPairContext, fall
   }
   const receipt = getMoveIntentReceipt(pair.attacker);
   if (!receipt) {
+    const nextRoom = travelling ? nextPairRouteRoom(pair, fallbackEncodedRoute) : undefined;
+    if (nextRoom && pairExitDirection(pair, nextRoom) !== undefined && tryProvenPairCrossing(pair, nextRoom)) return;
     holdPairMember(pair.attacker);
     holdPairMember(pair.healer);
     return;
   }
-  if (receipt.to?.roomName === pair.attacker.room.name) {
+  if (!receipt.to) {
+    const canceled = cancelPairAdvance(pair, receipt);
+    const nextRoom = travelling ? nextPairRouteRoom(pair, fallbackEncodedRoute) : undefined;
+    if (canceled && nextRoom && pairExitDirection(pair, nextRoom) !== undefined) tryProvenPairCrossing(pair, nextRoom);
+    return;
+  }
+  if (receipt.to.roomName === pair.attacker.room.name) {
     const followDirection = pair.healer.pos.getDirectionTo(new RoomPosition(receipt.from.x, receipt.from.y, receipt.from.roomName));
     const followDestination = getMoveIntentDestination(pair.healer.pos, followDirection);
     if (followDestination && samePairPosition(followDestination, receipt.from)) {

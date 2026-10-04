@@ -79,17 +79,17 @@ export function getCurrentScoutRoute(targetRoom: string, fallbackEncodedRoute?: 
 }
 
 /** 行军协调器与单体执行器共享房间选择；有效的有序路线不重复调用原生findRoute。 */
-export function getNextTravelRoom(currentRoom: string, targetRoom: string, encodedRouteRooms?: string, avoidRooms?: string[]): string | null {
+export function getNextTravelRoom(currentRoom: string, targetRoom: string, encodedRouteRooms?: string, avoidRooms?: string[], routePurpose: "normal" | "combat" = "normal"): string | null {
   if (currentRoom === targetRoom) return currentRoom;
   const routeRooms = parseEncodedRouteRooms(encodedRouteRooms);
-  const dangerousRooms = getDangerousRoomsForTarget(targetRoom, avoidRooms);
+  const dangerousRooms = getDangerousRoomsForTarget(targetRoom, avoidRooms, routePurpose === "combat");
   if (routeRooms.length > 0) {
     const next = findOrderedRouteNextRoom(currentRoom, targetRoom, routeRooms, dangerousRooms)
       ?? findStrictRouteNextRoom(currentRoom, targetRoom, routeRooms, dangerousRooms)
       ?? findAdjacentAllowedRoom(currentRoom, targetRoom, routeRooms, dangerousRooms);
     if (next) return next;
   }
-  return findDynamicNextRoom(currentRoom, targetRoom, getForwardPreferredRooms(currentRoom, routeRooms, targetRoom), dangerousRooms);
+  return findDynamicNextRoom(currentRoom, targetRoom, getForwardPreferredRooms(currentRoom, routeRooms, targetRoom), dangerousRooms, routePurpose === "combat");
 }
 
 export function moveToTargetRoom(
@@ -108,7 +108,7 @@ export function moveToTargetRoom(
   }
 
   const routeRooms = parseEncodedRouteRooms(encodedRouteRooms);
-  const dangerousRooms = getDangerousRoomsForTarget(targetRoom, options.avoidRooms);
+  const dangerousRooms = getDangerousRoomsForTarget(targetRoom, options.avoidRooms, options.routePurpose === "combat");
   const hasFixedRoute = routeRooms.length > 0;
   if (movementState.travelState?.targetRoom !== targetRoom) delete movementState.movePathState;
   const travelState = getTravelState(creep, targetRoom);
@@ -142,7 +142,7 @@ export function moveToTargetRoom(
       creep.room.name;
     if (nextRoom === creep.room.name) {
       recordMovementMetric("travelFallbacks", creep.room.name);
-      const recoveredNextRoom = findDynamicNextRoom(creep.room.name, targetRoom, forwardPreferredRooms, dangerousRooms);
+      const recoveredNextRoom = findDynamicNextRoom(creep.room.name, targetRoom, forwardPreferredRooms, dangerousRooms, options.routePurpose === "combat");
       nextRoom = recoveredNextRoom ?? creep.room.name;
       if (nextRoom === creep.room.name) {
         delete travelState.exitTarget;
@@ -157,7 +157,7 @@ export function moveToTargetRoom(
       return ERR_NO_PATH;
     }
   } else {
-    const dynamicNextRoom = findDynamicNextRoom(creep.room.name, targetRoom, routeRooms, dangerousRooms);
+    const dynamicNextRoom = findDynamicNextRoom(creep.room.name, targetRoom, routeRooms, dangerousRooms, options.routePurpose === "combat");
     nextRoom = dynamicNextRoom ?? creep.room.name;
     if (nextRoom === creep.room.name) {
       delete travelState.exitTarget;
@@ -171,7 +171,7 @@ export function moveToTargetRoom(
     const preferredRooms = hasFixedRoute
       ? getForwardPreferredRooms(creep.room.name, routeRooms, targetRoom)
       : routeRooms;
-    const dynamicNextRoom = findDynamicNextRoom(creep.room.name, targetRoom, preferredRooms, dangerousRooms);
+    const dynamicNextRoom = findDynamicNextRoom(creep.room.name, targetRoom, preferredRooms, dangerousRooms, options.routePurpose === "combat");
     if (dynamicNextRoom && dynamicNextRoom !== creep.room.name) {
       nextRoom = dynamicNextRoom;
     }
@@ -351,8 +351,8 @@ function updateTravelState(creep: Creep, state: TravelState): void {
   ensureCreepMovementState(creep.name).travelState = state;
 }
 
-function getDangerousRoomsForTarget(targetRoom: string, additionalAvoidRooms?: string[]): string[] {
-  const dangerousRooms = Memory.data?.colonization?.[targetRoom]?.dangerousRooms;
+function getDangerousRoomsForTarget(targetRoom: string, additionalAvoidRooms?: string[], combat = false): string[] {
+  const dangerousRooms = combat ? undefined : Memory.data?.colonization?.[targetRoom]?.dangerousRooms;
   const base = dangerousRooms && dangerousRooms.length > 0
     ? dangerousRooms.filter((roomName) => roomName !== targetRoom)
     : [];
@@ -381,7 +381,7 @@ function buildDynamicRouteCacheKey(
 }
 
 function setDynamicRouteCache(cacheKey: string, nextRoom: string | null): void {
-  dynamicNextRoomCache[cacheKey] = { nextRoom, expiresAt: Game.time + DYNAMIC_ROUTE_CACHE_TTL };
+  dynamicNextRoomCache[cacheKey] = { nextRoom, expiresAt: Game.time + DYNAMIC_ROUTE_CACHE_TTL, computedAt: Game.time };
   const keys = Object.keys(dynamicNextRoomCache);
   if (keys.length <= DYNAMIC_ROUTE_CACHE_MAX) {
     return;
@@ -443,17 +443,23 @@ function isVisibleRoomDangerous(roomName: string): boolean {
   return false;
 }
 
-function isLiveTransitionRoomSafe(roomName: string): boolean {
+function isLiveTransitionRoomSafe(roomName: string, combat = false): boolean {
   if (liveRoomSafetyCacheTick !== Game.time) {
     liveRoomSafetyCacheTick = Game.time;
     liveRoomSafetyCache = {};
   }
-  const cached = liveRoomSafetyCache[roomName];
+  const key = combat ? "combat:" + roomName : roomName;
+  const cached = liveRoomSafetyCache[key];
   if (cached !== undefined) {
     return cached;
   }
-  const safe = Game.map.getRoomStatus(roomName).status === "normal" && !isVisibleRoomDangerous(roomName);
-  liveRoomSafetyCache[roomName] = safe;
+  const room = Game.rooms[roomName];
+  const combatDanger = combat && room ? room.find(FIND_HOSTILE_CREEPS).some((creep) =>
+    creep.getActiveBodyparts(ATTACK) > 0 || creep.getActiveBodyparts(RANGED_ATTACK) > 0 || creep.getActiveBodyparts(HEAL) > 0)
+    || room.find(FIND_HOSTILE_POWER_CREEPS).length > 0
+    || room.find(FIND_HOSTILE_STRUCTURES).some((structure) => structure.structureType === STRUCTURE_TOWER && (structure as StructureTower).store.getUsedCapacity(RESOURCE_ENERGY) >= TOWER_ENERGY_COST) : false;
+  const safe = Game.map.getRoomStatus(roomName).status === "normal" && !(combat ? combatDanger : isVisibleRoomDangerous(roomName));
+  liveRoomSafetyCache[key] = safe;
   return safe;
 }
 
@@ -462,10 +468,11 @@ function findDynamicNextRoom(
   targetRoom: string,
   preferredRooms: string[],
   avoidRooms: string[],
+  combat = false,
 ): string | null {
-  const cacheKey = buildDynamicRouteCacheKey(currentRoom, targetRoom, preferredRooms, avoidRooms);
+  const cacheKey = buildDynamicRouteCacheKey(currentRoom, targetRoom, preferredRooms, avoidRooms) + (combat ? "|combat" : "");
   const cached = dynamicNextRoomCache[cacheKey];
-  if (cached && cached.expiresAt > Game.time) {
+  if (cached && cached.expiresAt > Game.time && (!combat || (cached.nextRoom ? cached.nextRoom === targetRoom || isLiveTransitionRoomSafe(cached.nextRoom, true) : cached.computedAt === Game.time))) {
     recordMovementMetric("dynamicRouteCacheHits");
     return cached.nextRoom;
   }
@@ -481,7 +488,7 @@ function findDynamicNextRoom(
         if (avoidSet.has(roomName)) {
           return Infinity;
         }
-        if (!isLiveTransitionRoomSafe(roomName)) {
+        if (!isLiveTransitionRoomSafe(roomName, combat)) {
           return Infinity;
         }
         if (preferredSet.has(roomName)) {

@@ -49,6 +49,8 @@ export interface MoveToTargetOptions {
 }
 
 export interface MoveToRoomOptions extends MoveToTargetOptions {
+  /** 清剿按当前战斗威胁续路；经济角色保持控制器/结构避让。 */
+  routePurpose?: "normal" | "combat";
   travelRange?: 1 | 3;
   avoidRooms?: string[];
 }
@@ -94,6 +96,7 @@ export interface MovePathState {
 }
 
 export interface DynamicRouteCacheEntry {
+  computedAt?: number;
   nextRoom: string | null;
   expiresAt: number;
 }
