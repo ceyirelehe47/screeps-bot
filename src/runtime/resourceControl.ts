@@ -2636,7 +2636,7 @@ function getProtectedResourceAmount(
   excludeTaskId?: string,
 ): number {
   let safetyFloor = snapshot.mineralFloor[resource] || 0;
-  if (HUB_TARGET_COMPOUNDS.includes(resource)) {
+  if (HUB_TARGET_COMPOUNDS.includes(resource) && !isHubOnlyReserveCompound(resource)) {
     safetyFloor = Math.max(safetyFloor, config.t3ReservePerRoom);
   }
   return (
