@@ -79,8 +79,9 @@ function getSalvageAvoidRooms(): string[] {
     if (!Number.isFinite(expiresAt) || expiresAt <= Game.time) delete dangerous[name];
   }
   for (const room of Object.values(Game.rooms)) {
-    if (isInvaderSalvageRoomClear(room)) delete dangerous[room.name];
-    else dangerous[room.name] = Game.time + SALVAGE_DANGER_TTL;
+    const roomName = room.name;
+    if (isInvaderSalvageRoomClear(room)) delete dangerous[roomName];
+    else dangerous[roomName] = Game.time + SALVAGE_DANGER_TTL;
   }
   return [...new Set([...getPowerBankOwnedAvoidRooms(), ...Object.keys(dangerous)])];
 }
@@ -118,7 +119,7 @@ function moveSalvageSafely(creep: Creep, goal: RoomPosition, range = 1): void {
         const hazards = getInvaderSalvageHazards(next);
         if (!hazards.length) continue;
         const exit = Number(direction);
-        if (![TOP, RIGHT, BOTTOM, LEFT].includes(exit)) continue;
+        if (![TOP, RIGHT, BOTTOM, LEFT].some((value) => value === exit)) continue;
         for (let coordinate = 0; coordinate < 50; coordinate++) {
           const horizontal = exit === LEFT || exit === RIGHT;
           const x = horizontal ? (exit === LEFT ? 0 : 49) : coordinate;
