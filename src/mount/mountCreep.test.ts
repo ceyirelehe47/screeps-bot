@@ -93,6 +93,26 @@ function makeInvaderAtBoundary(targetRoom: string): Creep {
   } as unknown as Creep;
 }
 
+describe("共享清剿多余成员撤回回收", () => {
+  beforeEach(() => {
+    resetRuntimeServices(); installCreepPrototype(); mountCreep(); Game.time++;
+    Game.rooms = {}; Game.creeps = {}; Game.spawns = {};
+    jest.clearAllMocks();
+  });
+  it("没有战斗config的退役成员走统一跨房寻路，进入源房后由spawn回收", () => {
+    const source = createRoom("E1N57");
+    const creep = createMockPowerBankCreep("healer", { name: "returning-green", roomName: "E3N57", memory: { _warDetached: true, _warRetireToRoom: source.name } });
+    Object.setPrototypeOf(creep, Creep.prototype); Game.creeps[creep.name] = creep;
+    const { moveToTargetRoom } = jest.requireMock("@/roles/shared") as { moveToTargetRoom: jest.Mock };
+    creep.work();
+    expect(moveToTargetRoom).toHaveBeenCalledWith(creep, source.name, undefined, { routePurpose: "combat" });
+    creep.room = source;
+    const spawn = { room: source, pos: new MockPos(25, 25, source.name), isActive: () => true, recycleCreep: jest.fn(() => OK) } as unknown as StructureSpawn;
+    Game.spawns.Spawn1 = spawn; creep.pos = new MockPos(24, 25, source.name) as unknown as RoomPosition;
+    creep.work(); expect(spawn.recycleCreep).toHaveBeenCalledWith(creep);
+  });
+});
+
 describe("mountCreep carrier switching", () => {
   beforeEach(() => {
     clearCarrierTaskBoardForTest();

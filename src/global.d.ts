@@ -232,7 +232,7 @@ declare global {
     | string;
   var stopWar: (targetRoom: string, suicide?: boolean) => string;
   var stopWarRaw: (targetRoom: string, options?: StopWarOptions) => StopWarResult | string;
-  var startWarRebuildWatch: (sourceRoom: string, targetRooms: string[], enemyUsername: string, intervalTicks?: number) => string;
+  var startWarRebuildWatch: (sourceRoom: string, targetRooms: string[], enemyUsername: string, intervalTicks?: number, sharedSquad?: boolean) => string;
   var startWar: (targetRoom: string, sourceRoom: string, squad?: "standard" | "t3Duo" | "towerDrainDuo", routeRooms?: string[] | string, oneShot?: boolean) => string;
   var startWarRaw: (targetRoom: string, sourceRoom: string, options?: StartWarOptions) => StartWarResult | string;
   var startWarPatrol: (sourceRoom: string, targetRooms: string[] | string, intervalTicks?: number) => string;
@@ -719,6 +719,8 @@ declare global {
     _warPartnerConfigName?: string;
     _warDetached?: boolean;
     _warQueued?: boolean;
+    /** 已退出共享清剿的多余成员撤回此源房回收。 */
+    _warRetireToRoom?: string;
     _warTowerDrain?: import("@/roles/towerDrainPair").TowerDrainPairState;
     _move?: {
       dest?: {

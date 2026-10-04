@@ -86,6 +86,113 @@ function createWarCreep(
   } as unknown as Creep;
 }
 
+describe("三个NPC目标共享一支清剿小队", () => {
+  const rooms = ["E3N57", "E2N54", "E3N53"];
+  const enemyStructure = (name: string) => ({ id: name, structureType: STRUCTURE_EXTENSION, owner: { username: "TooAngel" }, pos: new MockPos(20, 20, name) }) as unknown as StructureExtension;
+  const tick = () => { Game.time++; resetRuntimeServices(); };
+  const shared = () => configureWarRebuildWatch("E1N57", rooms, "TooAngel", 100, true);
+  beforeEach(() => {
+    jest.restoreAllMocks(); jest.clearAllMocks(); resetRuntimeServices(); Game.time = 1000;
+    Memory.cfg = {}; Memory.runtime = {}; Memory.data = {}; Memory.creeps = {};
+    const source = createSourceRoom(); source.energyAvailable = 12900; source.energyCapacityAvailable = 12900;
+    Game.rooms = { E1N57: source }; Game.spawns = { Spawn1: createSpawn(source) }; Game.creeps = {};
+    Game.map = { ...Game.map, findRoute: jest.fn((_from: string, target: string) => [{ exit: RIGHT, room: target }]) } as GameMap;
+    for (const name of rooms) {
+      const room = createTargetRoom([], [enemyStructure(name)], [], name);
+      room.controller!.owner = { username: "TooAngel" }; room.controller!.level = 8;
+      Game.rooms[name] = room;
+      startWarRoom(name, "E1N57", { squad: "towerDrainDuo", oneShot: false });
+    }
+  });
+  afterEach(() => { Memory.cfg = {}; });
+
+  function installExistingPairs(): void {
+    runWarControl();
+    for (const name of rooms) {
+      const task = Memory.data!.war![name]; const generation = task.activeGeneration!;
+      generation.phase = "deployed";
+      const red = createWarCreep(`${name}-red`, "meleeAttacker", generation.configNames.meleeAttacker, name);
+      const green = createWarCreep(`${name}-green`, "healer", generation.configNames.healer, name);
+      red.ticksToLive = green.ticksToLive = 1000;
+      red.body = Array.from({ length: 25 }, () => ({ type: ATTACK, hits: 100 })) as BodyPartDefinition[];
+      if (name === "E3N53") {
+        task.squad = "t3Duo"; task.boostTier = "t3";
+        red.body = Array.from({ length: 30 }, () => ({ type: ATTACK, hits: 100, boost: RESOURCE_CATALYZED_UTRIUM_ACID })) as BodyPartDefinition[];
+      }
+      Game.creeps[red.name] = red; Game.creeps[green.name] = green;
+    }
+    tick(); shared();
+  }
+
+  it("三个新目标只生产一对无强化成员，另外两房排队", () => {
+    shared(); runWarControl();
+    const tasks = Object.values(Memory.data!.war!);
+    expect(tasks.filter((task) => task.activeGeneration)).toHaveLength(1);
+    expect(Object.values(Memory.data!.creepConfigs!).filter((config) => config.role === "meleeAttacker" || config.role === "healer")).toHaveLength(2);
+    expect(tasks.filter((task) => task.failReason === "shared_squad_queued")).toHaveLength(2);
+  });
+
+  it("采用已强化的现役成员，撤回其余成员并保留各房控制器任务", () => {
+    installExistingPairs(); runWarControl();
+    expect(Object.values(Memory.runtime!.warRebuildWatch!)[0].sharedSquadOwner).toBe("E3N53");
+    expect(Game.creeps['E3N53-red'].memory.configName).toBeDefined();
+    for (const name of ["E3N57", "E2N54"]) for (const role of ["red", "green"]) {
+      expect(Game.creeps[`${name}-${role}`].memory).toMatchObject({ _warDetached: true, _warRetireToRoom: "E1N57" });
+      expect(Game.creeps[`${name}-${role}`].memory.configName).toBeUndefined();
+    }
+    expect(Object.values(Memory.data!.creepConfigs!).filter((config) => config.role === "claimer")).toHaveLength(3);
+  });
+
+  it("清空一房后同一对成员原子换目标与搭档，不孵化另一队，降级任务继续", () => {
+    installExistingPairs(); runWarControl();
+    const room = createTargetRoom([], [], [], "E3N53"); room.controller!.owner = { username: "TooAngel" }; room.controller!.level = 8;
+    Game.rooms.E3N53 = room;
+    tick(); runWarControl(); Game.time += 25; resetRuntimeServices(); runWarControl();
+    const watch = Object.values(Memory.runtime!.warRebuildWatch!)[0];
+    const next = Memory.data!.war![watch.sharedSquadOwner!];
+    const red = Game.creeps['E3N53-red']; const green = Game.creeps['E3N53-green'];
+    expect(next.targetRoom).not.toBe("E3N53");
+    expect(red.memory.configName).toBe(next.activeGeneration!.configNames.meleeAttacker);
+    expect(green.memory.configName).toBe(next.activeGeneration!.configNames.healer);
+    expect(red.memory.roleArgs?.[0]).toBe(next.targetRoom);
+    expect(red.memory.roleArgs?.[4]).toBe(green.memory.configName);
+    expect(green.memory.roleArgs?.[4]).toBe(red.memory.configName);
+    expect(Memory.data!.war!.E3N53).toMatchObject({ status: "downgrading", combatClearedAt: Game.time });
+    expect(Memory.data!.war!.E3N53.activeGeneration).toBeUndefined();
+    expect(Object.values(Memory.data!.creepConfigs!).filter((config) => config.role === "meleeAttacker" || config.role === "healer").every((config) => config.spawnOnce?.queuedAt === 1000)).toBe(true);
+  });
+
+  it("无所属的旧墙不占用整个共享清剿世代，空房等待降级时不补生战斗队", () => {
+    for (const name of rooms) {
+      const room = createTargetRoom([], [], [{ id: `${name}-wall`, structureType: STRUCTURE_WALL } as StructureWall], name);
+      room.controller!.owner = { username: "TooAngel" }; room.controller!.level = 8; Game.rooms[name] = room;
+    }
+    shared(); runWarControl(); Game.time += 25; resetRuntimeServices(); runWarControl();
+    expect(Object.values(Memory.data!.war!).every((task) => task.combatClearedAt !== undefined && task.status === "downgrading")).toBe(true);
+    expect(Object.values(Memory.data!.war!).every((task) => !task.activeGeneration)).toBe(true);
+    expect(Object.values(Memory.runtime!.warRebuildWatch!)[0].armedAt).toBe(Game.time);
+    Game.time++; resetRuntimeServices(); runWarControl();
+    expect(Object.values(Memory.data!.creepConfigs!).filter((config) => config.role === "meleeAttacker" || config.role === "healer")).toHaveLength(0);
+  });
+
+  it("共享队伍损失成员后仅替换一代，并重新尝试无强化", () => {
+    installExistingPairs(); runWarControl();
+    delete Game.creeps['E3N53-red']; tick(); runWarControl();
+    const owner = Memory.data!.war!.E3N53;
+    expect(owner.squad).toBe("towerDrainDuo");
+    expect(owner.activeGeneration?.phase).toBe("assembling");
+    expect(Game.creeps['E3N53-green'].memory._warRetireToRoom).toBe("E1N57");
+    expect(Object.values(Memory.data!.war!).filter((task) => task.activeGeneration)).toHaveLength(1);
+    const id = owner.activeGeneration!.id; tick(); runWarControl();
+    expect(owner.activeGeneration!.id).toBe(id);
+  });
+
+  it("源房失去所有权时停止整个共享组生产，不回落到旧并行规则", () => {
+    shared(); Game.rooms.E1N57.controller!.my = false; runWarControl();
+    expect(Object.values(Memory.data!.war!).every((task) => task.failReason === "shared_source_not_owned" && !task.activeGeneration)).toBe(true);
+  });
+});
+
 describe("runWarControl", () => {
   beforeEach(() => {
     jest.restoreAllMocks();

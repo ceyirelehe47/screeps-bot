@@ -216,6 +216,17 @@ describe("towerDrainDuo 公共战术门", () => {
     expect(towerDrainPairRange(attacker.pos, healer.pos)).toBe(1);
   });
 
+  it.each([false, true])("所有敌塔已拆除时允许从沼泽入口进入，绿先执行=%s", (greenFirst) => {
+    const { attacker, healer } = pair(false, []);
+    Game.map.getRoomTerrain = jest.fn(() => ({ get: (x: number) => x === 1 ? TERRAIN_MASK_SWAMP : 0 })) as GameMap["getRoomTerrain"];
+    const commit = deferredEngineFrame([attacker, healer]);
+    for (const actor of greenFirst ? [healer, attacker] : [attacker, healer]) runTowerDrainPair(actor, TARGET, actor === attacker ? GREEN_CONFIG : RED_CONFIG);
+    commit();
+    expect([attacker.room.name, healer.room.name]).toEqual([TARGET, TARGET]);
+    expect([attacker.pos.x, healer.pos.x]).toEqual([1, 1]);
+    expect(attacker.memory._warTowerDrain?.blocker).toBeUndefined();
+  });
+
   it.each([false, true])("E3N57三塔9/3/1能量、载能carrier距最近塔6格时，绿先执行=%s也同步离开边界", (greenFirst) => {
     const storage = { structureType: STRUCTURE_STORAGE, pos: new MockPos(22, 26, TARGET), store: createMockStore({ [RESOURCE_ENERGY]: 1971 }) } as unknown as StructureStorage;
     const threats = [tower("a", 9, 24, 28), tower("b", 3, 14, 6), tower("c", 1, 13, 8), storage];
@@ -537,7 +548,7 @@ describe("towerDrainDuo 公共战术门", () => {
 
   it("铺路沼泽属于现成通道，保留道路可走并继续封住裸沼泽", () => {
     const road = { structureType: STRUCTURE_ROAD, pos: new MockPos(2, 25, TARGET) } as unknown as StructureRoad;
-    const { attacker } = pair(false, [tower("empty", 0), road]);
+    const { attacker } = pair(false, [tower("live", 1000), road]);
     attacker.memory._warTowerDrain = state("breaching");
     Game.map.getRoomTerrain = jest.fn(() => ({ get: (x: number) => x === 2 || x === 3 ? TERRAIN_MASK_SWAMP : 0 })) as GameMap["getRoomTerrain"];
     const matrix = { set: jest.fn() } as unknown as CostMatrix;
@@ -564,8 +575,9 @@ describe("towerDrainDuo 公共战术门", () => {
       expect.objectContaining({ swampCost: 8, ignoreCreeps: false }));
   });
 
-  it("即使全部空塔也禁走沼泽，不把多轮MOVE疲劳藏入两轮退出余量", () => {
-    const { attacker } = pair(false, [tower("empty", 0)]);
+  it("空塔仍有载能补给时禁走无道路沼泽，不隐藏多轮MOVE疲劳", () => {
+    const storage = { structureType: STRUCTURE_STORAGE, pos: new MockPos(20, 20, TARGET), store: createMockStore({ [RESOURCE_ENERGY]: 1000 }) } as unknown as StructureStorage;
+    const { attacker } = pair(false, [tower("empty", 0), storage], [carrier(20, 24, 50)]);
     runTowerDrainPair(attacker, TARGET, GREEN_CONFIG);
     Game.map.getRoomTerrain = jest.fn(() => ({ get: jest.fn((x: number, y: number) => x === 1 && y === 25 ? TERRAIN_MASK_SWAMP : 0) })) as unknown as GameMap["getRoomTerrain"];
     const matrix = { set: jest.fn() } as unknown as CostMatrix;

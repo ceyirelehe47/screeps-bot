@@ -27,6 +27,8 @@ const DAMAGE_RESERVE = 1000;
 type DrainMemory = CreepMemory & { _warTowerDrain?: TowerDrainPairState };
 
 function plainOnlyMatrix(roomName: string, matrix: CostMatrix): CostMatrix {
+  const visible = Game.rooms[roomName];
+  if (visible && refillableTowers(visible).length === 0) return matrix;
   const terrain = Game.map.getRoomTerrain(roomName);
   // 道路覆盖沼泽后按道路疲劳结算，不能把现成通道一起封掉。
   const roads = new Set(Game.rooms[roomName]?.find(FIND_STRUCTURES).filter((s) => s.structureType === STRUCTURE_ROAD).map((s) => s.pos.x * 50 + s.pos.y) ?? []);
@@ -98,6 +100,7 @@ function exitPaths(room: Room, state: TowerDrainPairState, entry: { x: number; y
   const blocked = new Uint8Array(2500);
   const terrain = Game.map.getRoomTerrain(room.name);
   const roads = new Set(room.find(FIND_STRUCTURES).filter((s) => s.structureType === STRUCTURE_ROAD).map((s) => s.pos.x * 50 + s.pos.y));
+  const allowSwamps = towers.length === 0;
   const index = (x: number, y: number): number => x * 50 + y;
   const damage = (x: number, y: number): number => {
     const at = index(x, y);
@@ -110,7 +113,7 @@ function exitPaths(room: Room, state: TowerDrainPairState, entry: { x: number; y
   for (let x = 0; x < 50; x++) for (let y = 0; y < 50; y++) {
     const atExit = x === 0 || x === 49 || y === 0 || y === 49;
     const onReturnSide = state.exitDirection === LEFT ? x === 0 : state.exitDirection === RIGHT ? x === 49 : state.exitDirection === TOP ? y === 0 : y === 49;
-    if ((terrain.get(x, y) !== 0 && !(terrain.get(x, y) === TERRAIN_MASK_SWAMP && roads.has(index(x, y)))) || (atExit && (!onReturnSide || x === 0 && y === 0 || x === 49 && y === 49 || x === 0 && y === 49 || x === 49 && y === 0))) blocked[index(x, y)] = 1;
+    if ((terrain.get(x, y) !== 0 && !(terrain.get(x, y) === TERRAIN_MASK_SWAMP && (allowSwamps || roads.has(index(x, y))))) || (atExit && (!onReturnSide || x === 0 && y === 0 || x === 49 && y === 49 || x === 0 && y === 49 || x === 49 && y === 0))) blocked[index(x, y)] = 1;
   }
   for (const structure of room.find(FIND_STRUCTURES)) if (!isWalkableStructure(structure)) blocked[index(structure.pos.x, structure.pos.y)] = 1;
   for (const natural of [...room.find(FIND_SOURCES), ...room.find(FIND_MINERALS), ...room.find(FIND_DEPOSITS)]) blocked[index(natural.pos.x, natural.pos.y)] = 1;
@@ -235,7 +238,7 @@ export function moveTowerDrainBorderAttack(creep: Creep, target: RoomPosition, w
 
 function walkable(roomName: string, tile: { x: number; y: number }, room: Room | undefined): boolean {
   const terrain = Game.map.getRoomTerrain(roomName).get(tile.x, tile.y);
-  if (terrain !== 0 && !(terrain === TERRAIN_MASK_SWAMP && room?.find(FIND_STRUCTURES).some((s) => s.structureType === STRUCTURE_ROAD && s.pos.x === tile.x && s.pos.y === tile.y))) return false;
+  if (terrain !== 0 && !(terrain === TERRAIN_MASK_SWAMP && room && (refillableTowers(room).length === 0 || room.find(FIND_STRUCTURES).some((s) => s.structureType === STRUCTURE_ROAD && s.pos.x === tile.x && s.pos.y === tile.y)))) return false;
   if (!room) return true;
   const blocked = room.find(FIND_STRUCTURES).some((structure) => structure.pos.x === tile.x && structure.pos.y === tile.y && !isWalkableStructure(structure));
   const natural = [...room.find(FIND_SOURCES), ...room.find(FIND_MINERALS), ...room.find(FIND_DEPOSITS)].some((s) => s.pos.x === tile.x && s.pos.y === tile.y);

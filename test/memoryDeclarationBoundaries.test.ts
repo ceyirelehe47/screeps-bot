@@ -10,7 +10,7 @@ const MEMORY_BRANCHES = {
   cfg: {
     declaration: "src/types/memory/cfg.d.ts",
     interfaceName: "ScreepsMemoryConfig",
-    schemaFingerprint: "dbd0d468e46060da50ab32d85c2b8e0dae40c57c45de0be3cec0f41760fbb153",
+    schemaFingerprint: "1546b1ee8a87c80f20dc4b53ba89f2c874c5e9a628c3c4fcab25cb19147aaa9f",
     imports: ["@/runtime/depositHarvest:DepositHarvestConfig", "@/types/system:RoomType"],
     fields: [
       "warRebuildWatch",
@@ -38,7 +38,7 @@ const MEMORY_BRANCHES = {
   runtime: {
     declaration: "src/types/memory/runtime.d.ts",
     interfaceName: "ScreepsMemoryRuntime",
-    schemaFingerprint: "7c9f21ceaae28d96cd4dafd9cc9dec98667a0a629582b6f405a8d238ffb0ff7e",
+    schemaFingerprint: "b7b1934879fe250ca51d155852d4ea5481694161dc1def5c8a92f7efc8e44bc7",
     imports: [
       "@/runtime/hubPlanner:AllocationLedgerEntry",
       "@/runtime/hubPlanner:DirectRouteDecision",
@@ -84,7 +84,7 @@ const MEMORY_BRANCHES = {
   data: {
     declaration: "src/types/memory/data.d.ts",
     interfaceName: "ScreepsMemoryData",
-    schemaFingerprint: "f247e80af77d396efc801c47b339c6cfa261c5ee4ca2fa2c4138fefa49977fca",
+    schemaFingerprint: "fc5fdda3344af1a927a9b36e3c5e3c0d54a5a096f8bccaf376ee9807cf342343",
     imports: [
       "@/runtime/depositHarvest:DepositHarvestTask",
       "@/runtime/marketActionArbiter:MarketAccountClaim",

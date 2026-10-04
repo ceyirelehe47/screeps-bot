@@ -16,6 +16,7 @@ declare global {
     warRebuildWatch?: Record<string, {
       clearedRooms: string[];
       armedAt?: number;
+      sharedSquadOwner?: string;
       targets: Record<string, {
         nextObservationAt?: number;
         pendingObservationAt?: number;

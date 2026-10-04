@@ -273,6 +273,9 @@ declare global {
         routePlannedAt?: number;
         routeTrace?: { hops: number; avoided: Record<string, string>; policy: "map_combat" | "manual" };
         npcAuto?: true;
+        sharedSquadWatchId?: string;
+        combatClearedAt?: number;
+        combatClearSince?: number;
         squadDecision?: string;
         squadAssessedAt?: number;
         squad?: "standard" | "t3Duo" | "towerDrainDuo";

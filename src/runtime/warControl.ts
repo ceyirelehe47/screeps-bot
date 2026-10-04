@@ -32,6 +32,9 @@ interface WarTask {
   routePlannedAt?: number;
   routeTrace?: { hops: number; avoided: Record<string, string>; policy: "map_combat" | "manual" };
   npcAuto?: true;
+  sharedSquadWatchId?: string;
+  combatClearedAt?: number;
+  combatClearSince?: number;
   squadDecision?: string;
   squadAssessedAt?: number;
   squad?: WarSquad;
@@ -511,9 +514,12 @@ function hasTaskWarActivity(task: WarTask): boolean {
   );
 }
 
+let transferredMembers: { game: Game; tick: number; byConfig: Map<string, Creep[]> } | undefined;
+
 function getLiveCreepsByConfig(configName: string): Creep[] {
-  return getTickContextService().getCreepsByConfigName(configName).filter(
-    (creep) => creep.memory._warDetached !== true && creep.memory.configName === configName,
+  const transferred = transferredMembers?.game === Game && transferredMembers.tick === Game.time ? transferredMembers.byConfig.get(configName) : undefined;
+  return (transferred ?? getTickContextService().getCreepsByConfigName(configName)).filter(
+    (creep) => Game.creeps[creep.name] === creep && creep.memory._warDetached !== true && creep.memory.configName === configName,
   );
 }
 
@@ -689,7 +695,7 @@ function getHostilePresence(room: Room, task?: WarTask): HostilePresenceSnapshot
       structure.structureType !== STRUCTURE_CONTROLLER && structure.structureType !== STRUCTURE_KEEPER_LAIR,
   });
 
-  if (task && isTowerDrainDuoTask(task)) {
+  if (task && isTowerDrainDuoTask(task) && !task.sharedSquadWatchId) {
     const seen = new Set(hostileStructures.map((structure) => structure.id));
     for (const wall of room.find(FIND_STRUCTURES, {
       filter: (structure) => structure.structureType === STRUCTURE_WALL,
@@ -1731,7 +1737,7 @@ export function getWarStatus(targetRoom?: string): WarStatusSnapshot {
 }
 
 /** 注册观察后补剿策略；不重启现役任务，也不立即孵化小队。 */
-export function configureWarRebuildWatch(sourceRoom: string, targetRooms: string[], enemyUsername: string, intervalTicks = 100): { ok: true; id: string } | string {
+export function configureWarRebuildWatch(sourceRoom: string, targetRooms: string[], enemyUsername: string, intervalTicks = 100, sharedSquad = false): { ok: true; id: string } | string {
   const rooms = [...new Set(targetRooms)].sort();
   const validRoom = (name: string) => /^[WE]\d+[NS]\d+$/.test(name);
   const source = Game.rooms[sourceRoom];
@@ -1739,8 +1745,168 @@ export function configureWarRebuildWatch(sourceRoom: string, targetRooms: string
     || !enemyUsername || enemyUsername === source.controller.owner?.username || !Number.isFinite(intervalTicks) || intervalTicks < 1) return "ERR_INVALID_REBUILD_WATCH";
   const id = `${sourceRoom}:${enemyUsername}:${rooms.join("|")}`;
   getMemoryService().ensureCfg().warRebuildWatch ??= {};
-  getMemoryService().ensureCfg().warRebuildWatch![id] = { sourceRoom, targetRooms: rooms, enemyUsername, intervalTicks: Math.floor(intervalTicks) };
+  getMemoryService().ensureCfg().warRebuildWatch![id] = { sourceRoom, targetRooms: rooms, enemyUsername, intervalTicks: Math.floor(intervalTicks), ...(sharedSquad ? { sharedSquad: true } : {}) };
   return { ok: true, id };
+}
+
+/** 只退役战斗成员，控制器攻击者继续执行；已有生产也归同一所有权收口。 */
+function retireSharedCombat(task: WarTask): void {
+  const names = new Set(getTaskConfigNames(task).filter((name) => name !== getControllerAttackConfigName(task)));
+  const spawning = collectSpawningForConfigs(names);
+  for (const creep of Object.values(Game.creeps)) {
+    if (!creep.memory.configName || !names.has(creep.memory.configName)) continue;
+    creep.memory._warRetireToRoom = task.sourceRoom;
+    resetWarCreepTargetState(creep);
+  }
+  detachWarTaskCreeps(names, false);
+  for (const spawn of spawning) spawn.cancel();
+  for (const name of names) { removeQueuedConfigByName(name); removeConfig(name); }
+  releaseWarBoosts(task);
+  delete task.activeGeneration;
+}
+
+function sharedSquadScore(task: WarTask): number {
+  const generation = task.activeGeneration;
+  if (!generation) return 0;
+  const members = Object.values(generation.configNames).map((name) => getLiveCreepsByConfig(name)[0]);
+  if (members.some((creep) => !creep || creep.spawning)) return 1;
+  const attacker = members[0]!;
+  const power = attacker.body.reduce((sum, part) => sum + (part.type === ATTACK && part.hits > 0
+    ? ATTACK_POWER * (part.boost ? (BOOSTS[ATTACK][part.boost]?.attack ?? 1) : 1) : 0), 0);
+  return 1_000_000 + power * 1000 + Math.min(...members.map((creep) => creep!.ticksToLive ?? 0));
+}
+
+/** 完成目标后原子换名和搭档；不会为下一房再孵化另一对成员。 */
+function transferSharedGeneration(from: WarTask, to: WarTask): boolean {
+  const previous = from.activeGeneration;
+  if (!previous || previous.phase !== "deployed") return false;
+  const roles: WarRole[] = ["meleeAttacker", "healer"];
+  const members = roles.map((role) => getLiveCreepsByConfig(previous.configNames[role])[0]);
+  if (members.some((creep) => !creep || creep.spawning)) return false;
+  const id = Math.max(to.generationCounter ?? 0, previous.id) + 1;
+  const generation: WarGenerationState = { ...previous, id, boostTaskId: getGenerationBoostTaskId(to, id), configNames: {
+    meleeAttacker: getGenerationConfigName(to, id, "meleeAttacker"),
+    healer: getGenerationConfigName(to, id, "healer"),
+  } };
+  to.squad = from.squad;
+  to.boostTier = from.boostTier;
+  to.boostStatus = from.boostStatus;
+  to.activeGeneration = generation;
+  to.generationCounter = id;
+  to.npcAuto = true;
+  const store = ensureConfigStore();
+  if (transferredMembers?.game !== Game || transferredMembers.tick !== Game.time) transferredMembers = { game: Game, tick: Game.time, byConfig: new Map() };
+  for (let index = 0; index < roles.length; index++) {
+    const role = roles[index];
+    const member = members[index]!;
+    const name = generation.configNames[role];
+    removeQueuedConfigByName(previous.configNames[role]);
+    removeConfig(previous.configNames[role]);
+    member.memory.configName = name;
+    member.memory._warPartnerConfigName = generation.configNames[role === "meleeAttacker" ? "healer" : "meleeAttacker"];
+    resetWarCreepTargetState(member);
+    store[name] = { role, roomName: to.sourceRoom, args: [], body: getRoleBody(to, role), spawnOnce: { queuedAt: previous.createdAt } };
+    transferredMembers!.byConfig.set(name, [member]);
+  }
+  synchronizeGenerationRoleArgs(to, false);
+  delete from.activeGeneration;
+  releaseWarBoosts(from);
+  setTaskStatus(to, "staging");
+  delete to.failReason;
+  return true;
+}
+
+/** 同组所有房间保留独立任务/降级器，只有一份战斗世代能够生产或出征。 */
+function runSharedWarSquads(store: Record<string, WarTask>): Set<WarTask> {
+  const managed = new Set<WarTask>();
+  for (const task of Object.values(store)) {
+    if (task.sharedSquadWatchId && !Memory.cfg?.warRebuildWatch?.[task.sharedSquadWatchId]?.sharedSquad) {
+      delete task.sharedSquadWatchId;
+      delete task.combatClearedAt;
+      delete task.combatClearSince;
+    }
+  }
+  for (const [id, config] of Object.entries(Memory.cfg?.warRebuildWatch ?? {})) {
+    if (!config.sharedSquad) continue;
+    const state = getMemoryService().ensureRuntime().warRebuildWatch ??= {};
+    const watch = state[id] ??= { clearedRooms: [], targets: {} };
+    const tasks = config.targetRooms.map((name) => store[name]).filter((task): task is WarTask => !!task
+      && task.sourceRoom === config.sourceRoom && task.status !== "done" && task.status !== "failed" && !managed.has(task));
+    for (const task of tasks) {
+      managed.add(task);
+      task.sharedSquadWatchId = id;
+      if (!Game.rooms[config.sourceRoom]?.controller?.my) {
+        retireSharedCombat(task);
+        task.failReason = "shared_source_not_owned";
+        continue;
+      }
+      if (task.failReason === "shared_source_not_owned") delete task.failReason;
+      if (task.combatClearedAt === undefined) requestCombatObservation(task.targetRoom);
+      const room = Game.rooms[task.targetRoom];
+      if (!room) continue;
+      if (room.controller?.my || (room.controller?.owner && room.controller.owner.username !== config.enemyUsername)) {
+        task.failReason = "shared_target_owner_changed";
+        retireSharedCombat(task);
+        continue;
+      }
+      const hostile = getHostilePresence(room, task);
+      if (hostile.hostileCreeps > 0 || hostile.hostileStructures > 0) {
+        delete task.combatClearedAt;
+        delete task.combatClearSince;
+      } else {
+        task.combatClearSince ??= Game.time;
+        if (Game.time - task.combatClearSince + 1 >= WAR_CLEAR_DEBOUNCE_TICKS) task.combatClearedAt ??= Game.time;
+      }
+    }
+    const pending = tasks.filter((task) => task.combatClearedAt === undefined && !task.failReason?.startsWith("shared_target_owner") && task.failReason !== "shared_source_not_owned");
+    let owner = tasks.find((task) => task.targetRoom === watch.sharedSquadOwner && task.failReason !== "shared_target_owner_changed" && task.failReason !== "shared_source_not_owned");
+    if (!owner) owner = [...pending].sort((a, b) => sharedSquadScore(b) - sharedSquadScore(a))[0];
+    // 换策略时先收回重复生产/成员，再决定是否把现役成员交给下一房。
+    for (const task of tasks) if (task !== owner) retireSharedCombat(task);
+    if (owner?.combatClearedAt !== undefined) {
+      const next = pending[0];
+      if (next) transferSharedGeneration(owner, next);
+      if (!next || owner.activeGeneration) retireSharedCombat(owner);
+      owner = next;
+    }
+    watch.sharedSquadOwner = owner?.targetRoom;
+    for (const task of tasks) {
+      const room = Game.rooms[task.targetRoom];
+      if (task.failReason === "shared_target_owner_changed" || task.failReason === "shared_source_not_owned") continue;
+      if (task.combatClearedAt !== undefined) {
+        if (room && isControllerDefeated(room)) transitionWarTaskTerminal(task, "done", null);
+        else { setTaskStatus(task, "downgrading"); ensureControllerAttackConfig(task); }
+        continue;
+      }
+      if (task !== owner) {
+        setTaskStatus(task, "queued");
+        task.failReason = "shared_squad_queued";
+        if (room && isControllerDowngradeReady(room)) ensureControllerAttackConfig(task);
+        continue;
+      }
+      // 清空去抖只等视野稳定；不能为了等这几十tick再孵化一队。
+      if (task.combatClearSince !== undefined) {
+        setTaskStatus(task, "clearing");
+        if (room && isControllerDowngradeReady(room)) ensureControllerAttackConfig(task);
+        continue;
+      }
+      // 现役强化成员继续使用；只有真的需要新世代时重新评估无强化能力。
+      if (task.activeGeneration?.phase === "deployed" && !isGenerationComplete(task.activeGeneration)) retireSharedCombat(task);
+      if (!task.activeGeneration && room && isNpcWarTarget(room)) {
+        const decision = assessUnboostedNpc(room, task.routeRooms, TOWER_DRAIN_ATTACKER_BODY, TOWER_DRAIN_HEALER_BODY, Game.rooms[task.sourceRoom]?.energyCapacityAvailable);
+        if (decision.reason === "entry_not_proven") { task.failReason = "npc_entry_not_proven"; continue; }
+        task.squad = decision.sufficient ? "towerDrainDuo" : "t3Duo";
+        task.boostTier = decision.sufficient ? undefined : "t3";
+        task.npcAuto = true;
+        task.squadAssessedAt = Game.time;
+        task.squadDecision = decision.reason;
+      }
+      activateFrontline(task);
+      if (task.failReason === "shared_squad_queued") delete task.failReason;
+      processTask(task);
+    }
+  }
+  return managed;
 }
 
 /** 复用观察调度和War唯一目标任务；无新鲜视野不派队，战斗中不重复派队。 */
@@ -1753,7 +1919,7 @@ function runWarRebuildWatches(store: Record<string, WarTask>): void {
   for (const [id, config] of Object.entries(configs)) {
     const state = runtime.warRebuildWatch[id] ??= { clearedRooms: [], targets: {} };
     const targets = [...new Set(config.targetRooms)];
-    for (const name of targets) if (store[name]?.sourceRoom === config.sourceRoom && store[name].status === "done" && !state.clearedRooms.includes(name)) state.clearedRooms.push(name);
+    for (const name of targets) if (store[name]?.sourceRoom === config.sourceRoom && (store[name].status === "done" || store[name].combatClearedAt !== undefined) && !state.clearedRooms.includes(name)) state.clearedRooms.push(name);
     // 每房完成记录独立于短期War任务，避免200tick终态清理丢掉首轮成果。
     if (state.armedAt === undefined) {
       if (targets.length === 0 || !targets.every((name) => state.clearedRooms.includes(name))) continue;
@@ -1764,7 +1930,7 @@ function runWarRebuildWatches(store: Record<string, WarTask>): void {
       const task = store[name];
       if (!Game.rooms[config.sourceRoom]?.controller?.my) { target.blocker = "source_not_owned"; continue; }
       if (Game.rooms[name]?.controller?.my) { target.blocker = "target_owned"; continue; }
-      if (task && task.status !== "done" && task.status !== "failed") { target.blocker = "clear_active"; delete target.pendingObservationAt; continue; }
+      if (task && task.status !== "done" && task.status !== "failed" && task.combatClearedAt === undefined) { target.blocker = "clear_active"; delete target.pendingObservationAt; continue; }
       if (task?.status === "failed" || target.blocker === "clear_failed") { target.blocker = "clear_failed"; continue; }
       const interval = Math.max(1, Math.floor(config.intervalTicks));
       if (target.pendingObservationAt === undefined) {
@@ -1817,8 +1983,10 @@ export function runWarControl(): void {
       releaseWarTaskAssets(task);
     }
   }
+  const sharedTasks = runSharedWarSquads(store);
   const tasksBySource = new Map<string, WarTask[]>();
   for (const task of tasks) {
+    if (sharedTasks.has(task)) continue;
     const sourceTasks = tasksBySource.get(task.sourceRoom) ?? [];
     sourceTasks.push(task);
     tasksBySource.set(task.sourceRoom, sourceTasks);

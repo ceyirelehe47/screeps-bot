@@ -1,6 +1,6 @@
 import { issueMove } from "@/movement/traffic";
 import { roleRegistry } from "@/roles";
-import { clearMovementState } from "@/roles/shared";
+import { clearMovementState, moveToTarget, moveToTargetRoom } from "@/roles/shared";
 import { decodeCrossShardTravelerName } from "@/runtime/crossShardNaming";
 import { isPerCreepPhaseTimingEnabled, measureCpuPhase } from "@/runtime/cpuPhaseProfiler";
 import { getCreepConfigService } from "@/runtime/runtimeServices";
@@ -208,6 +208,23 @@ export function mountCreep(): void {
         issueMove(this, spawnYield.dir);
         return;
       }
+    }
+
+    const retireRoom = this.memory._warRetireToRoom;
+    if (retireRoom) {
+      if (this.spawning) return;
+      if (this.hits < this.hitsMax && this.getActiveBodyparts(HEAL) > 0) this.heal(this);
+      if (this.room.name !== retireRoom) {
+        moveToTargetRoom(this, retireRoom, undefined, { routePurpose: "combat" });
+      } else {
+        const spawns = Object.values(Game.spawns).filter((spawn) => spawn.room.name === retireRoom && spawn.isActive());
+        const spawn = this.pos.findClosestByRange(spawns);
+        if (spawn) {
+          if (this.pos.isNearTo(spawn)) spawn.recycleCreep(this);
+          else moveToTarget(this, spawn, 1);
+        }
+      }
+      return;
     }
 
     // 非采样 tick 直接调用（不创建计时闭包）；采样 tick 才进入 phase 计时。

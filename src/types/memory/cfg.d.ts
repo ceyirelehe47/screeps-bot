@@ -10,6 +10,8 @@ declare global {
       targetRooms: string[];
       enemyUsername: string;
       intervalTicks: number;
+      /** 多个目标共用一对战斗成员；控制器攻击独立执行。 */
+      sharedSquad?: boolean;
     }>;
     rooms?: Record<
       string,
