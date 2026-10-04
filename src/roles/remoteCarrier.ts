@@ -10,9 +10,11 @@ import type { RoleFactory } from "@/types/system";
 import { getCreepConfigService } from "@/runtime/runtimeServices";
 import { requestCombatObservation } from "@/runtime/powerBankObserver";
 import { getMoveIntentReceipt } from "@/movement/traffic";
+import { getPowerBankOwnedAvoidRooms } from "@/runtime/powerBankTransit";
 
 type RemoteHaulTarget = AnyStoreStructure | Ruin | Tombstone | Resource;
 const SALVAGE_MODE = "invaderSalvage";
+const SALVAGE_DANGER_TTL = 500;
 const COMBAT_PARTS: readonly BodyPartConstant[] = [ATTACK, RANGED_ATTACK, HEAL, WORK];
 const salvageIntentTicks = new WeakMap<Creep, number>();
 let salvageSearchTick = -1;
@@ -70,6 +72,19 @@ function markSalvageIntent(creep: Creep): void {
   salvageIntentTicks.set(creep, Game.time);
 }
 
+function getSalvageAvoidRooms(): string[] {
+  const runtime = Memory.runtime ??= {};
+  const dangerous = runtime.invaderSalvageDangerRooms ??= {};
+  for (const [name, expiresAt] of Object.entries(dangerous)) {
+    if (!Number.isFinite(expiresAt) || expiresAt <= Game.time) delete dangerous[name];
+  }
+  for (const room of Object.values(Game.rooms)) {
+    if (isInvaderSalvageRoomClear(room)) delete dangerous[room.name];
+    else dangerous[room.name] = Game.time + SALVAGE_DANGER_TTL;
+  }
+  return [...new Set([...getPowerBankOwnedAvoidRooms(), ...Object.keys(dangerous)])];
+}
+
 /** 回收业务只提供禁区与新鲜视野门，移动执行复用统一房内寻路。 */
 function moveSalvageSafely(creep: Creep, goal: RoomPosition, range = 1): void {
   if (salvageSearchTick !== Game.time || salvageSearchGame !== Game) {
@@ -84,6 +99,7 @@ function moveSalvageSafely(creep: Creep, goal: RoomPosition, range = 1): void {
   if (salvageSearches >= 2) return;
   salvageSearches += 1;
   const options = {
+    avoidRooms: getSalvageAvoidRooms(), allowSourceKeeperRooms: true,
     plainCost: 2, swampCost: 10, ignoreCreeps: false, reusePath: 0,
     costCallback: (roomName: string, matrix: CostMatrix): CostMatrix => {
       const room = Game.rooms[roomName];
@@ -94,12 +110,29 @@ function moveSalvageSafely(creep: Creep, goal: RoomPosition, range = 1): void {
           if (x >= 0 && x < 50 && y >= 0 && y < 50) matrix.set(x, y, 255);
         }
       }
+      // 相邻房的 Keeper 禁区也约束出口选择，不能一直选中危险落点后原地等许可。
+      const exits = typeof Game.map.describeExits === "function" ? Game.map.describeExits(roomName) : null;
+      for (const [direction, nextName] of Object.entries(exits ?? {})) {
+        const next = nextName && Game.rooms[nextName];
+        if (!next) continue;
+        const hazards = getInvaderSalvageHazards(next);
+        if (!hazards.length) continue;
+        const exit = Number(direction);
+        if (![TOP, RIGHT, BOTTOM, LEFT].includes(exit)) continue;
+        for (let coordinate = 0; coordinate < 50; coordinate++) {
+          const horizontal = exit === LEFT || exit === RIGHT;
+          const x = horizontal ? (exit === LEFT ? 0 : 49) : coordinate;
+          const y = horizontal ? coordinate : (exit === TOP ? 0 : 49);
+          const entry = new RoomPosition(horizontal ? 49 - x : x, horizontal ? y : 49 - y, next.name);
+          if (!outsideSalvageHazards(entry, hazards)) matrix.set(x, y, 255);
+        }
+      }
       return matrix;
     },
     canMoveStep: (destination: RoomPosition): boolean => {
       const room = Game.rooms[destination.roomName];
       if (!room) { requestCombatObservation(destination.roomName); return false; }
-      return (room.name === creep.room.name || isInvaderSalvageRoomClear(room)) &&
+      return (room.name === creep.room.name || ((!room.controller?.owner || room.controller.my === true) && isInvaderSalvageRoomClear(room))) &&
         isInvaderSalvagePositionSafe(room, destination);
     },
   };

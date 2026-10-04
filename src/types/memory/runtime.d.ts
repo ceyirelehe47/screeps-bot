@@ -622,6 +622,8 @@ declare global {
     };
     /** Power bank scout transit danger rooms: roomName -> expiresAt tick. */
     transitDangerRooms?: Record<string, number>;
+    /** INVADER 回收的实际危险房；失去视野保留，fresh 清场证据提前解除。 */
+    invaderSalvageDangerRooms?: Record<string, number>;
     /** Power bank scout hostile-owned or hostile-reserved transit rooms. */
     powerBankPermanentDangerRooms?: Record<string, true>;
     /** 原生视野确认的敌方所有权；失去视野保留，再次确认无主/己方后删除。 */

@@ -161,6 +161,25 @@ describe("外出 creep 与常驻 creep 的统一房内寻路", () => {
     expect(getCreepMovementState(creep)!.stepPolicyWaitAt).toBeUndefined();
   });
 
+  it("Keeper 感知的回收路线复用原生路由与房内执行器，普通角色保留避让", () => {
+    const { creep } = traveler("remoteCarrier");
+    const keeperRoom = createRoom("W0N1", []);
+    const keeper = { owner: { username: "Source Keeper" }, getActiveBodyparts: () => 1 } as Creep;
+    const originalFind = keeperRoom.find.bind(keeperRoom);
+    keeperRoom.find = jest.fn((type: FindConstant) => type === FIND_HOSTILE_CREEPS ? [keeper] : originalFind(type)) as Room["find"];
+    Game.map.findRoute = jest.fn((_from, _to, options) => {
+      const cost = options?.routeCallback?.("W0N1", creep.room.name);
+      return cost === Infinity ? ERR_NO_PATH : [{ exit: RIGHT, room: "W0N1" }, { exit: RIGHT, room: "W0N2" }];
+    });
+    expect(moveToTargetRoom(creep, "W0N2")).toBe(ERR_NO_PATH);
+    expect(moveToTargetRoom(creep, "W0N2", undefined, { allowSourceKeeperRooms: true, canMoveStep: () => true })).toBe(OK);
+    expect(creep.move).toHaveBeenCalledWith(RIGHT);
+    expect(PathFinder.search).not.toHaveBeenCalled();
+    Game.time++; resetRuntimeServices();
+    keeper.owner.username = "Invader";
+    expect(moveToTargetRoom(creep, "W0N2", undefined, { allowSourceKeeperRooms: true })).toBe(ERR_NO_PATH);
+  });
+
   it("到达目标房后不复用旧房路径，global reset后可重建", () => {
     const { creep } = traveler(); moveToTargetRoom(creep, "W0N1", "W1N1|W0N1");
     clearCreepMovementStateForTest(); clearRoomBaseCostMatrixCacheForTest();

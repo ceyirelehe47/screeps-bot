@@ -49,6 +49,8 @@ export interface MoveToTargetOptions {
 }
 
 export interface MoveToRoomOptions extends MoveToTargetOptions {
+  /** 业务已提供 Keeper 禁区矩阵及逐步安全门时，可规划穿过 Keeper 房间。 */
+  allowSourceKeeperRooms?: boolean;
   /** 清剿按当前战斗威胁续路；经济角色保持控制器/结构避让。 */
   routePurpose?: "normal" | "combat";
   travelRange?: 1 | 3;
