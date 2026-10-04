@@ -1,7 +1,7 @@
 import { HUB_TARGET_COMPOUNDS } from "@/config/hub";
 import { buildHubProgressSnapshot } from "@/runtime/hubProgress";
 import { getDefaultHubConfig, getDefaultHubRuntime, normalizeHubConfig, planDistributedSynthesis,
-  planHubChains, planHubDistribution, planHubImports } from "@/runtime/hubPlanner";
+  planHubChains, planHubDistribution, planHubImports, runHubPlanner } from "@/runtime/hubPlanner";
 import { ensureResourceTransferTaskStore } from "@/runtime/logistics/resourceTransferTasks";
 import { registerRuntimeServices } from "@/runtime/runtimeServices";
 
@@ -88,6 +88,17 @@ describe("OH 仅 HUB 储备", () => {
     expect(plan.dispatchAssignments.some(a => a.product === RESOURCE_HYDROXIDE)).toBe(true);
     expect(plan.dispatchAssignments.filter(a => a.product === RESOURCE_HYDROXIDE)
       .reduce((sum, a) => sum + a.targetAmount, 0)).toBe(20000);
+  });
+
+  it("新建 OH 补货已覆盖目标时不由 HUB fallback 重复合成", () => {
+    Game.rooms = { [HUB]: room(HUB, { H: 100000, O: 100000 }), [SAT]: room(SAT, { OH: 50000 }) };
+    Memory.cfg!.hub!.targetCompounds = [RESOURCE_HYDROXIDE];
+    runHubPlanner();
+    expect(Object.values(ensureResourceTransferTaskStore()).filter(t => t.resource === RESOURCE_HYDROXIDE)
+      .reduce((sum, t) => sum + t.amount, 0)).toBe(20000);
+    expect(Memory.runtime!.hub!.lastPlanActions).not.toContain(RESOURCE_HYDROXIDE);
+    expect((Memory.cfg?.synthesisControl?.rooms?.[HUB]?.reactions ?? [])
+      .some(reaction => reaction.product === RESOURCE_HYDROXIDE)).toBe(false);
   });
 
   it("进度展示只报告 HUB 的 OH 缺口，外房 OH 缺口为零", () => {

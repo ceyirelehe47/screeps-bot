@@ -2695,6 +2695,13 @@ function runHubPlanningAttempt(
       ? { [RESOURCE_GHODIUM]: nukerGhodiumDemand }
       : {};
 
+  planHubImports(cfg, transferAmountsBeforeImports, hubInventory);
+  const transferAmountsAfterImports = createResourceTransferTaskAmountIndex();
+  // 本帧新建的 OH 补库也算覆盖，避免 fallback 再生产一份相同的储备。
+  for (const compound of targetCompounds.filter(isHubOnlyReserveCompound)) {
+    incomingResources[compound] = transferAmountsAfterImports.getIncoming(cfg.hubRoomName, compound);
+  }
+
   const result = planHubChains(
     hubInventory,
     incomingResources,
@@ -2703,9 +2710,6 @@ function runHubPlanningAttempt(
     additionalProductionDemands,
     hubReservePerCompound,
   );
-
-  planHubImports(cfg, transferAmountsBeforeImports, hubInventory);
-  const transferAmountsAfterImports = createResourceTransferTaskAmountIndex();
 
   const distributedPreview = result.blocked
     ? planDistributedSynthesis(
