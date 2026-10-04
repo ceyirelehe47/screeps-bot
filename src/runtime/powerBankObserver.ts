@@ -55,6 +55,16 @@ let observerSnapshot: {
   reachability: Map<string, boolean>;
 } | undefined;
 
+let coverageSnapshot: {
+  game: Game;
+  tick: number;
+  context: ReturnType<typeof getTickContextService>;
+  observers: readonly StructureObserver[];
+  candidates: readonly string[];
+  coveredRooms: readonly string[];
+  complete: boolean;
+} | undefined;
+
 function getRuntimeState(): PowerBankObserverRuntime {
   const runtime = getMemoryService().ensureRuntime();
   runtime.powerBankObserver ??= {
@@ -68,10 +78,13 @@ function getRuntimeState(): PowerBankObserverRuntime {
 
 function getActiveObservers(): StructureObserver[] {
   const tickContext = getTickContextService();
-  if (observerSnapshot?.game === Game && observerSnapshot.tick === Game.time && observerSnapshot.context === tickContext) return observerSnapshot.observers;
+  if (observerSnapshot?.game === Game && observerSnapshot.tick === Game.time && observerSnapshot.context === tickContext &&
+      observerSnapshot.observers.every(observer => Game.rooms[observer.room.name] === observer.room && observer.room.controller?.my)) return observerSnapshot.observers;
   const observers: StructureObserver[] = [];
   for (const room of tickContext.getMyRooms()) {
-    const roomObservers = tickContext.getRoomContext(room)?.getMyStructuresByType(STRUCTURE_OBSERVER).filter(
+    const currentRoom = Game.rooms[room.name];
+    if (!currentRoom?.controller?.my) continue;
+    const roomObservers = tickContext.getRoomContext(currentRoom)?.getMyStructuresByType(STRUCTURE_OBSERVER).filter(
       (structure): structure is StructureObserver => structure.structureType === STRUCTURE_OBSERVER &&
         (typeof structure.isActive !== "function" || structure.isActive()),
     ) ?? [];
@@ -184,11 +197,22 @@ function scanVisibleSearchRooms(): void {
 }
 
 function getCoveredRooms(
-  observers: StructureObserver[],
-  candidates: string[],
+  observers: readonly StructureObserver[],
+  candidates: readonly string[],
   reachable = canObserve,
 ): string[] {
   return candidates.filter((roomName) => observers.some((observer) => reachable(observer, roomName)));
+}
+
+function getCoverageSnapshot(observers: readonly StructureObserver[], candidates: readonly string[]): NonNullable<typeof coverageSnapshot> {
+  const context = getTickContextService();
+  if (coverageSnapshot?.game === Game && coverageSnapshot.tick === Game.time && coverageSnapshot.context === context &&
+      coverageSnapshot.observers === observers && coverageSnapshot.candidates.length === candidates.length &&
+      coverageSnapshot.candidates.every((name, index) => name === candidates[index])) return coverageSnapshot;
+  const coveredRooms = Object.freeze(getCoveredRooms(observers, candidates));
+  coverageSnapshot = { game: Game, tick: Game.time, context, observers, candidates: Object.freeze([...candidates]),
+    coveredRooms, complete: candidates.length > 0 && observers.length > 0 && coveredRooms.length === candidates.length };
+  return coverageSnapshot;
 }
 
 function getPriorityRequests(state: PowerBankObserverRuntime, kind: RequestKind, worldSize: number | undefined): string[] {
@@ -203,7 +227,7 @@ export function hasPowerBankObserverCoverage(): boolean {
   // 集合由来源房位置独立生成，不能把 Observer 自己能看的集合当作覆盖证明。
   const candidates = getPowerBankSearchRooms();
   const observers = getActiveObservers();
-  return candidates.length > 0 && observers.length > 0 && getCoveredRooms(observers, candidates).length === candidates.length;
+  return getCoverageSnapshot(observers, candidates).complete;
 }
 
 export function runPowerBankObserver(): void {
@@ -221,17 +245,9 @@ export function runPowerBankObserver(): void {
       delete patrolNextScanAt[name];
     }
   }
-  const reachability = new Map<string, boolean>();
-  const reachable = (observer: StructureObserver, roomName: string): boolean => {
-    const key = `${observer.room.name}:${roomName}`;
-    const cached = reachability.get(key);
-    if (cached !== undefined) return cached;
-    const result = canObserve(observer, roomName);
-    reachability.set(key, result);
-    return result;
-  };
+  const reachable = canObserve;
   state.updatedAt = Game.time;
-  state.coveredRooms = getCoveredRooms(observers, candidates, reachable);
+  state.coveredRooms = [...getCoverageSnapshot(observers, candidates).coveredRooms];
   if (!scheduled || scheduled.game !== Game || scheduled.tick !== Game.time || scheduled.state !== state) {
     scheduled = { game: Game, tick: Game.time, state, observerIds: new Set(), roomNames: new Set(), combatSlots: 0, remoteSlots: 0 };
   }

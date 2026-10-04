@@ -1,7 +1,9 @@
 import { isPowerBankSearchRoom } from "@/runtime/powerBankConstants";
 import { getPowerBankSearchRooms } from "@/runtime/powerBankSearch";
+import * as constants from "@/runtime/powerBankConstants";
 
 describe("PowerBank 动态搜房", () => {
+  afterEach(() => jest.restoreAllMocks());
   beforeEach(() => {
     Game.map = {
       ...Game.map,
@@ -115,5 +117,32 @@ describe("PowerBank 动态搜房", () => {
 
     expect(getPowerBankSearchRooms("E0S0")).not.toContain("E0S0");
     expect(status).toHaveBeenCalledTimes(coldReads * 2);
+  });
+
+  it("跨帧复用纯几何，仍逐帧重读每一个候选房间的开放状态", () => {
+    const classify = jest.spyOn(constants, "isPowerBankSearchRoom");
+    const first = getPowerBankSearchRooms("E67S67");
+    const geometryCalls = classify.mock.calls.length;
+    const status = Game.map.getRoomStatus as jest.Mock;
+    expect(geometryCalls).toBeGreaterThan(first.length);
+    const statusCalls = status.mock.calls.length;
+    status.mockImplementation((name: string) => ({ status: name === "E60S60" ? "closed" : "normal", timestamp: null }));
+    Game.time++;
+    const second = getPowerBankSearchRooms("E67S67");
+    expect(first).toContain("E60S60");
+    expect(second).not.toContain("E60S60");
+    expect(classify).toHaveBeenCalledTimes(geometryCalls);
+    expect(status).toHaveBeenCalledTimes(statusCalls * 2);
+  });
+
+  it("纯几何缓存有界，输入被淘汰后可重建而不污染返回值", () => {
+    const classify = jest.spyOn(constants, "isPowerBankSearchRoom");
+    const first = getPowerBankSearchRooms("W67S67");
+    const original = [...first]; first.splice(0, first.length, "caller-only");
+    for (let index = 0; index < 40; index++) getPowerBankSearchRooms(`W${30 + index}N67`);
+    const calls = classify.mock.calls.length;
+    Game.time++;
+    expect(getPowerBankSearchRooms("W67S67")).toEqual(original);
+    expect(classify.mock.calls.length).toBeGreaterThan(calls);
   });
 });

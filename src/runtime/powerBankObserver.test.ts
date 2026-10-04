@@ -211,6 +211,42 @@ describe("PowerBank Observer 动态扫描", () => {
     expect(hasPowerBankObserverCoverage()).toBe(true);
   });
 
+  it("调度和覆盖读取共享私有本帧结果，Memory 中的列表改写不能污染覆盖证明", () => {
+    jest.spyOn(search, "getPowerBankSearchRooms").mockReturnValue(["E0N59", "E10N60"]);
+    const observer = addObserver(createRoom("E3N59"));
+    expect(hasPowerBankObserverCoverage()).toBe(true);
+    runPowerBankObserver();
+    const reads = (Game.map.getRoomLinearDistance as jest.Mock).mock.calls.length;
+    Memory.runtime!.powerBankObserver!.coveredRooms.splice(0);
+    expect(hasPowerBankObserverCoverage()).toBe(true);
+    expect(Game.map.getRoomLinearDistance).toHaveBeenCalledTimes(reads);
+    expect(observer.observeRoom).toHaveBeenCalledTimes(1);
+    Game.time++;
+    (Game.map.getRoomLinearDistance as jest.Mock).mockReturnValue(11);
+    expect(hasPowerBankObserverCoverage()).toBe(false);
+  });
+
+  it("同 tick 替换来源 Room 与 Observer 后重建覆盖和活跃结构查询", () => {
+    jest.spyOn(search, "getPowerBankSearchRooms").mockReturnValue(["E0N59"]);
+    const old = addObserver(createRoom("E3N59"));
+    expect(hasPowerBankObserverCoverage()).toBe(true);
+    const replacement = addObserver(createRoom("E3N59"));
+    Object.assign(replacement, { id: "replacement-observer" });
+    runPowerBankObserver();
+    expect(old.observeRoom).not.toHaveBeenCalled();
+    expect(replacement.observeRoom).toHaveBeenCalledWith("E0N59");
+    expect(hasPowerBankObserverCoverage()).toBe(true);
+  });
+
+  it("同 tick 的来源归属丢失不沿用旧 Observer 证明", () => {
+    jest.spyOn(search, "getPowerBankSearchRooms").mockReturnValue(["E0N59"]);
+    const observer = addObserver(createRoom("E3N59"));
+    expect(hasPowerBankObserverCoverage()).toBe(true);
+    Object.assign(observer.room.controller!, { my: false });
+    expect(hasPowerBankObserverCoverage()).toBe(false);
+    expect(requestCombatObservation("E2N54")).toBe(false);
+  });
+
   it("复看请求不覆盖当前意图，下次调度优先发布观察", () => {
     const observer = addObserver(createRoom("E3N59"));
     runPowerBankObserver();
