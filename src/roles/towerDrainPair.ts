@@ -179,7 +179,10 @@ export function constrainTowerDrainBreachPath(creep: Creep, roomName: string, ma
   const redPaths = exitPaths(room, state, state.attackerEntry, towers);
   const greenPaths = exitPaths(room, state, state.healerEntry ?? state.attackerEntry, towers);
   const health = Math.min(creep.hits, partner.hits);
-  const exposures = (steps: number): number => Math.max(exitExposureTicks(creep, steps), exitExposureTicks(partner, steps));
+  // 身体与当前疲劳在单次矩阵评估中不变；每名成员只计算一次，下一次调用重新读取。
+  const redExposure = createExitExposureEvaluator(creep);
+  const greenExposure = createExitExposureEvaluator(partner);
+  const exposures = (steps: number): number => Math.max(redExposure(steps), greenExposure(steps));
   for (let x = 1; x < 49; x++) for (let y = 1; y < 49; y++) {
     const tile = { x, y };
     const at = x * 50 + y;
@@ -280,14 +283,18 @@ function minimumExitMoves(creep: Creep): number {
   return Math.min(moves, creep.getActiveBodyparts(MOVE));
 }
 
+function createExitExposureEvaluator(creep: Creep): (steps: number) => number {
+  const moves = minimumExitMoves(creep);
+  if (moves <= 0) return (steps) => steps === 0 ? 2 : Infinity;
+  const cadence = Math.max(mobilityTicks(creep), mobilityTicks(creep, moves));
+  const fatigueWait = Math.ceil(creep.fatigue / (moves * 2));
+  return (steps) => steps === 0 ? 2 : steps === UNREACHABLE ? Infinity : Math.max(2, fatigueWait + steps * cadence + 1);
+}
+
 function exitExposureTicks(creep: Creep, steps: number): number {
   // 到0/49即本帧迁房，已在边界退出不需要再走一格；保留两轮新伤害余量。
   if (steps === 0) return 2;
-  const moves = minimumExitMoves(creep);
-  if (moves <= 0 || steps === UNREACHABLE) return Infinity;
-  const cadence = Math.max(mobilityTicks(creep), mobilityTicks(creep, moves));
-  const fatigueWait = Math.ceil(creep.fatigue / (moves * 2));
-  return Math.max(2, fatigueWait + steps * cadence + 1);
+  return createExitExposureEvaluator(creep)(steps);
 }
 
 function proofDamageBudget(damage: number, exposures: number): number {

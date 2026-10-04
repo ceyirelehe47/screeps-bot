@@ -8,6 +8,7 @@ import { meleeAttackerRole } from "@/roles/meleeAttacker";
 import * as meleeModule from "@/roles/meleeAttacker";
 import { healerRole } from "@/roles/healer";
 import { createMockPowerBankCreep, createMockStore, MockPos } from "@mock/powerBank";
+import { createHash } from "node:crypto";
 
 const TARGET = "E3N57";
 const RETREAT = "E2N57";
@@ -367,6 +368,36 @@ describe("towerDrainDuo 公共战术门", () => {
     const second = { set: jest.fn() } as unknown as CostMatrix;
     constrainTowerDrainBreachPath(attacker, TARGET, second);
     expect(second.set).not.toHaveBeenCalledWith(10, 25, 255);
+  });
+
+  it("整房破墙矩阵的身体查询保持常量上限，同tick疲劳变化仍重新收紧", () => {
+    const storage = { id: "stock", structureType: STRUCTURE_STORAGE, pos: new MockPos(30, 30, TARGET), store: createMockStore({ [RESOURCE_ENERGY]: 1000 }) } as unknown as StructureStorage;
+    const { attacker, healer } = pair(false, [tower("empty", 0, 25, 25), storage]);
+    attacker.memory._warTowerDrain = state("breaching");
+    const redQueries = jest.spyOn(attacker, "getActiveBodyparts");
+    const greenQueries = jest.spyOn(healer, "getActiveBodyparts");
+    const evaluate = () => {
+      const cells = new Uint8Array(2500);
+      const matrix = { set: (x: number, y: number, value: number) => { cells[x * 50 + y] = value; } } as unknown as CostMatrix;
+      const started = Date.now();
+      constrainTowerDrainBreachPath(attacker, TARGET, matrix);
+      console.log(JSON.stringify({ kind: "towerDrainMatrixBudget", fatigue: healer.fatigue,
+        redQueries: redQueries.mock.calls.length, greenQueries: greenQueries.mock.calls.length,
+        matrixSha256: createHash("sha256").update(cells).digest("hex"), elapsedMs: Date.now() - started }));
+      return cells;
+    };
+    const healthy = evaluate();
+    expect(healthy[1 * 50 + 25]).toBe(0);
+    expect(healthy[5 * 50 + 25]).toBe(255);
+    expect(redQueries.mock.calls.length).toBeLessThanOrEqual(8);
+    expect(greenQueries.mock.calls.length).toBeLessThanOrEqual(8);
+    redQueries.mockClear();
+    greenQueries.mockClear();
+    healer.fatigue = 300;
+    const fatigued = evaluate();
+    expect(fatigued[1 * 50 + 25]).toBe(255);
+    expect(redQueries.mock.calls.length).toBeLessThanOrEqual(8);
+    expect(greenQueries.mock.calls.length).toBeLessThanOrEqual(8);
   });
 
   it("预留未来仅尾5MOVE的退出节奏：浅格可走，更深平地即使满血也拒绝", () => {
