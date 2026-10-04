@@ -21,6 +21,7 @@ declare global {
         pendingObservationAt?: number;
         lastSeenAt?: number;
         lastTriggeredAt?: number;
+        lastTriggeredEvidenceIds?: string[];
         triggerCount?: number;
         blocker?: string;
       }>;

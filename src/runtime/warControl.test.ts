@@ -748,6 +748,23 @@ describe("清剿后Observer重建监视", () => {
     expect(Memory.data!.war!.E3N57.attempts).toBe(2);
   });
 
+  it("已补剿后的同一残留工地不反复派兵，有新creep到来才触发下一次", () => {
+    runWarControl();
+    let actors: Creep[] = [{ id: "first-builder", owner: { username: "TooAngel" } } as Creep];
+    const room = createTargetRoom();
+    room.find = jest.fn((kind: FindConstant) => kind === FIND_HOSTILE_CONSTRUCTION_SITES ? [{ id: "remaining-site", owner: { username: "TooAngel" } }]
+      : kind === FIND_HOSTILE_CREEPS ? actors : []) as Room["find"];
+    observe("E3N57", room);
+    expect(watchState().targets.E3N57.triggerCount).toBe(1);
+    Memory.data!.war!.E3N57 = terminal("E3N57");
+    actors = [];
+    Game.time = 1100; runWarControl(); Game.time++; runWarControl();
+    expect(watchState().targets.E3N57.triggerCount).toBe(1);
+    actors = [{ id: "new-builder", owner: { username: "TooAngel" } } as Creep];
+    Game.time = 1200; runWarControl(); Game.time++; runWarControl();
+    expect(watchState().targets.E3N57.triggerCount).toBe(2);
+  });
+
   it("对手完成的新结构也触发；仅控制器归属仍保持监视", () => {
     runWarControl();
     const spawn = { id: "rebuilt", owner: { username: "TooAngel" }, structureType: STRUCTURE_SPAWN } as StructureSpawn;

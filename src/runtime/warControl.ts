@@ -1714,11 +1714,17 @@ function runWarRebuildWatches(store: Record<string, WarTask>): void {
       target.blocker = undefined;
       if (room.controller?.owner && room.controller.owner.username !== config.enemyUsername) { target.blocker = "target_owner_changed"; continue; }
       // 控制器归属本身不是重建。观察到对手creep或新造的实体/工地才启动。
-      const rebuilding = room.find(FIND_HOSTILE_CREEPS).some((creep) => creep.owner.username === config.enemyUsername)
-        || room.find(FIND_HOSTILE_CONSTRUCTION_SITES).some((site) => site.owner.username === config.enemyUsername)
-        || room.find(FIND_HOSTILE_STRUCTURES).some((structure) => structure.structureType !== STRUCTURE_CONTROLLER
-          && structure.structureType !== STRUCTURE_KEEPER_LAIR && "owner" in structure && (structure as OwnedStructure).owner.username === config.enemyUsername);
-      if (!rebuilding) continue;
+      const evidence = [
+        ...room.find(FIND_HOSTILE_CREEPS).filter((creep) => creep.owner.username === config.enemyUsername).map((creep) => `creep:${creep.id}`),
+        ...room.find(FIND_HOSTILE_CONSTRUCTION_SITES).filter((site) => site.owner.username === config.enemyUsername).map((site) => `site:${site.id}`),
+        ...room.find(FIND_HOSTILE_STRUCTURES).filter((structure) => structure.structureType !== STRUCTURE_CONTROLLER
+          && structure.structureType !== STRUCTURE_KEEPER_LAIR && "owner" in structure && (structure as OwnedStructure).owner.username === config.enemyUsername).map((structure) => `structure:${structure.id}`),
+      ].sort();
+      const previous = new Set(target.lastTriggeredEvidenceIds ?? []);
+      const newEvidence = evidence.some((item) => !previous.has(item));
+      target.lastTriggeredEvidenceIds = evidence;
+      // 减少旧证据不是重建；例如creep已被击杀，但其工地仍残留。
+      if (!newEvidence) continue;
       requestWarRoomClear(name, config.sourceRoom, { reason: "manual", squad: "towerDrainDuo", oneShot: false });
       target.lastTriggeredAt = Game.time;
       target.triggerCount = (target.triggerCount ?? 0) + 1;
