@@ -198,7 +198,8 @@ export function getPowerCreepRoomEnergyPolicy(roomName: string): PowerCreepRoomE
   }
 
   return {
-    suppressSpawnSupply: true,
+    // OPERATE_EXTENSION补充extension，spawn仍由常规carrier供能。
+    suppressSpawnSupply: false,
     suppressExtensionSupply: isOperateExtensionControlHealthy(roomName, capability),
     managePowerSpawnSupply: true,
   };

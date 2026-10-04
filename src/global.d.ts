@@ -546,6 +546,8 @@ declare global {
     lastBankHits?: number;
     /** Last tick at which bank hits decreased. */
     lastBankProgressAt?: number;
+    /** 首次确认现役攻击者贴近且Bank血量下降的tick。 */
+    attackStartedTick?: number;
     combatRecoveryHits?: number;
     combatRecoveryProgressAt?: number;
     /** Most recent tick on which the target room or bank was visible. */
@@ -721,6 +723,8 @@ declare global {
     _warQueued?: boolean;
     /** 已退出共享清剿的多余成员撤回此源房回收。 */
     _warRetireToRoom?: string;
+    /** 已终止任务的空载成员通过共用交通返回此房回收。 */
+    _recycleToRoom?: string;
     _warTowerDrain?: import("@/roles/towerDrainPair").TowerDrainPairState;
     _move?: {
       dest?: {

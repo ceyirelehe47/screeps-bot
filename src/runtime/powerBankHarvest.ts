@@ -45,7 +45,7 @@ import { getPowerBankOwnedAvoidRooms } from "@/runtime/powerBankTransit";
 const PATROL_SCOUT_CONFIG_NAME = "powerbank:patrol:scout:0";
 
 const MAX_POWER_BANK_HAULER_PAIRS = 25;
-const POWER_BANK_HAULER_ARRIVAL_BUFFER = 200;
+const POWER_BANK_HAULER_ARRIVAL_BUFFER = 25;
 const HAULING_EMPTY_CONFIRM_TICKS = 100;
 const REINFORCEMENT_INDEX = 1;
 const REINFORCEMENT_TTL_BUFFER = 75;
@@ -778,12 +778,7 @@ function estimateRemainingAttackTicks(bank: StructurePowerBank, attacker: Creep,
 }
 
 function shouldSpawnHaulers(task: PowerBankHarvestTask, bank: StructurePowerBank, attacker: Creep, healer: Creep): boolean {
-  if (
-    task.plannedHaulerSpawnStartTick !== undefined &&
-    Game.time >= task.plannedHaulerSpawnStartTick
-  ) {
-    return true;
-  }
+  if (task.attackStartedTick === undefined) return false;
 
   const sourceRoom = Game.rooms[task.sourceRoom];
   const energyCapacity = sourceRoom?.energyCapacityAvailable ?? 0;
@@ -793,8 +788,51 @@ function shouldSpawnHaulers(task: PowerBankHarvestTask, bank: StructurePowerBank
   if (!Number.isFinite(travelTime) || !Number.isFinite(remainingAttackTicks)) {
     return false;
   }
-
+  task.plannedKillTick = Game.time + remainingAttackTicks;
+  task.plannedHaulerSpawnStartTick = Math.max(task.attackStartedTick, task.plannedKillTick - spawnTime - travelTime - POWER_BANK_HAULER_ARRIVAL_BUFFER);
+  task.plannedHaulerArrivalTick = Math.max(Game.time, task.plannedHaulerSpawnStartTick) + spawnTime + travelTime;
   return remainingAttackTicks <= spawnTime + travelTime + POWER_BANK_HAULER_ARRIVAL_BUFFER;
+}
+
+/** 边界的0/49落点重合，用49格房间坐标求剩余移动下界；不把房数硬乘50。 */
+function minimumRemainingTravel(pos: RoomPosition, goal: RoomPosition): number {
+  const point = (p: RoomPosition): readonly [number, number] | null => {
+    const match = /^([WE])(\d+)([NS])(\d+)$/.exec(p.roomName);
+    if (!match || !Number.isFinite(p.x) || !Number.isFinite(p.y)) return null;
+    const x = match[1] === "E" ? Number(match[2]) : -Number(match[2]) - 1;
+    const y = match[3] === "S" ? Number(match[4]) : -Number(match[4]) - 1;
+    return [x * 49 + p.x, y * 49 + p.y];
+  };
+  const a = point(pos), b = point(goal);
+  return a && b ? Math.max(0, Math.max(Math.abs(a[0] - b[0]), Math.abs(a[1] - b[1])) - 1) : 0;
+}
+
+function abortUnfinishablePair(task: PowerBankHarvestTask, bank: StructurePowerBank, pair: ActivePowerBankPair): boolean {
+  const finish = estimateRemainingAttackTicks(bank, pair.attacker, pair.healer);
+  const travel = Math.max(minimumRemainingTravel(pair.attacker.pos, bank.pos), minimumRemainingTravel(pair.healer.pos, bank.pos));
+  const ttl = Math.min(pair.attacker.ticksToLive ?? CREEP_LIFE_TIME, pair.healer.ticksToLive ?? CREEP_LIFE_TIME);
+  if (finish + travel + POWER_BANK_COMBAT_TTL_MARGIN < ttl) return false;
+  // 即使理想通路下也不能一队完成：停止投入，现役空载成员通过共用交通回收。
+  const configs = new Set(getTaskConfigNames(task));
+  for (const name of configs) {
+    for (const creep of getTickContextService().getCreepsByConfigName(name)) {
+      if ((creep.memory as PowerBankCreepMemory).taskId !== undefined && (creep.memory as PowerBankCreepMemory).taskId !== task.id) continue;
+      if ((creep.store?.getUsedCapacity() ?? 0) > 0) continue;
+      creep.memory._recycleToRoom = task.sourceRoom;
+      clearMovementState(creep);
+    }
+  }
+  for (const spawn of Object.values(Game.spawns)) {
+    const spawning = spawn.spawning;
+    const name = spawning && (Game.creeps[spawning.name]?.memory ?? Memory.creeps?.[spawning.name])?.configName;
+    if (spawning && name && configs.has(name) && typeof spawning.cancel === "function") spawning.cancel();
+  }
+  for (const actor of [pair.attacker, pair.healer]) {
+    actor.memory._recycleToRoom = task.sourceRoom;
+    clearMovementState(actor);
+  }
+  transitionToTerminal(task, "aborted", "one_pair_runtime_ttl_insufficient");
+  return true;
 }
 
 function getRequiredHaulerCount(task: PowerBankHarvestTask): number {
@@ -1521,6 +1559,7 @@ function processAttacking(task: PowerBankHarvestTask): void {
     return;
   }
 
+  const bankWasDamaged = task.lastBankHits !== undefined && bank.hits < task.lastBankHits;
   updatePowerBankObservation(task, bank);
   processReinforcement(task);
 
@@ -1543,6 +1582,8 @@ function processAttacking(task: PowerBankHarvestTask): void {
     resetChangedActivePair(task);
     return;
   }
+  if (bankWasDamaged && pair.attacker.room.name === task.targetRoom && pair.attacker.pos.isNearTo(bank.pos)) task.attackStartedTick ??= Game.time - 1;
+  if (abortUnfinishablePair(task, bank, pair)) return;
 
   const combatCapable = isPairCombatCapable(pair);
   // combatReady记录已通过的出生/强化门，身体损毁不能把它改回未准备状态，
@@ -1567,72 +1608,13 @@ function processAttacking(task: PowerBankHarvestTask): void {
     delete task.combatRecoveryHits; delete task.combatRecoveryProgressAt;
     if (task.blocker === "active_pair_recovering") delete task.blocker;
   }
-  maybeRequestReinforcement(
-    task,
-    pair,
-    bank,
-    !Number.isFinite(recovery.ticks) || task.blocker === "attack_no_progress" && !recoveryProgress,
-  );
+  if (task.blocker === "attack_no_progress" && Game.time % REINFORCEMENT_REPATH_COOLDOWN === 0) {
+    clearMovementState(pair.attacker); clearMovementState(pair.healer);
+  }
   processReinforcement(task);
   if (!combatCapable || shouldProactivelyHandoff(task, pair, bank) || task.blocker === "attack_no_progress") pair = promoteReinforcement(task) ?? pair;
   if (!task.reinforcement) cleanupInactiveCombatConfigs(task);
   if (shouldSpawnHaulers(task, bank, pair.attacker, pair.healer)) ensureHaulerConfigs(task);
-}
-
-function estimateReinforcementLeadTicks(task: PowerBankHarvestTask): number {
-  if (!task.tier) return Infinity;
-  const profile = derivePowerBankTierProfile(task.tier);
-  if (!profile) return Infinity;
-  const spawnReadyIn = getSpawnReadyIn(task.sourceRoom);
-  const sourceRoom = Game.rooms[task.sourceRoom];
-  if (spawnReadyIn.length === 0 || !sourceRoom) return Infinity;
-  const timeline = planPowerBankTimeline({
-    profile,
-    currentTick: Game.time,
-    bankHits: 0,
-    bankPower: 0,
-    freeTiles: Math.max(1, task.freeTiles),
-    routeDistance: task.routeDistance ?? 5,
-    combatTravelTicks: task.combatTravelTicks,
-    haulerOutboundTravelTicks: task.haulerOutboundTravelTicks,
-    haulerReturnTravelTicks: task.haulerReturnTravelTicks,
-    haulerCapacity: getPowerBankHaulerCapacity(sourceRoom.energyCapacityAvailable),
-    spawnReadyIn,
-  });
-  return timeline.combatArrivalTick - Game.time;
-}
-
-function maybeRequestReinforcement(
-  task: PowerBankHarvestTask,
-  pair: ActivePowerBankPair,
-  bank: StructurePowerBank,
-  force = false,
-): void {
-  if (task.reinforcement) return;
-  const pairTtl = Math.min(
-    pair.attacker.ticksToLive ?? CREEP_LIFE_TIME,
-    pair.healer.ticksToLive ?? CREEP_LIFE_TIME,
-  );
-  const remainingAttackTicks = estimateRemainingAttackTicks(bank, pair.attacker, pair.healer);
-  // 主队能独立完成时无需接班队，不能把接班队的准备时间加到击破寿命门。
-  if (!force && pairTtl > remainingAttackTicks + REINFORCEMENT_TTL_BUFFER) return;
-  const leadTicks = estimateReinforcementLeadTicks(task);
-  if (!Number.isFinite(leadTicks) || !force && !Number.isFinite(remainingAttackTicks)) return;
-  // 确需接班时按现役剩余寿命预留孵化/强化/行军提前量。
-  if (!force && pairTtl > leadTicks + REINFORCEMENT_TTL_BUFFER) return;
-
-  const generation = (task.activeGeneration ?? 0) + 1;
-  task.reinforcement = {
-    index: generation,
-    generation,
-    stage: "spawning",
-    attackerReady: false,
-    healerReady: false,
-    combatReady: false,
-    boostOwnerId: `${task.id}:reinforcement:g${generation}`,
-    boostLabs: [],
-  };
-  markPowerBankProgress(task);
 }
 
 function resetReinforcementForMemberChange(
@@ -2055,6 +2037,12 @@ function processTask(task: PowerBankHarvestTask): void {
 
   if (task.nextAttemptAt !== undefined && Game.time < task.nextAttemptAt) {
     return;
+  }
+  if (task.status === POWER_BANK_STATUS.TRAVELLING) {
+    const bank = Game.getObjectById(task.bankId as Id<StructurePowerBank>);
+    const pair = getActiveCombatPair(task);
+    if (bank && pair && abortUnfinishablePair(task, bank, pair)) return;
+    if (!bank && !Game.rooms[task.targetRoom]) requestPowerBankObservation(task.targetRoom);
   }
 
   if (BOOST_FINISHED_STATUSES.has(task.status)) {

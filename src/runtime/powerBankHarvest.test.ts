@@ -8,7 +8,7 @@ import { getCreepConfigService, registerRuntimeServices } from "@/runtime/runtim
 import { clearDefenseModeCacheForTest } from "@/runtime/defenseMode";
 import {
   createMockLab,
-  createMockPowerBank,
+  createMockPowerBank as createMockBank,
   createMockPowerBankCreep,
   createMockStore,
   MockPos,
@@ -31,6 +31,10 @@ function resetRuntimeServices(): void {
 const SOURCE_ROOM = "E5N55";
 const SECONDARY_SOURCE_ROOM = "E6N55";
 const TARGET_ROOM = "E0N60";
+
+function createMockPowerBank(overrides: Parameters<typeof createMockBank>[0] = {}): StructurePowerBank {
+  return createMockBank({ roomName: TARGET_ROOM, ...overrides });
+}
 
 function makeTask(overrides: Partial<PowerBankHarvestTask> = {}): PowerBankHarvestTask {
   return {
@@ -70,6 +74,7 @@ function makeTask(overrides: Partial<PowerBankHarvestTask> = {}): PowerBankHarve
     lastProgressAt: overrides.lastProgressAt,
     lastBankHits: overrides.lastBankHits,
     lastBankProgressAt: overrides.lastBankProgressAt,
+    attackStartedTick: overrides.attackStartedTick,
     lastVisibleAt: overrides.lastVisibleAt,
     blocker: overrides.blocker,
     nextAttemptAt: overrides.nextAttemptAt,
@@ -84,6 +89,8 @@ function makeTask(overrides: Partial<PowerBankHarvestTask> = {}): PowerBankHarve
     plannedHps: overrides.plannedHps,
     plannedTtk: overrides.plannedTtk,
     plannedKillTick: overrides.plannedKillTick,
+    plannedHaulerSpawnStartTick: overrides.plannedHaulerSpawnStartTick,
+    plannedHaulerArrivalTick: overrides.plannedHaulerArrivalTick,
     minimumCombatTtl: overrides.minimumCombatTtl,
     bankGoneTick: overrides.bankGoneTick,
     haulingDeadlineAt: overrides.haulingDeadlineAt,
@@ -364,6 +371,48 @@ describe("powerBankHarvest", () => {
     resetPowerBankFixture();
   });
 
+  it("旧计划日期已过也不提前生运输者；开打后按剩余血量倒推真实窗口", () => {
+    setupSourceRoom(); setupTargetRoom();
+    const taskId = "pb-live-hauler-window";
+    const pair = setupOwnedCombatPair({ taskId, ticksToLive: 1450 });
+    const dps = pair.attacker.body.filter(p => p.type === ATTACK).length * ATTACK_POWER * 4;
+    const bank = createMockPowerBank({ id: taskId + "-bank", roomName: TARGET_ROOM, x: 25, y: 25, hits: 2_000_000, ticksToDecay: 5000 });
+    mockObjects(pair.attacker, pair.healer, bank);
+    const task = makeTask({ id: taskId, bankId: bank.id, status: POWER_BANK_STATUS.ATTACKING, sourceRoom: SOURCE_ROOM,
+      attackerId: pair.attacker.id, healerId: pair.healer.id, activeGeneration: 0, activeIndex: 0, combatReady: true,
+      tier: 8, haulerCount: 1, haulerOutboundTravelTicks: 100, bankExpiresAt: Game.time + 5000,
+      lastBankHits: bank.hits, stageEnteredAt: Game.time, plannedHaulerSpawnStartTick: Game.time - 1000 });
+    addTask(task); runPowerBankHarvest();
+    expect(Object.keys(Memory.data!.creepConfigs!).filter(n => n.includes(":hauler:"))).toHaveLength(0);
+    expect(task.attackStartedTick).toBeUndefined();
+    Game.time++; bank.hits = dps * 276; runPowerBankHarvest();
+    expect(task.attackStartedTick).toBe(Game.time - 1);
+    expect(task.plannedKillTick).toBe(Game.time + 276);
+    expect(Object.keys(Memory.data!.creepConfigs!).filter(n => n.includes(":hauler:"))).toHaveLength(0);
+    Game.time++; bank.hits -= dps; runPowerBankHarvest();
+    expect(task.plannedKillTick).toBe(Game.time + 275);
+    expect(Object.keys(Memory.data!.creepConfigs!).filter(n => n.includes(":hauler:"))).toHaveLength(1);
+  });
+
+  it("旧在途队伍的剩余寿命已经不足一队击破时撤回回收，不生增援或运输者", () => {
+    setupSourceRoom(); setupTargetRoom();
+    const taskId = "pb-old-travel-ttl";
+    const pair = setupOwnedCombatPair({ taskId, roomName: SOURCE_ROOM, ticksToLive: 1100 });
+    const bank = createMockPowerBank({ id: taskId + "-bank", roomName: TARGET_ROOM, hits: 2_000_000, ticksToDecay: 5000 });
+    mockObjects(pair.attacker, pair.healer, bank);
+    addTask(makeTask({ id: taskId, bankId: bank.id, status: POWER_BANK_STATUS.TRAVELLING, sourceRoom: SOURCE_ROOM,
+      attackerId: pair.attacker.id, healerId: pair.healer.id, activeGeneration: 0, activeIndex: 0, combatReady: true,
+      tier: 8, bankExpiresAt: Game.time + 5000 }));
+    runPowerBankHarvest();
+    expect(getTask(taskId)).toBeUndefined();
+    expect(Memory.data!.powerBankHarvestHistory!.slice(-1)[0]).toMatchObject({ failReason: "one_pair_runtime_ttl_insufficient" });
+    for (const actor of [pair.attacker, pair.healer]) {
+      expect(actor.memory._recycleToRoom).toBe(SOURCE_ROOM);
+      expect(actor.suicide).not.toHaveBeenCalled();
+    }
+    expect(Object.keys(Memory.data!.creepConfigs!).filter(n => n.includes(":hauler:") || n.includes(":attacker:1:") || n.includes(":healer:1:"))).toHaveLength(0);
+  });
+
   it("取得当前 PB 视野且排除战斗威胁后才测路，等待不冒充失败", () => {
     setupSourceRoom();
     jest.spyOn(powerBankObserver, "hasPowerBankObserverCoverage").mockReturnValue(true);
@@ -629,7 +678,7 @@ describe("powerBankHarvest", () => {
     expect(Object.keys(Memory.data?.creepConfigs ?? {}).some((name) => name.includes(":attacker:1:") || name.includes(":healer:1:"))).toBe(false);
   });
 
-  it.each(["healthy", "unboosted", "damaged"] as const)("增援寿命门按现役有效 ATTACK 计算，而不是预设四倍强化：%s", (condition) => {
+  it.each(["healthy", "unboosted", "damaged"] as const)("一队寿命复核按现役有效 ATTACK 计算，不靠增援弥补不足：%s", (condition) => {
     Game.time = 400;
     setupSourceRoom();
     const taskId = `pb-actual-dps-${condition}`;
@@ -649,10 +698,10 @@ describe("powerBankHarvest", () => {
       bankExpiresAt: Game.time + 5000 }));
     runPowerBankHarvest();
     if (condition === "healthy") expect(getTask(taskId)?.reinforcement).toBeUndefined();
-    else expect(getTask(taskId)?.reinforcement).toMatchObject({ generation: 1, stage: "spawning" });
+    else expect(Memory.data!.powerBankHarvestHistory!.slice(-1)[0]).toMatchObject({ taskId, failReason: "one_pair_runtime_ttl_insufficient" });
   });
 
-  it.each([400, 140])("损毁HEAL需要暂停恢复，TTL为%s时按真实恢复时间决定增援", (ttl) => {
+  it.each([400, 140])("损毁HEAL需要暂停恢复，TTL为%s时按真实恢复时间决定继续或撤回", (ttl) => {
     Game.time = 400;
     setupSourceRoom();
     const taskId = `pb-heal-recovery-${ttl}`;
@@ -668,7 +717,7 @@ describe("powerBankHarvest", () => {
       bankExpiresAt: Game.time + 5000 }));
     runPowerBankHarvest();
     if (ttl === 400) expect(getTask(taskId)?.reinforcement).toBeUndefined();
-    else expect(getTask(taskId)?.reinforcement).toMatchObject({ generation: 1 });
+    else expect(Memory.data!.powerBankHarvestHistory!.slice(-1)[0]).toMatchObject({ taskId, failReason: "one_pair_runtime_ttl_insufficient" });
   });
 
   it("实际恢复血量可暂缓攻击无进展门，恢复停滞仍达到原有期限", () => {
@@ -699,7 +748,7 @@ describe("powerBankHarvest", () => {
     expect(Memory.data?.powerBankHarvestHistory).toContainEqual(expect.objectContaining({ taskId, failReason: "attack_no_progress" }));
   });
 
-  it.each(["attack", "heal"] as const)("主队失去全部有效%s部件时，寿命充足也必须允许有界恢复", (lostRole) => {
+  it.each(["attack", "heal"] as const)("全部%s部件损毁且实际血量不支持恢复时，停止投入并撤回", (lostRole) => {
     Game.time = 400;
     setupSourceRoom();
     const taskId = `pb-recovery-${lostRole}`;
@@ -715,11 +764,12 @@ describe("powerBankHarvest", () => {
       lastBankHits: bank.hits, lastBankProgressAt: Game.time, stageEnteredAt: Game.time,
       bankExpiresAt: Game.time + 5000 }));
     runPowerBankHarvest();
-    expect(getTask(taskId)?.reinforcement).toMatchObject({ generation: 1, stage: "spawning" });
+    expect(getTask(taskId)).toBeUndefined();
+    expect(Memory.data!.powerBankHarvestHistory!.slice(-1)[0]).toMatchObject({ taskId, failReason: "one_pair_runtime_ttl_insufficient" });
     Game.time += 3;
     resetRuntimeServices();
     runPowerBankHarvest();
-    expect(getTask(taskId)?.reinforcement).toMatchObject({ generation: 1, stage: "spawning" });
+    expect(getTask(taskId)).toBeUndefined();
     expect(Object.keys(Memory.data?.creepConfigs ?? {}).some((name) => name.includes(":attacker:2:") || name.includes(":healer:2:"))).toBe(false);
   });
 
@@ -746,7 +796,7 @@ describe("powerBankHarvest", () => {
     expect(getTask(taskId)?.combatReady).toBe(true);
   });
 
-  it("requests recovery at 100 idle ticks and fails closed after the 250-tick progress deadline", () => {
+  it("卡住100tick只重寻路不生第二队，250tick无进展仍失败停机", () => {
     Game.time = 400;
     setupSourceRoom();
     const pair = setupOwnedCombatPair({ taskId: "pb-stalled" });
@@ -786,13 +836,8 @@ describe("powerBankHarvest", () => {
 
     runPowerBankHarvest();
 
-    expect(getTask("pb-stalled")?.reinforcement).toMatchObject({
-      generation: 1,
-      index: 1,
-      stage: "spawning",
-      combatReady: false,
-      boostOwnerId: "pb-stalled:reinforcement:g1",
-    });
+    expect(getTask("pb-stalled")?.reinforcement).toBeUndefined();
+    expect(getTask("pb-stalled")).toBeDefined();
     expect(getTask("pb-stalled-terminal")).toBeUndefined();
     expect(Memory.data?.powerBankHarvestHistory).toContainEqual(expect.objectContaining({
       taskId: "pb-stalled-terminal",

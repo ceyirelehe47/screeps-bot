@@ -229,15 +229,16 @@ function hasWaitingWarSpawn(spawn: StructureSpawn): boolean {
     if (!isSpawnActive(candidate)) {
       return false;
     }
-
-    return (candidate.memory.spawnList ?? []).some((configName) => {
+    if (candidate.spawning) return false;
+    // 只为当帧能执行的战争队首保留能量；排在后面或尚缺能量的任务不能锁住房间经济。
+    return (candidate.memory.spawnList ?? []).slice(0, 1).some((configName) => {
       if (!isWarConfigName(configName) || !getCreepConfigService().get(configName)) {
         return false;
       }
 
       const bodyCost = chooseBody(candidate, configName)
         .reduce((sum, part) => sum + BODYPART_COST[part], 0);
-      return bodyCost <= candidate.room.energyCapacityAvailable;
+      return bodyCost <= candidate.room.energyAvailable;
     });
   });
 }

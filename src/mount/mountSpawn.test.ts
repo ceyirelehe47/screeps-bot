@@ -61,6 +61,23 @@ describe("mountSpawn", () => {
     expect(two[2].memory.configName).toBe(configs[1]);
   });
 
+  it.each(["energy", "busy", "behind"])("战争任务%s未能立即执行时不阻止便宜外矿出生", (condition) => {
+    const room = { name: "E1N57", energyAvailable: 12000, energyCapacityAvailable: 12900 } as Room;
+    const war = "E1N57:war:E3N57:controllerAttacker:0";
+    const mine = "E1N57:remoteMine:E1N58:harvester:source";
+    Memory.data!.creepConfigs![war] = { role: "claimer", roomName: room.name, args: [], body: [...Array(19).fill(CLAIM), ...Array(19).fill(MOVE)] };
+    Memory.data!.creepConfigs![mine] = { role: "colonizerHarvester", roomName: room.name, args: [], body: [WORK, CARRY, MOVE] };
+    const first = createSpawn("Spawn1", room, condition === "behind" ? [mine, war] : [war]);
+    const second = createSpawn("Spawn2", room, [mine]);
+    if (condition === "busy") { room.energyAvailable = 12900; first.spawning = { name: "old", remainingTime: 100 } as Spawning; }
+    if (condition === "behind") room.energyAvailable = 12900;
+    Game.spawns = { Spawn1: first, Spawn2: second };
+    Object.setPrototypeOf(second, prototype);
+    prototype.work.call(second);
+    expect(second.spawnCreep).toHaveBeenCalledTimes(1);
+    expect((second.spawnCreep as jest.Mock).mock.calls[0][2].memory.configName).toBe(mine);
+  });
+
   it("preserves authenticated RCL8 maintenance ownership over war and emergency queues", () => {
     const room = {
       name: "E4N58",

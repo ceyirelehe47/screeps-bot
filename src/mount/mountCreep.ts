@@ -210,12 +210,12 @@ export function mountCreep(): void {
       }
     }
 
-    const retireRoom = this.memory._warRetireToRoom;
+    const retireRoom = this.memory._recycleToRoom ?? this.memory._warRetireToRoom;
     if (retireRoom) {
       if (this.spawning) return;
       if (this.hits < this.hitsMax && this.getActiveBodyparts(HEAL) > 0) this.heal(this);
       if (this.room.name !== retireRoom) {
-        moveToTargetRoom(this, retireRoom, undefined, { routePurpose: "combat" });
+        moveToTargetRoom(this, retireRoom, undefined, { routePurpose: this.memory._recycleToRoom ? "normal" : "combat" });
       } else {
         const spawns = Object.values(Game.spawns).filter((spawn) => spawn.room.name === retireRoom && spawn.isActive());
         const spawn = this.pos.findClosestByRange(spawns);

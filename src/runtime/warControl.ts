@@ -1849,6 +1849,19 @@ function runSharedWarSquads(store: Record<string, WarTask>): Set<WarTask> {
         retireSharedCombat(task);
         continue;
       }
+      if ((task.squad === "t3Duo" || task.boostTier === "t3") && isNpcWarTarget(room)) {
+        const decision = assessUnboostedNpc(room, task.routeRooms, TOWER_DRAIN_ATTACKER_BODY, TOWER_DRAIN_HEALER_BODY, Game.rooms[task.sourceRoom]?.energyCapacityAvailable);
+        if (decision.sufficient) {
+          // 无强化优先也覆盖现役选择；只有新鲜能力证据充足才撤回旧T3。
+          retireSharedCombat(task);
+          task.squad = "towerDrainDuo";
+          delete task.boostTier;
+          delete task.boostStatus;
+          task.npcAuto = true;
+          task.squadAssessedAt = Game.time;
+          task.squadDecision = decision.reason;
+        }
+      }
       const hostile = getHostilePresence(room, task);
       if (hostile.hostileCreeps > 0 || hostile.hostileStructures > 0) {
         delete task.combatClearedAt;
@@ -1904,6 +1917,8 @@ function runSharedWarSquads(store: Record<string, WarTask>): Set<WarTask> {
       activateFrontline(task);
       if (task.failReason === "shared_squad_queued") delete task.failReason;
       processTask(task);
+      // 战斗世代重建/降档不撤销独立的控制器攻击任务。
+      if (room && isControllerDowngradeReady(room) && task.status !== "done" && task.status !== "failed") ensureControllerAttackConfig(task);
     }
   }
   return managed;

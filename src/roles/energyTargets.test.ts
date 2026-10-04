@@ -131,7 +131,7 @@ describe("energyTargets", () => {
     clearSpawnActiveCacheForTest();
   });
 
-  it("按技能动态跳过 Spawn，但 PC 未接管时保留 Extension 回退", () => {
+  it("PC 未接管Extension时保留就近常规补能", () => {
     const roomName = "W2N2";
     const spawn = {
       id: "dynamic-spawn",
@@ -180,7 +180,7 @@ describe("energyTargets", () => {
     expect(getEnergyStoreTarget(createCreep(room))?.id).toBe(extension.id);
   });
 
-  it("PC 已接管后同时跳过 Spawn、Extension 和普通 PowerSpawn 供能", () => {
+  it("PC 接管Extension后carrier仍负责Spawn供能", () => {
     const roomName = "W3N3";
     const spawn = {
       id: "controlled-spawn",
@@ -235,6 +235,6 @@ describe("energyTargets", () => {
       [powerCreep.name]: powerCreep,
     };
 
-    expect(getEnergyStoreTarget(createCreep(room))?.id).toBe(storage.id);
+    expect(getEnergyStoreTarget(createCreep(room))?.id).toBe(spawn.id);
   });
 });

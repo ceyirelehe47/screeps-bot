@@ -132,33 +132,62 @@ describe("三个NPC目标共享一支清剿小队", () => {
     expect(tasks.filter((task) => task.failReason === "shared_squad_queued")).toHaveLength(2);
   });
 
-  it("采用已强化的现役成员，撤回其余成员并保留各房控制器任务", () => {
-    installExistingPairs(); runWarControl();
-    expect(Object.values(Memory.runtime!.warRebuildWatch!)[0].sharedSquadOwner).toBe("E3N53");
-    expect(Game.creeps['E3N53-red'].memory.configName).toBeDefined();
-    for (const name of ["E3N57", "E2N54"]) for (const role of ["red", "green"]) {
+  it("无威胁时优先无强化现役，回收T3和多余成员并保留控制器任务", () => {
+    installExistingPairs();
+    const controllerName = "E1N57:war:E2N54:controllerAttacker:0";
+    Memory.data!.creepConfigs![controllerName] = { role: "claimer", roomName: "E1N57", args: ["E2N54", "", "attack"], body: [CLAIM, MOVE] };
+    runWarControl();
+    expect(Object.values(Memory.runtime!.warRebuildWatch!)[0].sharedSquadOwner).toBe("E2N54");
+    expect(Game.creeps['E2N54-red'].memory.configName).toBeDefined();
+    for (const name of ["E3N57", "E3N53"]) for (const role of ["red", "green"]) {
       expect(Game.creeps[`${name}-${role}`].memory).toMatchObject({ _warDetached: true, _warRetireToRoom: "E1N57" });
       expect(Game.creeps[`${name}-${role}`].memory.configName).toBeUndefined();
     }
+    expect(Memory.data!.creepConfigs![controllerName]).toBeDefined();
     expect(Object.values(Memory.data!.creepConfigs!).filter((config) => config.role === "claimer")).toHaveLength(3);
+  });
+
+  it("当前唯一现役为T3且无威胁时回收它，重新只生产一份无强化队", () => {
+    installExistingPairs();
+    const id = Object.keys(Memory.cfg!.warRebuildWatch!)[0];
+    Memory.runtime!.warRebuildWatch = { [id]: { clearedRooms: [], targets: {}, sharedSquadOwner: "E3N53" } };
+    for (const name of ["E3N57", "E2N54"]) { delete Game.creeps[`${name}-red`]; delete Game.creeps[`${name}-green`]; }
+    runWarControl();
+    const owner = Memory.data!.war!.E3N53;
+    expect(owner).toMatchObject({ squad: "towerDrainDuo", npcAuto: true });
+    expect(owner.boostTier).toBeUndefined();
+    expect(Game.creeps['E3N53-red'].memory._warRetireToRoom).toBe("E1N57");
+    expect(Object.values(Memory.data!.war!).filter(t => t.activeGeneration)).toHaveLength(1);
+  });
+
+  it("新鲜敌方治疗超过无强化攻击时保留当前T3能力", () => {
+    installExistingPairs();
+    const hostile = { id: "strong-heal", pos: new MockPos(25, 25, "E3N53"), owner: { username: "TooAngel" },
+      body: Array.from({ length: 20 }, () => ({ type: HEAL, hits: 100, boost: RESOURCE_CATALYZED_LEMERGIUM_ALKALIDE })) } as unknown as Creep;
+    const room = createTargetRoom([hostile], [enemyStructure("E3N53")], [], "E3N53");
+    room.controller!.owner = { username: "TooAngel" }; Game.rooms.E3N53 = room;
+    runWarControl();
+    expect(Memory.data!.war!.E3N53).toMatchObject({ squad: "t3Duo", boostTier: "t3" });
+    expect(Game.creeps['E3N53-red'].memory._warRetireToRoom).toBeUndefined();
   });
 
   it("清空一房后同一对成员原子换目标与搭档，不孵化另一队，降级任务继续", () => {
     installExistingPairs(); runWarControl();
-    const room = createTargetRoom([], [], [], "E3N53"); room.controller!.owner = { username: "TooAngel" }; room.controller!.level = 8;
-    Game.rooms.E3N53 = room;
+    const previous = Object.values(Memory.runtime!.warRebuildWatch!)[0].sharedSquadOwner!;
+    const room = createTargetRoom([], [], [], previous); room.controller!.owner = { username: "TooAngel" }; room.controller!.level = 8;
+    Game.rooms[previous] = room;
     tick(); runWarControl(); Game.time += 25; resetRuntimeServices(); runWarControl();
     const watch = Object.values(Memory.runtime!.warRebuildWatch!)[0];
     const next = Memory.data!.war![watch.sharedSquadOwner!];
-    const red = Game.creeps['E3N53-red']; const green = Game.creeps['E3N53-green'];
-    expect(next.targetRoom).not.toBe("E3N53");
+    const red = Game.creeps[`${previous}-red`]; const green = Game.creeps[`${previous}-green`];
+    expect(next.targetRoom).not.toBe(previous);
     expect(red.memory.configName).toBe(next.activeGeneration!.configNames.meleeAttacker);
     expect(green.memory.configName).toBe(next.activeGeneration!.configNames.healer);
     expect(red.memory.roleArgs?.[0]).toBe(next.targetRoom);
     expect(red.memory.roleArgs?.[4]).toBe(green.memory.configName);
     expect(green.memory.roleArgs?.[4]).toBe(red.memory.configName);
-    expect(Memory.data!.war!.E3N53).toMatchObject({ status: "downgrading", combatClearedAt: Game.time });
-    expect(Memory.data!.war!.E3N53.activeGeneration).toBeUndefined();
+    expect(Memory.data!.war![previous]).toMatchObject({ status: "downgrading", combatClearedAt: Game.time });
+    expect(Memory.data!.war![previous].activeGeneration).toBeUndefined();
     expect(Object.values(Memory.data!.creepConfigs!).filter((config) => config.role === "meleeAttacker" || config.role === "healer").every((config) => config.spawnOnce?.queuedAt === 1000)).toBe(true);
   });
 
@@ -177,11 +206,12 @@ describe("三个NPC目标共享一支清剿小队", () => {
 
   it("共享队伍损失成员后仅替换一代，并重新尝试无强化", () => {
     installExistingPairs(); runWarControl();
-    delete Game.creeps['E3N53-red']; tick(); runWarControl();
-    const owner = Memory.data!.war!.E3N53;
+    const ownerName = Object.values(Memory.runtime!.warRebuildWatch!)[0].sharedSquadOwner!;
+    delete Game.creeps[`${ownerName}-red`]; tick(); runWarControl();
+    const owner = Memory.data!.war![ownerName];
     expect(owner.squad).toBe("towerDrainDuo");
     expect(owner.activeGeneration?.phase).toBe("assembling");
-    expect(Game.creeps['E3N53-green'].memory._warRetireToRoom).toBe("E1N57");
+    expect(Game.creeps[`${ownerName}-green`].memory._warRetireToRoom).toBe("E1N57");
     expect(Object.values(Memory.data!.war!).filter((task) => task.activeGeneration)).toHaveLength(1);
     const id = owner.activeGeneration!.id; tick(); runWarControl();
     expect(owner.activeGeneration!.id).toBe(id);
