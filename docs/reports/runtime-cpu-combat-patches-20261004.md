@@ -31,8 +31,16 @@ v7 的最终增量覆盖45套/334测试，v8为45套/340测试，均通过双类
 
 塔伤按原始伤害保守预算，尚不抵扣 TOUGH 减伤；这不会低估威胁，但可能限制强化队推进。NPC默认配置与历史16/18跳路线迁移仍属于未完成的架构候选任务。
 
-身体回填、伤害与治疗结算的依据是 Screeps 官方 engine 的 `creeps/tick.js`、`_recalc-body.js`、`heal.js`，并以当前原生 room/creep 状态校验。
+身体回填、伤害与治疗结算的依据是 Screeps 官方 engine 的 [tick.js](https://github.com/screeps/engine/blob/master/src/processor/intents/creeps/tick.js)、[_recalc-body.js](https://github.com/screeps/engine/blob/master/src/processor/intents/creeps/_recalc-body.js)、[heal.js](https://github.com/screeps/engine/blob/master/src/processor/intents/creeps/heal.js)，并以当前原生 room/creep 状态校验。
 
 ## v9 验证与发布
 
-待最终完整回归、构建和独立原生上线核验后填写。所有高负载工作在服务器 `/srv/screeps-treasury-build/boost-lab-loop-20261004` 执行；本机仅编辑、轻量查询、传输和上线控制。
+最终源码 `322aa073d5294dc91cbbfa5e652d709131f6ef9a` / tree `c934e1eeda061b050aaf234904fb3558e0bb4f62`：服务器完整232套/1557测试通过，其中清剿42场景；双类型检查、构建通过（19.4秒）。同一真实room布局样本在v8隔离基线两种执行顺序均失败、返回邻房；v9均进入房内。最初基线尝试因新状态字段类型不能在旧源码编译而未运行，原日志保留；用显式测试类型兼容后取得真实行为失败证据。
+
+单次上传成功、独立 GET 读回匹配：`2026.10.4-9+322aa07@2026-10-04T02:24:40.418Z`，main3549469字节，SHA-256 `93999757343e160317890ccab59082245464591584382d5cdd656136c6a5d721`。四 shard 的完整Memory只读核验未开启Treasury写入；没有手动改队伍、世代、角色参数或spawn。
+
+原生tick74112228确认部署标签，bucket9696、没有本批CPU错误。旧队已正常寿命耗尽；自然下一世代红/绿 `meleeAttacker-74112091` / `healer-74112091` 正在母房出生。tick74112303双方已到E2N57，满血无疲劳、TTL1437；tick74112347已到入口排位线，目标视野暂缺，按既有保护等待观察。现役第一步的原生结果仍待下一次读取，不以单位回归代替现场结果。
+
+证据位于 `/Users/forst/Downloads/screeps-npc-tower-forecast-20261004/`，包括冻结manifest、上传读回、完整Jest和类型/构建日志，以及v8真实基线报告；原生控制台文件在 `/Users/forst/Downloads/screeps-handoff-20261004/npc-tower-v9-*.json`。私密上线备份单独0700存放，不作为公开审查链接。
+
+所有高负载工作在服务器 `/srv/screeps-treasury-build/boost-lab-loop-20261004` 执行；本机仅编辑、轻量查询、传输和上线控制。
