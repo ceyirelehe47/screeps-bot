@@ -135,8 +135,9 @@ describe("HUB 工厂规划和执行", () => {
   });
 
   it("高阶链不自动定级工厂或触发 Power Creep 技能", () => {
-    setup({ energy: 300000, composite: 10000, wire: 10000 });
+    setup({ energy: 300000, X: 40000, composite: 10000, wire: 10000 });
     planHubFactory();
+    expect(Memory.runtime!.factoryControl!.hubPlan!.targets.length).toBeGreaterThan(0);
     expect(Memory.runtime!.factoryControl!.hubPlan!.targets.every(t => !COMMODITIES[t.resource].level)).toBe(true);
   });
 
@@ -154,14 +155,14 @@ describe("HUB 工厂规划和执行", () => {
     Memory.runtime = { factoryControl: { rooms: { W1N1: { stage: "producing", activeTarget: "purifier", lastTransitionAt: 999 } } } };
     runFactoryControl();
     expect(hub.factory.produce).not.toHaveBeenCalled();
-    expect(listCarrierTasksByRoom("W1N1")[0]).toMatchObject({ type: "factory_unload", resource: "purifier" });
+    expect(listCarrierTasksByRoom("W1N1")[0]).toMatchObject({ type: "factory_unload", steps: [{ resource: "purifier" }] });
   });
 
   it("换配方时清理残料，HUB 停用时卸出存货", () => {
     const hub = setup();
     hub.factory.store = createMockStore({ silicon: 100 }, 50000);
     runFactoryControl();
-    expect(listCarrierTasksByRoom("W1N1")[0]).toMatchObject({ type: "factory_unload", resource: "silicon" });
+    expect(listCarrierTasksByRoom("W1N1")[0]).toMatchObject({ type: "factory_unload", steps: [{ resource: "silicon" }] });
     Memory.cfg!.factoryControl!.hub = { enabled: false };
     Game.time++;
     runFactoryControl();

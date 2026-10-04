@@ -64,6 +64,7 @@ export function planHubFactory(): void {
   if (!canPlan) {
     state.status = !enabled ? "disabled" : manualOverride || manual?.enabled === false || globalQueue ? "manual" : "unavailable";
     cancelUnusedImports(new Set(), hubName, actions);
+    state.lastActions = actions.slice(-16);
     return;
   }
 
@@ -132,6 +133,7 @@ export function planHubFactory(): void {
   const first = state.targets[0];
   if (!first) {
     cancelUnusedImports(new Set(), hubName, actions);
+    state.lastActions = actions.slice(-16);
     return;
   }
   const wanted = new Set<ResourceConstant>();
