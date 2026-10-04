@@ -48,6 +48,41 @@ describe("PowerBank Observer 动态扫描", () => {
     registerRuntimeServices();
   });
 
+  it("四类请求共享同帧活跃结构与可达查询，保留独立队列及单次意图", () => {
+    const observer = addObserver(createRoom("E3N59"));
+    const active = jest.spyOn(observer, "isActive");
+    for (const request of [requestPowerBankObservation, requestCombatObservation, requestDepositObservation, requestRemoteObservation]) {
+      expect(request("E10N60")).toBe(true);
+    }
+    const runtime = Memory.runtime!.powerBankObserver!;
+    expect([runtime.requestedRooms?.E10N60, runtime.combatRequestedRooms?.E10N60,
+      runtime.depositRequestedRooms?.E10N60, runtime.remoteRequestedRooms?.E10N60].every((value) => value !== undefined)).toBe(true);
+    runPowerBankObserver();
+    runPowerBankObserver();
+    const reachabilityQueries = (Game.map.getRoomLinearDistance as jest.Mock).mock.calls.filter(([, to]) => to === "E10N60").length;
+    console.log(JSON.stringify({ kind: "observerSharedQueryBudget", activeQueries: active.mock.calls.length, reachabilityQueries,
+      publishedRooms: (observer.observeRoom as jest.Mock).mock.calls.map(([room]) => room) }));
+    expect(observer.observeRoom).toHaveBeenCalledTimes(1);
+    expect(observer.observeRoom).toHaveBeenCalledWith("E10N60");
+    expect(active).toHaveBeenCalledTimes(1);
+    expect(reachabilityQueries).toBe(1);
+  });
+
+  it("同tick重建服务与下一tick均使Observer查询快照失效", () => {
+    const observer = addObserver(createRoom("E3N59"));
+    const active = jest.spyOn(observer, "isActive");
+    expect(requestCombatObservation("E10N60")).toBe(true);
+    (Game.map.getRoomLinearDistance as jest.Mock).mockReturnValue(11);
+    delete (global as typeof global & { __runtimeServices?: unknown }).__runtimeServices;
+    registerRuntimeServices();
+    expect(requestCombatObservation("E10N60")).toBe(false);
+    expect(active).toHaveBeenCalledTimes(2);
+    (Game.map.getRoomLinearDistance as jest.Mock).mockReturnValue(1);
+    Game.time++;
+    expect(requestCombatObservation("E10N60")).toBe(true);
+    expect(active).toHaveBeenCalledTimes(3);
+  });
+
   it("轮巡自动生成的高速房，不限原固定十房", () => {
     const observer = addObserver(createRoom("E3N59"));
     runPowerBankObserver();
