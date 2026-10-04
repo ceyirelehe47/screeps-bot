@@ -2,7 +2,9 @@ import {
   hasSharedStorageControllerLinkCluster,
   isReceiverLink,
   isStorageReceiverLink,
+  runLinkControl,
 } from "@/runtime/linkControl";
+import { MockPos, createMockStore } from "@mock/powerBank";
 import { setActiveTickCpuProfiler, type TickCpuProfiler } from "@/runtime/cpuPhaseProfiler";
 
 type RuntimeGlobal = typeof global & {
@@ -78,6 +80,26 @@ afterEach(() => {
 });
 
 describe("isReceiverLink", () => {
+
+  it("入口 link 作为发送端优先送仓库，本地源矿 link 继续优先控制器", () => {
+    const links: StructureLink[] = [];
+    const room = { name: "W1N1", controller: { my: true, level: 8, pos: new MockPos(30, 30, "W1N1") },
+      storage: { pos: new MockPos(10, 10, "W1N1") },
+      find: (kind: FindConstant) => kind === FIND_STRUCTURES || kind === FIND_MY_STRUCTURES ? links
+        : kind === FIND_SOURCES ? [{ pos: new MockPos(4, 5, "W1N1") }] : [] } as unknown as Room;
+    const make = (id: string, x: number, y: number, energy: number) => ({ id, room, my: true, structureType: STRUCTURE_LINK,
+      pos: new MockPos(x, y, room.name), cooldown: 0, store: createMockStore({ energy }, 800), transferEnergy: jest.fn(() => OK) } as unknown as StructureLink);
+    const entry = make("entry", 47, 20, 800), source = make("source", 5, 5, 800);
+    const warehouse = make("warehouse", 11, 10, 0), controller = make("controller", 31, 30, 0);
+    links.push(entry, source, warehouse, controller);
+    Game.rooms = { W1N1: room };
+    Game.getObjectById = jest.fn(id => links.find(l => l.id === id) ?? null) as typeof Game.getObjectById;
+    Memory.data = { roomPlanner: { W1N1: { layout: { remote_entry_link: [{ x: 47, y: 20 }] }, savedAt: 0, timestamp: "" } } };
+    runLinkControl();
+    expect(entry.transferEnergy).toHaveBeenCalledWith(warehouse);
+    expect(source.transferEnergy).toHaveBeenCalledWith(controller);
+    expect(Memory.runtime!.linkNetwork!.W1N1.senderIds).toEqual([entry.id, source.id]);
+  });
 
   it("keeps distant controller receiver links separate from storage receivers", () => {
     const link = createLink({ controllerRange: 3, storageRange: 4, storageControllerRange: 6 });
