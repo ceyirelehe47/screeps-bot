@@ -313,7 +313,7 @@ describe("remoteCarrierRole", () => {
   });
 
   it("单 Core 过路房可用，并移除上一版本留下的整房禁行记录", () => {
-    const world = salvageFixture();
+    const world = salvageFixture({ drops: [{ amount: 239, resourceType: RESOURCE_ENERGY, pos: new RoomPosition(44, 17, "W5N5") } as Resource] });
     Object.assign(world.creep, { room: world.home, pos: new RoomPosition(10, 10, world.home.name) });
     Game.rooms.W4N5 = { name: "W4N5", controller: { reservation: { username: "Invader" } },
       find: (type: FindConstant) => type === FIND_STRUCTURES ? [{ structureType: STRUCTURE_INVADER_CORE }] : [] } as unknown as Room;

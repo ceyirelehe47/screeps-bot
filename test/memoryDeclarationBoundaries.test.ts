@@ -85,7 +85,8 @@ const MEMORY_BRANCHES = {
   data: {
     declaration: "src/types/memory/data.d.ts",
     interfaceName: "ScreepsMemoryData",
-    schemaFingerprint: "fc5fdda3344af1a927a9b36e3c5e3c0d54a5a096f8bccaf376ee9807cf342343",
+    // NPC 清场后的 lootAfterClear 与搬运任务已有 emptyObservedAt 生命周期。
+    schemaFingerprint: "35cb1de8bafe4be11c066cb2fc44e3a116077855029a4e372a21dc6af7edde87",
     imports: [
       "@/runtime/depositHarvest:DepositHarvestTask",
       "@/runtime/marketActionArbiter:MarketAccountClaim",

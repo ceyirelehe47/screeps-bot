@@ -39,6 +39,8 @@ class MockRoomPosition {
   public findClosestByPath(direction: DirectionConstant): RoomPosition | null {
     return new MockRoomPosition(direction === RIGHT ? 49 : direction === LEFT ? 0 : this.x, direction === TOP ? 0 : direction === BOTTOM ? 49 : this.y, this.roomName) as unknown as RoomPosition;
   }
+
+  public findPathTo(): PathStep[] { return []; }
 }
 
 class RealCostMatrix {
