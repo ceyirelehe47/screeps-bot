@@ -37,6 +37,7 @@ import {
   HUB_STORAGE_PAUSE_FREE_CAPACITY,
   HUB_SURPLUS_THRESHOLD,
   HUB_TARGET_COMPOUNDS,
+  isHubOnlyReserveCompound,
 } from "@/config/hub";
 import { getTickContextService } from "@/runtime/runtimeServices";
 import { collectCarrierCargoInventory } from "@/runtime/hubProgress";
@@ -85,23 +86,18 @@ const OLD_DEFAULT_TARGET_COMPOUNDS = new Set<ResourceConstant>([
   RESOURCE_CATALYZED_UTRIUM_ALKALIDE, // XUHO2
   RESOURCE_CATALYZED_LEMERGIUM_ALKALIDE, // XLHO2
 ]);
+const PRE_OH_DEFAULT_TARGET_COMPOUNDS = new Set(
+  HUB_TARGET_COMPOUNDS.filter(resource => !isHubOnlyReserveCompound(resource)),
+);
 
 export function normalizeHubConfig(cfg: NonNullable<Memory["cfg"]>["hub"]): NonNullable<Memory["cfg"]>["hub"] {
   let migrated = { ...cfg };
 
   const compounds = cfg?.targetCompounds;
-  if (compounds && compounds.length === OLD_DEFAULT_TARGET_COMPOUNDS.size) {
-    const compoundSet = new Set(compounds);
-    let matchesOldDefault = true;
-    for (const c of OLD_DEFAULT_TARGET_COMPOUNDS) {
-      if (!compoundSet.has(c)) {
-        matchesOldDefault = false;
-        break;
-      }
-    }
-    if (matchesOldDefault) {
-      migrated = { ...migrated, targetCompounds: [...HUB_TARGET_COMPOUNDS] };
-    }
+  const oldDefaultLists = [OLD_DEFAULT_TARGET_COMPOUNDS, PRE_OH_DEFAULT_TARGET_COMPOUNDS];
+  if (compounds && oldDefaultLists.some(defaults => compounds.length === defaults.size &&
+      compounds.every(compound => defaults.has(compound)) && new Set(compounds).size === defaults.size)) {
+    migrated = { ...migrated, targetCompounds: [...HUB_TARGET_COMPOUNDS] };
   }
 
   if ((migrated.reservePerRoom ?? 0) < HUB_RESERVE_PER_ROOM) {
@@ -297,6 +293,7 @@ export function planHubChains(
   targetReserve: number,
   targetCompounds: ResourceConstant[] = T3_TARGETS,
   additionalDemands: Partial<Record<ResourceConstant, number>> = {},
+  hubOnlyTargetReserve: number = targetReserve,
 ): { steps: ChainStep[]; blocked: boolean; missingResources: ResourceConstant[] } {
   // 1. Merge hub inventory + healthy incoming into available pool
   const available: Record<string, number> = {};
@@ -314,8 +311,10 @@ export function planHubChains(
   const needed: Record<string, number> = {};
   for (const t3 of targetCompounds) {
     const have = available[t3] || 0;
-    if (have < targetReserve) {
-      needed[t3] = targetReserve;
+    const reserve = isHubOnlyReserveCompound(t3) ? hubOnlyTargetReserve : targetReserve;
+    // OH 也是后续反应的原料：将库存目标与下游消耗相加后统一扣减库存。
+    if (isHubOnlyReserveCompound(t3) || have < reserve) {
+      needed[t3] = reserve;
     }
   }
 
@@ -487,7 +486,7 @@ function getLocalReserveForSynthesis(
   reservePerRoom: number,
   targetCompounds: ResourceConstant[],
 ): number {
-  if (targetCompounds.includes(resource as ResourceConstant)) {
+  if (targetCompounds.includes(resource as ResourceConstant) && !isHubOnlyReserveCompound(resource as ResourceConstant)) {
     return reservePerRoom;
   }
 
@@ -540,6 +539,7 @@ function isReagentInChain(product: string, resource: string): boolean {
 export function planHubImports(
   cfg: NonNullable<Memory["cfg"]>["hub"],
   transferAmounts: ResourceTransferTaskAmountIndex = createResourceTransferTaskAmountIndex(),
+  hubInventory?: Record<string, number>,
 ): string[] {
   if (!cfg?.hubRoomName) return [];
 
@@ -553,6 +553,20 @@ export function planHubImports(
   const reservePerRoom = cfg.reservePerRoom ?? HUB_RESERVE_PER_ROOM;
   const surplusThreshold = cfg.surplusThreshold ?? HUB_SURPLUS_THRESHOLD;
   const targetCompounds = cfg.targetCompounds?.length ? cfg.targetCompounds : HUB_TARGET_COMPOUNDS;
+
+  const hubOnlyShortages = new Map<ResourceConstant, number>();
+  for (const compound of targetCompounds.filter(isHubOnlyReserveCompound)) {
+    const stored = hubInventory?.[compound] ?? (
+      (hubRoom.storage.store[compound] || 0) + (hubRoom.terminal?.store[compound] || 0) +
+      (hubRoom.find(FIND_MY_STRUCTURES, { filter: structure =>
+        structure.structureType === STRUCTURE_LAB || structure.structureType === STRUCTURE_FACTORY ||
+        structure.structureType === STRUCTURE_POWER_SPAWN
+      }) as AnyStoreStructure[]).reduce((sum, structure) => sum + (structure.store?.[compound] || 0), 0) +
+      (collectCarrierCargoInventory(hubRoom.name)[compound] || 0)
+    );
+    hubOnlyShortages.set(compound, Math.max(0,
+      (cfg.hubReservePerCompound ?? HUB_RESERVE_PER_COMPOUND) - stored - transferAmounts.getIncoming(hubRoom.name, compound)));
+  }
 
   const existingKeys = new Set<string>();
   const taskStore = ensureResourceTransferTaskStore();
@@ -609,6 +623,7 @@ export function planHubImports(
       }
 
       for (const compound of INTERMEDIATE_COMPOUNDS) {
+        if (hubOnlyShortages.has(compound)) continue;
         const amount = satResources[compound] || 0;
         if (amount <= 0) continue;
         const directCommitment = getDirectSupplyCommitment(satellite.name, compound, transferAmounts);
@@ -626,18 +641,21 @@ export function planHubImports(
     }
 
     for (const t3 of targetCompounds) {
+      const hubOnly = isHubOnlyReserveCompound(t3);
       const amount = satResources[t3] || 0;
-      if (amount <= surplusThreshold) continue;
+      if (hubOnly ? amount < MIN_HUB_IMPORT_AMOUNT : amount <= surplusThreshold) continue;
       const directCommitment = getDirectSupplyCommitment(satellite.name, t3, transferAmounts);
       const localReserve = getLocalReserveForSynthesis(satellite.name, t3, reservePerRoom, targetCompounds);
-      const sendAmount = amount - directCommitment - localReserve;
-      if (sendAmount <= 0) continue;
+      const sendAmount = Math.min(amount - directCommitment - localReserve,
+        hubOnly ? hubOnlyShortages.get(t3) || 0 : Infinity);
+      if (hubOnly ? sendAmount < MIN_HUB_IMPORT_AMOUNT : sendAmount <= 0) continue;
       const reason = `hub:reclaim:${t3}`;
       const key = `${satellite.name}:${t3}:${reason}`;
       if (existingKeys.has(key)) continue;
       const result = createAutomaticResourceTransferTask(satellite.name, cfg.hubRoomName, t3, sendAmount, reason);
       if (typeof result === "object" && result.ok) {
         actions.push(`reclaim:${satellite.name}:${t3}=${sendAmount}`);
+        if (hubOnly) hubOnlyShortages.set(t3, (hubOnlyShortages.get(t3) || 0) - sendAmount);
       }
     }
   }
@@ -652,7 +670,8 @@ export function planHubDistribution(cfg: NonNullable<Memory["cfg"]>["hub"]): str
   if (!hubRoom?.storage || !hubRoom?.terminal) return [];
 
   const reservePerRoom = cfg.reservePerRoom ?? HUB_RESERVE_PER_ROOM;
-  const targetCompounds = cfg.targetCompounds?.length ? cfg.targetCompounds : HUB_TARGET_COMPOUNDS;
+  const targetCompounds = (cfg.targetCompounds?.length ? cfg.targetCompounds : HUB_TARGET_COMPOUNDS)
+    .filter(compound => !isHubOnlyReserveCompound(compound));
   const capacityPolicy = normalizeCapacityHeadroomPolicy(
     Memory.cfg?.resourceControl?.capacityBalancing,
   );
@@ -889,6 +908,7 @@ function computeTotalSatelliteDeficit(
   let totalDeficit = 0;
   for (const satellite of satellites) {
     for (const t3 of targetCompounds) {
+      if (isHubOnlyReserveCompound(t3)) continue;
       const satStorage = satellite.storage!.store as unknown as Record<string, number>;
       const satTerminal = satellite.terminal!.store as unknown as Record<string, number>;
       const current = (satStorage[t3] || 0) + (satTerminal[t3] || 0);
@@ -1078,8 +1098,10 @@ export function planDistributedSynthesis(
   const chainInventory: Record<string, number> = {};
   for (const res of allResources) {
     const resource = res as ResourceConstant;
-    chainInventory[res] = T3_TARGETS.includes(resource)
-      ? hubInventory[res] || 0
+    const hubOnlyTarget = isHubOnlyReserveCompound(resource) && targetCompounds.includes(resource);
+    chainInventory[res] = T3_TARGETS.includes(resource) || hubOnlyTarget
+      ? (hubInventory[res] || 0) + (hubOnlyTarget
+        ? transferAmounts.getIncoming(hubRoomName, resource) - transferAmounts.getOutgoing(hubRoomName, resource) : 0)
       : ledger[res]?.totalAmount ?? 0;
   }
   const chainResult = planHubChains(
@@ -1088,6 +1110,7 @@ export function planDistributedSynthesis(
     targetReserve,
     targetCompounds,
     additionalDemands,
+    hubReservePerCompound,
   );
 
   // 5. Assign steps to rooms using logistics-cost-aware scoring, decrementing ledger atomically
@@ -1235,13 +1258,13 @@ export function planDistributedSynthesis(
   for (let i = 0; i < taggedSteps.length; i++) {
     if (assignedIndices.has(i)) continue;
     for (const target of taggedSteps[i].possibleTargets) {
-      if ((hubInventory[target] || 0) < targetReserve) {
+      if ((hubInventory[target] || 0) < (isHubOnlyReserveCompound(target) ? hubReservePerCompound : targetReserve)) {
         blockedTargetSet.add(target);
       }
     }
   }
   for (const target of targetCompounds) {
-    if ((hubInventory[target] || 0) >= targetReserve) continue;
+    if ((hubInventory[target] || 0) >= (isHubOnlyReserveCompound(target) ? hubReservePerCompound : targetReserve)) continue;
     if (
       chainResult.missingResources.length === 0
         ? chainResult.blocked
@@ -2678,9 +2701,10 @@ function runHubPlanningAttempt(
     chainTarget,
     targetCompounds,
     additionalProductionDemands,
+    hubReservePerCompound,
   );
 
-  planHubImports(cfg, transferAmountsBeforeImports);
+  planHubImports(cfg, transferAmountsBeforeImports, hubInventory);
   const transferAmountsAfterImports = createResourceTransferTaskAmountIndex();
 
   const distributedPreview = result.blocked

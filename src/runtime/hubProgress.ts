@@ -1,5 +1,5 @@
 import { getCreepConfigService, getMemoryService } from "@/runtime/runtimeServices";
-import { HUB_RESERVE_PER_COMPOUND, HUB_RESERVE_PER_ROOM } from "@/config/hub";
+import { HUB_RESERVE_PER_COMPOUND, HUB_RESERVE_PER_ROOM, isHubOnlyReserveCompound } from "@/config/hub";
 import type { ResourceTransferTask } from "@/runtime/logistics/resourceTransferTasks";
 import { ensureResourceTransferTaskStore } from "@/runtime/logistics/resourceTransferTasks";
 import type {
@@ -544,7 +544,7 @@ export function drawHubVisualPanel(rv: VisualSurface, model: HubVisualModel): nu
     p.textRow(`+${model.logistics.overflow} more tasks`, { font: 0.35, color: VIS_MUTED });
   }
 
-  p.sectionHeader("T3 Reserve");
+  p.sectionHeader("Reserve");
   if (model.t3Reserve.totalCompounds === 0) {
     p.textRow("not configured", { font: 0.35, color: VIS_MUTED });
   } else if (model.t3Reserve.rows.length === 0) {
@@ -971,6 +971,7 @@ function buildT3ReserveStatus(
   if (satelliteStores) {
     for (const sat of satelliteStores) {
       for (const compound of targetCompounds) {
+        if (isHubOnlyReserveCompound(compound)) continue;
         const current = (sat.storage?.[compound] || 0) + (sat.terminal?.[compound] || 0);
         const needed = Math.max(0, reservePerRoom - current);
         if (needed > 0) {

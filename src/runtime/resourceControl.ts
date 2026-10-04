@@ -36,6 +36,7 @@ import {
   type ResourceTransferTask,
 } from "@/runtime/logistics/resourceTransferTasks";
 import { bumpTreasuryCommitmentRevision } from "@/runtime/treasury/commitmentRevision";
+import { isHubOnlyReserveCompound } from "@/config/hub";
 import { runTreasuryTerminalTransferTask } from "@/runtime/treasuryTerminalTransfer";
 import { TREASURY_TERMINAL_LANES, TREASURY_T3_LANE, TREASURY_T4_LANE, treasuryLaneTaskMatches } from "@/runtime/treasuryTerminalLane";
 import {
@@ -7775,7 +7776,7 @@ function isHubProtectedResource(
   const targetCompounds = hubCfg.targetCompounds || [];
 
   if (!isHubRoom) {
-    if (targetCompounds.includes(resource)) return true;
+    if (targetCompounds.includes(resource) && !isHubOnlyReserveCompound(resource)) return true;
     if (isResourceCommittedToDistributedSynthesis(roomName, resource))
       return true;
     return false;

@@ -9,7 +9,12 @@ export const HUB_TARGET_COMPOUNDS: ResourceConstant[] = [
   RESOURCE_CATALYZED_ZYNTHIUM_ALKALIDE, // XZHO2
   RESOURCE_CATALYZED_GHODIUM_ACID, // XGH2O
   RESOURCE_CATALYZED_GHODIUM_ALKALIDE, // XGHO2
+  RESOURCE_HYDROXIDE, // OH：仅 HUB 储备，作为全部 T3 的共用中间产物。
 ];
+
+export function isHubOnlyReserveCompound(resource: ResourceConstant): boolean {
+  return resource === RESOURCE_HYDROXIDE;
+}
 
 export const HUB_PLAN_INTERVAL = 50;
 export const HUB_RESERVE_PER_ROOM = 5000;
