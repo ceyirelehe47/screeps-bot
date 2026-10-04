@@ -1338,7 +1338,7 @@ function processTask(task: WarTask): void {
       const otherOwner = room.controller?.owner?.username;
       if (otherOwner && otherOwner !== "Invader" && otherOwner !== "TooAngel") { task.failReason = "npc_identity_changed"; return; }
     }
-    const decision = assessUnboostedNpc(room, task.routeRooms, TOWER_DRAIN_ATTACKER_BODY, TOWER_DRAIN_HEALER_BODY);
+    const decision = assessUnboostedNpc(room, task.routeRooms, TOWER_DRAIN_ATTACKER_BODY, TOWER_DRAIN_HEALER_BODY, Game.rooms[task.sourceRoom]?.energyCapacityAvailable);
     task.squadAssessedAt = Game.time;
     task.squadDecision = decision.reason;
     if (decision.reason === "entry_not_proven") { task.failReason = "npc_entry_not_proven"; return; }
@@ -1348,6 +1348,15 @@ function processTask(task: WarTask): void {
       return;
     }
     if (task.failReason?.startsWith("npc_")) delete task.failReason;
+  }
+  if (task.npcAuto) {
+    const capacity = Game.rooms[task.sourceRoom]?.energyCapacityAvailable;
+    const bodies = isTowerDrainDuoTask(task) ? [TOWER_DRAIN_ATTACKER_BODY, TOWER_DRAIN_HEALER_BODY] : [T3_ATTACKER_BODY, T3_HEALER_BODY];
+    if (capacity !== undefined && bodies.some(body => body.reduce((sum, part) => sum + BODYPART_COST[part], 0) > capacity)) {
+      task.failReason = "npc_source_capacity_insufficient";
+      return;
+    }
+    if (task.failReason === "npc_source_capacity_insufficient") delete task.failReason;
   }
   if (isTowerDrainDuoTask(task)) requestCombatObservation(task.targetRoom);
   task.statusSince ??= task.createdAt;
@@ -1496,7 +1505,7 @@ export function requestWarRoomClear(
   const inheritedRoute = existing?.sourceRoom === sourceRoom ? existing.routeRooms : undefined;
   const plan = options?.routeRooms || inheritedRoute ? undefined : defaultWarMapRoute(sourceRoom, targetRoom);
   const routeRooms = options?.routeRooms ?? inheritedRoute ?? plan?.rooms;
-  const decision = npcAuto && Game.rooms[targetRoom] ? assessUnboostedNpc(Game.rooms[targetRoom], routeRooms, TOWER_DRAIN_ATTACKER_BODY, TOWER_DRAIN_HEALER_BODY) : undefined;
+  const decision = npcAuto && Game.rooms[targetRoom] ? assessUnboostedNpc(Game.rooms[targetRoom], routeRooms, TOWER_DRAIN_ATTACKER_BODY, TOWER_DRAIN_HEALER_BODY, Game.rooms[sourceRoom]?.energyCapacityAvailable) : undefined;
   const needsT3 = !restarting && existing?.squad === "t3Duo" || decision && !decision.sufficient && decision.reason !== "entry_not_proven";
   const squad = options?.squad ?? (npcAuto ? needsT3 ? "t3Duo" : "towerDrainDuo" : existing?.squad);
   const changedSquad = !!existing && existing.squad !== squad;

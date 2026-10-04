@@ -12,7 +12,9 @@ export function isNpcWarTarget(room: Room): boolean {
 }
 
 /** 首先尝试现有无强化身体。这里只决定生产配置，实际推进仍由战术退路门逐步验证。 */
-export function assessUnboostedNpc(room: Room, route: string[] | undefined, attackerBody: BodyPartConstant[], healerBody: BodyPartConstant[]): { sufficient: boolean; reason: string } {
+export function assessUnboostedNpc(room: Room, route: string[] | undefined, attackerBody: BodyPartConstant[], healerBody: BodyPartConstant[], sourceCapacity?: number): { sufficient: boolean; reason: string } {
+  const bodyCost = (body: BodyPartConstant[]) => body.reduce((sum, part) => sum + BODYPART_COST[part], 0);
+  if (sourceCapacity !== undefined && sourceCapacity < Math.max(bodyCost(attackerBody), bodyCost(healerBody))) return { sufficient: false, reason: "source_cannot_spawn_unboosted_body" };
   const heal = healerBody.filter(part => part === HEAL).length * HEAL_POWER;
   const attack = attackerBody.filter(part => part === ATTACK).length * ATTACK_POWER;
   if (room.find(FIND_HOSTILE_CREEPS).reduce((sum, actor) => sum + effectivePower(actor.body ?? [], HEAL), 0) >= attack) return { sufficient: false, reason: "hostile_heal_exceeds_attack" };

@@ -439,6 +439,20 @@ describe("towerDrainDuo 战争控制", () => {
     expect(Memory.data!.war!.E4N57.activeGeneration).toBeUndefined();
   });
 
+  it("源房装不下无强化身体时使用可孵化T3；两种都不足时等待而不预约实验室", () => {
+    const room = createTargetRoom(); room.controller!.owner = { username: "Invader" };
+    Game.rooms[room.name] = room;
+    Game.rooms.E1N57.energyCapacityAvailable = 6000;
+    startWarRoom(room.name, "E1N57", { oneShot: false });
+    expect(Memory.data!.war![room.name]).toMatchObject({ squad: "t3Duo", squadDecision: "source_cannot_spawn_unboosted_body" });
+    Game.rooms.E1N57.energyCapacityAvailable = 2300;
+    const boosts = jest.spyOn(combatBoosts, "prepareBoosts");
+    runWarControl();
+    expect(Memory.data!.war![room.name].failReason).toBe("npc_source_capacity_insufficient");
+    expect(Memory.data!.war![room.name].activeGeneration).toBeUndefined();
+    expect(boosts).not.toHaveBeenCalled();
+  });
+
   it("地图路线记录跳数和当前敌情，经济危险名单不造成长绕行，显式路线不被刷新", () => {
     const threatened = createTargetRoom([], [{ structureType: STRUCTURE_TOWER, pos: new MockPos(25, 25, "E2N57"), store: createMockStore({ [RESOURCE_ENERGY]: 1000 }) } as unknown as StructureTower], [], "E2N57");
     Game.rooms.E2N57 = threatened;
