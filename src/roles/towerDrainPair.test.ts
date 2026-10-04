@@ -18,12 +18,12 @@ const { moveToTarget, moveToTargetRoom } = jest.requireMock("@/roles/shared") as
 const { requestCombatObservation } = jest.requireMock("@/runtime/powerBankObserver") as { requestCombatObservation: jest.Mock };
 const { moveOffExit } = jest.requireMock("@/movement/traffic") as { moveOffExit: jest.Mock };
 
-function room(name: string, structures: Structure[] = []): Room {
+function room(name: string, structures: Structure[] = [], hostiles: Creep[] = []): Room {
   return {
     name,
     controller: { my: false, owner: { username: "npc" } },
     find: jest.fn((type: FindConstant, opts?: { filter?: (value: Structure) => boolean }) => {
-      const values = type === FIND_STRUCTURES || type === FIND_HOSTILE_STRUCTURES ? structures : [];
+      const values = type === FIND_STRUCTURES || type === FIND_HOSTILE_STRUCTURES ? structures : type === FIND_HOSTILE_CREEPS ? hostiles : [];
       return opts?.filter ? values.filter(opts.filter) : values;
     }),
   } as unknown as Room;
@@ -33,12 +33,17 @@ function tower(name: string, energy = 1000, x = 20, y = 25): StructureTower {
   return { id: name, structureType: STRUCTURE_TOWER, pos: new MockPos(x, y, TARGET), store: createMockStore({ [RESOURCE_ENERGY]: energy }) } as unknown as StructureTower;
 }
 
+function carrier(x = 25, y = 25, energy = 0): Creep {
+  return { body: [{ type: CARRY, hits: 100 }, { type: MOVE, hits: 100 }], pos: new MockPos(x, y, TARGET),
+    store: createMockStore({ [RESOURCE_ENERGY]: energy }) } as unknown as Creep;
+}
+
 function state(phase: TowerDrainPairState["phase"] = "draining"): TowerDrainPairState {
   return { targetRoom: TARGET, retreatRoom: RETREAT, exitDirection: LEFT, attackerEntry: { x: 0, y: 25 }, healerEntry: { x: 0, y: 26 }, phase };
 }
 
-function pair(outside = false, structures: Structure[] = [tower("tower")]): { attacker: Creep; healer: Creep; target: Room } {
-  const target = room(TARGET, structures);
+function pair(outside = false, structures: Structure[] = [tower("tower")], hostiles: Creep[] = []): { attacker: Creep; healer: Creep; target: Room } {
+  const target = room(TARGET, structures, hostiles);
   const safe = room(RETREAT);
   Game.rooms = { [TARGET]: target, [RETREAT]: safe };
   const parts = (type: BodyPartConstant, count: number): Array<{ type: BodyPartConstant; hits: number }> => Array.from({ length: count }, () => ({ type, hits: 100 }));
@@ -96,7 +101,7 @@ describe("towerDrainDuo 公共战术门", () => {
   });
 
   it("在边界耗有能量的塔，两个真实role都不追目标、不破墙、不moveOffExit", () => {
-    const { attacker, healer } = pair();
+    const { attacker, healer } = pair(false, [tower("one"), tower("two"), tower("three")]);
     meleeAttackerRole(TARGET, "", "", "", GREEN_CONFIG, "towerDrainDuo").target(attacker);
     healerRole(TARGET, "", "", "", RED_CONFIG, "towerDrainDuo").target(healer);
     expect(attacker.attack).not.toHaveBeenCalled();
@@ -211,6 +216,52 @@ describe("towerDrainDuo 公共战术门", () => {
     expect(towerDrainPairRange(attacker.pos, healer.pos)).toBe(1);
   });
 
+  it.each([false, true])("E3N57三塔9/3/1能量、载能carrier距最近塔6格时，绿先执行=%s也同步离开边界", (greenFirst) => {
+    const storage = { structureType: STRUCTURE_STORAGE, pos: new MockPos(22, 26, TARGET), store: createMockStore({ [RESOURCE_ENERGY]: 1971 }) } as unknown as StructureStorage;
+    const threats = [tower("a", 9, 24, 28), tower("b", 3, 14, 6), tower("c", 1, 13, 8), storage];
+    const { attacker, healer } = pair(false, threats, [carrier(18, 27, 40)]);
+    attacker.pos = new MockPos(0, 28, TARGET) as unknown as RoomPosition;
+    healer.pos = new MockPos(0, 29, TARGET) as unknown as RoomPosition;
+    attacker.memory._warTowerDrain = { ...state(), attackerEntry: { x: 0, y: 28 }, healerEntry: { x: 0, y: 29 } };
+    const commit = deferredEngineFrame([attacker, healer]);
+    for (const actor of greenFirst ? [healer, attacker] : [attacker, healer]) {
+      if (actor === attacker) meleeAttackerRole(TARGET, "", "", "", GREEN_CONFIG, "towerDrainDuo").target(actor);
+      else healerRole(TARGET, "", "", "", RED_CONFIG, "towerDrainDuo").target(actor);
+    }
+    commit();
+    expect([attacker.room.name, healer.room.name]).toEqual([TARGET, TARGET]);
+    expect([attacker.pos.x, healer.pos.x]).toEqual([1, 1]);
+    expect(attacker.memory._warTowerDrain?.healingPower).toBe(300);
+    threats.slice(0, 3).forEach((tower) => (tower as StructureTower).store[RESOURCE_ENERGY] = 1000);
+    for (const actor of [attacker, healer]) runTowerDrainPair(actor, TARGET, actor === attacker ? GREEN_CONFIG : RED_CONFIG);
+    expect(attacker.memory._warTowerDrain?.phase).toBe("retreating");
+    commit();
+    expect([attacker.room.name, healer.room.name]).toEqual([RETREAT, RETREAT]);
+  });
+
+  it("一座有能量塔落点伤害低于300治疗时推进；等于治疗则不推进", () => {
+    const { attacker, healer } = pair(false, [tower("one", 1000, 25, 25)]);
+    runTowerDrainPair(attacker, TARGET, GREEN_CONFIG);
+    runTowerDrainPair(healer, TARGET, RED_CONFIG);
+    expect(attacker.move).toHaveBeenCalledWith(RIGHT);
+    expect(healer.move).toHaveBeenCalledWith(RIGHT);
+    const equal = pair(false, [tower("one", 1000, 25, 25), tower("two", 1000, 25, 25)]);
+    runTowerDrainPair(equal.attacker, TARGET, GREEN_CONFIG);
+    expect(equal.attacker.move).not.toHaveBeenCalled();
+  });
+
+  it("治疗按当前活HEAL和强化读取，同tick部件失效会关闭原先可推进的格", () => {
+    const { attacker, healer } = pair(false, [tower("one", 1000, 25, 25), tower("two", 1000, 25, 25)]);
+    for (const part of healer.body) if (part.type === HEAL) part.boost = "LHO2";
+    expect(runTowerDrainPair(attacker, TARGET, GREEN_CONFIG)).toBe(true);
+    expect(attacker.move).toHaveBeenCalledWith(RIGHT);
+    for (const part of healer.body) if (part.type === HEAL) part.hits = 0;
+    attacker.move = jest.fn(() => OK);
+    runTowerDrainPair(attacker, TARGET, GREEN_CONFIG);
+    expect(attacker.memory._warTowerDrain?.phase).toBe("retreating");
+    expect(attacker.move).toHaveBeenCalledWith(LEFT);
+  });
+
   it("高血比例仍不足承受fresh6塔两轮时拒绝入房", () => {
     const towers = Array.from({ length: 6 }, (_, index) => tower(`tower${index}`, 1000, 1, 25));
     const { attacker, healer } = pair(true, towers);
@@ -224,7 +275,7 @@ describe("towerDrainDuo 公共战术门", () => {
   it("六空塔仍可从敌库存补能时，不能按零伤害放行危险入口", () => {
     const towers = Array.from({ length: 6 }, (_, index) => tower(`empty${index}`, 0, 1, 25));
     const storage = { id: "stock", structureType: STRUCTURE_STORAGE, pos: new MockPos(30, 30, TARGET), store: createMockStore({ [RESOURCE_ENERGY]: 1000 }) } as unknown as StructureStorage;
-    const { attacker, healer } = pair(true, [...towers, storage]);
+    const { attacker, healer } = pair(true, [...towers, storage], [carrier(1, 26)]);
     runTowerDrainPair(attacker, TARGET, GREEN_CONFIG);
     runTowerDrainPair(healer, TARGET, RED_CONFIG);
     expect(attacker.move).not.toHaveBeenCalled();
@@ -276,9 +327,10 @@ describe("towerDrainDuo 公共战术门", () => {
     expect(attacker.memory._warTowerDrain?.phase).toBe("retreating");
   });
 
-  it("绿受伤立即退出并自疗", () => {
+  it("绿的HEAL全部失效时立即退出并自疗", () => {
     const { attacker, healer } = pair();
     healer.hits = 4900;
+    for (const part of healer.body) if (part.type === HEAL) part.hits = 0;
     runTowerDrainPair(attacker, TARGET, GREEN_CONFIG);
     runTowerDrainPair(healer, TARGET, RED_CONFIG);
     expect(attacker.move).toHaveBeenCalledWith(LEFT);
@@ -292,6 +344,24 @@ describe("towerDrainDuo 公共战术门", () => {
     expect(runTowerDrainPair(attacker, TARGET, GREEN_CONFIG)).toBe(true);
     expect(attacker.move).not.toHaveBeenCalled();
     expect(attacker.memory._warTowerDrain?.blocker).toBe("pair_fatigued");
+  });
+
+  it("近身撤退一员疲劳时同时等待并治疗，不预支未来已经分离的治疗", () => {
+    const { attacker, healer } = pair(false, [tower("one", 1000, 25, 25)]);
+    attacker.pos = new MockPos(3, 25, TARGET) as unknown as RoomPosition;
+    healer.pos = new MockPos(3, 26, TARGET) as unknown as RoomPosition;
+    attacker.hits = 3700;
+    healer.fatigue = 4;
+    runTowerDrainPair(attacker, TARGET, GREEN_CONFIG);
+    runTowerDrainPair(healer, TARGET, RED_CONFIG);
+    expect(attacker.move).not.toHaveBeenCalled();
+    expect(healer.move).not.toHaveBeenCalled();
+    expect(healer.heal).toHaveBeenCalledWith(attacker);
+    healer.fatigue = 0;
+    runTowerDrainPair(attacker, TARGET, GREEN_CONFIG);
+    runTowerDrainPair(healer, TARGET, RED_CONFIG);
+    expect(attacker.move).toHaveBeenCalled();
+    expect(healer.move).toHaveBeenCalled();
   });
 
   it("跨边界撤退不会对另一房治疗或误判远离后重新进房", () => {
@@ -343,7 +413,7 @@ describe("towerDrainDuo 公共战术门", () => {
   });
 
   it("每次fresh判断塔不能开火后才放行原破墙逻辑，补能立刻撤退", () => {
-    const empty = tower("empty", TOWER_ENERGY_COST - 1);
+    const empty = tower("empty", TOWER_ENERGY_COST - 1, 3, 25);
     const { attacker, healer } = pair(false, [empty]);
     attacker.pos = new MockPos(1, 25, TARGET) as unknown as RoomPosition;
     healer.pos = new MockPos(1, 26, TARGET) as unknown as RoomPosition;
@@ -359,7 +429,7 @@ describe("towerDrainDuo 公共战术门", () => {
   it("破墙移动在NPC仍可填塔时保留退出距离预算；库存耗尽后重新开放", () => {
     const towers = Array.from({ length: 6 }, (_, index) => tower(`tower${index}`, 0, 25, 25));
     const storage = { id: "enemy-storage", structureType: STRUCTURE_STORAGE, pos: new MockPos(25, 20, TARGET), store: createMockStore({ [RESOURCE_ENERGY]: 1000 }) } as unknown as StructureStorage;
-    const { attacker } = pair(false, [...towers, storage]);
+    const { attacker } = pair(false, [...towers, storage], [carrier()]);
     runTowerDrainPair(attacker, TARGET, GREEN_CONFIG);
     const first = { set: jest.fn() } as unknown as CostMatrix;
     constrainTowerDrainBreachPath(attacker, TARGET, first);
@@ -372,7 +442,7 @@ describe("towerDrainDuo 公共战术门", () => {
 
   it("整房破墙矩阵的身体查询保持常量上限，同tick疲劳变化仍重新收紧", () => {
     const storage = { id: "stock", structureType: STRUCTURE_STORAGE, pos: new MockPos(30, 30, TARGET), store: createMockStore({ [RESOURCE_ENERGY]: 1000 }) } as unknown as StructureStorage;
-    const { attacker, healer } = pair(false, [tower("empty", 0, 25, 25), storage]);
+    const { attacker, healer } = pair(false, [tower("empty", 0, 25, 25), storage], [carrier()]);
     attacker.memory._warTowerDrain = state("breaching");
     const redQueries = jest.spyOn(attacker, "getActiveBodyparts");
     const greenQueries = jest.spyOn(healer, "getActiveBodyparts");
@@ -388,31 +458,32 @@ describe("towerDrainDuo 公共战术门", () => {
     };
     const healthy = evaluate();
     expect(healthy[1 * 50 + 25]).toBe(0);
-    expect(healthy[5 * 50 + 25]).toBe(255);
+    expect(healthy[20 * 50 + 25]).toBe(255);
     expect(redQueries.mock.calls.length).toBeLessThanOrEqual(8);
     expect(greenQueries.mock.calls.length).toBeLessThanOrEqual(8);
     redQueries.mockClear();
     greenQueries.mockClear();
-    healer.fatigue = 300;
+    healer.fatigue = 1500;
+    for (const part of healer.body) if (part.type === HEAL) part.hits = 0;
     const fatigued = evaluate();
     expect(fatigued[1 * 50 + 25]).toBe(255);
     expect(redQueries.mock.calls.length).toBeLessThanOrEqual(8);
     expect(greenQueries.mock.calls.length).toBeLessThanOrEqual(8);
   });
 
-  it("预留未来仅尾5MOVE的退出节奏：浅格可走，更深平地即使满血也拒绝", () => {
+  it("按实际治疗与落点伤害开放浅格，塔近处伤害超过治疗仍拒绝", () => {
     const storage = { id: "stock", structureType: STRUCTURE_STORAGE, pos: new MockPos(30, 30, TARGET), store: createMockStore({ [RESOURCE_ENERGY]: 1000 }) } as unknown as StructureStorage;
-    const { attacker } = pair(false, [tower("empty", 0, 25, 25), storage]);
+    const { attacker } = pair(false, [tower("empty", 0, 25, 25), storage], [carrier()]);
     attacker.memory._warTowerDrain = state("breaching");
     const matrix = { set: jest.fn() } as unknown as CostMatrix;
     constrainTowerDrainBreachPath(attacker, TARGET, matrix);
     expect(matrix.set).not.toHaveBeenCalledWith(1, 25, 255);
-    expect(matrix.set).toHaveBeenCalledWith(5, 25, 255);
+    expect(matrix.set).toHaveBeenCalledWith(20, 25, 255);
   });
 
   it("死亡主部件仍占平地重量，红25主已毁仅20MOVE与受损绿的近路也不能假称一tick一格", () => {
     const storage = { id: "stock", structureType: STRUCTURE_STORAGE, pos: new MockPos(30, 30, TARGET), store: createMockStore({ [RESOURCE_ENERGY]: 1000 }) } as unknown as StructureStorage;
-    const { attacker, healer } = pair(false, [tower("empty", 0, 25, 25), storage]);
+    const { attacker, healer } = pair(false, [tower("empty", 0, 25, 25), storage], [carrier()]);
     for (let index = 0; index < 30; index++) attacker.body[index].hits = 0;
     for (let index = 0; index < 30; index++) healer.body[index].hits = 0;
     attacker.hits = healer.hits = 2000;
@@ -426,12 +497,13 @@ describe("towerDrainDuo 公共战术门", () => {
 
   it("同一浅格重新读取当前fatigue，不能只复用健康身体的退出预算", () => {
     const storage = { id: "stock", structureType: STRUCTURE_STORAGE, pos: new MockPos(30, 30, TARGET), store: createMockStore({ [RESOURCE_ENERGY]: 1000 }) } as unknown as StructureStorage;
-    const { attacker, healer } = pair(false, [tower("empty", 0, 25, 25), storage]);
+    const { attacker, healer } = pair(false, [tower("empty", 0, 25, 25), storage], [carrier()]);
     attacker.memory._warTowerDrain = state("breaching");
     const first = { set: jest.fn() } as unknown as CostMatrix;
     constrainTowerDrainBreachPath(attacker, TARGET, first);
     expect(first.set).not.toHaveBeenCalledWith(1, 25, 255);
-    healer.fatigue = 300;
+    healer.fatigue = 1500;
+    for (const part of healer.body) if (part.type === HEAL) part.hits = 0;
     const fatigued = { set: jest.fn() } as unknown as CostMatrix;
     constrainTowerDrainBreachPath(attacker, TARGET, fatigued);
     expect(fatigued.set).toHaveBeenCalledWith(1, 25, 255);
@@ -447,8 +519,8 @@ describe("towerDrainDuo 公共战术门", () => {
   });
 
   it("已知墙绕行的实际退路长于几何range时拒绝深入，并按BFS首步退出", () => {
-    const structures: Structure[] = [tower("empty", 0, 25, 25), { id: "stock", structureType: STRUCTURE_STORAGE, pos: new MockPos(30, 30, TARGET), store: createMockStore({ [RESOURCE_ENERGY]: 1000 }) } as unknown as StructureStorage];
-    const { attacker, healer } = pair(false, structures);
+    const structures: Structure[] = [tower("empty", 0, 25, 25), tower("empty2", 0, 25, 25), { id: "stock", structureType: STRUCTURE_STORAGE, pos: new MockPos(30, 30, TARGET), store: createMockStore({ [RESOURCE_ENERGY]: 1000 }) } as unknown as StructureStorage];
+    const { attacker, healer } = pair(false, structures, [carrier()]);
     runTowerDrainPair(attacker, TARGET, GREEN_CONFIG);
     const initial = { set: jest.fn() } as unknown as CostMatrix;
     constrainTowerDrainBreachPath(attacker, TARGET, initial);
@@ -471,11 +543,11 @@ describe("towerDrainDuo 公共战术门", () => {
     const towers = Array.from({ length: 6 }, (_, index) => tower(`empty${index}`, 0, 15, 25));
     const storage = { id: "stock", structureType: STRUCTURE_STORAGE, pos: new MockPos(25, 20, TARGET), store: createMockStore({ [RESOURCE_ENERGY]: 1000 }) } as unknown as StructureStorage;
     const spawn = { id: "target-spawn", structureType: STRUCTURE_SPAWN, pos: new MockPos(25, 25, TARGET), store: createMockStore() } as unknown as StructureSpawn;
-    const { attacker } = pair(false, [...towers, storage, spawn]);
+    const { attacker } = pair(false, [...towers, storage, spawn], [carrier(15, 26)]);
     attacker.attack = jest.fn(() => ERR_NOT_IN_RANGE);
     meleeAttackerRole(TARGET, "", "", "", GREEN_CONFIG, "towerDrainDuo").target(attacker);
     expect(attacker.attack).not.toHaveBeenCalled();
-    expect(attacker.move).not.toHaveBeenCalled();
+    expect(attacker.move).not.toHaveBeenCalledWith(RIGHT);
     expect(moveToTarget).not.toHaveBeenCalled();
     expect(moveOffExit).not.toHaveBeenCalled();
   });
@@ -506,7 +578,7 @@ describe("towerDrainDuo 公共战术门", () => {
   });
 
   it("source与target两阶段都先消费耗塔门，不被mount立即换阶段旁路", () => {
-    const { attacker, healer } = pair();
+    const { attacker, healer } = pair(false, [tower("one"), tower("two"), tower("three")]);
     expect(meleeAttackerRole(TARGET, "", "", "", GREEN_CONFIG, "towerDrainDuo").source?.(attacker)).toBe(false);
     expect(healerRole(TARGET, "", "", "", RED_CONFIG, "towerDrainDuo").source?.(healer)).toBe(false);
     expect(attacker.attack).not.toHaveBeenCalled();

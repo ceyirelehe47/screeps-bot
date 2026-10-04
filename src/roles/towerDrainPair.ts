@@ -15,11 +15,12 @@ export interface TowerDrainPairState {
   attackerDamage?: number;
   healerDamage?: number;
   enteredAt?: number;
+  healingPower?: number;
 }
 
 const MOVE_OPTIONS = { plainCost: 2, swampCost: 8, reusePath: 0, maxRooms: 1, ignoreCreeps: false, avoidExitTiles: false, costCallback: plainOnlyMatrix } as const;
 const RETREAT_RATIO = 0.75;
-// 保留尾部1000HP；其中尚存MOVE只作为最坏退出速度下界，不预支治疗或假设每tick一格。
+// 退路预算至少保留1000HP，并按可能受损后的真实MOVE/HEAL重算。
 const DAMAGE_RESERVE = 1000;
 
 type DrainMemory = CreepMemory & { _warTowerDrain?: TowerDrainPairState };
@@ -103,14 +104,37 @@ function damageAt(towers: StructureTower[], tile: { x: number; y: number }): num
   return towers.reduce((sum, tower) => sum + (tower.store.getUsedCapacity(RESOURCE_ENERGY) >= TOWER_ENERGY_COST ? towerPowerAt(tower, tile) : 0), 0);
 }
 
-function refillableTowers(room: Room): StructureTower[] {
+interface TowerThreat { tower: StructureTower; refillAt: number; live: boolean }
+
+/** 最早补能时间取物理下界：搬运者每tick至多一格；不预支取能/转移耗时。 */
+function towerThreats(room: Room): TowerThreat[] {
   const structures = room.find(FIND_HOSTILE_STRUCTURES);
-  const canRefill = structures.some((structure) => structure.structureType !== STRUCTURE_TOWER && "store" in structure && (structure as AnyStoreStructure).store.getUsedCapacity(RESOURCE_ENERGY) > 0)
-    || room.find(FIND_HOSTILE_CREEPS).length > 0
+  const carriers = room.find(FIND_HOSTILE_CREEPS).filter((actor) => actor.body.some((part) => part.type === CARRY && part.hits > 0));
+  const stores = structures.some((structure) => structure.structureType !== STRUCTURE_TOWER && "store" in structure && (structure as AnyStoreStructure).store.getUsedCapacity(RESOURCE_ENERGY) > 0)
     || room.find(FIND_DROPPED_RESOURCES).some((resource) => resource.resourceType === RESOURCE_ENERGY && resource.amount > 0)
     || room.find(FIND_TOMBSTONES).some((remains) => remains.store.getUsedCapacity(RESOURCE_ENERGY) > 0)
     || room.find(FIND_RUINS).some((remains) => remains.store.getUsedCapacity(RESOURCE_ENERGY) > 0);
-  return activeTowers(room).filter((tower) => canRefill || tower.store.getUsedCapacity(RESOURCE_ENERGY) >= TOWER_ENERGY_COST);
+  const spawns = structures.filter((structure): structure is StructureSpawn => structure.structureType === STRUCTURE_SPAWN);
+  const spawnEnergy = structures.filter((structure) => structure.structureType === STRUCTURE_SPAWN || structure.structureType === STRUCTURE_EXTENSION)
+    .reduce((sum, structure) => sum + (structure as StructureSpawn | StructureExtension).store.getUsedCapacity(RESOURCE_ENERGY), 0);
+  return activeTowers(room).map((tower) => {
+    if (tower.store.getUsedCapacity(RESOURCE_ENERGY) >= TOWER_ENERGY_COST) return { tower, refillAt: 0, live: true };
+    let refillAt = Infinity;
+    for (const carrier of carriers) {
+      if (!stores && carrier.store.getUsedCapacity(RESOURCE_ENERGY) <= 0) continue;
+      refillAt = Math.min(refillAt, Math.max(0, range(carrier.pos, tower.pos) - 1));
+    }
+    if (stores) for (const spawn of spawns) {
+      // 未知正在出生的body按可补能处理；新CARRY+MOVE至少出生6tick。
+      const birth = spawn.spawning?.remainingTime ?? (spawnEnergy >= BODYPART_COST[CARRY] + BODYPART_COST[MOVE] ? 2 * CREEP_SPAWN_TIME : Infinity);
+      refillAt = Math.min(refillAt, birth + Math.max(0, range(spawn.pos, tower.pos) - 1));
+    }
+    return { tower, refillAt, live: false };
+  });
+}
+
+function refillableTowers(room: Room): StructureTower[] {
+  return towerThreats(room).filter((threat) => Number.isFinite(threat.refillAt)).map((threat) => threat.tower);
 }
 
 const UNREACHABLE = 0xffff;
@@ -120,12 +144,17 @@ function exitPaths(room: Room, state: TowerDrainPairState, entry: { x: number; y
   const next = new Uint16Array(2500).fill(UNREACHABLE);
   const worstDamage = new Float64Array(2500);
   const tileDamage = new Float64Array(2500).fill(-1);
+  const peaks = towers.map(() => new Float64Array(2500));
+  const perTower = towers.map(() => new Float64Array(2500).fill(-1));
   const blocked = new Uint8Array(2500);
   const terrain = Game.map.getRoomTerrain(room.name);
   const index = (x: number, y: number): number => x * 50 + y;
   const damage = (x: number, y: number): number => {
     const at = index(x, y);
-    if (tileDamage[at] < 0) tileDamage[at] = towers.reduce((sum, tower) => sum + towerPowerAt(tower, { x, y }), 0);
+    if (tileDamage[at] < 0) tileDamage[at] = towers.reduce((sum, tower, i) => {
+      perTower[i][at] = towerPowerAt(tower, { x, y });
+      return sum + perTower[i][at];
+    }, 0);
     return tileDamage[at];
   };
   for (let x = 0; x < 50; x++) for (let y = 0; y < 50; y++) {
@@ -137,12 +166,13 @@ function exitPaths(room: Room, state: TowerDrainPairState, entry: { x: number; y
   for (const hostile of room.find(FIND_HOSTILE_CREEPS)) blocked[index(hostile.pos.x, hostile.pos.y)] = 1;
   const queue = new Uint16Array(2500);
   const start = index(entry.x, entry.y);
-  if (blocked[start]) return { distances, next, worstDamage };
+  if (blocked[start]) return { distances, next, worstDamage, peaks };
   let read = 0;
   let write = 1;
   queue[0] = start;
   distances[start] = 0;
   worstDamage[start] = damage(entry.x, entry.y);
+  for (let i = 0; i < towers.length; i++) peaks[i][start] = perTower[i][start];
   while (read < write) {
     const current = queue[read++];
     const x = Math.floor(current / 50);
@@ -157,17 +187,40 @@ function exitPaths(room: Room, state: TowerDrainPairState, entry: { x: number; y
         distances[candidate] = distances[current] + 1;
         worstDamage[candidate] = worst;
         next[candidate] = current;
+        for (let i = 0; i < towers.length; i++) peaks[i][candidate] = Math.max(peaks[i][current], perTower[i][candidate]);
         queue[write++] = candidate;
       } else if (worst < worstDamage[candidate]) {
         worstDamage[candidate] = worst;
         next[candidate] = current;
+        for (let i = 0; i < towers.length; i++) peaks[i][candidate] = Math.max(peaks[i][current], perTower[i][candidate]);
       }
     }
   }
-  return { distances, next, worstDamage };
+  return { distances, next, worstDamage, peaks };
 }
 
-/** 空塔仍可能被 NPC 填回；破墙移动也必须留得下从新位置退到已知出口的血量。 */
+/** 两条BFS退路逐格仍在近身治疗距离内才抵扣治疗；不假定绕墙后还能治疗。 */
+function createLinkedExitProof(redPaths: ReturnType<typeof exitPaths>, greenPaths: ReturnType<typeof exitPaths>) {
+  const cache = new Map<number, boolean>();
+  return (redAt: number, greenAt: number): boolean => {
+    const visited: number[] = [];
+    let linked = false;
+    for (let steps = 0; steps < 2500; steps++) {
+      const key = redAt * 2500 + greenAt;
+      const known = cache.get(key); if (known !== undefined) { linked = known; break; }
+      visited.push(key);
+      if (Math.max(Math.abs(Math.floor(redAt / 50) - Math.floor(greenAt / 50)), Math.abs(redAt % 50 - greenAt % 50)) > 1) break;
+      const r = redPaths.distances[redAt]; const g = greenPaths.distances[greenAt];
+      if (r === UNREACHABLE || g === UNREACHABLE) break;
+      if (r === 0 || g === 0) { linked = Math.max(r, g) <= 1; break; }
+      redAt = redPaths.next[redAt]; greenAt = greenPaths.next[greenAt];
+    }
+    for (const key of visited) cache.set(key, linked);
+    return linked;
+  };
+}
+
+/** 每次调用创建身体/塔快照；同tick补能、疲劳、堵路仍重新读取。 */
 export function constrainTowerDrainBreachPath(creep: Creep, roomName: string, matrix: CostMatrix): CostMatrix {
   const state = (creep.memory as DrainMemory)._warTowerDrain;
   const room = Game.rooms[roomName];
@@ -175,29 +228,34 @@ export function constrainTowerDrainBreachPath(creep: Creep, roomName: string, ma
   plainOnlyMatrix(roomName, matrix);
   const partner = Object.values(Game.creeps).find((candidate) => candidate.memory.configName === creep.memory._warPartnerConfigName && !candidate.memory._warDetached);
   if (!partner) return matrix;
-  const towers = refillableTowers(room);
-  const redPaths = exitPaths(room, state, state.attackerEntry, towers);
-  const greenPaths = exitPaths(room, state, state.healerEntry ?? state.attackerEntry, towers);
-  const health = Math.min(creep.hits, partner.hits);
-  // 身体与当前疲劳在单次矩阵评估中不变；每名成员只计算一次，下一次调用重新读取。
-  const redExposure = createExitExposureEvaluator(creep);
-  const greenExposure = createExitExposureEvaluator(partner);
-  const exposures = (steps: number): number => Math.max(redExposure(steps), greenExposure(steps));
+  const attacker = creep.memory.role === "meleeAttacker" ? creep : partner;
+  const healer = creep.memory.role === "healer" ? creep : partner;
+  const threats = towerThreats(room).filter((threat) => Number.isFinite(threat.refillAt));
+  const redPaths = exitPaths(room, state, state.attackerEntry, threats.map((threat) => threat.tower));
+  const greenPaths = exitPaths(room, state, state.healerEntry ?? state.attackerEntry, threats.map((threat) => threat.tower));
+  const evaluate = createPairExitEvaluator(attacker, healer, threats);
+  const linkedExit = createLinkedExitProof(redPaths, greenPaths);
+  const heal = bodyModel(healer).heal(healer.hits);
   for (let x = 1; x < 49; x++) for (let y = 1; y < 49; y++) {
-    const tile = { x, y };
     const at = x * 50 + y;
-    let budget = proofDamageBudget(redPaths.worstDamage[at], exposures(redPaths.distances[at]));
-    if (redPaths.distances[at] === UNREACHABLE) budget = Infinity;
-    // 绿球可能跟在红球前一格，只对可通行邻格取最大已证明退路预算。
+    const redSteps = redPaths.distances[at];
+    if (redSteps === UNREACHABLE) { matrix.set(x, y, 0xff); continue; }
+    let greenSteps = 0;
+    const peak = threats.map((_, i) => redPaths.peaks[i][at]);
+    let greenReachable = false;
+    let linked = true;
     for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) {
-      const gx = x + dx;
-      const gy = y + dy;
+      const gx = x + dx; const gy = y + dy;
       if (gx < 0 || gx > 49 || gy < 0 || gy > 49) continue;
-      const green = gx * 50 + gy;
-      if (greenPaths.distances[green] === UNREACHABLE) continue;
-      budget = Math.max(budget, proofDamageBudget(greenPaths.worstDamage[green], exposures(greenPaths.distances[green])));
+      const greenAt = gx * 50 + gy;
+      if (greenPaths.distances[greenAt] === UNREACHABLE) continue;
+      greenReachable = true;
+      linked = linked && linkedExit(at, greenAt);
+      greenSteps = Math.max(greenSteps, greenPaths.distances[greenAt]);
+      for (let i = 0; i < threats.length; i++) peak[i] = Math.max(peak[i], greenPaths.peaks[i][greenAt]);
     }
-    if (budget >= health) matrix.set(x, y, 0xff);
+    const incoming = threats.reduce((sum, threat, i) => sum + (threat.live ? peak[i] : 0), 0);
+    if (!greenReachable || (incoming > 0 && incoming >= heal) || !evaluate(redSteps, greenSteps, peak, linked)) matrix.set(x, y, 0xff);
   }
   return matrix;
 }
@@ -266,56 +324,75 @@ function moveAcross(creep: Creep, direction: DirectionConstant): void {
   measureCreepIntent(() => creep.move(direction));
 }
 
-function mobilityTicks(creep: Creep, moves = creep.getActiveBodyparts(MOVE)): number {
-  if (moves <= 0) return Infinity;
-  // actual Engine movement.execute：死亡主部件仍计重量；plain产生2*weight，MOVE每tick减2*moves。
+/** Engine按hits从身体尾端回填；部分存活的HEAL/MOVE仍完整生效。 */
+function bodyModel(creep: Creep) {
+  const moves = new Float64Array(creep.body.length + 1);
+  const heals = new Float64Array(creep.body.length + 1);
+  for (let living = 1; living <= creep.body.length; living++) {
+    const part = creep.body[creep.body.length - living];
+    const boost = part.boost ? (BOOSTS[part.type] as Record<string, { fatigue?: number; heal?: number }>)[part.boost] : undefined;
+    moves[living] = moves[living - 1] + (part.type === MOVE && part.hits > 0 ? boost?.fatigue ?? 1 : 0);
+    heals[living] = heals[living - 1] + (part.type === HEAL && part.hits > 0 ? HEAL_POWER * (boost?.heal ?? 1) : 0);
+  }
   const weight = creep.body.filter((part) => part.type !== MOVE && part.type !== CARRY).length;
-  return Math.max(1, Math.ceil(weight / moves));
+  const alive = (hits: number): number => Math.max(0, Math.min(creep.body.length, Math.ceil(hits / 100)));
+  return { moves: (hits: number) => moves[alive(hits)], heal: (hits: number) => heals[alive(hits)],
+    cadence: (hits: number) => moves[alive(hits)] > 0 ? Math.max(1, Math.ceil(weight / moves[alive(hits)])) : Infinity };
 }
 
-function minimumExitMoves(creep: Creep): number {
-  let remaining = DAMAGE_RESERVE;
-  let moves = 0;
-  for (let index = creep.body.length - 1; index >= 0 && remaining > 0; index--) {
-    if (creep.body[index].type === MOVE) moves++;
-    remaining -= 100;
-  }
-  return Math.min(moves, creep.getActiveBodyparts(MOVE));
+/**
+ * 总缺血S的保守递推：等长身体、近身治疗较伤者，至少治疗min(H,S/2)。
+ * 每座塔一轮只可攻击一个成员，按两条已知退路上的较高伤害计入S。
+ * 将S全压到任一成员，取得MOVE/HEAL下界；最后两轮跨房不抵扣治疗。
+ */
+function createPairExitEvaluator(attacker: Creep, healer: Creep, threats: TowerThreat[]) {
+  const red = bodyModel(attacker); const green = bodyModel(healer);
+  const initial = attacker.hitsMax - attacker.hits + healer.hitsMax - healer.hits;
+  const canHeal = attacker.room.name === healer.room.name && towerDrainPairRange(attacker.pos, healer.pos) <= 1 && attacker.hitsMax === healer.hitsMax;
+  const cache = new Map<string, boolean>();
+  return (redSteps: number, greenSteps: number, peak: number[], linked: boolean): boolean => {
+    if (redSteps === UNREACHABLE || greenSteps === UNREACHABLE) return false;
+    const key = `${redSteps}:${greenSteps}:${linked}:${peak.join(',')}`;
+    const known = cache.get(key); if (known !== undefined) return known;
+    const exposure = (redHits: number, greenHits: number): { horizon: number; crossWait: number } => {
+      const cadence = Math.max(red.cadence(redHits), green.cadence(greenHits));
+      const wait = Math.max(Math.ceil(attacker.fatigue / Math.max(1, 2 * red.moves(redHits))), Math.ceil(healer.fatigue / Math.max(1, 2 * green.moves(greenHits))));
+      const crossWait = Math.max(2, 2 * cadence);
+      return { horizon: wait + Math.max(redSteps, greenSteps) * cadence + crossWait, crossWait };
+    };
+    let { horizon, crossWait } = exposure(attacker.hits, healer.hits);
+    let safe = false;
+    for (let revision = 0; revision < 52 && horizon <= 1500; revision++) {
+      let deficit = initial; let worst = initial; let failed = false;
+      for (let tick = 0; tick < horizon; tick++) {
+        const incoming = threats.reduce((sum, threat, i) => sum + (tick >= threat.refillAt ? peak[i] : 0), 0);
+        const healing = canHeal && linked && tick < horizon - crossWait ? green.heal(Math.min(healer.hits, healer.hitsMax - worst)) : 0;
+        deficit = Math.max(0, deficit - Math.min(healing, deficit / 2)) + incoming;
+        worst = Math.max(worst, deficit);
+        if (Math.min(attacker.hitsMax, healer.hitsMax) - worst <= DAMAGE_RESERVE) { failed = true; break; }
+      }
+      if (failed) break;
+      const redHits = Math.min(attacker.hits, attacker.hitsMax - worst);
+      const greenHits = Math.min(healer.hits, healer.hitsMax - worst);
+      const nextExposure = exposure(redHits, greenHits);
+      const next = nextExposure.horizon;
+      if (next <= horizon) { safe = true; break; }
+      horizon = next; crossWait = nextExposure.crossWait;
+    }
+    cache.set(key, safe); return safe;
+  };
 }
 
-function createExitExposureEvaluator(creep: Creep): (steps: number) => number {
-  const moves = minimumExitMoves(creep);
-  if (moves <= 0) return (steps) => steps === 0 ? 2 : Infinity;
-  const cadence = Math.max(mobilityTicks(creep), mobilityTicks(creep, moves));
-  const fatigueWait = Math.ceil(creep.fatigue / (moves * 2));
-  return (steps) => steps === 0 ? 2 : steps === UNREACHABLE ? Infinity : Math.max(2, fatigueWait + steps * cadence + 1);
-}
-
-function exitExposureTicks(creep: Creep, steps: number): number {
-  // 到0/49即本帧迁房，已在边界退出不需要再走一格；保留两轮新伤害余量。
-  if (steps === 0) return 2;
-  return createExitExposureEvaluator(creep)(steps);
-}
-
-function proofDamageBudget(damage: number, exposures: number): number {
-  return Number.isFinite(exposures) ? damage * exposures + DAMAGE_RESERVE : Infinity;
-}
-
-function exitBudget(creep: Creep, state: TowerDrainPairState, damage: number, entry?: { x: number; y: number }): number {
-  if (creep.room.name !== state.targetRoom) return 0;
+function pairExitSafe(attacker: Creep, healer: Creep, state: TowerDrainPairState): boolean {
   const room = Game.rooms[state.targetRoom];
-  if (!room || !entry) return Infinity;
-  const towers = refillableTowers(room);
-  if (range(creep.pos, entry) === 0) {
-    if (!walkable(room.name, entry, room)) return Infinity;
-    return proofDamageBudget(Math.max(damage, towers.reduce((sum, tower) => sum + towerPowerAt(tower, entry), 0)), exitExposureTicks(creep, 0));
-  }
-  const paths = exitPaths(room, state, entry, towers);
-  const at = creep.pos.x * 50 + creep.pos.y;
-  const steps = paths.distances[at];
-  if (steps === UNREACHABLE) return Infinity;
-  // 不预支治疗：同一轮全部塔可以改打绿球，且跨房后无法治疗另一侧。
-  return proofDamageBudget(Math.max(damage, paths.worstDamage[at]), exitExposureTicks(creep, steps));
+  if (!room || !state.attackerEntry || !state.healerEntry) return false;
+  const threats = towerThreats(room).filter((threat) => Number.isFinite(threat.refillAt));
+  const redPaths = exitPaths(room, state, state.attackerEntry, threats.map((threat) => threat.tower));
+  const greenPaths = exitPaths(room, state, state.healerEntry, threats.map((threat) => threat.tower));
+  const redAt = (attacker.room.name === state.targetRoom ? attacker.pos : state.attackerEntry);
+  const greenAt = (healer.room.name === state.targetRoom ? healer.pos : state.healerEntry);
+  const r = redAt.x * 50 + redAt.y; const g = greenAt.x * 50 + greenAt.y;
+  return createPairExitEvaluator(attacker, healer, threats)(redPaths.distances[r], greenPaths.distances[g], threats.map((_, i) => Math.max(redPaths.peaks[i][r], greenPaths.peaks[i][g])), createLinkedExitProof(redPaths, greenPaths)(r, g));
 }
 
 function healPair(healer: Creep, attacker: Creep): void {
@@ -338,6 +415,8 @@ function publish(state: TowerDrainPairState, attacker: Creep, healer?: Creep): v
 function withdraw(creep: Creep, state: TowerDrainPairState, entry: { x: number; y: number } | undefined): void {
   if (!entry || !state.retreatRoom || !state.exitDirection) { state.blocker = "missing_exit"; return; }
   if (creep.room.name === state.targetRoom) {
+    const partner = Object.values(Game.creeps).find((actor) => actor.memory.configName === creep.memory._warPartnerConfigName);
+    if (partner?.room.name === state.targetRoom && towerDrainPairRange(creep.pos, partner.pos) <= 1 && (creep.fatigue > 0 || partner.fatigue > 0)) return;
     if (!walkable(state.targetRoom, entry, Game.rooms[state.targetRoom])) { state.blocker = "exit_blocked"; return; }
     if (range(creep.pos, entry) === 0) moveAcross(creep, state.exitDirection);
     else advanceAlongExit(creep, state, entry);
@@ -431,9 +510,8 @@ export function runTowerDrainPair(creep: Creep, targetRoom: string, partnerConfi
   state.attackerDamage = room ? damageAt(towers, attacker.room.name === targetRoom ? attacker.pos : state.attackerEntry) : undefined;
   state.healerDamage = room ? damageAt(towers, healer.room.name === targetRoom ? healer.pos : state.healerEntry) : undefined;
   const unsafe = attacker.getActiveBodyparts(MOVE) <= 0 || healer.getActiveBodyparts(MOVE) <= 0 || healer.getActiveBodyparts(HEAL) <= 0
-    || healer.hits < healer.hitsMax || attacker.hits <= attacker.hitsMax * RETREAT_RATIO
-    || attacker.hits <= exitBudget(attacker, state, state.attackerDamage ?? Infinity, state.attackerEntry)
-    || healer.hits <= exitBudget(healer, state, state.healerDamage ?? Infinity, state.healerEntry);
+    || attacker.hits <= attacker.hitsMax * RETREAT_RATIO
+    || !pairExitSafe(attacker, healer, state);
   if (!bothOutside && (unsafe || !room)) state.phase = "retreating";
   if (bothInside && !unsafe && (attacker.fatigue > 0 || healer.fatigue > 0) && state.phase !== "retreating") {
     state.blocker = "pair_fatigued";
@@ -453,7 +531,9 @@ export function runTowerDrainPair(creep: Creep, targetRoom: string, partnerConfi
   }
   if (!room) { state.blocker = "target_not_visible"; withdraw(creep, state, creep === attacker ? state.attackerEntry : state.healerEntry); publish(state, attacker, healer); return true; }
   const canFire = towers.some((tower) => tower.store.getUsedCapacity(RESOURCE_ENERGY) >= TOWER_ENERGY_COST);
-  if (!canFire && bothInside && !unsafe) {
+  state.healingPower = bodyModel(healer).heal(healer.hits);
+  const canAdvance = !canFire || Math.max(state.attackerDamage ?? Infinity, state.healerDamage ?? Infinity) < state.healingPower;
+  if (canAdvance && bothInside && !unsafe) {
     state.phase = "breaching";
     if (towerDrainPairRange(attacker.pos, healer.pos) > 1) {
       state.blocker = "pair_regrouping";
@@ -470,7 +550,7 @@ export function runTowerDrainPair(creep: Creep, targetRoom: string, partnerConfi
     publish(state, attacker, healer);
     return false;
   }
-  if (state.phase === "breaching" && canFire) state.phase = "retreating";
+  if (state.phase === "breaching" && !canAdvance) state.phase = "retreating";
   if (state.phase === "retreating") {
     withdraw(creep, state, creep === attacker ? state.attackerEntry : state.healerEntry);
     publish(state, attacker, healer);
