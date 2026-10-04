@@ -1,4 +1,4 @@
-import { runFlagHaulingByFlag } from "@/runtime/flagHauling";
+import { runFlagHaulingByFlag, ensureClearedNpcLootHandoff } from "@/runtime/flagHauling";
 import { getCreepConfigService } from "@/runtime/runtimeServices";
 import { requestCombatObservation } from "@/runtime/powerBankObserver";
 
@@ -119,6 +119,89 @@ describe("runFlagHaulingByFlag", () => {
     getRangeTo: (other: RoomPosition) => Math.max(Math.abs(x - other.x), Math.abs(y - other.y)),
   } as RoomPosition);
 
+  it("小额 NPC 资源只派一只按货量配体型的 carrier，已有成员不预补出生", () => {
+    const world = salvageFixture();
+    world.objects.drops.push({ amount: 239, resourceType: RESOURCE_ENERGY, pos: position(44, 17) } as Resource);
+    runFlagHaulingByFlag();
+    const cfg = getCreepConfigService().get(world.configName)!;
+    expect(cfg.body?.filter(p => p === CARRY)).toHaveLength(5);
+    expect(cfg.body?.filter(p => p === MOVE)).toHaveLength(5);
+    expect(cfg.spawnOnce).toEqual({});
+    const actor = createRemoteCarrierCreep(world.configName, 0);
+    Object.assign(actor, { name: "existing-hauler", ticksToLive: 900, pos: position(30, 30) });
+    Game.creeps[actor.name] = actor;
+    Game.time++; runFlagHaulingByFlag();
+    expect(Object.keys(getCreepConfigService().list())).toEqual([world.configName]);
+    expect(getCreepConfigService().get(world.configName)?.spawnOnce?.queuedAt).toBe(Game.time);
+    Game.time++; runFlagHaulingByFlag();
+    expect(getCreepConfigService().get(world.configName)?.spawnOnce?.queuedAt).toBe(Game.time - 1);
+  });
+
+  it("资源从三车份缩至一车时保留现役最近成员，空车退役，载货成员继续归仓", () => {
+    const world = salvageFixture();
+    const drop = { amount: 1800, resourceType: RESOURCE_ENERGY, pos: position(44, 17) } as Resource;
+    world.objects.drops.push(drop);
+    runFlagHaulingByFlag();
+    expect(Object.keys(getCreepConfigService().list())).toHaveLength(3);
+    const names = [world.configName, world.configName + ":2", world.configName + ":3"];
+    const actors = names.map((name, i) => {
+      const actor = createRemoteCarrierCreep(name, i === 2 ? 100 : 0);
+      Object.assign(actor, { name: `member-${i}`, ticksToLive: 1000, pos: i === 1 ? position(30, 30) : { x: 10, y: 10, roomName: "W1N1" } });
+      return actor;
+    });
+    Game.creeps = Object.fromEntries(actors.map(c => [c.name, c]));
+    world.spawn.memory.spawnList = [...names];
+    Object.assign(drop, { amount: 239 });
+    Game.time++; runFlagHaulingByFlag();
+    expect(getCreepConfigService().get(names[1])?.roomName).toBe("W1N1");
+    expect(actors[1].memory.configName).toBe(names[1]);
+    expect(actors[0].memory._recycleToRoom).toBe("W1N1");
+    expect(actors[0].memory.configName).toBeUndefined();
+    expect(actors[2].memory.working).toBe(true);
+    expect(actors[2].memory.configName).toBe(names[2]);
+    expect(getCreepConfigService().get(names[2])?.roomName).toBeUndefined();
+    expect(world.spawn.memory.spawnList).toEqual([names[1]]);
+  });
+
+  it("已清空的 NPC 战争房间同帧衔接一车搬运，重复执行不创建第二个任务", () => {
+    const world = salvageFixture();
+    delete Game.flags[world.flag.name];
+    world.objects.drops.push({ amount: 239, resourceType: RESOURCE_ENERGY, pos: position(44, 17) } as Resource);
+    world.target.createFlag = jest.fn(() => world.flag.name) as Room["createFlag"];
+    expect(ensureClearedNpcLootHandoff(world.home.name, world.target.name)).toBe(true);
+    expect(Object.keys(getCreepConfigService().list())).toEqual([world.configName]);
+    expect(Memory.data?.flagHauling?.[world.flag.name]?.createdAt).toBe(Game.time);
+    expect(ensureClearedNpcLootHandoff(world.home.name, world.target.name)).toBe(true);
+    expect(world.target.createFlag).toHaveBeenCalledTimes(1);
+  });
+
+  it("活跃 PowerBank 搬运和无生产能力的源房不额外发布 NPC 搬运者", () => {
+    const world = salvageFixture();
+    delete Game.flags[world.flag.name];
+    world.objects.drops.push({ amount: 100, resourceType: RESOURCE_POWER, pos: position(44, 17) } as Resource);
+    world.target.createFlag = jest.fn(() => world.flag.name) as Room["createFlag"];
+    Memory.data!.powerBankHarvest = { bank: { targetRoom: world.target.name, status: "hauling" } as PowerBankHarvestTask };
+    expect(ensureClearedNpcLootHandoff(world.home.name, world.target.name)).toBe(false);
+    Memory.data!.powerBankHarvest = {};
+    Object.assign(world.spawn, { isActive: () => false });
+    Game.time++;
+    expect(ensureClearedNpcLootHandoff(world.home.name, world.target.name)).toBe(false);
+    expect(world.target.createFlag).not.toHaveBeenCalled();
+  });
+
+  it("危险位置的货量不放大派遣数量，但也不误判房间搬空", () => {
+    const world = salvageFixture();
+    world.objects.structures.push({ structureType: STRUCTURE_KEEPER_LAIR, pos: position(20, 20) } as StructureKeeperLair);
+    world.objects.drops.push({ amount: 5000, resourceType: RESOURCE_ENERGY, pos: position(20, 20) } as Resource,
+      { amount: 239, resourceType: RESOURCE_ENERGY, pos: position(44, 17) } as Resource);
+    runFlagHaulingByFlag();
+    expect(Object.keys(getCreepConfigService().list())).toHaveLength(1);
+    Object.assign(world.objects.drops[1], { amount: 0 });
+    Game.time++; runFlagHaulingByFlag();
+    expect(world.flag.remove).not.toHaveBeenCalled();
+    expect(Memory.data?.flagHauling?.[world.flag.name]?.emptyObservedAt).toBeUndefined();
+  });
+
   it.each(["vision", "core", "tower", "combat"] as const)("INVADER %s 阻止新派遣，撤队列但保留返程货物", (threat) => {
     const world = salvageFixture();
     world.objects.drops.push({ amount: 1, resourceType: RESOURCE_ENERGY, pos: position(44, 17) } as Resource);
@@ -147,7 +230,7 @@ describe("runFlagHaulingByFlag", () => {
     world.objects.drops.push({ amount: 1, resourceType: RESOURCE_ENERGY, pos: position(44, 17) } as Resource);
     runFlagHaulingByFlag();
     expect(world.flag.remove).not.toHaveBeenCalled();
-    expect(Object.keys(getCreepConfigService().list())).toHaveLength(3);
+    expect(Object.keys(getCreepConfigService().list())).toHaveLength(1);
     expect(getCreepConfigService().get(world.configName)?.args).toEqual(["W5N5", "44,17", "invaderSalvage"]);
     Object.assign(world.objects.drops[0], { amount: 0 });
     const tombstone = createStoredStructure("tomb", STRUCTURE_CONTAINER, { [RESOURCE_UTRIUM]: 1 });
@@ -179,7 +262,7 @@ describe("runFlagHaulingByFlag", () => {
     world.objects.drops.push(drop);
     runFlagHaulingByFlag();
     expect(world.objects.escorts).toEqual([]);
-    expect(Object.keys(getCreepConfigService().list())).toHaveLength(3);
+    expect(Object.keys(getCreepConfigService().list())).toHaveLength(1);
     expect(getCreepConfigService().get(world.configName)?.roomName).toBe("W1N1");
     Game.time += 1;
     runFlagHaulingByFlag();
@@ -214,7 +297,7 @@ describe("runFlagHaulingByFlag", () => {
     Object.assign(drop, { pos: position(44, 16) });
     Game.time += 1;
     runFlagHaulingByFlag();
-    expect(Object.keys(getCreepConfigService().list())).toHaveLength(3);
+    expect(Object.keys(getCreepConfigService().list())).toHaveLength(1);
     expect(getCreepConfigService().get(world.configName)?.roomName).toBe("W1N1");
     for (const lair of lairs) {
       Object.assign(drop, { pos: position(lair.pos.x, lair.pos.y + 5) });

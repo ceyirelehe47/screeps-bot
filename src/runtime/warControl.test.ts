@@ -95,7 +95,7 @@ describe("三个NPC目标共享一支清剿小队", () => {
     jest.restoreAllMocks(); jest.clearAllMocks(); resetRuntimeServices(); Game.time = 1000;
     Memory.cfg = {}; Memory.runtime = {}; Memory.data = {}; Memory.creeps = {};
     const source = createSourceRoom(); source.energyAvailable = 12900; source.energyCapacityAvailable = 12900;
-    Game.rooms = { E1N57: source }; Game.spawns = { Spawn1: createSpawn(source) }; Game.creeps = {};
+    Game.rooms = { E1N57: source }; Game.spawns = { Spawn1: createSpawn(source) }; Game.creeps = {}; Game.flags = {};
     Game.map = { ...Game.map, findRoute: jest.fn((_from: string, target: string) => [{ exit: RIGHT, room: target }]) } as GameMap;
     for (const name of rooms) {
       const room = createTargetRoom([], [enemyStructure(name)], [], name);
@@ -105,6 +105,24 @@ describe("三个NPC目标共享一支清剿小队", () => {
     }
   });
   afterEach(() => { Memory.cfg = {}; });
+
+  it("已确认 NPC 目标清剿后无需人工 flag，当帧按残留货量衔接搬运", () => {
+    shared(); runWarControl();
+    expect(Memory.data!.war!.E3N57.lootAfterClear).toBe(true);
+    const room = Game.rooms.E3N57;
+    const ruin = { id: "npc-loot", pos: new MockPos(44, 17, room.name), store: createMockStore({ energy: 239 }) } as unknown as Ruin;
+    room.find = jest.fn((kind: FindConstant) => kind === FIND_RUINS ? [ruin] : []) as Room["find"];
+    room.createFlag = jest.fn((_pos: RoomPosition, name: string) => name) as Room["createFlag"];
+    Game.time++; runWarControl();
+    expect(room.createFlag).not.toHaveBeenCalled();
+    Game.time += 19; runWarControl();
+    const flag = "HAUL_E1N57_INVADER_E3N57";
+    expect(room.createFlag).toHaveBeenCalledWith(ruin.pos, flag);
+    expect(Memory.data!.flagHauling![flag].sourceRoom).toBe("E1N57");
+    const carriers = Object.entries(Memory.data!.creepConfigs!).filter(([name]) => name.includes(":haul:E3N57:"));
+    expect(carriers).toHaveLength(1);
+    expect(carriers[0][1].body?.filter(part => part === CARRY)).toHaveLength(5);
+  });
 
   function installExistingPairs(): void {
     runWarControl();
@@ -927,7 +945,7 @@ describe("清剿后Observer重建监视", () => {
     Memory.data!.war!.E2N54.status = "clearing";
     runWarControl();
     expect(watchState().armedAt).toBeUndefined();
-    expect(watchState().targets).toEqual({});
+    expect(watchState().targets).toEqual({ E3N57: { lastTriggeredEvidenceIds: [] }, E3N53: { lastTriggeredEvidenceIds: [] } });
     (combatObserver.requestCombatObservation as jest.Mock).mockClear();
     delete Memory.data!.war!.E3N57;
     delete Memory.data!.war!.E3N53;
@@ -1004,6 +1022,43 @@ describe("清剿后Observer重建监视", () => {
     const spawn = { id: "rebuilt", owner: { username: "TooAngel" }, structureType: STRUCTURE_SPAWN } as StructureSpawn;
     observe("E3N57", createTargetRoom([], [spawn]));
     expect(Memory.data!.war!.E3N57.attempts).toBe(2);
+  });
+
+  it("手动结束任务后首次扫描登记旧建筑，后续新实体才触发补剿", () => {
+    Memory.data!.war = {};
+    Memory.runtime!.warRebuildWatch = { [id]: { armedAt: Game.time, clearedRooms: [...rooms], targets: {} } };
+    const old = { id: "old-extractor", owner: { username: "TooAngel" }, structureType: STRUCTURE_EXTRACTOR } as StructureExtractor;
+    const structures: Structure[] = [old];
+    const room = createTargetRoom([], structures);
+    runWarControl(); observe("E3N57", room);
+    expect(Memory.data!.war!.E3N57).toBeUndefined();
+    Game.time = 1100; runWarControl(); Game.time++; runWarControl();
+    expect(Memory.data!.war!.E3N57).toBeUndefined();
+    structures.push({ id: "new-spawn", owner: { username: "TooAngel" }, structureType: STRUCTURE_SPAWN } as StructureSpawn);
+    Game.time = 1200; runWarControl(); Game.time++; runWarControl();
+    expect(watchState().targets.E3N57.triggerCount).toBe(1);
+    expect(Memory.data!.war!.E3N57.status).toBe("staging");
+  });
+
+  it("缺少初始基线也不能吞掉首次观察到的对手 creep", () => {
+    Memory.data!.war = {};
+    Memory.runtime!.warRebuildWatch = { [id]: { armedAt: Game.time, clearedRooms: [...rooms], targets: {} } };
+    runWarControl();
+    observe("E3N57", createTargetRoom([{ id: "first-builder", owner: { username: "TooAngel" } } as Creep]));
+    expect(watchState().targets.E3N57.triggerCount).toBe(1);
+    expect(Memory.data!.war!.E3N57.status).toBe("staging");
+  });
+
+  it("清场完成时留下的旧工地不触发，新工地才触发", () => {
+    let sites = [{ id: "old-site", owner: { username: "TooAngel" } }];
+    const room = createTargetRoom();
+    room.find = jest.fn((kind: FindConstant) => kind === FIND_HOSTILE_CONSTRUCTION_SITES ? sites : []) as Room["find"];
+    Game.rooms.E3N57 = room;
+    runWarControl(); Game.time++; runWarControl();
+    expect(watchState().targets.E3N57.triggerCount).toBeUndefined();
+    sites = [...sites, { id: "new-site", owner: { username: "TooAngel" } }];
+    Game.time = 1100; runWarControl(); Game.time++; runWarControl();
+    expect(watchState().targets.E3N57.triggerCount).toBe(1);
   });
 
   it("没有视野或Observer不可用不孵化队伍；请求超时保留下一轮重试", () => {

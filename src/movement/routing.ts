@@ -142,7 +142,7 @@ export function moveToTargetRoom(
       creep.room.name;
     if (nextRoom === creep.room.name) {
       recordMovementMetric("travelFallbacks", creep.room.name);
-      const recoveredNextRoom = findDynamicNextRoom(creep.room.name, targetRoom, forwardPreferredRooms, dangerousRooms, options.routePurpose === "combat", options.allowSourceKeeperRooms);
+      const recoveredNextRoom = findDynamicNextRoom(creep.room.name, targetRoom, forwardPreferredRooms, dangerousRooms, options.routePurpose === "combat", options.allowSourceKeeperRooms, options.routeRoomCost, options.routePolicyKey, travelState.rejectedTransitions);
       nextRoom = recoveredNextRoom ?? creep.room.name;
       if (nextRoom === creep.room.name) {
         delete travelState.exitTarget;
@@ -157,7 +157,7 @@ export function moveToTargetRoom(
       return ERR_NO_PATH;
     }
   } else {
-    const dynamicNextRoom = findDynamicNextRoom(creep.room.name, targetRoom, routeRooms, dangerousRooms, options.routePurpose === "combat", options.allowSourceKeeperRooms);
+    const dynamicNextRoom = findDynamicNextRoom(creep.room.name, targetRoom, routeRooms, dangerousRooms, options.routePurpose === "combat", options.allowSourceKeeperRooms, options.routeRoomCost, options.routePolicyKey, travelState.rejectedTransitions);
     nextRoom = dynamicNextRoom ?? creep.room.name;
     if (nextRoom === creep.room.name) {
       delete travelState.exitTarget;
@@ -171,12 +171,18 @@ export function moveToTargetRoom(
     const preferredRooms = hasFixedRoute
       ? getForwardPreferredRooms(creep.room.name, routeRooms, targetRoom)
       : routeRooms;
-    const dynamicNextRoom = findDynamicNextRoom(creep.room.name, targetRoom, preferredRooms, dangerousRooms, options.routePurpose === "combat", options.allowSourceKeeperRooms);
+    const dynamicNextRoom = findDynamicNextRoom(creep.room.name, targetRoom, preferredRooms, dangerousRooms, options.routePurpose === "combat", options.allowSourceKeeperRooms, options.routeRoomCost, options.routePolicyKey, travelState.rejectedTransitions);
     if (dynamicNextRoom && dynamicNextRoom !== creep.room.name) {
       nextRoom = dynamicNextRoom;
     }
   }
 
+  if ((travelState.rejectedTransitions?.[`${creep.room.name}->${nextRoom}`] ?? 0) > Game.time) {
+    const fallback = findDynamicNextRoom(creep.room.name, targetRoom, routeRooms, dangerousRooms, options.routePurpose === "combat",
+      options.allowSourceKeeperRooms, options.routeRoomCost, options.routePolicyKey, travelState.rejectedTransitions);
+    if (!fallback) { updateTravelState(creep, travelState); return ERR_NO_PATH; }
+    nextRoom = fallback;
+  }
   if (nextRoom !== targetRoom && dangerousRooms.includes(nextRoom)) {
     delete travelState.exitTarget;
     updateTravelState(creep, travelState);
@@ -228,12 +234,16 @@ export function moveToTargetRoom(
     options.plainCost, options.swampCost, options.cacheKey]);
   if (!exit || exit.key !== key || exit.expiresAt <= Game.time || options.costCallback && !options.cacheKey) {
     const selectionOptions = { ...moveOptions, avoidExitTiles: false };
+    const selectionMatrix = buildRoomMovementMatrix(creep, creep.room, creep.room.name, new PathFinder.CostMatrix(), selectionOptions, creep.pos);
     const exitPos = measureCreepPathing(() => creep.pos.findClosestByPath(exitDirection as ExitConstant, {
       ...selectionOptions,
-      costCallback: (roomName, matrix) => buildRoomMovementMatrix(creep, creep.room, roomName, matrix, selectionOptions, creep.pos),
+      // 目标过滤与路径矩阵共享约束，禁止把危险出口当成可用目标再反复等下一步许可。
+      filter: (position: RoomPosition) => selectionMatrix.get(position.x, position.y) < 255,
+      costCallback: (roomName, matrix) => roomName === creep.room.name ? selectionMatrix.clone() : matrix,
     }));
     if (!exitPos || exitPos.roomName !== creep.room.name || !isOnExitDirection(exitPos, exitDirection as DirectionConstant)) {
       delete travelState.exitTarget;
+      (travelState.rejectedTransitions ??= {})[`${creep.room.name}->${nextRoom}`] = Game.time + 20;
       updateTravelState(creep, travelState);
       return ERR_NO_PATH;
     }
@@ -480,10 +490,19 @@ function findDynamicNextRoom(
   avoidRooms: string[],
   combat = false,
   allowSourceKeepers = false,
+  routeRoomCost?: (roomName: string) => number,
+  routePolicyKey?: string,
+  rejectedTransitions?: Record<string, number>,
 ): string | null {
-  const cacheKey = buildDynamicRouteCacheKey(currentRoom, targetRoom, preferredRooms, avoidRooms) + (combat ? "|combat" : "") + (allowSourceKeepers ? "|keepers" : "");
-  const cached = dynamicNextRoomCache[cacheKey];
-  if (cached && cached.expiresAt > Game.time && (!(combat || allowSourceKeepers) || (cached.nextRoom ? cached.nextRoom === targetRoom || isLiveTransitionRoomSafe(cached.nextRoom, combat, allowSourceKeepers) : cached.computedAt === Game.time))) {
+  for (const [edge, until] of Object.entries(rejectedTransitions ?? {})) if (until <= Game.time) delete rejectedTransitions![edge];
+  const blockedEdges = Object.keys(rejectedTransitions ?? {}).sort();
+  const cacheKey = buildDynamicRouteCacheKey(currentRoom, targetRoom, preferredRooms, avoidRooms) + (combat ? "|combat" : "") + (allowSourceKeepers ? "|keepers" : "") + (routeRoomCost ? `|policy:${routePolicyKey ?? ""}` : "") + `|edges:${blockedEdges.join(",")}`;
+  const cacheable = !routeRoomCost || !!routePolicyKey;
+  const cached = cacheable ? dynamicNextRoomCache[cacheKey] : undefined;
+  const cachedSafe = cached?.nextRoom
+    ? routeRoomCost ? Number.isFinite(routeRoomCost(cached.nextRoom)) : cached.nextRoom === targetRoom || isLiveTransitionRoomSafe(cached.nextRoom, combat, allowSourceKeepers)
+    : cached?.computedAt === Game.time;
+  if (cached && cached.expiresAt > Game.time && (!(combat || allowSourceKeepers || routeRoomCost) || cachedSafe)) {
     recordMovementMetric("dynamicRouteCacheHits");
     return cached.nextRoom;
   }
@@ -492,13 +511,15 @@ function findDynamicNextRoom(
   const avoidSet = new Set(avoidRooms);
   const route = measureCreepPathing(() =>
     Game.map.findRoute(currentRoom, targetRoom, {
-      routeCallback: (roomName) => {
-        if (roomName === currentRoom || roomName === targetRoom) {
+      routeCallback: (roomName, fromRoom) => {
+        if ((rejectedTransitions?.[`${fromRoom}->${roomName}`] ?? 0) > Game.time) return Infinity;
+        if (roomName === currentRoom || (!routeRoomCost && roomName === targetRoom)) {
           return 1;
         }
         if (avoidSet.has(roomName)) {
           return Infinity;
         }
+        if (routeRoomCost) return routeRoomCost(roomName);
         if (!isLiveTransitionRoomSafe(roomName, combat, allowSourceKeepers)) {
           return Infinity;
         }
@@ -511,11 +532,12 @@ function findDynamicNextRoom(
   );
 
   if (route === ERR_NO_PATH || route.length === 0) {
-    setDynamicRouteCache(cacheKey, null);
+    if (cacheable) setDynamicRouteCache(cacheKey, null);
     return null;
   }
   const nextRoom = route[0].room;
-  setDynamicRouteCache(cacheKey, nextRoom);
+  if ((rejectedTransitions?.[`${currentRoom}->${nextRoom}`] ?? 0) > Game.time) return null;
+  if (cacheable) setDynamicRouteCache(cacheKey, nextRoom);
   return nextRoom;
 }
 

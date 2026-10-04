@@ -70,6 +70,7 @@ function getSpawnConfigPriority(roomName: string, configName: string): number {
   if (configName.includes(":war:")) {
     return 2;
   }
+  if (config?.role === "remoteCarrier" && config.args[2] === "invaderSalvage") return 2;
   if (config?.role === "upgrader" || config?.role === "hubUpgrader") {
     return 3;
   }

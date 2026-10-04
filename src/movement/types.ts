@@ -49,6 +49,9 @@ export interface MoveToTargetOptions {
 }
 
 export interface MoveToRoomOptions extends MoveToTargetOptions {
+  /** 业务按同一实际敌情给出过房成本；Infinity 禁行。须用稳定 key 隔离路线缓存。 */
+  routeRoomCost?: (roomName: string) => number;
+  routePolicyKey?: string;
   /** 业务已提供 Keeper 禁区矩阵及逐步安全门时，可规划穿过 Keeper 房间。 */
   allowSourceKeeperRooms?: boolean;
   /** 清剿按当前战斗威胁续路；经济角色保持控制器/结构避让。 */
@@ -60,6 +63,8 @@ export interface MoveToRoomOptions extends MoveToTargetOptions {
 export type MovementOptions = MoveToRoomOptions;
 
 export interface TravelState {
+  /** 暂时不可达的有向房间出口；改用其它入口，不将整个目标房永久禁行。 */
+  rejectedTransitions?: Record<string, number>;
   exitTarget?: { key: string; x: number; y: number; expiresAt: number };
   targetRoom: string;
   lastPosKey?: string;

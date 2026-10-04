@@ -273,6 +273,7 @@ declare global {
         routePlannedAt?: number;
         routeTrace?: { hops: number; avoided: Record<string, string>; policy: "map_combat" | "manual" };
         npcAuto?: true;
+        lootAfterClear?: true;
         sharedSquadWatchId?: string;
         combatClearedAt?: number;
         combatClearSince?: number;

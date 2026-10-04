@@ -5,6 +5,7 @@ import { clearMovementState } from "@/roles/shared";
 import type { CreepConfig } from "@/types/system";
 import { assessUnboostedNpc, isNpcWarTarget } from "@/runtime/warNpcPolicy";
 import { getRefillableHostileTowers } from "@/runtime/combatTowerThreat";
+import { ensureClearedNpcLootHandoff } from "@/runtime/flagHauling";
 
 type WarStatus = "queued" | "staging" | "clearing" | "downgrading" | "patrol_waiting" | "done" | "failed";
 export type WarSquad = "standard" | "t3Duo" | "towerDrainDuo";
@@ -32,6 +33,7 @@ interface WarTask {
   routePlannedAt?: number;
   routeTrace?: { hops: number; avoided: Record<string, string>; policy: "map_combat" | "manual" };
   npcAuto?: true;
+  lootAfterClear?: true;
   sharedSquadWatchId?: string;
   combatClearedAt?: number;
   combatClearSince?: number;
@@ -1324,6 +1326,25 @@ function writeWarTelemetry(): void {
   };
 }
 
+function runNpcLootHandoffs(store: Record<string, WarTask>): void {
+  for (const task of Object.values(store)) {
+    if (task.status === "failed") continue;
+    const room = Game.rooms[task.targetRoom];
+    if (!room) continue;
+    const authority = room.controller?.owner?.username ?? room.controller?.reservation?.username;
+    if (authority === "Invader" || authority === "TooAngel" || (!authority && room.find(FIND_HOSTILE_STRUCTURES)
+      .some(s => s.structureType === STRUCTURE_INVADER_CORE))) task.lootAfterClear = true;
+    if (!task.lootAfterClear) continue;
+    const hostile = getHostilePresence(room);
+    if (hostile.hostileCreeps || hostile.hostileStructures) {
+      if (!task.sharedSquadWatchId) delete task.combatClearSince;
+      continue;
+    }
+    task.combatClearSince ??= Game.time;
+    if (Game.time - task.combatClearSince + 1 >= WAR_CLEAR_DEBOUNCE_TICKS) ensureClearedNpcLootHandoff(task.sourceRoom, task.targetRoom);
+  }
+}
+
 function processTask(task: WarTask): void {
   if (!task.routeTrace && task.routeRooms) task.routeTrace = { hops: Math.max(0, task.routeRooms.length - 1), avoided: {}, policy: task.routeOrigin === "map" ? "map_combat" : "manual" };
   if (task.routeOrigin === "map" && Game.time - (task.routePlannedAt ?? 0) >= 100) {
@@ -1948,7 +1969,15 @@ function runWarRebuildWatches(store: Record<string, WarTask>): void {
   for (const [id, config] of Object.entries(configs)) {
     const state = runtime.warRebuildWatch[id] ??= { clearedRooms: [], targets: {} };
     const targets = [...new Set(config.targetRooms)];
-    for (const name of targets) if (store[name]?.sourceRoom === config.sourceRoom && (store[name].status === "done" || store[name].combatClearedAt !== undefined) && !state.clearedRooms.includes(name)) state.clearedRooms.push(name);
+    for (const name of targets) {
+      if (store[name]?.sourceRoom !== config.sourceRoom || (store[name].status !== "done" && store[name].combatClearedAt === undefined)
+        || state.clearedRooms.includes(name)) continue;
+      state.clearedRooms.push(name);
+      // 清场完成帧已有的残留实体是基线；失去视野时，已确认清空的结果仍保留。
+      const target = state.targets[name] ??= {};
+      target.lastTriggeredEvidenceIds ??= Game.rooms[name] ? getWarRebuildEvidence(Game.rooms[name], config.enemyUsername)
+        .filter(item => !item.startsWith("creep:")) : [];
+    }
     // 每房完成记录独立于短期War任务，避免200tick终态清理丢掉首轮成果。
     if (state.armedAt === undefined) {
       if (targets.length === 0 || !targets.every((name) => state.clearedRooms.includes(name))) continue;
@@ -1980,13 +2009,10 @@ function runWarRebuildWatches(store: Record<string, WarTask>): void {
       target.blocker = undefined;
       if (room.controller?.owner && room.controller.owner.username !== config.enemyUsername) { target.blocker = "target_owner_changed"; continue; }
       // 控制器归属本身不是重建。观察到对手creep或新造的实体/工地才启动。
-      const evidence = [
-        ...room.find(FIND_HOSTILE_CREEPS).filter((creep) => creep.owner.username === config.enemyUsername).map((creep) => `creep:${creep.id}`),
-        ...room.find(FIND_HOSTILE_CONSTRUCTION_SITES).filter((site) => site.owner.username === config.enemyUsername).map((site) => `site:${site.id}`),
-        ...room.find(FIND_HOSTILE_STRUCTURES).filter((structure) => structure.structureType !== STRUCTURE_CONTROLLER
-          && structure.structureType !== STRUCTURE_KEEPER_LAIR && "owner" in structure && (structure as OwnedStructure).owner.username === config.enemyUsername).map((structure) => `structure:${structure.id}`),
-      ].sort();
-      const previous = new Set(target.lastTriggeredEvidenceIds ?? []);
+      const evidence = getWarRebuildEvidence(room, config.enemyUsername);
+      // 手动结束首轮任务或旧监视状态没有基线时，首次观察只登记旧建筑/工地。
+      // 对方 creep 仍是即时重建证据，不能因首次扫描而吞掉。
+      const previous = new Set(target.lastTriggeredEvidenceIds ?? evidence.filter(item => !item.startsWith("creep:")));
       const newEvidence = evidence.some((item) => !previous.has(item));
       target.lastTriggeredEvidenceIds = evidence;
       // 减少旧证据不是重建；例如creep已被击杀，但其工地仍残留。
@@ -1997,6 +2023,15 @@ function runWarRebuildWatches(store: Record<string, WarTask>): void {
       target.blocker = "clear_active";
     }
   }
+}
+
+function getWarRebuildEvidence(room: Room, enemyUsername: string): string[] {
+  return [
+    ...room.find(FIND_HOSTILE_CREEPS).filter(c => c.owner.username === enemyUsername).map(c => `creep:${c.id}`),
+    ...room.find(FIND_HOSTILE_CONSTRUCTION_SITES).filter(s => s.owner.username === enemyUsername).map(s => `site:${s.id}`),
+    ...room.find(FIND_HOSTILE_STRUCTURES).filter(s => s.structureType !== STRUCTURE_CONTROLLER
+      && s.structureType !== STRUCTURE_KEEPER_LAIR && "owner" in s && (s as OwnedStructure).owner.username === enemyUsername).map(s => `structure:${s.id}`),
+  ].sort();
 }
 
 export function runWarControl(): void {
@@ -2049,5 +2084,6 @@ export function runWarControl(): void {
     task.updatedAt = Game.time;
   }
   runWarRebuildWatches(store);
+  runNpcLootHandoffs(store);
   writeWarTelemetry();
 }

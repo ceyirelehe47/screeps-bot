@@ -230,7 +230,7 @@ describe("remoteCarrierRole", () => {
     expect(options.canMoveStep(new RoomPosition(0, 18, "W5N5"))).toBe(true);
     const previous = world.room.find;
     world.room.find = jest.fn((type: FindConstant) => type === FIND_STRUCTURES ? [{ structureType: STRUCTURE_INVADER_CORE, pos: drop.pos }] : [] ) as Room["find"];
-    expect(options.canMoveStep(new RoomPosition(0, 18, "W5N5"))).toBe(false);
+    expect(options.canMoveStep(new RoomPosition(0, 18, "W5N5"))).toBe(true);
     world.room.find = previous;
     expect(PathFinder.search).not.toHaveBeenCalled();
   });
@@ -276,16 +276,16 @@ describe("remoteCarrierRole", () => {
     expect([...calls.values()]).toEqual([2, 2, 2]);
   });
 
-  it("已确认过路房有 Core 时失去视野仍绕行，fresh 清空后解除，未知房不被误禁", () => {
+  it("已确认过路房有敌塔时失去视野仍绕行，fresh 清空后解除，未知房不被误禁", () => {
     const world = salvageFixture({ drops: [{ amount: 50, resourceType: RESOURCE_ENERGY, pos: new RoomPosition(44, 17, "W5N5") } as Resource] });
     Object.assign(world.creep, { room: world.home, pos: new RoomPosition(10, 10, world.home.name) });
-    const unsafe = { name: "W4N5", find: jest.fn((type: FindConstant) => type === FIND_STRUCTURES ? [{ structureType: STRUCTURE_INVADER_CORE }] : []) } as unknown as Room;
+    const unsafe = { name: "W4N5", find: jest.fn((type: FindConstant) => type === FIND_STRUCTURES ? [{ structureType: STRUCTURE_TOWER, my: false }] : []) } as unknown as Room;
     Game.rooms[unsafe.name] = unsafe;
     world.role.source(world.creep);
     const first = (moveToTargetRoom as jest.Mock).mock.calls[0][3];
     expect(first.avoidRooms).toContain(unsafe.name);
     expect(first.avoidRooms).not.toContain("W3N5");
-    expect(first.allowSourceKeeperRooms).toBe(true);
+    expect(first.routeRoomCost).toEqual(expect.any(Function));
     Game.time++; delete Game.rooms[unsafe.name];
     world.role.source(world.creep);
     expect((moveToTargetRoom as jest.Mock).mock.calls[1][3].avoidRooms).toContain(unsafe.name);
@@ -293,6 +293,35 @@ describe("remoteCarrierRole", () => {
     world.role.source(world.creep);
     expect((moveToTargetRoom as jest.Mock).mock.calls[2][3].avoidRooms).not.toContain(unsafe.name);
     expect(clearMovementState).not.toHaveBeenCalled();
+  });
+
+  it("Observer 缺视野暂停生产配置后，已出发成员仍沿受管任务前进，不反复返家", () => {
+    const world = salvageFixture();
+    const configName = world.creep.memory.configName!;
+    const flagName = "HAUL_W1N1_INVADER_W5N5";
+    Game.flags = { [flagName]: { name: flagName } as Flag };
+    Memory.data!.flagHauling = { [flagName]: { flagName, sourceRoom: world.home.name, targetRoom: world.room.name,
+      targetX: 44, targetY: 17, createdAt: Game.time, updatedAt: Game.time } };
+    delete Memory.data!.creepConfigs![configName].roomName;
+    delete Game.rooms[world.room.name];
+    Object.assign(world.creep, { room: world.home, pos: new RoomPosition(10, 10, world.home.name) });
+    expect(world.role.source(world.creep)).toBe(false);
+    expect(moveToTargetRoom).toHaveBeenCalledWith(world.creep, world.room.name, undefined, expect.any(Object));
+    Game.time++; Game.flags = {};
+    expect(world.role.source(world.creep)).toBe(false);
+    expect(moveToTargetRoom).toHaveBeenCalledTimes(1);
+  });
+
+  it("单 Core 过路房可用，并移除上一版本留下的整房禁行记录", () => {
+    const world = salvageFixture();
+    Object.assign(world.creep, { room: world.home, pos: new RoomPosition(10, 10, world.home.name) });
+    Game.rooms.W4N5 = { name: "W4N5", controller: { reservation: { username: "Invader" } },
+      find: (type: FindConstant) => type === FIND_STRUCTURES ? [{ structureType: STRUCTURE_INVADER_CORE }] : [] } as unknown as Room;
+    Memory.runtime = { invaderSalvageDangerRooms: { W4N5: Game.time + 500 } };
+    world.role.source(world.creep);
+    const options = (moveToTargetRoom as jest.Mock).mock.calls[0][3];
+    expect(options.avoidRooms).not.toContain("W4N5");
+    expect(options.routeRoomCost("W4N5")).toBe(1);
   });
 
   it("Keeper 房允许规划但仍受位置禁区限制；敌方所有权失去视野继续绕行", () => {

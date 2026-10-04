@@ -88,6 +88,22 @@ const resetScenarioWorld = () => {
 };
 
 describe("spawnPlanner queue ownership 重合同", () => {
+  it("清剿后的有限搬运优先于常规 worker，仍遵守 spawnOnce 去重", () => {
+    resetScenarioWorld();
+    const room = createRoom("W6N1");
+    const spawn = createSpawn(room, "loot-source");
+    Game.rooms[room.name] = room; Game.spawns[spawn.name] = spawn; addLiveCarrier(room);
+    const worker = `${room.name}:worker:0`, haul = `${room.name}:haul:W6N2:carrier:HAUL_W6N1_INVADER_W6N2`;
+    Memory.data = { creepConfigs: {
+      [worker]: { role: "worker", args: [], roomName: room.name },
+      [haul]: { role: "remoteCarrier", args: ["W6N2", "25,25", "invaderSalvage"], roomName: room.name, body: [CARRY, MOVE], spawnOnce: {} },
+    } };
+    scheduleSpawnTasks();
+    expect(spawn.memory.spawnList).toEqual([haul, worker]);
+    scheduleSpawnTasks();
+    expect(spawn.memory.spawnList!.filter(name => name === haul)).toHaveLength(1);
+  });
+
   // Jest 预算归并：原 4 个所有权参数化变体合并为单一代表性用例。
   const scenarioDistribute = () => {
     const room = createRoom("W6N1");
