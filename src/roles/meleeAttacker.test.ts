@@ -13,7 +13,7 @@ jest.mock("@/movement/traffic", () => ({ ...jest.requireActual("@/movement/traff
   moveOffExit: jest.fn(() => OK),
 }));
 
-import { meleeAttackerRole } from "@/roles/meleeAttacker";
+import { meleeAttackerRole, findWarObjectiveTarget } from "@/roles/meleeAttacker";
 import { createMockPowerBankCreep } from "@mock/powerBank";
 
 const { moveToTarget, moveToTargetRoom } = jest.requireMock("@/roles/shared") as {
@@ -68,6 +68,25 @@ describe("meleeAttackerRole war duo staging", () => {
         search: jest.fn(),
       },
     });
+  });
+
+  it("补剿的旧被动建筑不再选为目标，新建筑和生产设施仍是目标", () => {
+    const old = hostileStructure(STRUCTURE_EXTRACTOR, "old-extractor", 25, 25);
+    const attacker = createMockPowerBankCreep("meleeAttacker", { roomName: TARGET_ROOM, memory: { configName: ATTACKER_CONFIG } });
+    const structures = [old];
+    attacker.room.find = jest.fn((type: FindConstant) => type === FIND_HOSTILE_STRUCTURES || type === FIND_STRUCTURES ? structures : []) as Room["find"];
+    Memory.data = { war: { [TARGET_ROOM]: { targetRoom: TARGET_ROOM, sourceRoom: "E1N57", status: "clearing", reason: "manual",
+      attempts: 1, createdAt: 1, updatedAt: Game.time, rebuildIgnoreStructureIds: [old.id, "old-spawn"] } } };
+    expect(findWarObjectiveTarget(attacker)).toBeNull();
+    const rebuilt = hostileStructure(STRUCTURE_EXTENSION, "new-extension", 26, 25);
+    structures.push(rebuilt);
+    expect(findWarObjectiveTarget(attacker)).toBe(rebuilt);
+    const spawn = hostileStructure(STRUCTURE_SPAWN, "old-spawn", 27, 25);
+    structures.push(spawn);
+    expect(findWarObjectiveTarget(attacker)).toBe(spawn);
+    attacker.memory.configName = "another-source:war:E3N57:meleeAttacker:0";
+    structures.splice(1);
+    expect(findWarObjectiveTarget(attacker)).toBe(old);
   });
 
   it("does not wait for an implicit same-index healer when the producer declares no partner", () => {

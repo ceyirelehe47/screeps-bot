@@ -6,6 +6,7 @@ import type { CreepConfig } from "@/types/system";
 import { assessUnboostedNpc, isNpcWarTarget } from "@/runtime/warNpcPolicy";
 import { getRefillableHostileTowers } from "@/runtime/combatTowerThreat";
 import { ensureClearedNpcLootHandoff } from "@/runtime/flagHauling";
+import { isRebuildStructureRelevant } from "@/runtime/warRebuildScope";
 
 type WarStatus = "queued" | "staging" | "clearing" | "downgrading" | "patrol_waiting" | "done" | "failed";
 export type WarSquad = "standard" | "t3Duo" | "towerDrainDuo";
@@ -34,6 +35,7 @@ interface WarTask {
   routeTrace?: { hops: number; avoided: Record<string, string>; policy: "map_combat" | "manual" };
   npcAuto?: true;
   lootAfterClear?: true;
+  rebuildIgnoreStructureIds?: string[];
   sharedSquadWatchId?: string;
   combatClearedAt?: number;
   combatClearSince?: number;
@@ -697,24 +699,25 @@ function getHostilePresence(room: Room, task?: WarTask): HostilePresenceSnapshot
       structure.structureType !== STRUCTURE_CONTROLLER && structure.structureType !== STRUCTURE_KEEPER_LAIR,
   });
 
+  const relevantStructures = hostileStructures.filter(s => isRebuildStructureRelevant(s, task?.rebuildIgnoreStructureIds));
   if (task && isTowerDrainDuoTask(task) && !task.sharedSquadWatchId) {
     const seen = new Set(hostileStructures.map((structure) => structure.id));
     for (const wall of room.find(FIND_STRUCTURES, {
       filter: (structure) => structure.structureType === STRUCTURE_WALL,
     })) {
-      if (!seen.has(wall.id)) {
+      if (!seen.has(wall.id) && isRebuildStructureRelevant(wall, task.rebuildIgnoreStructureIds)) {
         seen.add(wall.id);
-        hostileStructures.push(wall);
+        relevantStructures.push(wall);
       }
     }
   }
 
   const hostileReservation = isHostileReservation(room);
   return {
-    present: hostileCreeps.length > 0 || hostileStructures.length > 0
+    present: hostileCreeps.length > 0 || relevantStructures.length > 0
       || (hostileReservation && !(task && isTowerDrainDuoTask(task))),
     hostileCreeps: hostileCreeps.length,
-    hostileStructures: hostileStructures.length,
+    hostileStructures: relevantStructures.length,
     hostileReservation,
   };
 }
@@ -1904,6 +1907,7 @@ function runSharedWarSquads(store: Record<string, WarTask>): Set<WarTask> {
         delete task.combatClearedAt;
         delete task.combatClearSince;
       } else {
+        if (task.rebuildIgnoreStructureIds && task.activeGeneration && task.activeGeneration.phase !== "deployed") retireSharedCombat(task);
         task.combatClearSince ??= Game.time;
         if (Game.time - task.combatClearSince + 1 >= WAR_CLEAR_DEBOUNCE_TICKS) task.combatClearedAt ??= Game.time;
       }
@@ -2018,6 +2022,12 @@ function runWarRebuildWatches(store: Record<string, WarTask>): void {
       // 减少旧证据不是重建；例如creep已被击杀，但其工地仍残留。
       if (!newEvidence) continue;
       requestWarRoomClear(name, config.sourceRoom, { reason: "manual", npcAuto: true, oneShot: false });
+      // 补剿处理新入侵者/新建筑，旧空墙与被动设施不要求再拆一轮。
+      // 挡住实际目标的墙仍由角色的通用破障路径处理。
+      store[name].rebuildIgnoreStructureIds = [...new Set([
+        ...[...previous].filter(item => item.startsWith("structure:")).map(item => item.slice("structure:".length)),
+        ...room.find(FIND_STRUCTURES).filter(s => s.structureType === STRUCTURE_WALL).map(s => s.id),
+      ])];
       target.lastTriggeredAt = Game.time;
       target.triggerCount = (target.triggerCount ?? 0) + 1;
       target.blocker = "clear_active";

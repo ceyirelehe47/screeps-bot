@@ -5,6 +5,7 @@ import { prepareCombatBoost } from "@/roles/combatBoosts";
 import { constrainTowerDrainBreachPath, moveTowerDrainBorderAttack, runTowerDrainPair } from "@/roles/towerDrainPair";
 import { measureCreepDecision, measureCreepIntent } from "@/runtime/cpuPhaseProfiler";
 import type { RoleFactory } from "@/types/system";
+import { getCreepRebuildIgnoredStructures, isRebuildStructureRelevant } from "@/runtime/warRebuildScope";
 
 const TRAVEL_OPTIONS = { plainCost: 2, swampCost: 8, routePurpose: "combat" } as const;
 const TARGET_ROOM_MOVE_OPTIONS = {
@@ -41,14 +42,16 @@ function getHostileCreeps(room: Room): Creep[] {
   });
 }
 
-function getHostileStructures(room: Room, includeNeutralWalls = false): Structure[] {
+function getHostileStructures(room: Room, includeNeutralWalls = false, creep?: Creep): Structure[] {
   const hostile: Structure<StructureConstant>[] = room.find(FIND_HOSTILE_STRUCTURES, {
     filter: (structure) =>
       structure.structureType !== STRUCTURE_CONTROLLER && structure.structureType !== STRUCTURE_KEEPER_LAIR,
   });
-  if (!includeNeutralWalls) return hostile;
+  const ignored = creep ? getCreepRebuildIgnoredStructures(creep) : undefined;
+  if (!includeNeutralWalls) return hostile.filter(s => isRebuildStructureRelevant(s, ignored));
   const ids = new Set(hostile.map((structure) => structure.id));
-  return [...hostile, ...room.find(FIND_STRUCTURES).filter((structure) => structure.structureType === STRUCTURE_WALL && !ids.has(structure.id))];
+  return [...hostile, ...room.find(FIND_STRUCTURES).filter((structure) => structure.structureType === STRUCTURE_WALL && !ids.has(structure.id))]
+    .filter(s => isRebuildStructureRelevant(s, ignored));
 }
 
 export function findTarget(creep: Creep): Creep | Structure | null {
@@ -64,7 +67,7 @@ export function findTarget(creep: Creep): Creep | Structure | null {
     return creep.pos.findClosestByRange(hostileCreeps);
   }
 
-  const hostileStructures = getHostileStructures(creep.room);
+  const hostileStructures = getHostileStructures(creep.room, false, creep);
   if (hostileStructures.length === 0) {
     return null;
   }
@@ -88,7 +91,7 @@ export function findTarget(creep: Creep): Creep | Structure | null {
 
 export function findWarObjectiveTarget(creep: Creep, includeNeutralWalls = false): Creep | Structure | null {
   const hostileCreeps = getHostileCreeps(creep.room);
-  const hostileStructures = getHostileStructures(creep.room, includeNeutralWalls);
+  const hostileStructures = getHostileStructures(creep.room, includeNeutralWalls, creep);
   const rampartPositions = new Set(
     hostileStructures
       .filter((structure) => structure.structureType === STRUCTURE_RAMPART)
@@ -214,7 +217,7 @@ function chooseWarApproach(creep: Creep, includeNeutralWalls: boolean): { target
   if (first.open) return { target: preferred, approach: first };
   // 最近的目标被封住时，先处理同类或其它核心可达目标，不能把全队锁在一面墙前。
   const order: StructureConstant[] = [STRUCTURE_SPAWN, STRUCTURE_TOWER, STRUCTURE_STORAGE, STRUCTURE_TERMINAL, STRUCTURE_INVADER_CORE];
-  const structures = getHostileStructures(creep.room, includeNeutralWalls).filter((structure) => structure.id !== preferred.id);
+  const structures = getHostileStructures(creep.room, includeNeutralWalls, creep).filter((structure) => structure.id !== preferred.id);
   for (const target of structures.filter((structure) => creep.pos.getRangeTo(structure.pos) <= 1)) {
     const approach = findCombatApproach(creep, target, includeNeutralWalls);
     if (approach.open) return { target, approach };
@@ -258,7 +261,7 @@ function findWeakestAdjacentBreachTarget(creep: Creep, target?: Creep | Structur
 }
 
 function findWeakestAdjacentHostileStructure(creep: Creep, target?: Creep | Structure): Structure | null {
-  const hostileIds = new Set(getHostileStructures(creep.room).map((structure) => structure.id));
+  const hostileIds = new Set(getHostileStructures(creep.room, false, creep).map((structure) => structure.id));
   const candidates = findAdjacentStructures(creep).filter((structure) => hostileIds.has(structure.id));
   if (candidates.length === 0) return null;
 
@@ -899,7 +902,7 @@ export const meleeAttackerRole: RoleFactory = (
     }
 
     if (code === ERR_INVALID_TARGET && (target as Creep | Structure).id) {
-      const fallback = creep.pos.findClosestByRange(getHostileStructures(creep.room, tactic === "towerDrainDuo"));
+      const fallback = creep.pos.findClosestByRange(getHostileStructures(creep.room, tactic === "towerDrainDuo", creep));
       if (fallback) {
         const fallbackCode = measureCreepIntent(() => creep.attack(fallback));
         if (fallbackCode === ERR_NOT_IN_RANGE) {

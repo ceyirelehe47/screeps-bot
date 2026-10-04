@@ -147,6 +147,35 @@ function makeCreep(opts: {
   } as unknown as Creep;
 }
 
+describe("外矿入口 link 卸载", () => {
+  it("送到已规划入口 link，满载等待发送时不会反向走回 storage", () => {
+    const structures: Structure[] = [];
+    const home = makeRoom("W1N1", { structures });
+    Object.assign(home, { controller: { my: true, level: 8, pos: makePos(20, 20, home.name) },
+      storage: { id: "store", structureType: STRUCTURE_STORAGE, pos: makePos(10, 25, home.name), store: createStore({}, 1000000) } });
+    const entry = { id: "entry", structureType: STRUCTURE_LINK, room: home, pos: makePos(47, 19, home.name),
+      isActive: () => true, store: createStore({ energy: 800 }, 800) } as unknown as StructureLink;
+    const receiver = { id: "receiver", structureType: STRUCTURE_LINK, room: home, pos: makePos(11, 25, home.name),
+      isActive: () => true, store: createStore({}, 800) } as unknown as StructureLink;
+    structures.push(entry, receiver);
+    Game.rooms[home.name] = home;
+    Game.map.describeExits = jest.fn(() => ({ [RIGHT]: "W5N5" }));
+    Memory.data = { roomPlanner: { W1N1: { savedAt: 0, timestamp: "", layout: { remote_entry_link: [{ x: 47, y: 19 }] } } },
+      remoteMining: { W5N5: { sourceRoom: home.name, targetRoom: "W5N5", status: "active", assignedAt: 1, updatedAt: 1,
+        sourceIds: ["s1", "s2"], roadPlan: { generatedAt: 1, positions: [{ x: 0, y: 20, roomName: "W5N5" }] } } } };
+    const creep = makeCreep({ room: home, energy: 1000, capacity: 1200, pos: makePos(48, 20, home.name) });
+    creep.transfer = jest.fn(() => ERR_FULL);
+    const role = remoteMiningCarrierRole("W5N5", "s1");
+    role.target(creep); Game.time++; role.target(creep);
+    expect(creep.transfer).toHaveBeenNthCalledWith(1, entry, RESOURCE_ENERGY);
+    expect(creep.transfer).toHaveBeenNthCalledWith(2, entry, RESOURCE_ENERGY);
+    expect(moveToTarget).not.toHaveBeenCalled();
+    Object.assign(receiver, { isActive: () => false });
+    Game.time++; role.target(creep);
+    expect(creep.transfer).toHaveBeenLastCalledWith(home.storage, RESOURCE_ENERGY);
+  });
+});
+
 describe("partial withdrawal and maintenance", () => {
 
   it("explicit-source carrier uses its planned container position instead of a neighboring source container", () => {

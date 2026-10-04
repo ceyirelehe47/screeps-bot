@@ -274,6 +274,7 @@ declare global {
         routeTrace?: { hops: number; avoided: Record<string, string>; policy: "map_combat" | "manual" };
         npcAuto?: true;
         lootAfterClear?: true;
+        rebuildIgnoreStructureIds?: string[];
         sharedSquadWatchId?: string;
         combatClearedAt?: number;
         combatClearSince?: number;

@@ -78,12 +78,16 @@ const RESOURCE_CONTROL_TERMINAL_PRELOAD_PRODUCER = "resourceControl:preload";
 const MIN_CARRIER_DROPPED_RESOURCE_PICKUP_AMOUNT = 50;
 
 interface CarrierPickupOptions {
+  receiverLinksOnly?: boolean;
   includeStorage?: boolean;
   includeProtoStorage?: boolean;
   includeTerminal?: boolean;
   terminalEnergyReserve?: number;
   terminalBootstrapRoomName?: string;
 }
+
+const receiverLinkPickupTicks = new WeakMap<Creep, number>();
+const receiverLinkFlushOwners = new Set<string>();
 
 function isTerminalPickupEnabledForRoom(roomName: string): boolean {
   const configRooms = Memory.cfg?.energyPickup?.terminalPickupRooms;
@@ -252,7 +256,9 @@ function getWeightedCarrierPickupCandidates(creep: Creep, options?: CarrierPicku
         ? [creep.room.terminal]
         : [];
 
-    const candidates: CarrierPickupTarget[] = [...dropped, ...structures, ...tombstones, ...ruins, ...storage, ...terminal];
+    const candidates: CarrierPickupTarget[] = options?.receiverLinksOnly
+      ? structures.filter(s => s.structureType === STRUCTURE_LINK && s.store.getUsedCapacity(RESOURCE_ENERGY) >= (s.store.getCapacity(RESOURCE_ENERGY) ?? 800) / 2)
+      : [...dropped, ...structures, ...tombstones, ...ruins, ...storage, ...terminal];
     if (candidates.length === 0) {
       return [];
     }
@@ -290,6 +296,7 @@ function isCarrierPickupTarget(
   target: Resource | AnyStoreStructure | Tombstone | Ruin,
   options?: CarrierPickupOptions,
 ): target is CarrierPickupTarget {
+  if (options?.receiverLinksOnly && (!("structureType" in target) || target.structureType !== STRUCTURE_LINK)) return false;
   if (isDroppedResourceTarget(target)) {
     return shouldCarrierPickUpDroppedResource(creep, target);
   }
@@ -1806,6 +1813,7 @@ function deliverSynthesisCarrierResource(creep: Creep): boolean {
 export const carrierRole: RoleFactory = () => ({
   source: (creep): boolean => {
     clearPostTransferPlan(creep);
+    if (receiverLinkPickupTicks.get(creep) === Game.time) return false;
 
     const assignedRoomName = getAssignedCarrierRoomName(creep);
     const terminalBootstrapReserve = creep.room.name === assignedRoomName
@@ -1826,6 +1834,7 @@ export const carrierRole: RoleFactory = () => ({
       releasePickupReservation(creep);
       return true;
     }
+    if (receiverLinkFlushOwners.delete(creep.name)) delete deliveryState.carrierStorageOnlyMode;
 
     if (hasRunnablePowerBankBoostCarrierTask(assignedRoomName)) {
       const powerBankBoostPickup = pickupSynthesisCarrierResource(creep, isPowerBankBoostCarrierTask, false);
@@ -1866,6 +1875,22 @@ export const carrierRole: RoleFactory = () => ({
         assignedRoomName,
         terminalBootstrapReserve,
       ).switched;
+    }
+
+    // 解开 link 网络背压优先于后台补给；实际领取仍复用普通能量预约和移动。
+    const congestedReceiver = (getTickContextService().getRoomContext(creep.room)?.getLinks() ?? []).some(l =>
+      isStorageReceiverLink(l) && !isControllerAdjacentLink(l)
+      && l.store.getUsedCapacity(RESOURCE_ENERGY) >= (l.store.getCapacity(RESOURCE_ENERGY) ?? 800) / 2);
+    if (congestedReceiver && deliveryState.synthesisCarrierPendingPickupTick !== Game.time &&
+      (creep.room.storage?.store.getFreeCapacity(RESOURCE_ENERGY) ?? 0) > 0) {
+      const flush = pickupEnergyForCarrier(creep, { receiverLinksOnly: true, includeStorage: false, includeTerminal: false });
+      if (flush.picked || flush.outOfRange) {
+        clearSynthesisCarrierTaskPlan(creep);
+        deliveryState.carrierStorageOnlyMode = true;
+        receiverLinkFlushOwners.add(creep.name);
+        if (flush.picked) receiverLinkPickupTicks.set(creep, Game.time);
+        return false;
+      }
     }
 
     if (hasRunnablePowerSpawnSupplyCarrierTask(assignedRoomName)) {

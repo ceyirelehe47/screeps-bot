@@ -7,6 +7,7 @@ import {
   type LinkRoomRuntimeView,
 } from "@/runtime/linkNetworkMemory";
 import { getTickContextService } from "@/runtime/runtimeServices";
+import { isRemoteEntranceLink } from "@/runtime/remoteEntranceLink";
 
 const CLASSIFY_INTERVAL = 11;
 const LINKED_SOURCE_CONTAINER_CLEANUP_INTERVAL = 101;
@@ -38,7 +39,7 @@ function classifyRoomLinks(room: Room): LinkRoomRuntimeSnapshot {
     }
 
     const nearSource = sources.some((source) => link.pos.getRangeTo(source.pos) <= SOURCE_SENDER_RANGE);
-    if (nearSource) {
+    if (nearSource || isRemoteEntranceLink(link)) {
       senderIds.push(link.id);
     }
   }
@@ -121,8 +122,9 @@ function chooseReceiverTarget(sender: StructureLink, receiverLinks: StructureLin
   const validReceivers = receiverLinks
     .filter((receiver) => receiver.id !== sender.id && isLinkUnderfilled(receiver))
     .sort((a, b) => {
-      const aControllerPriority = isControllerReceiver(a) ? 0 : 1;
-      const bControllerPriority = isControllerReceiver(b) ? 0 : 1;
+      const entrySender = isRemoteEntranceLink(sender);
+      const aControllerPriority = (entrySender ? isStorageReceiverByPosition(a) : isControllerReceiver(a)) ? 0 : 1;
+      const bControllerPriority = (entrySender ? isStorageReceiverByPosition(b) : isControllerReceiver(b)) ? 0 : 1;
       if (aControllerPriority !== bControllerPriority) {
         return aControllerPriority - bControllerPriority;
       }

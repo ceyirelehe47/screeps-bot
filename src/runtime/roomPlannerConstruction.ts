@@ -1,6 +1,7 @@
 import { runPlannerForRoom, savePlannerForRoom } from "@/modules/autoplanner";
 import { getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
 import { hasSourceAdjacentLink } from "@/runtime/sourceLink";
+import { addRemoteEntranceLinkPlans, REMOTE_ENTRANCE_LINK_LAYOUT_KEY } from "@/runtime/remoteEntranceLink";
 
 const CONSTRUCTION_PRIORITY: BuildableStructureConstant[] = [
   STRUCTURE_SPAWN,
@@ -68,8 +69,9 @@ const LAYOUT_WORK_POS = 'work_pos';
 
 const LINK_PRIORITY_STORAGE = 0;
 const LINK_PRIORITY_SOURCE = 1;
-const LINK_PRIORITY_OTHER = 2;
-const LINK_PRIORITY_CONTROLLER = 3;
+const LINK_PRIORITY_REMOTE = 2;
+const LINK_PRIORITY_OTHER = 3;
+const LINK_PRIORITY_CONTROLLER = 4;
 
 interface PlannedLinkOrder {
   pos: { x: number; y: number };
@@ -290,6 +292,10 @@ function getSortedLinkPlannedPositions(room: Room, layout: PlannedLayout): { x: 
         commuteDistance: getPathDistance(anchor, nearestSource.pos),
         referenceDistance,
       };
+    }
+
+    if ((layout[REMOTE_ENTRANCE_LINK_LAYOUT_KEY] ?? []).some(p => p.x === pos.x && p.y === pos.y)) {
+      return { pos, priority: LINK_PRIORITY_REMOTE, commuteDistance: 0, referenceDistance };
     }
 
     return {
@@ -856,6 +862,7 @@ export function runRoomPlannerConstruction(): void {
 
     const controllerLevel = room.controller?.level ?? 0;
     const layout = roomPlan.layout;
+    if (addRemoteEntranceLinkPlans(room, layout)) roomPlan.savedAt = Game.time;
 
     runProtoSourceContainerManagement(room.name);
     runProtoStorageManagement(room, layout, controllerLevel);

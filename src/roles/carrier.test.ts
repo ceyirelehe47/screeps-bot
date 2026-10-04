@@ -514,6 +514,36 @@ describe("carrierRole mineral hauling", () => {
 
   beforeEach(resetCarrierFixture);
 
+  it("优先清空接收 link，实际 Store 次帧到货后归仓，同 tick 不重复领取", () => {
+    useActualEnergyPickupReservationsForTest();
+    const room = createRoom("W1N1", { terminal: null });
+    const storage = room.storage!;
+    Object.assign(storage, { room, pos: new RoomPosition(10, 10, room.name) });
+    Object.assign(room.controller!, { pos: new RoomPosition(25, 25, room.name) });
+    let energy = 800, cargo = 0;
+    const receiver = { id: "receiver-link", structureType: STRUCTURE_LINK, room, pos: new RoomPosition(11, 10, room.name),
+      store: { getUsedCapacity: () => energy, getFreeCapacity: () => 800 - energy, getCapacity: () => 800 } } as unknown as StructureLink;
+    room.find = jest.fn((kind: FindConstant) => kind === FIND_STRUCTURES ? [storage, receiver] : []) as Room["find"];
+    const creep = createCreep(room);
+    Object.assign(creep, { pos: new RoomPosition(10, 11, room.name), store: {
+      getUsedCapacity: (resource?: ResourceConstant) => resource === undefined || resource === RESOURCE_ENERGY ? cargo : 0,
+      getFreeCapacity: () => 1000 - cargo, getCapacity: () => 1000,
+    } });
+    Game.creeps = { [creep.name]: creep };
+    installCarrierTaskTestObjects([storage, receiver]);
+    getEnergyStoreTarget.mockReturnValue(null);
+    const role = carrierRole();
+    expect(role.source(creep)).toBe(false);
+    expect(creep.withdraw).toHaveBeenCalledWith(receiver, RESOURCE_ENERGY);
+    expect(role.source(creep)).toBe(false);
+    expect(creep.withdraw).toHaveBeenCalledTimes(1);
+    expect(ensureCreepAssignmentState(creep.name).carrierStorageOnlyMode).toBe(true);
+    Game.time++; cargo = 800; energy = 0;
+    expect(role.source(creep)).toBe(true);
+    role.target(creep);
+    expect(creep.transfer).toHaveBeenCalledWith(storage, RESOURCE_ENERGY, expect.any(Number));
+  });
+
   it("低能量 Tower 可从 Storage/proto 取能，但不继承 Spawn 的 Terminal bootstrap 授权", () => {
     const createLowTower = (room: Room): StructureTower => ({
       id: `${room.name}-low-tower`,

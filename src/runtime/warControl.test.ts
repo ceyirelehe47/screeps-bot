@@ -1049,6 +1049,32 @@ describe("清剿后Observer重建监视", () => {
     expect(Memory.data!.war!.E3N57.status).toBe("staging");
   });
 
+  it("补剿只清除重建证据，creep 消失后不为旧空 rampart 和 extractor 补兵", () => {
+    Memory.cfg!.warRebuildWatch![id].sharedSquad = true;
+    Memory.data!.war = {};
+    Memory.runtime!.warRebuildWatch = { [id]: { armedAt: Game.time, clearedRooms: [...rooms], targets: {
+      E3N57: { lastTriggeredEvidenceIds: ["structure:old-rampart", "structure:old-extractor"] },
+    } } };
+    const source = Game.rooms.E1N57; source.energyAvailable = source.energyCapacityAvailable = 12900;
+    Game.spawns = { Spawn1: createSpawn(source) };
+    let actors = [{ id: "rebuilding-creep", owner: { username: "TooAngel" } } as Creep];
+    const structures = [{ id: "old-rampart", owner: { username: "TooAngel" }, structureType: STRUCTURE_RAMPART },
+      { id: "old-extractor", owner: { username: "TooAngel" }, structureType: STRUCTURE_EXTRACTOR }];
+    const room = createTargetRoom(); room.controller!.owner = { username: "TooAngel" }; room.controller!.level = 3;
+    room.find = jest.fn((kind: FindConstant) => kind === FIND_HOSTILE_CREEPS ? actors : kind === FIND_HOSTILE_STRUCTURES || kind === FIND_STRUCTURES ? structures : []) as Room["find"];
+    runWarControl(); observe("E3N57", room);
+    expect(Memory.data!.war!.E3N57.rebuildIgnoreStructureIds).toEqual(["old-rampart", "old-extractor"]);
+    Game.time++; runWarControl();
+    expect(Memory.data!.war!.E3N57.activeGeneration).toBeDefined();
+    actors = [];
+    Game.time++; runWarControl();
+    expect(Memory.data!.war!.E3N57.activeGeneration).toBeUndefined();
+    expect(Object.keys(Memory.data!.creepConfigs!).filter(n => n.includes(":war:E3N57:"))).toEqual([]);
+    Game.time += 19; runWarControl();
+    expect(Memory.data!.war!.E3N57.combatClearedAt).toBe(Game.time);
+    expect(Memory.data!.war!.E3N57.status).toBe("downgrading");
+  });
+
   it("清场完成时留下的旧工地不触发，新工地才触发", () => {
     let sites = [{ id: "old-site", owner: { username: "TooAngel" } }];
     const room = createTargetRoom();

@@ -3,6 +3,7 @@ import { clearMovementState, moveToTarget, moveToTargetRoom } from "@/roles/shar
 import { measureCreepDecision, measureCreepIntent } from "@/runtime/cpuPhaseProfiler";
 import { getMyUsername } from "@/runtime/remoteMining";
 import { getTickContextService } from "@/runtime/runtimeServices";
+import { getRemoteEntranceDeliveryLink } from "@/runtime/remoteEntranceLink";
 
 import type { RoomTickContext } from "@/runtime/tickContext";
 import type { RoleFactory } from "@/types/system";
@@ -450,7 +451,7 @@ export const remoteMiningCarrierRole: RoleFactory = (targetRoom: string, sourceI
         return false;
       }
 
-      const target = measureCreepDecision(() => getDeliveryTarget(homeRoomName));
+      const target = measureCreepDecision(() => getRemoteEntranceDeliveryLink(creep, targetRoom) ?? getDeliveryTarget(homeRoomName));
       if (!target) {
         clearMovementState(creep);
         return false;
