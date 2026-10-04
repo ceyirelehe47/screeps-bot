@@ -7,7 +7,19 @@ class Pos {
   getRangeTo(value: { pos?: RoomPosition; x?: number; y?: number }): number {
     const p = value.pos ?? value; return Math.max(Math.abs(this.x - p.x!), Math.abs(this.y - p.y!));
   }
-  findPathTo(_target: RoomPosition, opts: FindPathOpts): PathStep[] { expect(opts.swampCost).toBe(10); return path; }
+  findPathTo(target: RoomPosition, opts: FindPathOpts): PathStep[] {
+    expect(opts.swampCost).toBe(10);
+    if (this.x === 49 && this.y === 20) {
+      if (this.getRangeTo(target) <= 6) {
+        return Array.from({ length: Math.max(0, this.getRangeTo(target) - 1) }, (_, i) => ({
+          x: this.x + Math.sign(target.x - this.x) * Math.min(i + 1, Math.abs(target.x - this.x)),
+          y: this.y + Math.sign(target.y - this.y) * Math.min(i + 1, Math.abs(target.y - this.y)),
+        } as PathStep));
+      }
+      return [...path].reverse();
+    }
+    return path;
+  }
 }
 const pos = (x: number, y: number) => new Pos(x, y, "W1N1") as unknown as RoomPosition;
 function link(id: string, x: number, y: number, room: Room): StructureLink {
@@ -58,7 +70,9 @@ it("坐标接近但真实寻路绕远时仍规划，不用直线距离否定收�
 
 it.each([12, 17, 29])("实际可省路程仅 %i 步时不占用新 link 额度", length => {
   const w = world();
-  path = Array.from({ length }, (_, i) => ({ x: 49 - length + i, y: 20 } as PathStep));
+  w.room.storage!.pos = pos(47 - length, 20); w.links[0].pos = pos(48 - length, 20);
+  w.layout.link[0] = { x: 48 - length, y: 20 };
+  path = Array.from({ length: length + 1 }, (_, i) => ({ x: 48 - length + i, y: 20 } as PathStep));
   expect(addRemoteEntranceLinkPlans(w.room, w.layout)).toBe(false);
   expect(w.layout.link).toHaveLength(1);
   expect(w.layout[REMOTE_ENTRANCE_LINK_LAYOUT_KEY] ?? []).toEqual([]);
@@ -66,8 +80,17 @@ it.each([12, 17, 29])("实际可省路程仅 %i 步时不占用新 link 额度",
 
 it("实际可省 30 步时进入候选，仍须有建设额度和接收网络", () => {
   const w = world();
-  path = Array.from({ length: 30 }, (_, i) => ({ x: 19 + i, y: 20 } as PathStep));
+  w.room.storage!.pos = pos(17, 20); w.links[0].pos = pos(18, 20); w.layout.link[0] = { x: 18, y: 20 };
+  path = Array.from({ length: 31 }, (_, i) => ({ x: 18 + i, y: 20 } as PathStep));
   expect(addRemoteEntranceLinkPlans(w.room, w.layout)).toBe(true);
+});
+
+it("入口至仓库 30 步、至 link 卸货处 1 步时仅省 29 步，不建", () => {
+  const w = world();
+  w.room.storage!.pos = pos(18, 20); w.links[0].pos = pos(19, 20); w.layout.link[0] = { x: 19, y: 20 };
+  path = Array.from({ length: 30 }, (_, i) => ({ x: 19 + i, y: 20 } as PathStep));
+  expect(addRemoteEntranceLinkPlans(w.room, w.layout)).toBe(false);
+  expect(w.layout.link).toHaveLength(1);
 });
 
 it("保留源矿/控制器的规划额度，额度满时不破坏现有 link", () => {

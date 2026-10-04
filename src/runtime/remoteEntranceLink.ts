@@ -8,6 +8,15 @@ const MIN_SAVED_STEPS = 30;
 type Layout = Record<string, { x: number; y: number }[]>;
 interface Entrance { targetRoom: string; pos: RoomPosition }
 const same = (a: { x: number; y: number }, b: { x: number; y: number }): boolean => a.x === b.x && a.y === b.y;
+const WALK_OPTIONS: FindPathOpts = { range: 1, maxRooms: 1, ignoreCreeps: true, plainCost: 2, swampCost: 10, maxOps: 2000 };
+
+function walkingDistance(origin: RoomPosition, target: RoomPosition): number | null {
+  if (origin.getRangeTo(target) <= 1) return 0;
+  const path = origin.findPathTo(target, WALK_OPTIONS);
+  const last = path[path.length - 1];
+  if (!last || new RoomPosition(last.x, last.y, origin.roomName).getRangeTo(target) > 1) return null;
+  return path.length;
+}
 
 function getEntrances(room: Room, activeOnly = false): Entrance[] {
   const exits = Game.map.describeExits?.(room.name);
@@ -76,8 +85,11 @@ export function addRemoteEntranceLinkPlans(room: Room, layout: Layout): boolean 
       continue;
     }
     if (spare <= 0 || typeof room.storage.pos.findPathTo !== "function") continue;
-    const path = room.storage.pos.findPathTo(entry.pos, { range: 1, maxRooms: 1, ignoreCreeps: true, plainCost: 2, swampCost: 10, maxOps: 2000 });
+    const path = room.storage.pos.findPathTo(entry.pos, WALK_OPTIONS);
     if (path.length < MIN_SAVED_STEPS) continue;
+    const homeDistance = walkingDistance(entry.pos, room.storage.pos);
+    // 可建位置离边界至少两格，走到卸货范围至少还要一步。
+    if (homeDistance === null || homeDistance <= MIN_SAVED_STEPS) continue;
     const walkKeys = new Set(path.map(p => `${p.x}:${p.y}`));
     const occupied = new Set(structures.filter(s => s.structureType !== STRUCTURE_RAMPART).map(s => `${s.pos.x}:${s.pos.y}`));
     for (const site of sites) occupied.add(`${site.pos.x}:${site.pos.y}`);
@@ -99,8 +111,12 @@ export function addRemoteEntranceLinkPlans(room: Room, layout: Layout): boolean 
       }
     }
     candidates.sort((a, b) => b.saved - a.saved || terrain.get(a.x, a.y) - terrain.get(b.x, b.y) || a.x - b.x || a.y - b.y);
-    const chosen = candidates[0];
-    if (!chosen || chosen.saved < Math.max(MIN_SAVED_STEPS, Math.ceil(path.length / 4))) continue;
+    // 道路节点只决定尝试顺序；收益必须扣除入口到 link 卸货范围的真实步数。
+    const chosen = candidates.find(candidate => {
+      const deliveryDistance = walkingDistance(entry.pos, new RoomPosition(candidate.x, candidate.y, room.name));
+      return deliveryDistance !== null && homeDistance - deliveryDistance >= Math.max(MIN_SAVED_STEPS, Math.ceil(homeDistance / 4));
+    });
+    if (!chosen) continue;
     const pos = { x: chosen.x, y: chosen.y };
     planned.push(pos); markers.push({ ...pos }); spare--; changed = true;
   }
