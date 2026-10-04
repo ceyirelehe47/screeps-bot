@@ -51,14 +51,12 @@ export function towerDrainPairRange(left: RoomPosition, right: RoomPosition): nu
 }
 
 function directionToRoom(from: string, to: string): DirectionConstant | undefined {
-  const a = roomCoordinate(from);
-  const b = roomCoordinate(to);
+  const a = roomCoordinate(from); const b = roomCoordinate(to);
   if (!a || !b) return undefined;
-  if (a.x === b.x && a.y - 1 === b.y) return TOP;
-  if (a.x + 1 === b.x && a.y === b.y) return RIGHT;
-  if (a.x === b.x && a.y + 1 === b.y) return BOTTOM;
-  if (a.x - 1 === b.x && a.y === b.y) return LEFT;
-  return undefined;
+  const candidate = a.x === b.x && a.y - 1 === b.y ? TOP : a.x + 1 === b.x && a.y === b.y ? RIGHT
+    : a.x === b.x && a.y + 1 === b.y ? BOTTOM : a.x - 1 === b.x && a.y === b.y ? LEFT : undefined;
+  if (!candidate || Game.map.describeExits(from)?.[candidate] !== to || Game.map.describeExits(to)?.[opposite(candidate)] !== from) return undefined;
+  return candidate;
 }
 
 function opposite(direction: DirectionConstant): DirectionConstant {
@@ -107,30 +105,14 @@ function damageAt(towers: StructureTower[], tile: { x: number; y: number }): num
 
 interface TowerThreat { tower: StructureTower; refillAt: number; live: boolean }
 
-/** 最早补能时间取物理下界：搬运者每tick至多一格；不预支取能/转移耗时。 */
+/** 只计已具备开火能量的塔及近旁实际带能的补给；库存和未来出生不等于已发生补能。 */
 function towerThreats(room: Room): TowerThreat[] {
-  const structures = room.find(FIND_HOSTILE_STRUCTURES);
-  const carriers = room.find(FIND_HOSTILE_CREEPS).filter((actor) => actor.body.some((part) => part.type === CARRY && part.hits > 0));
-  const stores = structures.some((structure) => structure.structureType !== STRUCTURE_TOWER && "store" in structure && (structure as AnyStoreStructure).store.getUsedCapacity(RESOURCE_ENERGY) > 0)
-    || room.find(FIND_DROPPED_RESOURCES).some((resource) => resource.resourceType === RESOURCE_ENERGY && resource.amount > 0)
-    || room.find(FIND_TOMBSTONES).some((remains) => remains.store.getUsedCapacity(RESOURCE_ENERGY) > 0)
-    || room.find(FIND_RUINS).some((remains) => remains.store.getUsedCapacity(RESOURCE_ENERGY) > 0);
-  const spawns = structures.filter((structure): structure is StructureSpawn => structure.structureType === STRUCTURE_SPAWN);
-  const spawnEnergy = structures.filter((structure) => structure.structureType === STRUCTURE_SPAWN || structure.structureType === STRUCTURE_EXTENSION)
-    .reduce((sum, structure) => sum + (structure as StructureSpawn | StructureExtension).store.getUsedCapacity(RESOURCE_ENERGY), 0);
+  const carriers = room.find(FIND_HOSTILE_CREEPS).filter((actor) => actor.store.getUsedCapacity(RESOURCE_ENERGY) > 0 && actor.body.some((part) => part.type === CARRY && part.hits > 0));
   return activeTowers(room).map((tower) => {
-    if (tower.store.getUsedCapacity(RESOURCE_ENERGY) >= TOWER_ENERGY_COST) return { tower, refillAt: 0, live: true };
-    let refillAt = Infinity;
-    for (const carrier of carriers) {
-      if (!stores && carrier.store.getUsedCapacity(RESOURCE_ENERGY) <= 0) continue;
-      refillAt = Math.min(refillAt, Math.max(0, range(carrier.pos, tower.pos) - 1));
-    }
-    if (stores) for (const spawn of spawns) {
-      // 未知正在出生的body按可补能处理；新CARRY+MOVE至少出生6tick。
-      const birth = spawn.spawning?.remainingTime ?? (spawnEnergy >= BODYPART_COST[CARRY] + BODYPART_COST[MOVE] ? 2 * CREEP_SPAWN_TIME : Infinity);
-      refillAt = Math.min(refillAt, birth + Math.max(0, range(spawn.pos, tower.pos) - 1));
-    }
-    return { tower, refillAt, live: false };
+    const energy = tower.store.getUsedCapacity(RESOURCE_ENERGY);
+    const live = energy >= TOWER_ENERGY_COST;
+    const immediateRefill = carriers.some((actor) => range(actor.pos, tower.pos) <= 1 && actor.store.getUsedCapacity(RESOURCE_ENERGY) >= TOWER_ENERGY_COST - energy);
+    return { tower, live, refillAt: live ? 0 : immediateRefill ? 1 : Infinity };
   });
 }
 
@@ -485,6 +467,10 @@ export function runTowerDrainPair(creep: Creep, targetRoom: string, partnerConfi
   const room = Game.rooms[targetRoom];
   if (room?.controller?.my) { state.blocker = "target_owned"; publish(state, attacker, healer); return true; }
   if (creep === healer) healPair(healer, attacker);
+  if (state.retreatRoom && directionToRoom(targetRoom, state.retreatRoom) === undefined) {
+    delete state.retreatRoom; delete state.exitDirection; delete state.attackerEntry; delete state.healerEntry;
+    state.phase = "approach"; state.blocker = undefined;
+  }
   const outsideMember = [attacker, healer].find((member) => member.room.name !== targetRoom && directionToRoom(targetRoom, member.room.name));
   if (!state.retreatRoom && outsideMember) {
     state.retreatRoom = outsideMember.room.name;

@@ -205,6 +205,22 @@ function findCombatApproach(creep: Creep, target: Creep | Structure): WarCombatA
   return { open: false, breach: null };
 }
 
+function chooseWarApproach(creep: Creep, includeNeutralWalls: boolean): { target: Creep | Structure; approach: WarCombatApproach } | null {
+  const preferred = findWarObjectiveTarget(creep, includeNeutralWalls);
+  if (!preferred) return null;
+  const first = findCombatApproach(creep, preferred);
+  if (first.open) return { target: preferred, approach: first };
+  // 最近的目标被封住时，先处理同类或其它核心可达目标，不能把全队锁在一面墙前。
+  const order: StructureConstant[] = [STRUCTURE_SPAWN, STRUCTURE_TOWER, STRUCTURE_STORAGE, STRUCTURE_TERMINAL, STRUCTURE_INVADER_CORE];
+  const structures = getHostileStructures(creep.room, includeNeutralWalls).filter((structure) => structure.id !== preferred.id);
+  for (const type of order) for (const target of structures.filter((structure) => structure.structureType === type)
+    .sort((left, right) => creep.pos.getRangeTo(left.pos) - creep.pos.getRangeTo(right.pos))) {
+    const approach = findCombatApproach(creep, target);
+    if (approach.open) return { target, approach };
+  }
+  return { target: preferred, approach: first };
+}
+
 function findAdjacentStructures(creep: Creep): Structure[] {
   if (typeof creep.pos.findInRange === "function") return creep.pos.findInRange(FIND_STRUCTURES, 1);
   if (typeof creep.room.find !== "function") return [];
@@ -841,7 +857,8 @@ export const meleeAttackerRole: RoleFactory = (
     if (tactic !== "towerDrainDuo" && targetRoom && creep.room.name === targetRoom && runCounterstrikeApproach(creep)) return false;
 
     const targetMoveOptions = targetRoom ? getTargetRoomMoveOptions(creep, tactic === "towerDrainDuo") : TARGET_ROOM_MOVE_OPTIONS;
-    const target = measureCreepDecision(() => (targetRoom ? findWarObjectiveTarget(creep, tactic === "towerDrainDuo") : findTarget(creep)));
+    const warApproach = targetRoom ? measureCreepDecision(() => chooseWarApproach(creep, tactic === "towerDrainDuo")) : null;
+    const target = targetRoom ? warApproach?.target : measureCreepDecision(() => findTarget(creep));
     if (!target) {
       delete creep.memory._warBreachTargetId;
       if (targetRoom) {
@@ -850,7 +867,7 @@ export const meleeAttackerRole: RoleFactory = (
       return false;
     }
 
-    const approach = targetRoom ? measureCreepDecision(() => findCombatApproach(creep, target)) : undefined;
+    const approach = warApproach?.approach;
     if (targetRoom) {
       const plannedBreach = approach?.breach;
       if (plannedBreach) {

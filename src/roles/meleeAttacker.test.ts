@@ -166,6 +166,29 @@ describe("meleeAttackerRole war duo staging", () => {
     expect(moveToTarget).toHaveBeenCalledWith(attacker, spawn, 1, expect.any(Object));
   });
 
+  it("最近核心目标封闭时先走另一个开放核心目标，不锁在旧墙前", () => {
+    const wall = hostileStructure(STRUCTURE_WALL, "sealed-wall", 2, 28, 500000);
+    const closed = hostileStructure(STRUCTURE_SPAWN, "closed-spawn", 5, 28, 5000);
+    const open = hostileStructure(STRUCTURE_SPAWN, "open-spawn", 25, 25, 5000);
+    const road = hostileStructure(STRUCTURE_ROAD, "open-road", 2, 32);
+    const attacker = createMockPowerBankCreep("meleeAttacker", { name: "red", roomName: TARGET_ROOM, x: 1, y: 28,
+      memory: { configName: ATTACKER_CONFIG, _warBreachTargetId: wall.id as Id<StructureWall> } });
+    const healer = createMockPowerBankCreep("healer", { name: "green", roomName: TARGET_ROOM, x: 1, y: 29, memory: { configName: HEALER_CONFIG } });
+    attacker.room.find = jest.fn((kind) => kind === FIND_STRUCTURES ? [wall, road, closed, open] : kind === FIND_HOSTILE_STRUCTURES ? [closed, open] : []) as Room["find"];
+    attacker.pos.findInRange = jest.fn(() => []) as RoomPosition["findInRange"];
+    attacker.attack = jest.fn(() => ERR_NOT_IN_RANGE);
+    Game.creeps = { red: attacker, green: healer };
+    (PathFinder.search as jest.Mock)
+      .mockReturnValueOnce({ path: [], incomplete: true })
+      .mockReturnValueOnce({ path: [wall.pos], incomplete: false })
+      .mockReturnValueOnce({ path: [road.pos], incomplete: false });
+    meleeAttackerRole(TARGET_ROOM, "", "", "", HEALER_CONFIG).target(attacker);
+    expect(attacker.attack).toHaveBeenCalledWith(open);
+    expect(attacker.attack).not.toHaveBeenCalledWith(wall);
+    expect(attacker.memory._warBreachTargetId).toBeUndefined();
+    expect(moveToTarget).toHaveBeenCalledWith(attacker, open, 1, expect.any(Object));
+  });
+
   it("开放路线确实不完整时才规划路径上的墙，保留必要突破", () => {
     const wall = hostileStructure(STRUCTURE_WALL, "sealed-wall", 2, 28, 500000);
     const spawn = hostileStructure(STRUCTURE_SPAWN, "sealed-spawn", 25, 25, 5000);
