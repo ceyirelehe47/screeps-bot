@@ -342,6 +342,7 @@ declare global {
         targetY: number;
         createdAt: number;
         updatedAt: number;
+        emptyObservedAt?: number;
       }
     >;
     crossShardColonization?: Record<
