@@ -232,6 +232,7 @@ declare global {
     | string;
   var stopWar: (targetRoom: string, suicide?: boolean) => string;
   var stopWarRaw: (targetRoom: string, options?: StopWarOptions) => StopWarResult | string;
+  var startWarRebuildWatch: (sourceRoom: string, targetRooms: string[], enemyUsername: string, intervalTicks?: number) => string;
   var startWar: (targetRoom: string, sourceRoom: string, squad?: "standard" | "t3Duo" | "towerDrainDuo", routeRooms?: string[] | string, oneShot?: boolean) => string;
   var startWarRaw: (targetRoom: string, sourceRoom: string, options?: StartWarOptions) => StartWarResult | string;
   var startWarPatrol: (sourceRoom: string, targetRooms: string[] | string, intervalTicks?: number) => string;

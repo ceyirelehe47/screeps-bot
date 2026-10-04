@@ -4,6 +4,13 @@ import type { DepositHarvestConfig } from "@/runtime/depositHarvest";
 declare global {
   interface ScreepsMemoryConfig {
     depositHarvest?: Partial<DepositHarvestConfig>;
+    /** 清剿全部完成后，由共用Observer周期复查指定对手的重建。 */
+    warRebuildWatch?: Record<string, {
+      sourceRoom: string;
+      targetRooms: string[];
+      enemyUsername: string;
+      intervalTicks: number;
+    }>;
     rooms?: Record<
       string,
       {

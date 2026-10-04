@@ -1,6 +1,6 @@
 jest.mock("@/runtime/powerBankObserver", () => ({ ...jest.requireActual("@/runtime/powerBankObserver"), requestCombatObservation: jest.fn(() => true) }));
 
-import { runWarControl, startWarRoom, stopWarRoom } from "@/runtime/warControl";
+import { configureWarRebuildWatch, runWarControl, startWarRoom, stopWarRoom } from "@/runtime/warControl";
 import * as combatBoosts from "@/runtime/powerBankBoost";
 import * as combatObserver from "@/runtime/powerBankObserver";
 import { createMockStore, MockPos } from "@mock/powerBank";
@@ -668,5 +668,124 @@ describe("towerDrainDuo 战争控制", () => {
     expect(Game.spawns.Spawn1.memory.spawnList.sort()).toEqual(survivingNames.sort());
     expect(Object.keys(Memory.data!.creepConfigs!).sort()).toEqual(survivingNames.sort());
     expect(release).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("清剿后Observer重建监视", () => {
+  const rooms = ["E3N57", "E3N53", "E2N54"];
+  let id: string;
+  const watchState = () => Memory.runtime!.warRebuildWatch![id];
+  const terminal = (name: string) => ({ targetRoom: name, sourceRoom: "E1N57", status: "done" as const, reason: "manual" as const,
+    squad: "towerDrainDuo" as const, attempts: 1, createdAt: 1, updatedAt: Game.time, assetsReleasedAt: Game.time });
+  beforeEach(() => {
+    jest.clearAllMocks(); resetRuntimeServices(); Game.time = 1000;
+    Memory.cfg = {}; Memory.runtime = {}; Memory.data = { war: Object.fromEntries(rooms.map((name) => [name, terminal(name)])) };
+    Game.rooms = { E1N57: createSourceRoom() }; Game.creeps = {}; Game.spawns = {};
+    (combatObserver.requestCombatObservation as jest.Mock).mockReturnValue(true);
+    const result = configureWarRebuildWatch("E1N57", rooms, "TooAngel", 100);
+    if (typeof result === "string") throw Error(result);
+    id = result.id;
+  });
+  const observe = (name: string, room: Room) => { Game.time++; Game.rooms[name] = room; runWarControl(); };
+
+  it("三个房间全部完成才启动；先完成的记录在终态任务删除后仍保留", () => {
+    Memory.data!.war!.E2N54.status = "clearing";
+    runWarControl();
+    expect(watchState().armedAt).toBeUndefined();
+    expect(watchState().targets).toEqual({});
+    (combatObserver.requestCombatObservation as jest.Mock).mockClear();
+    delete Memory.data!.war!.E3N57;
+    delete Memory.data!.war!.E3N53;
+    Memory.data!.war!.E2N54 = terminal("E2N54");
+    Game.time++; runWarControl();
+    expect(watchState().armedAt).toBe(Game.time);
+    expect(combatObserver.requestCombatObservation).toHaveBeenCalledTimes(3);
+  });
+
+  it("空房与对方控制器不派兵，只在100tick间隔请求观察", () => {
+    runWarControl();
+    const room = createTargetRoom();
+    room.controller!.owner = { username: "TooAngel" };
+    observe("E3N57", room);
+    expect(Memory.data!.war!.E3N57.status).toBe("done");
+    Game.time = 1099; runWarControl();
+    expect((combatObserver.requestCombatObservation as jest.Mock).mock.calls.filter(([name]) => name === "E3N57")).toHaveLength(1);
+    Game.time = 1100; runWarControl();
+    expect((combatObserver.requestCombatObservation as jest.Mock).mock.calls.filter(([name]) => name === "E3N57")).toHaveLength(2);
+  });
+
+  it("新鲜观察见对手creep只重启一次，重复观察和已有小队不增加世代或任务", () => {
+    runWarControl();
+    const enemy = { owner: { username: "TooAngel" } } as Creep;
+    observe("E3N57", createTargetRoom([enemy]));
+    const task = Memory.data!.war!.E3N57;
+    expect(task.status).toBe("staging"); expect(task.attempts).toBe(2);
+    expect(task.squad).toBe("towerDrainDuo"); expect(watchState().targets.E3N57.triggerCount).toBe(1);
+    Game.time++; runWarControl();
+    expect(Memory.data!.war!.E3N57.attempts).toBe(2);
+    expect(watchState().targets.E3N57.triggerCount).toBe(1);
+  });
+
+  it("其它玩家creep不触发指定对手的补剿", () => {
+    runWarControl(); observe("E3N57", createTargetRoom([{ owner: { username: "someone-else" } } as Creep]));
+    expect(Memory.data!.war!.E3N57.status).toBe("done");
+  });
+
+  it("房间已被第三方接管时，即便有对手creep经过也不派队拆第三方房间", () => {
+    runWarControl();
+    const room = createTargetRoom([{ owner: { username: "TooAngel" } } as Creep]); room.controller!.owner = { username: "new-owner" };
+    observe("E3N57", room);
+    expect(watchState().targets.E3N57.blocker).toBe("target_owner_changed");
+    expect(Memory.data!.war!.E3N57.attempts).toBe(1);
+  });
+
+  it("对手工地即使尚未完成spawn也触发补剿", () => {
+    runWarControl();
+    const room = createTargetRoom();
+    room.find = jest.fn((kind: FindConstant) => kind === FIND_HOSTILE_CONSTRUCTION_SITES ? [{ owner: { username: "TooAngel" } }] : []) as Room["find"];
+    observe("E3N57", room);
+    expect(Memory.data!.war!.E3N57.attempts).toBe(2);
+  });
+
+  it("对手完成的新结构也触发；仅控制器归属仍保持监视", () => {
+    runWarControl();
+    const spawn = { id: "rebuilt", owner: { username: "TooAngel" }, structureType: STRUCTURE_SPAWN } as StructureSpawn;
+    observe("E3N57", createTargetRoom([], [spawn]));
+    expect(Memory.data!.war!.E3N57.attempts).toBe(2);
+  });
+
+  it("没有视野或Observer不可用不孵化队伍；请求超时保留下一轮重试", () => {
+    (combatObserver.requestCombatObservation as jest.Mock).mockReturnValue(false);
+    runWarControl(); expect(watchState().targets.E3N57.blocker).toBe("observer_unavailable");
+    Game.time = 1100; (combatObserver.requestCombatObservation as jest.Mock).mockReturnValue(true); runWarControl();
+    Game.time = 1126; runWarControl();
+    expect(watchState().targets.E3N57.blocker).toBe("observer_timeout");
+    expect(Memory.data!.war!.E3N57.attempts).toBe(1);
+  });
+
+  it("我方房间不出兵，源房失去所有权时停止请求", () => {
+    runWarControl();
+    const room = createTargetRoom([{ owner: { username: "TooAngel" } } as Creep]); room.controller!.my = true;
+    observe("E3N57", room);
+    expect(Memory.data!.war!.E3N57.attempts).toBe(1);
+    Game.rooms.E1N57.controller!.my = false; Game.time = 1100; runWarControl();
+    expect(watchState().targets.E3N53.blocker).toBe("source_not_owned");
+  });
+
+  it("失败的补剿在终态清理后仍停住，避免不断重复烧兵", () => {
+    runWarControl(); Memory.data!.war!.E3N57.status = "failed";
+    Game.time++; runWarControl(); delete Memory.data!.war!.E3N57;
+    Game.time = 1300; Game.rooms.E3N57 = createTargetRoom([{ owner: { username: "TooAngel" } } as Creep]); runWarControl();
+    expect(watchState().targets.E3N57.blocker).toBe("clear_failed");
+    expect(Memory.data!.war!.E3N57).toBeUndefined();
+  });
+
+  it("重复注册只更新扫描间隔，不改变现役清剿任务", () => {
+    const before = JSON.stringify(Memory.data!.war);
+    expect(configureWarRebuildWatch("E1N57", [...rooms].reverse(), "TooAngel", 200)).toEqual({ ok: true, id });
+    expect(JSON.stringify(Memory.data!.war)).toBe(before);
+    expect(Object.keys(Memory.cfg!.warRebuildWatch!)).toHaveLength(1);
+    expect(Memory.cfg!.warRebuildWatch![id].intervalTicks).toBe(200);
   });
 });

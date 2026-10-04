@@ -11,6 +11,7 @@ import {
 import { getCreepConfigService, getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
 import {
   getWarStatus,
+  configureWarRebuildWatch,
   releaseWarTaskOwner,
   startWarPatrol,
   startWarRoom,
@@ -374,6 +375,8 @@ export function registerOperationsConsoleCommands(): void {
   global.stopColonizationRaw = stopColonizationRaw;
   global.stopWar = stopWarCommand;
   global.stopWarRaw = stopWarRaw;
+  global.startWarRebuildWatch = (sourceRoom: string, targetRooms: string[], enemyUsername: string, intervalTicks = 100) =>
+    JSON.stringify(configureWarRebuildWatch(sourceRoom, targetRooms, enemyUsername, intervalTicks));
   global.startWar = startWarCommand;
   global.startWarRaw = startWarRaw;
   global.startWarPatrol = startWarPatrolCommand;

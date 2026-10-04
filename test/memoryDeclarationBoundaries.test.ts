@@ -10,9 +10,10 @@ const MEMORY_BRANCHES = {
   cfg: {
     declaration: "src/types/memory/cfg.d.ts",
     interfaceName: "ScreepsMemoryConfig",
-    schemaFingerprint: "4c9c00824220c59b60e8e20e390ab8c3673e3395f2a9577d970bd0ee17c0f4b3",
+    schemaFingerprint: "dbd0d468e46060da50ab32d85c2b8e0dae40c57c45de0be3cec0f41760fbb153",
     imports: ["@/runtime/depositHarvest:DepositHarvestConfig", "@/types/system:RoomType"],
     fields: [
+      "warRebuildWatch",
       "depositHarvest",
       "rooms",
       "worker",
@@ -37,7 +38,7 @@ const MEMORY_BRANCHES = {
   runtime: {
     declaration: "src/types/memory/runtime.d.ts",
     interfaceName: "ScreepsMemoryRuntime",
-    schemaFingerprint: "f7cde348dbdb3fef507f80214e383f4238dad22d7e3491230f547180a205b270",
+    schemaFingerprint: "5e7ecce3efbee38c31400f79ddd45d24520e29df733ee371928f234dcf195f65",
     imports: [
       "@/runtime/hubPlanner:AllocationLedgerEntry",
       "@/runtime/hubPlanner:DirectRouteDecision",
@@ -49,6 +50,7 @@ const MEMORY_BRANCHES = {
       "@/runtime/resourceControl:MarketTerminalEnergyReadinessObservation",
     ],
     fields: [
+      "warRebuildWatch",
       "lastDeployTag",
       "lastDeployCommit",
       "lastDeployTree",

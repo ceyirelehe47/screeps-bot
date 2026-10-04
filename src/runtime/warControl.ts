@@ -1,6 +1,6 @@
 import { getCreepConfigService, getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
 import { prepareBoosts, releaseBoostLabs } from "@/runtime/powerBankBoost";
-import { requestCombatObservation } from "@/runtime/powerBankObserver";
+import { requestCombatObservation, OBSERVATION_REQUEST_TTL } from "@/runtime/powerBankObserver";
 import { clearMovementState } from "@/roles/shared";
 import type { CreepConfig } from "@/types/system";
 
@@ -1659,6 +1659,74 @@ export function getWarStatus(targetRoom?: string): WarStatusSnapshot {
   };
 }
 
+/** 注册观察后补剿策略；不重启现役任务，也不立即孵化小队。 */
+export function configureWarRebuildWatch(sourceRoom: string, targetRooms: string[], enemyUsername: string, intervalTicks = 100): { ok: true; id: string } | string {
+  const rooms = [...new Set(targetRooms)].sort();
+  const validRoom = (name: string) => /^[WE]\d+[NS]\d+$/.test(name);
+  const source = Game.rooms[sourceRoom];
+  if (!source?.controller?.my || !validRoom(sourceRoom) || !rooms.length || rooms.some((name) => !validRoom(name) || name === sourceRoom)
+    || !enemyUsername || enemyUsername === source.controller.owner?.username || !Number.isFinite(intervalTicks) || intervalTicks < 1) return "ERR_INVALID_REBUILD_WATCH";
+  const id = `${sourceRoom}:${enemyUsername}:${rooms.join("|")}`;
+  getMemoryService().ensureCfg().warRebuildWatch ??= {};
+  getMemoryService().ensureCfg().warRebuildWatch![id] = { sourceRoom, targetRooms: rooms, enemyUsername, intervalTicks: Math.floor(intervalTicks) };
+  return { ok: true, id };
+}
+
+/** 复用观察调度和War唯一目标任务；无新鲜视野不派队，战斗中不重复派队。 */
+function runWarRebuildWatches(store: Record<string, WarTask>): void {
+  const configs = Memory.cfg?.warRebuildWatch;
+  if (!configs || Object.keys(configs).length === 0) return;
+  const runtime = getMemoryService().ensureRuntime();
+  runtime.warRebuildWatch ??= {};
+  for (const id of Object.keys(runtime.warRebuildWatch)) if (!configs[id]) delete runtime.warRebuildWatch[id];
+  for (const [id, config] of Object.entries(configs)) {
+    const state = runtime.warRebuildWatch[id] ??= { clearedRooms: [], targets: {} };
+    const targets = [...new Set(config.targetRooms)];
+    for (const name of targets) if (store[name]?.sourceRoom === config.sourceRoom && store[name].status === "done" && !state.clearedRooms.includes(name)) state.clearedRooms.push(name);
+    // 每房完成记录独立于短期War任务，避免200tick终态清理丢掉首轮成果。
+    if (state.armedAt === undefined) {
+      if (targets.length === 0 || !targets.every((name) => state.clearedRooms.includes(name))) continue;
+      state.armedAt = Game.time;
+    }
+    for (const name of targets) {
+      const target = state.targets[name] ??= {};
+      const task = store[name];
+      if (!Game.rooms[config.sourceRoom]?.controller?.my) { target.blocker = "source_not_owned"; continue; }
+      if (Game.rooms[name]?.controller?.my) { target.blocker = "target_owned"; continue; }
+      if (task && task.status !== "done" && task.status !== "failed") { target.blocker = "clear_active"; delete target.pendingObservationAt; continue; }
+      if (task?.status === "failed" || target.blocker === "clear_failed") { target.blocker = "clear_failed"; continue; }
+      const interval = Math.max(1, Math.floor(config.intervalTicks));
+      if (target.pendingObservationAt === undefined) {
+        if (Game.time < (target.nextObservationAt ?? Game.time)) continue;
+        target.nextObservationAt = Game.time + interval;
+        if (!requestCombatObservation(name)) { target.blocker = "observer_unavailable"; continue; }
+        target.pendingObservationAt = Game.time;
+        target.blocker = "awaiting_vision";
+        continue;
+      }
+      const room = Game.rooms[name];
+      if (!room) {
+        if (Game.time - target.pendingObservationAt > OBSERVATION_REQUEST_TTL) { delete target.pendingObservationAt; target.blocker = "observer_timeout"; }
+        continue;
+      }
+      target.lastSeenAt = Game.time;
+      delete target.pendingObservationAt;
+      target.blocker = undefined;
+      if (room.controller?.owner && room.controller.owner.username !== config.enemyUsername) { target.blocker = "target_owner_changed"; continue; }
+      // 控制器归属本身不是重建。观察到对手creep或新造的实体/工地才启动。
+      const rebuilding = room.find(FIND_HOSTILE_CREEPS).some((creep) => creep.owner.username === config.enemyUsername)
+        || room.find(FIND_HOSTILE_CONSTRUCTION_SITES).some((site) => site.owner.username === config.enemyUsername)
+        || room.find(FIND_HOSTILE_STRUCTURES).some((structure) => structure.structureType !== STRUCTURE_CONTROLLER
+          && structure.structureType !== STRUCTURE_KEEPER_LAIR && "owner" in structure && (structure as OwnedStructure).owner.username === config.enemyUsername);
+      if (!rebuilding) continue;
+      requestWarRoomClear(name, config.sourceRoom, { reason: "manual", squad: "towerDrainDuo", oneShot: false });
+      target.lastTriggeredAt = Game.time;
+      target.triggerCount = (target.triggerCount ?? 0) + 1;
+      target.blocker = "clear_active";
+    }
+  }
+}
+
 export function runWarControl(): void {
   const store = ensureWarStore();
   const tasks = Object.values(store);
@@ -1706,5 +1774,6 @@ export function runWarControl(): void {
   for (const task of tasks) {
     task.updatedAt = Game.time;
   }
+  runWarRebuildWatches(store);
   writeWarTelemetry();
 }

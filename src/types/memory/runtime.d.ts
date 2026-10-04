@@ -13,6 +13,18 @@ import type { MarketTerminalEnergyReadinessObservation } from "@/runtime/resourc
 
 declare global {
   interface ScreepsMemoryRuntime {
+    warRebuildWatch?: Record<string, {
+      clearedRooms: string[];
+      armedAt?: number;
+      targets: Record<string, {
+        nextObservationAt?: number;
+        pendingObservationAt?: number;
+        lastSeenAt?: number;
+        lastTriggeredAt?: number;
+        triggerCount?: number;
+        blocker?: string;
+      }>;
+    }>;
     lastDeployTag?: string;
     /** 部署身份（阶段 B）：bundle 首个 tick 写入，仅 build 改变时更新。 */
     lastDeployCommit?: string;

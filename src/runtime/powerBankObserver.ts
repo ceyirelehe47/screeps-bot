@@ -7,7 +7,7 @@ import { getMemoryService, getTickContextService } from "@/runtime/runtimeServic
 
 export { getPowerBankRoomThreat } from "@/runtime/powerBankThreat";
 
-const OBSERVATION_REQUEST_TTL = 25;
+export const OBSERVATION_REQUEST_TTL = 25;
 const OBSERVATION_REQUEST_LIMIT = 64;
 const TRANSIT_DANGER_TTL = 500;
 const REQUEST_KINDS = ["combat", "powerBank", "deposit", "remote"] as const;
