@@ -6,6 +6,7 @@ jest.mock("@/runtime/runtimeServices", () => ({ getTickContextService: jest.fn()
 jest.mock("@/runtime/cpuPhaseProfiler", () => ({ measureCreepIntent: (fn: () => unknown) => fn() }));
 jest.mock("@/runtime/powerBankObserver", () => ({ requestCombatObservation: jest.fn(() => true) }));
 
+import { coordinatePowerBankPairMovement, resolvePowerBankPair } from "@/roles/powerBankCombatPair";
 import { powerBankAttackerRole } from "@/roles/powerBankAttacker";
 import { powerBankHealerRole } from "@/roles/powerBankHealer";
 import { clearCreepMovementStateForTest, clearCreepMovementState, ensureCreepMovementState, getCreepMovementState } from "@/movement/creepState";
@@ -133,6 +134,79 @@ beforeEach(() => {
 });
 
 describe("PowerBank same-frame pair movement", () => {
+  it("同tick斜向出口候选共享格查询，source/target重复调用保持相同一组移动", () => {
+    place(attacker, 48, 17); place(healer, 48, 18);
+    walls.add(`${SOURCE}:49:19`); walls.add(`${TARGET}:0:19`); routeDirection = BOTTOM_RIGHT;
+    const reads = new Map<string, number>();
+    for (const name of [SOURCE, TARGET]) (Game.rooms[name].lookForAt as jest.Mock).mockImplementation((kind, x, y) => {
+      const key = `${name}:${kind}:${x}:${y}`; reads.set(key, (reads.get(key) ?? 0) + 1); return [];
+    });
+    const pair = resolvePowerBankPair(attacker, Memory.data!.powerBankHarvest![TASK])!;
+    coordinatePowerBankPairMovement(pair);
+    const redCalls = (attacker.move as jest.Mock).mock.calls.length, greenCalls = (healer.move as jest.Mock).mock.calls.length;
+    coordinatePowerBankPairMovement(pair);
+    expect(pending.get(attacker)).toBe(RIGHT); expect(pending.get(healer)).toBe(RIGHT);
+    console.log(JSON.stringify({ kind: "pairQueryBudget", reads: [...reads.entries()].sort(), staticQueries: (getCachedStaticTravelMatrix as jest.Mock).mock.calls.length,
+      output: [...pending].map(([c, d]) => [c.name, d]) }));
+    expect(Math.max(...reads.values())).toBe(1);
+    expect(attacker.move).toHaveBeenCalledTimes(redCalls); expect(healer.move).toHaveBeenCalledTimes(greenCalls);
+  });
+
+  it("同输入400creep出口查询性能样本，逐帧输出不变", () => {
+    place(attacker, 48, 17); place(healer, 48, 18); routeDirection = BOTTOM_RIGHT;
+    walls.add(`${SOURCE}:49:19`); walls.add(`${TARGET}:0:19`);
+    for (let i = 0; i < 400; i++) {
+      const extra = createMockPowerBankCreep("carrier", { id: `extra${i}`, name: `extra${i}` });
+      place(extra, 5 + i % 40, 5 + Math.floor(i / 40)); Game.creeps[extra.name] = extra;
+    }
+    const pair = resolvePowerBankPair(attacker, Memory.data!.powerBankHarvest![TASK])!;
+    const original = Object.values; let creepQueries = 0; let looks = 0; let matrixConstructions = 0;
+    (getCachedStaticTravelMatrix as jest.Mock).mockImplementation((name: string) => { matrixConstructions++; return { get: (x: number, y: number) => walls.has(`${name}:${x}:${y}`) ? 255 : 0 }; });
+    const values = jest.spyOn(Object, "values").mockImplementation((object: object) => {
+      if (object === Game.creeps) creepQueries++; return original(object);
+    });
+    for (const name of [SOURCE, TARGET]) (Game.rooms[name].lookForAt as jest.Mock).mockImplementation(() => { looks++; return []; });
+    const before = performance.now();
+    try {
+      for (let tick = 0; tick < 250; tick++) {
+        Game.time++; pending.clear(); coordinatePowerBankPairMovement(pair); coordinatePowerBankPairMovement(pair);
+        expect(pending.get(attacker)).toBe(RIGHT); expect(pending.get(healer)).toBe(RIGHT);
+      }
+    } finally { values.mockRestore(); }
+    console.log(JSON.stringify({ kind: "pairQueryPerformance", frames: 250, creeps: 402, creepQueries, looks,
+      staticQueries: (getCachedStaticTravelMatrix as jest.Mock).mock.calls.length, matrixConstructions, elapsedMs: performance.now() - before,
+      output: [pending.get(attacker), pending.get(healer)] }));
+  });
+
+  it("缓存的占位仍重读当帧让路意图，不缓存blocker是否已移动", () => {
+    place(attacker, 48, 17); place(healer, 48, 18);
+    const blocker = createMockPowerBankCreep("carrier", { id: "worker", name: "worker" });
+    place(blocker, 0, 18, TARGET); Game.creeps.worker = blocker;
+    (blocker.move as jest.Mock).mockImplementation((direction) => { pending.set(blocker, direction); return OK; });
+    (getCachedStaticTravelMatrix as jest.Mock).mockImplementation((name) => ({ get: (x: number, y: number) =>
+      (name === SOURCE && (x === 48 || x === 49) || name === TARGET && (x === 0 || x === 1)) && (y === 17 || y === 18) ? 0 : 255 }));
+    const first = resolvePowerBankPair(attacker, Memory.data!.powerBankHarvest![TASK])!; coordinatePowerBankPairMovement(first);
+    expect(pending.has(attacker)).toBe(false);
+    expect(issueMove(blocker, RIGHT)).toBe(OK);
+    coordinatePowerBankPairMovement({ ...first, task: { ...first.task } });
+    expect(pending.get(attacker)).toBe(RIGHT); expect(pending.get(healer)).toBe(RIGHT);
+  });
+
+  it.each(["service", "world", "tick"] as const)("%s变化使已缓存的封闭格失效", (change) => {
+    place(attacker, 48, 17); place(healer, 48, 18);
+    let open = false;
+    (getCachedStaticTravelMatrix as jest.Mock).mockImplementation((name) => ({ get: (x: number, y: number) =>
+      name === SOURCE && x === 48 && (y === 17 || y === 18) || open ? 0 : 255 }));
+    const pair = resolvePowerBankPair(attacker, Memory.data!.powerBankHarvest![TASK])!; coordinatePowerBankPairMovement(pair);
+    expect(pending.has(attacker)).toBe(false);
+    open = true;
+    if (change === "service") (getTickContextService as jest.Mock).mockReturnValue({ ...getTickContextService() });
+    if (change === "world") Object.assign(global, { Game: { ...Game } });
+    if (change === "tick") Game.time++;
+    coordinatePowerBankPairMovement({ ...pair, task: { ...pair.task } });
+    expect(pending.get(attacker)).toBe(RIGHT); expect(pending.get(healer)).toBe(RIGHT);
+  });
+
   it.each(["attacker-first", "healer-first"] as const)("已对齐出口直穿：单体斜向末步会送绿进下一墙格时仍前进，%s", (order) => {
     place(attacker, 48, 17); place(healer, 48, 18);
     walls.add(`${SOURCE}:49:19`); walls.add(`${TARGET}:0:19`);

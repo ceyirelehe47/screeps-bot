@@ -157,4 +157,14 @@ describe("powerBankHealerRole", () => {
       expect.objectContaining({ maxRooms: 1, ignoreCreeps: false, reusePath: 0 }),
     );
   });
+
+  it("recovers its HEAL when the attacker is full and reflection cannot be sustained", () => {
+    setupTask();
+    const { attacker, healer } = setupPair({}, { hits: 3100, hitsMax: 5000,
+      body: [...Array.from({ length: 25 }, (_, i) => ({ type: HEAL, hits: i < 19 ? 0 : 100 })),
+        ...Array.from({ length: 25 }, () => ({ type: MOVE, hits: 100 }))] });
+    powerBankHealerRole(TARGET_ROOM).target(healer);
+    expect(healer.heal).toHaveBeenCalledWith(healer);
+    expect(healer.heal).not.toHaveBeenCalledWith(attacker);
+  });
 });

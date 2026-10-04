@@ -41,6 +41,22 @@ describe("外出 creep 与常驻 creep 的统一房内寻路", () => {
     expect(getCreepMovementState(creep)?.travelState?.multiRoomSegment).toBeUndefined();
   });
 
+  it("有效有序路线重复选择与行军不调用原生findRoute或findExitTo", () => {
+    const { creep, room } = traveler("powerBankAttacker");
+    room.findExitTo = jest.fn((next) => { Game.map.findRoute(room.name, typeof next === "string" ? next : next.name); return RIGHT; });
+    for (let i = 0; i < 5; i++) expect(getNextTravelRoom(room.name, "W0N1", "W1N1|W0N1")).toBe("W0N1");
+    expect(moveToTargetRoom(creep, "W0N1", "W1N1|W0N1")).toBe(OK);
+    expect(Game.map.findRoute).not.toHaveBeenCalled(); expect(room.findExitTo).not.toHaveBeenCalled();
+    expect(creep.move).toHaveBeenCalledWith(RIGHT);
+  });
+
+  it("有序路线的下一房关闭时不发送跨房移动", () => {
+    const { creep } = traveler();
+    Game.map.getRoomStatus = jest.fn(() => ({ status: "closed" as const, timestamp: null }));
+    expect(moveToTargetRoom(creep, "W0N1", "W1N1|W0N1")).toBe(ERR_NO_PATH);
+    expect(creep.move).not.toHaveBeenCalled();
+  });
+
   it("下一tick复用同一房内路径，位置变化才推进游标", () => {
     const { creep, search, choose } = traveler();
     moveToTargetRoom(creep, "W0N1", "W1N1|W0N1");
@@ -105,7 +121,8 @@ describe("外出 creep 与常驻 creep 的统一房内寻路", () => {
     room.findExitTo = jest.fn(() => TOP);
     choose.mockReturnValue(new MockRoomPosition(10, 0, room.name) as unknown as RoomPosition);
     expect(moveToTargetRoom(creep, "W3N1", route, options)).toBe(OK);
-    expect(room.findExitTo).toHaveBeenCalledWith("W1N2");
+    expect(Game.map.describeExits).toHaveBeenCalledWith(room.name);
+    expect(room.findExitTo).not.toHaveBeenCalled();
     expect(getPowerBankOwnedAvoidRooms()).toContain("W0N1");
   });
 

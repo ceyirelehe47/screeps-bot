@@ -269,6 +269,12 @@ declare global {
         status: "queued" | "staging" | "clearing" | "downgrading" | "patrol_waiting" | "done" | "failed";
         reason: "npc_reservation" | "manual";
         routeRooms?: string[];
+        routeOrigin?: "map" | "manual";
+        routePlannedAt?: number;
+        routeTrace?: { hops: number; avoided: Record<string, string>; policy: "map_combat" | "manual" };
+        npcAuto?: true;
+        squadDecision?: string;
+        squadAssessedAt?: number;
         squad?: "standard" | "t3Duo" | "towerDrainDuo";
         boostTier?: "t3";
         boostLabs?: string[];

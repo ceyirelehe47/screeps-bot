@@ -158,6 +158,17 @@ describe("PowerBank Observer 动态扫描", () => {
     expect(Memory.data?.powerBankHarvest?.["pb-dynamic"]).toMatchObject({ status: "discovered", targetRoom: "E20N7" });
   });
 
+  it("同名可见Room替换后扫描新Bank，不把旧上下文当成空房", () => {
+    const old = createRoom("E20N7", false); Game.rooms[old.name] = old;
+    runPowerBankObserver();
+    const room = createRoom("E20N7", false);
+    const bank = { id: "pb-replaced", structureType: STRUCTURE_POWER_BANK, pos: { x: 25, y: 25, roomName: room.name }, hits: 2000000, power: 3000, ticksToDecay: 4000 };
+    (room.find as jest.Mock).mockImplementation((kind: FindConstant) => kind === FIND_STRUCTURES ? [bank] : []);
+    Game.rooms[room.name] = room;
+    runPowerBankObserver();
+    expect(Memory.data?.powerBankHarvest?.["pb-replaced"]).toMatchObject({ status: "discovered", targetRoom: room.name });
+  });
+
   it("高速房的敌方战斗能力仍记录危险，不因巡逻范围豁免", () => {
     const room = createRoom("E10N60", false);
     const enemy = { getActiveBodyparts: jest.fn((part: BodyPartConstant) => part === ATTACK ? 1 : 0) };

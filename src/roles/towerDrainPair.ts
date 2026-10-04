@@ -1,3 +1,4 @@
+import { getHostileTowers as activeTowers, getHostileTowerThreats as towerThreats, getRefillableHostileTowers as refillableTowers, towerAttackPowerAt as towerPowerAt, type TowerThreat } from "@/runtime/combatTowerThreat";
 import { clearMovementState, moveToTarget } from "@/roles/shared";
 import { isWalkableStructure } from "@/movement/common";
 import { measureCreepIntent } from "@/runtime/cpuPhaseProfiler";
@@ -81,43 +82,8 @@ function outsideTile(tile: { x: number; y: number }, direction: DirectionConstan
   return { x: tile.x, y: interior ? 1 : 0 };
 }
 
-function activeTowers(room: Room): StructureTower[] {
-  return room.find(FIND_HOSTILE_STRUCTURES).filter((structure): structure is StructureTower => structure.structureType === STRUCTURE_TOWER);
-}
-
-function towerPowerAt(tower: StructureTower, tile: { x: number; y: number }): number {
-  const distance = range(tower.pos, tile);
-  const decline = Math.max(0, Math.min(1, (distance - TOWER_OPTIMAL_RANGE) / (TOWER_FALLOFF_RANGE - TOWER_OPTIMAL_RANGE)));
-  let multiplier = 1;
-  // 只计增伤效果；忽略减伤效果，让退出预算保持保守。
-  for (const effect of tower.effects ?? []) {
-    if (effect.effect !== PWR_OPERATE_TOWER || effect.ticksRemaining <= 0) continue;
-    const values = POWER_INFO[PWR_OPERATE_TOWER].effect;
-    const amount = Array.isArray(values) ? values[(effect.level ?? 1) - 1] : values;
-    if (typeof amount === "number" && Number.isFinite(amount)) multiplier = Math.max(multiplier, amount);
-  }
-  return Math.ceil(TOWER_POWER_ATTACK * (1 - TOWER_FALLOFF * decline) * multiplier);
-}
-
 function damageAt(towers: StructureTower[], tile: { x: number; y: number }): number {
   return towers.reduce((sum, tower) => sum + (tower.store.getUsedCapacity(RESOURCE_ENERGY) >= TOWER_ENERGY_COST ? towerPowerAt(tower, tile) : 0), 0);
-}
-
-interface TowerThreat { tower: StructureTower; refillAt: number; live: boolean }
-
-/** 只计已具备开火能量的塔及近旁实际带能的补给；库存和未来出生不等于已发生补能。 */
-function towerThreats(room: Room): TowerThreat[] {
-  const carriers = room.find(FIND_HOSTILE_CREEPS).filter((actor) => actor.store.getUsedCapacity(RESOURCE_ENERGY) > 0 && actor.body.some((part) => part.type === CARRY && part.hits > 0));
-  return activeTowers(room).map((tower) => {
-    const energy = tower.store.getUsedCapacity(RESOURCE_ENERGY);
-    const live = energy >= TOWER_ENERGY_COST;
-    const immediateRefill = carriers.some((actor) => range(actor.pos, tower.pos) <= 1 && actor.store.getUsedCapacity(RESOURCE_ENERGY) >= TOWER_ENERGY_COST - energy);
-    return { tower, live, refillAt: live ? 0 : immediateRefill ? 1 : Infinity };
-  });
-}
-
-function refillableTowers(room: Room): StructureTower[] {
-  return towerThreats(room).filter((threat) => Number.isFinite(threat.refillAt)).map((threat) => threat.tower);
 }
 
 const UNREACHABLE = 0xffff;

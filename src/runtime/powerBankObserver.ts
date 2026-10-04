@@ -171,11 +171,12 @@ function scanVisibleSearchRooms(): void {
       runtime.transitDangerRooms ??= {};
       runtime.transitDangerRooms[room.name] = Game.time + TRANSIT_DANGER_TTL;
     }
-    const context = tickContext.getRoomContext(room);
-    for (const bank of (context?.getStructuresByType(STRUCTURE_POWER_BANK) ?? []).filter(
+    const candidate = tickContext.getRoomContext(room);
+    const context = candidate?.room === room ? candidate : null;
+    for (const bank of (context?.getStructuresByType(STRUCTURE_POWER_BANK) ?? room.find(FIND_STRUCTURES)).filter(
       (structure): structure is StructurePowerBank => structure.structureType === STRUCTURE_POWER_BANK,
     )) recordPowerBankDiscovery(bank);
-    for (const deposit of context?.getDeposits() ?? []) recordDepositDiscovery(deposit);
+    for (const deposit of context?.getDeposits() ?? room.find(FIND_DEPOSITS)) recordDepositDiscovery(deposit);
   }
 }
 

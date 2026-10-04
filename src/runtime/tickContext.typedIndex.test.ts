@@ -36,6 +36,26 @@ describe("tickContext typed structure index", () => {
     Game.spawns = {};
   });
 
+  it("同tick替换Game世界也重建房间与全creep/spawn快照", () => {
+    const saved = Game;
+    const { room: old } = createRoomWithStructures("W1N1");
+    const service = createTickContextService();
+    expect(service.getMyRooms()).toEqual([old]); expect(service.getAllCreeps()).toEqual([]); expect(service.getAllSpawns()).toEqual([]);
+    const next = { name: "W2N2", controller: { my: true }, find: jest.fn(() => []) } as unknown as Room;
+    const creep = { name: "new" } as Creep; const spawn = { name: "new-spawn" } as StructureSpawn;
+    try {
+      Object.assign(global, { Game: { ...Game, rooms: { W2N2: next }, creeps: { new: creep }, spawns: { new: spawn } } });
+      expect(service.getMyRooms()).toEqual([next]); expect(service.getAllCreeps()).toEqual([creep]); expect(service.getAllSpawns()).toEqual([spawn]);
+    } finally { Object.assign(global, { Game: saved }); }
+  });
+
+  it("同名Room对象替换不复用旧结构索引", () => {
+    const first = createRoomWithStructures("W1N1"); first.structures.push({ id: "old", structureType: STRUCTURE_POWER_BANK });
+    const service = createTickContextService(); expect(service.getRoomContext(first.room)!.getStructuresByType(STRUCTURE_POWER_BANK)[0].id).toBe("old");
+    const second = createRoomWithStructures("W1N1"); second.structures.push({ id: "new", structureType: STRUCTURE_POWER_BANK });
+    expect(service.getRoomContext(second.room)!.getStructuresByType(STRUCTURE_POWER_BANK)[0].id).toBe("new");
+  });
+
   it("多个 typed getter 只触发一次主结构扫描并共享索引", () => {
     const { room, find, myStructures, structures } = createRoomWithStructures("W1N1");
     myStructures.push(

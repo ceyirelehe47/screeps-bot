@@ -1,3 +1,4 @@
+import { predictPowerBankRecovery, predictPowerBankFinishTicks, powerBankAttackSustainable } from "@/runtime/powerBankCapability";
 import { POWER_BANK_STATUS, POWER_BANK_BODY_TIERS, POWER_BANK_BOOST_REQUIREMENTS, getPowerBankConfigName, isPowerBankSearchRoom } from "@/runtime/powerBankConstants";
 import {
   ATTACK_POWER,
@@ -27,6 +28,7 @@ import {
   isHealthyReceiverCapacityCommitment,
 } from "@/runtime/logistics/resourceTransferTasks";
 import {
+  ATTACK_PROGRESS_TIMEOUT,
   getPowerBankLifecycleFailure,
   initializePowerBankTaskRuntime,
   isTerminalPowerBankStatus,
@@ -770,17 +772,11 @@ function estimateOneWayRoomTravelTicks(task: PowerBankHarvestTask): number {
   return Math.ceil(routeDistance * POWER_BANK_ROOM_TRAVEL_TICKS);
 }
 
-function estimateRemainingAttackTicks(bank: StructurePowerBank, attacker: Creep): number {
-  const boosts = BOOSTS[ATTACK] as Record<string, { attack?: number } | undefined>;
-  const damage = attacker.body.reduce((sum, part) => {
-    if (part.type !== ATTACK || part.hits <= 0) return sum;
-    const multiplier = part.boost ? boosts[part.boost]?.attack ?? 1 : 1;
-    return sum + ATTACK_POWER * multiplier;
-  }, 0);
-  return damage > 0 ? Math.ceil(bank.hits / damage) : Infinity;
+function estimateRemainingAttackTicks(bank: StructurePowerBank, attacker: Creep, healer?: Creep): number {
+  return predictPowerBankFinishTicks(bank.hits, attacker, healer);
 }
 
-function shouldSpawnHaulers(task: PowerBankHarvestTask, bank: StructurePowerBank, attacker: Creep): boolean {
+function shouldSpawnHaulers(task: PowerBankHarvestTask, bank: StructurePowerBank, attacker: Creep, healer: Creep): boolean {
   if (
     task.plannedHaulerSpawnStartTick !== undefined &&
     Game.time >= task.plannedHaulerSpawnStartTick
@@ -792,7 +788,7 @@ function shouldSpawnHaulers(task: PowerBankHarvestTask, bank: StructurePowerBank
   const energyCapacity = sourceRoom?.energyCapacityAvailable ?? 0;
   const spawnTime = estimateHaulerBatchSpawnTicks(task, energyCapacity);
   const travelTime = estimateOneWayRoomTravelTicks(task);
-  const remainingAttackTicks = estimateRemainingAttackTicks(bank, attacker);
+  const remainingAttackTicks = estimateRemainingAttackTicks(bank, attacker, healer);
   if (!Number.isFinite(travelTime) || !Number.isFinite(remainingAttackTicks)) {
     return false;
   }
@@ -1474,7 +1470,7 @@ function shouldProactivelyHandoff(
     !reinforcement.healerId
   ) return false;
 
-  const remainingAttackTicks = estimateRemainingAttackTicks(bank, pair.attacker);
+  const remainingAttackTicks = estimateRemainingAttackTicks(bank, pair.attacker, pair.healer);
   if (!Number.isFinite(remainingAttackTicks)) return false;
   const pairTtl = Math.min(
     pair.attacker.ticksToLive ?? CREEP_LIFE_TIME,
@@ -1551,19 +1547,36 @@ function processAttacking(task: PowerBankHarvestTask): void {
   if (!combatCapable) {
     task.combatReady = false;
     setPowerBankBlocker(task, "active_pair_missing_effective_parts", 1);
+  } else if (task.combatReady === false && task.attackerReady !== false && task.healerReady !== false) {
+    // 已通过强化与身份门的现役成员恢复身体后可以继续；不代替出生/强化准备门。
+    task.combatReady = true;
   } else if (pair.attacker.room.name !== pair.healer.room.name || !pair.attacker.pos.isNearTo(pair.healer)) {
     setPowerBankBlocker(task, "active_pair_not_adjacent", 1);
   }
 
+  const recovering = combatCapable && !powerBankAttackSustainable(pair.attacker, pair.healer);
+  const recovery = recovering ? predictPowerBankRecovery(pair.attacker, pair.healer) : { ticks: 0 };
+  let recoveryProgress = false;
+  if (recovering && Number.isFinite(recovery.ticks)) {
+    const hits = pair.attacker.hits + pair.healer.hits;
+    if (task.combatRecoveryHits === undefined || hits > task.combatRecoveryHits) task.combatRecoveryProgressAt = Game.time;
+    task.combatRecoveryHits = hits;
+    recoveryProgress = Game.time - (task.combatRecoveryProgressAt ?? 0) <= ATTACK_PROGRESS_TIMEOUT;
+    if (recoveryProgress) setPowerBankBlocker(task, "active_pair_recovering", 1);
+  } else {
+    delete task.combatRecoveryHits; delete task.combatRecoveryProgressAt;
+    if (task.blocker === "active_pair_recovering") delete task.blocker;
+  }
   maybeRequestReinforcement(
     task,
     pair,
     bank,
-    !combatCapable || task.blocker === "attack_no_progress",
+    !combatCapable || !Number.isFinite(recovery.ticks) || task.blocker === "attack_no_progress" && !recoveryProgress,
   );
   processReinforcement(task);
+  if (!combatCapable || shouldProactivelyHandoff(task, pair, bank) || task.blocker === "attack_no_progress") pair = promoteReinforcement(task) ?? pair;
   if (!task.reinforcement) cleanupInactiveCombatConfigs(task);
-  if (shouldSpawnHaulers(task, bank, pair.attacker)) ensureHaulerConfigs(task);
+  if (shouldSpawnHaulers(task, bank, pair.attacker, pair.healer)) ensureHaulerConfigs(task);
 }
 
 function estimateReinforcementLeadTicks(task: PowerBankHarvestTask): number {
@@ -1600,7 +1613,7 @@ function maybeRequestReinforcement(
     pair.attacker.ticksToLive ?? CREEP_LIFE_TIME,
     pair.healer.ticksToLive ?? CREEP_LIFE_TIME,
   );
-  const remainingAttackTicks = estimateRemainingAttackTicks(bank, pair.attacker);
+  const remainingAttackTicks = estimateRemainingAttackTicks(bank, pair.attacker, pair.healer);
   // 主队能独立完成时无需接班队，不能把接班队的准备时间加到击破寿命门。
   if (!force && pairTtl > remainingAttackTicks + REINFORCEMENT_TTL_BUFFER) return;
   const leadTicks = estimateReinforcementLeadTicks(task);

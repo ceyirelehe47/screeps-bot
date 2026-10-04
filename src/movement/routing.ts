@@ -192,7 +192,11 @@ export function moveToTargetRoom(
     reusePath: options.reusePath ?? 5,
     avoidExitTiles: true,
   };
-  const exitDirection = creep.room.findExitTo(nextRoom);
+  // 已确认的相邻房从地图出口直接取方向，避免findExitTo内部再跑findRoute。
+  const exits = typeof Game.map.describeExits === "function" ? Game.map.describeExits(creep.room.name) : null;
+  const directExit = Object.entries(exits ?? {}).find(([direction, room]) => room === nextRoom && [TOP, RIGHT, BOTTOM, LEFT].some((exit) => exit === Number(direction)));
+  const closed = typeof Game.map.getRoomStatus === "function" && Game.map.getRoomStatus(nextRoom)?.status === "closed";
+  const exitDirection = closed ? ERR_NO_PATH : directExit ? Number(directExit[0]) : creep.room.findExitTo(nextRoom);
   if (typeof exitDirection !== "number" || exitDirection < 1 || exitDirection > 8) {
     updateTravelState(creep, travelState);
     return ERR_NO_PATH;

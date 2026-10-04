@@ -1,6 +1,8 @@
 import { clearMovementState, moveToTarget, moveToTargetRoom } from "@/roles/shared";
 import { ensureCreepMovementState, getCreepMovementState } from "@/movement/creepState";
 import { isExitTile } from "@/movement/common";
+import { powerBankAttackSustainable } from "@/runtime/powerBankCapability";
+import { getTickContextService } from "@/runtime/runtimeServices";
 import { getCachedStaticTravelMatrix, getNextTravelRoom } from "@/movement/routing";
 import { getPowerBankOwnedAvoidRooms, isPowerBankTransitRoomAllowed, powerBankTransitOptions } from "@/runtime/powerBankTransit";
 import {
@@ -135,13 +137,13 @@ export function pairReadyForTravel(pair: PowerBankPairContext): boolean {
 }
 
 export function pairReadyForCombat(pair: PowerBankPairContext): boolean {
-  if (!pair.combatReady) return false;
+  if (!pair.combatReady || pair.reinforcement) return false;
   if (pair.attacker.room.name !== pair.healer.room.name) return false;
   if (!pair.attacker.pos.isNearTo(pair.healer.pos)) return false;
   if (pair.attacker.getActiveBodyparts(ATTACK) <= 0) return false;
   if (pair.attacker.getActiveBodyparts(TOUGH) <= 0) return false;
   if (pair.healer.getActiveBodyparts(HEAL) <= 0) return false;
-  return true;
+  return powerBankAttackSustainable(pair.attacker, pair.healer);
 }
 
 export function getPowerBankEncodedRoute(task: RuntimePowerBankTask, fallback?: string): string | undefined {
@@ -214,8 +216,24 @@ const PAIR_DIRECTIONS: readonly DirectionConstant[] = [TOP, TOP_RIGHT, RIGHT, BO
 let pairMovementGame: typeof Game | undefined;
 let pairMovementTick = -1;
 let pairMovementCalls = new WeakMap<Creep, { task: RuntimePowerBankTask; healer: Creep; generation?: number }>();
-let pairTileChecks = new WeakMap<Creep, { healer: Creep; values: Map<string, { staticOpen: boolean; occupants: AnyCreep[] }> }>();
-let pairOccupants: AnyCreep[] = [];
+let pairTileChecks = new WeakMap<Creep, { healer: Creep; values: Map<string, { room: Room | undefined; staticOpen: boolean; occupants: AnyCreep[] }> }>();
+let pairOccupants = new Map<string, AnyCreep[]>();
+let pairQueryContext: ReturnType<typeof getTickContextService> | undefined;
+let pairQueryCreeps: typeof Game.creeps | undefined;
+let pairQueryPowerCreeps: typeof Game.powerCreeps | undefined;
+
+function pairPositionKey(pos: PairPosition): string { return `${pos.roomName}:${pos.x}:${pos.y}`; }
+
+function refreshPairQueries(): void {
+  const context = getTickContextService();
+  if (pairQueryContext === context && pairQueryCreeps === Game.creeps && pairQueryPowerCreeps === Game.powerCreeps) return;
+  pairQueryContext = context; pairQueryCreeps = Game.creeps; pairQueryPowerCreeps = Game.powerCreeps;
+  pairTileChecks = new WeakMap(); pairOccupants = new Map();
+  for (const creep of [...Object.values(Game.creeps), ...Object.values(Game.powerCreeps || {}).filter((actor) => actor.ticksToLive != null)]) {
+    const key = pairPositionKey(creep.pos), list = pairOccupants.get(key);
+    if (list) list.push(creep); else pairOccupants.set(key, [creep]);
+  }
+}
 
 type PairPosition = Readonly<{ x: number; y: number; roomName: string }>;
 
@@ -251,17 +269,17 @@ function isPairTileOpen(pos: PairPosition, pair: PowerBankPairContext): boolean 
     cache = { healer: pair.healer, values: new Map() };
     pairTileChecks.set(pair.attacker, cache);
   }
-  const key = pos.roomName + ':' + pos.x + ':' + pos.y;
+  const key = pairPositionKey(pos);
+  const room = Game.rooms[pos.roomName];
   let tile = cache.values.get(key);
-  if (!tile) {
+  if (!tile || tile.room !== room) {
     const staticOpen = getCachedStaticTravelMatrix(pos.roomName).get(pos.x, pos.y) < 255;
-    const occupants = staticOpen ? [...pairOccupants] : [];
-    const room = Game.rooms[pos.roomName];
+    const occupants = staticOpen ? [...(pairOccupants.get(key) ?? [])] : [];
     if (staticOpen && room && typeof room.lookForAt === 'function') {
       occupants.push(...room.lookForAt(LOOK_CREEPS, pos.x, pos.y));
       occupants.push(...room.lookForAt(LOOK_POWER_CREEPS, pos.x, pos.y));
     }
-    tile = { staticOpen, occupants: occupants.filter(creep => creep !== pair.attacker && creep !== pair.healer && samePairPosition(creep.pos, pos)) };
+    tile = { room, staticOpen, occupants: occupants.filter(creep => creep !== pair.attacker && creep !== pair.healer && samePairPosition(creep.pos, pos)) };
     cache.values.set(key, tile);
   }
   return tile.staticOpen && !tile.occupants.some(creep => !isBlockerActivelyMoving(creep));
@@ -482,9 +500,9 @@ export function coordinatePowerBankPairMovement(pair: PowerBankPairContext, fall
     pairMovementGame = Game;
     pairMovementTick = Game.time;
     pairMovementCalls = new WeakMap();
-    pairTileChecks = new WeakMap();
-    pairOccupants = [...Object.values(Game.creeps), ...Object.values(Game.powerCreeps || {}).filter((creep) => creep.ticksToLive != null)];
+    pairQueryContext = undefined; pairQueryCreeps = undefined; pairQueryPowerCreeps = undefined;
   }
+  refreshPairQueries();
   if (pairReadyForTravel(pair)) for (const member of [pair.attacker, pair.healer]) {
     if (member.room.name !== pair.task.targetRoom) {
       const state = ensureCreepMovementState(member);

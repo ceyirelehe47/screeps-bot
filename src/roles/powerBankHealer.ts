@@ -4,6 +4,7 @@ import {
   resolvePowerBankPair,
 } from "@/roles/powerBankCombatPair";
 import { measureCreepIntent } from "@/runtime/cpuPhaseProfiler";
+import { powerBankAttackSustainable } from "@/runtime/powerBankCapability";
 import type { RoleFactory } from "@/types/system";
 
 const RETIRE_STATUSES: ReadonlySet<string> = new Set([
@@ -27,6 +28,10 @@ function healPairedAttacker(creep: Creep, attacker: Creep): { sameRoom: boolean;
   const sameRoom = attacker.room.name === creep.room.name;
   const range = sameRoom ? creep.pos.getRangeTo(attacker.pos) : Infinity;
 
+  if (canHeal(creep) && creep.hits < creep.hitsMax && attacker.hits === attacker.hitsMax && !powerBankAttackSustainable(attacker, creep)) {
+    measureCreepIntent(() => creep.heal(creep));
+    return { sameRoom, range };
+  }
   if (canHeal(creep) && sameRoom) {
     if (range <= 1) {
       measureCreepIntent(() => creep.heal(attacker));

@@ -2,7 +2,8 @@
 // whole tick; memoizing avoids redundant JS->native calls from the spawn
 // planner's per-config spawn filters and mountSpawn's work loop.
 let spawnActiveCacheTick = -1;
-const spawnActiveCache = new Map<Id<StructureSpawn>, boolean>();
+let spawnActiveCacheGame: typeof Game | undefined;
+const spawnActiveCache = new Map<StructureSpawn, boolean>();
 
 /**
  * Backward-compatible spawn active check.
@@ -10,18 +11,19 @@ const spawnActiveCache = new Map<Id<StructureSpawn>, boolean>();
  */
 export function isSpawnActive(spawn: StructureSpawn): boolean {
   const tick = Game.time;
-  if (spawnActiveCacheTick !== tick) {
+  if (spawnActiveCacheTick !== tick || spawnActiveCacheGame !== Game) {
     spawnActiveCache.clear();
     spawnActiveCacheTick = tick;
+    spawnActiveCacheGame = Game;
   }
 
-  const cached = spawnActiveCache.get(spawn.id);
+  const cached = spawnActiveCache.get(spawn);
   if (cached !== undefined) {
     return cached;
   }
 
   const active = typeof spawn.isActive !== "function" || spawn.isActive();
-  spawnActiveCache.set(spawn.id, active);
+  spawnActiveCache.set(spawn, active);
   return active;
 }
 
@@ -29,6 +31,7 @@ export function isSpawnActive(spawn: StructureSpawn): boolean {
 export function clearSpawnActiveCacheForTest(): void {
   spawnActiveCache.clear();
   spawnActiveCacheTick = -1;
+  spawnActiveCacheGame = undefined;
 }
 
 export interface RoomTickContext {
@@ -72,6 +75,7 @@ export interface TickContextService {
 
 interface TickContextSnapshot {
   tick: number;
+  game?: typeof Game;
   myRooms?: Room[];
   allSpawns?: StructureSpawn[];
   allCreeps?: Creep[];
@@ -273,9 +277,10 @@ export function createTickContextService(): TickContextService {
   };
 
   function ensureCurrentTick(): TickContextSnapshot {
-    if (snapshot.tick !== Game.time) {
+    if (snapshot.tick !== Game.time || snapshot.game !== Game) {
       snapshot = {
         tick: Game.time,
+        game: Game,
       };
     }
     return snapshot;
@@ -432,7 +437,7 @@ export function createTickContextService(): TickContextService {
       }
 
       const existing = current.roomContexts.get(roomName);
-      if (existing) {
+      if (existing?.room === resolvedRoom) {
         return existing;
       }
 

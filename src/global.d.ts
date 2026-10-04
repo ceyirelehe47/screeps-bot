@@ -546,6 +546,8 @@ declare global {
     lastBankHits?: number;
     /** Last tick at which bank hits decreased. */
     lastBankProgressAt?: number;
+    combatRecoveryHits?: number;
+    combatRecoveryProgressAt?: number;
     /** Most recent tick on which the target room or bank was visible. */
     lastVisibleAt?: number;
     /** Stable machine-readable reason why the task cannot currently advance. */

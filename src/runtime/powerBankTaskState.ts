@@ -8,7 +8,7 @@ const DEFAULT_STAGE_TIMEOUTS: Partial<Record<PowerBankHarvestStatus, number>> = 
   [POWER_BANK_STATUS.BOOSTING]: 400,
 };
 
-const ATTACK_PROGRESS_TIMEOUT = 100;
+export const ATTACK_PROGRESS_TIMEOUT = 100;
 const VISIBILITY_GRACE_TICKS = 75;
 const HAULING_TIMEOUT_TICKS = 1200;
 
@@ -133,7 +133,8 @@ export function getPowerBankLifecycleFailure(task: PowerBankHarvestTask): string
   if (
     task.status === POWER_BANK_STATUS.ATTACKING &&
     task.lastBankProgressAt !== undefined &&
-    Game.time - task.lastBankProgressAt > ATTACK_PROGRESS_TIMEOUT
+    Game.time - task.lastBankProgressAt > ATTACK_PROGRESS_TIMEOUT &&
+    (task.combatRecoveryProgressAt === undefined || Game.time - task.combatRecoveryProgressAt > ATTACK_PROGRESS_TIMEOUT)
   ) {
     return "attack_no_progress";
   }

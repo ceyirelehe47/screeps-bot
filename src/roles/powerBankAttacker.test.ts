@@ -34,8 +34,8 @@ const BANK_ID = "powerbank-0";
 const ATTACKER_ID = "attacker-0";
 const HEALER_ID = "healer-0";
 const HEALER_BODY = [
-  { type: HEAL as BodyPartConstant, hits: 100 },
-  { type: MOVE as BodyPartConstant, hits: 100 },
+  ...Array.from({ length: 25 }, () => ({ type: HEAL as BodyPartConstant, hits: 100 })),
+  ...Array.from({ length: 25 }, () => ({ type: MOVE as BodyPartConstant, hits: 100 })),
 ];
 
 type TaskOverrides = Partial<PowerBankHarvestTask> & {
@@ -166,6 +166,30 @@ describe("powerBankAttackerRole", () => {
 
     powerBankAttackerRole(TARGET_ROOM).target(attacker);
 
+    expect(attacker.attack).not.toHaveBeenCalled();
+  });
+
+  it("pauses reflection while HEAL is damaged and resumes after the same members recover", () => {
+    setupTask();
+    setupBank();
+    const { attacker, healer } = setupPair();
+    const damaged = healer.body.filter((part) => part.type === HEAL).slice(0, 20);
+    damaged.forEach((part) => { part.hits = 0; });
+    powerBankAttackerRole(TARGET_ROOM).target(attacker);
+    expect(attacker.attack).not.toHaveBeenCalled();
+    damaged.forEach((part) => { part.hits = 100; });
+    Game.time++;
+    powerBankAttackerRole(TARGET_ROOM).target(attacker);
+    expect(attacker.attack).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not let the prepared next generation attack before active ownership transfers", () => {
+    setupTask({ activeGeneration: 0, combatReady: true, attackerId: "old-red", healerId: "old-green",
+      reinforcement: { index: 1, generation: 1, stage: "attacking", attackerId: ATTACKER_ID,
+        healerId: HEALER_ID, combatReady: true, boostLabs: [] } });
+    setupBank();
+    const { attacker } = setupPair({}, {}, 1);
+    powerBankAttackerRole(TARGET_ROOM).target(attacker);
     expect(attacker.attack).not.toHaveBeenCalled();
   });
 

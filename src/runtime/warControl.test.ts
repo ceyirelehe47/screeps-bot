@@ -1,6 +1,6 @@
 jest.mock("@/runtime/powerBankObserver", () => ({ ...jest.requireActual("@/runtime/powerBankObserver"), requestCombatObservation: jest.fn(() => true) }));
 
-import { configureWarRebuildWatch, runWarControl, startWarRoom, stopWarRoom } from "@/runtime/warControl";
+import { configureWarRebuildWatch, requestWarRoomClear, runWarControl, startWarRoom, stopWarRoom } from "@/runtime/warControl";
 import * as combatBoosts from "@/runtime/powerBankBoost";
 import * as combatObserver from "@/runtime/powerBankObserver";
 import { createMockStore, MockPos } from "@mock/powerBank";
@@ -392,6 +392,71 @@ describe("towerDrainDuo 战争控制", () => {
     expect(Game.spawns.Spawn1.memory.spawnList).toEqual(expect.arrayContaining(Object.values(generation.configNames)));
     expect(prepare).not.toHaveBeenCalled();
     expect(release).not.toHaveBeenCalled();
+  });
+
+  it("NPC默认无强化，真实入口塔伤不低于治疗时才升级，显式配置仍优先", () => {
+    const target = createTargetRoom();
+    target.controller!.owner = { username: "TooAngel" };
+    const towers = [0, 1].map(i => ({ id: `tower-${i}`, structureType: STRUCTURE_TOWER,
+      pos: new MockPos(25, 25, target.name), owner: { username: "TooAngel" }, store: createMockStore({ [RESOURCE_ENERGY]: 0 }) } as unknown as StructureTower));
+    target.find = jest.fn((kind: FindConstant) => kind === FIND_STRUCTURES || kind === FIND_HOSTILE_STRUCTURES ? towers : []) as Room["find"];
+    Game.rooms[target.name] = target;
+    Game.map = { ...Game.map, describeExits: jest.fn(() => ({ [LEFT]: "E2N57" })),
+      getRoomTerrain: jest.fn(() => ({ get: () => 0 })),
+      findRoute: jest.fn(() => [{ exit: RIGHT, room: "E2N57" }, { exit: RIGHT, room: target.name }]) } as unknown as GameMap;
+    startWarRoom(target.name, "E1N57", { oneShot: false });
+    runWarControl();
+    const old = Memory.data!.war![target.name];
+    expect(old).toMatchObject({ npcAuto: true, squad: "towerDrainDuo", squadDecision: "no_current_tower_threat", attempts: 1 });
+    const generation = old.activeGeneration!.id;
+    towers.forEach(tower => { tower.store[RESOURCE_ENERGY] = 1000; });
+    Game.time += 100; resetRuntimeServices(); runWarControl();
+    expect(Memory.data!.war![target.name]).toMatchObject({ npcAuto: true, squad: "t3Duo", boostTier: "t3", squadDecision: "entry_damage_exceeds_heal", attempts: 2 });
+    expect(Memory.data!.war![target.name].generationCounter).toBeGreaterThanOrEqual(generation);
+    towers.forEach(tower => { tower.store[RESOURCE_ENERGY] = 0; });
+    Game.time += 100; resetRuntimeServices(); runWarControl();
+    expect(Memory.data!.war![target.name].squad).toBe("t3Duo");
+    startWarRoom(target.name, "E1N57", { squad: "towerDrainDuo", oneShot: false });
+    expect(Memory.data!.war![target.name].npcAuto).toBeUndefined();
+    towers.forEach(tower => { tower.store[RESOURCE_ENERGY] = 1000; });
+    Game.time += 100; resetRuntimeServices(); runWarControl();
+    expect(Memory.data!.war![target.name].squad).toBe("towerDrainDuo");
+  });
+
+  it("玩家目标和显式T3保留原默认，未知NPC先观察而不盲孵化", () => {
+    const target = createTargetRoom(); target.controller!.owner = { username: "a-player" };
+    Game.rooms[target.name] = target;
+    startWarRoom(target.name, "E1N57");
+    expect(Memory.data!.war![target.name]).toMatchObject({ squad: "t3Duo", boostTier: "t3" });
+    target.controller!.owner = { username: "Invader" };
+    startWarRoom(target.name, "E1N57", { boostTier: "t3" });
+    expect(Memory.data!.war![target.name].npcAuto).toBeUndefined();
+    delete Game.rooms[target.name];
+    // 正常NPC保留请求来自已识别的reservation事件。
+    requestWarRoomClear("E4N57", "E1N57", { reason: "npc_reservation" });
+    runWarControl();
+    expect(Memory.data!.war!.E4N57).toMatchObject({ squad: "towerDrainDuo", failReason: "npc_policy_awaiting_vision" });
+    expect(Memory.data!.war!.E4N57.activeGeneration).toBeUndefined();
+  });
+
+  it("地图路线记录跳数和当前敌情，经济危险名单不造成长绕行，显式路线不被刷新", () => {
+    const threatened = createTargetRoom([], [{ structureType: STRUCTURE_TOWER, pos: new MockPos(25, 25, "E2N57"), store: createMockStore({ [RESOURCE_ENERGY]: 1000 }) } as unknown as StructureTower], [], "E2N57");
+    Game.rooms.E2N57 = threatened;
+    const route = jest.fn((_from: string, _to: string, options: RouteOptions) => {
+      expect(options.routeCallback!("E2N57", "E1N57")).toBe(Infinity);
+      expect(options.routeCallback!("E1N56", "E1N57")).toBe(1);
+      return [{ exit: TOP, room: "E1N56" }, { exit: RIGHT, room: "E2N56" }, { exit: RIGHT, room: "E3N56" }, { exit: BOTTOM, room: "E3N57" }];
+    });
+    Game.map = { ...Game.map, findRoute: route } as GameMap;
+    Memory.runtime!.powerBankPermanentDangerRooms = { E1N56: true };
+    startDrain();
+    expect(Memory.data!.war!.E3N57.routeTrace).toEqual({ hops: 4, policy: "map_combat", avoided: { E2N57: "current_tower_threat" } });
+    const manual = ["E1N57", "E2N57", "E3N57"];
+    startWarRoom("E3N57", "E1N57", { squad: "towerDrainDuo", routeRooms: manual, oneShot: false });
+    route.mockClear(); Game.time += 200; runWarControl();
+    expect(route).not.toHaveBeenCalled();
+    expect(Memory.data!.war!.E3N57.routeTrace).toEqual({ hops: 2, policy: "manual", avoided: {} });
+    expect(Memory.data!.war!.E3N57.routeRooms).toEqual(manual);
   });
 
   it("同母房的三个耗塔目标并行进入生产，保持独立 generation 与配对", () => {

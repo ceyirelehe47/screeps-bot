@@ -3,6 +3,8 @@ import { prepareBoosts, releaseBoostLabs } from "@/runtime/powerBankBoost";
 import { requestCombatObservation, OBSERVATION_REQUEST_TTL } from "@/runtime/powerBankObserver";
 import { clearMovementState } from "@/roles/shared";
 import type { CreepConfig } from "@/types/system";
+import { assessUnboostedNpc, isNpcWarTarget } from "@/runtime/warNpcPolicy";
+import { getRefillableHostileTowers } from "@/runtime/combatTowerThreat";
 
 type WarStatus = "queued" | "staging" | "clearing" | "downgrading" | "patrol_waiting" | "done" | "failed";
 export type WarSquad = "standard" | "t3Duo" | "towerDrainDuo";
@@ -28,6 +30,10 @@ interface WarTask {
   routeRooms?: string[];
   routeOrigin?: "map" | "manual";
   routePlannedAt?: number;
+  routeTrace?: { hops: number; avoided: Record<string, string>; policy: "map_combat" | "manual" };
+  npcAuto?: true;
+  squadDecision?: string;
+  squadAssessedAt?: number;
   squad?: WarSquad;
   boostTier?: "t3";
   boostLabs?: string[];
@@ -80,6 +86,9 @@ export interface StartWarResult {
   status: WarStatus;
   reason: "manual";
   squad?: WarSquad;
+  routeRooms?: string[];
+  routeTrace?: WarTask["routeTrace"];
+  squadDecision?: string;
   boostTier?: WarBoostTier;
   oneShot: boolean;
   attempts: number;
@@ -137,6 +146,9 @@ export interface WarStatusTaskSnapshot {
   status: WarStatus;
   reason: "npc_reservation" | "manual";
   squad?: WarSquad;
+  routeRooms?: string[];
+  routeTrace?: WarTask["routeTrace"];
+  squadDecision?: string;
   boostTier?: "t3";
   oneShot: boolean;
   boostStatus?: "preparing" | "ready" | "failed";
@@ -1250,6 +1262,9 @@ function buildTaskStatusSnapshot(task: WarTask): WarStatusTaskSnapshot {
     status: task.status,
     reason: task.reason,
     squad: task.squad,
+    routeRooms: task.routeRooms,
+    routeTrace: task.routeTrace,
+    squadDecision: task.squadDecision,
     boostTier: task.boostTier,
     oneShot: task.oneShot === true,
     boostStatus: task.boostStatus,
@@ -1302,13 +1317,37 @@ function writeWarTelemetry(): void {
 }
 
 function processTask(task: WarTask): void {
+  if (!task.routeTrace && task.routeRooms) task.routeTrace = { hops: Math.max(0, task.routeRooms.length - 1), avoided: {}, policy: task.routeOrigin === "map" ? "map_combat" : "manual" };
   if (task.routeOrigin === "map" && Game.time - (task.routePlannedAt ?? 0) >= 100) {
-    const route = defaultWarMapRoute(task.sourceRoom, task.targetRoom);
+    const plan = defaultWarMapRoute(task.sourceRoom, task.targetRoom);
+    const route = plan.rooms;
+    task.routeTrace = plan.trace;
     task.routePlannedAt = Game.time;
     if (route && route.join("|") !== task.routeRooms?.join("|")) {
       task.routeRooms = route;
       synchronizeGenerationRoleArgs(task, false);
     }
+  }
+  if (task.npcAuto && isTowerDrainDuoTask(task) && task.squadAssessedAt !== undefined && Game.time - task.squadAssessedAt < 100 && task.failReason?.startsWith("npc_")) return;
+  if (task.npcAuto && isTowerDrainDuoTask(task) && (task.squadAssessedAt === undefined || Game.time - task.squadAssessedAt >= 100)) {
+    task.squadAssessedAt = Game.time;
+    const room = Game.rooms[task.targetRoom];
+    if (!room) { requestCombatObservation(task.targetRoom); task.failReason = "npc_policy_awaiting_vision"; return; }
+    if (!isNpcWarTarget(room)) {
+      // 空房继续既有清空判定；出现其它玩家的实际实体时停止自动升级。
+      const otherOwner = room.controller?.owner?.username;
+      if (otherOwner && otherOwner !== "Invader" && otherOwner !== "TooAngel") { task.failReason = "npc_identity_changed"; return; }
+    }
+    const decision = assessUnboostedNpc(room, task.routeRooms, TOWER_DRAIN_ATTACKER_BODY, TOWER_DRAIN_HEALER_BODY);
+    task.squadAssessedAt = Game.time;
+    task.squadDecision = decision.reason;
+    if (decision.reason === "entry_not_proven") { task.failReason = "npc_entry_not_proven"; return; }
+    if (!decision.sufficient) {
+      requestWarRoomClear(task.targetRoom, task.sourceRoom, { npcAuto: true });
+      processTask(ensureWarStore()[task.targetRoom]);
+      return;
+    }
+    if (task.failReason?.startsWith("npc_")) delete task.failReason;
   }
   if (isTowerDrainDuoTask(task)) requestCombatObservation(task.targetRoom);
   task.statusSince ??= task.createdAt;
@@ -1427,24 +1466,40 @@ function activateFrontline(task: WarTask): void {
   setTaskCreepsQueued(task, false);
 }
 
-function defaultWarMapRoute(sourceRoom: string, targetRoom: string): string[] | undefined {
-  if (!/^[WE]\d+[NS]\d+$/.test(sourceRoom) || !/^[WE]\d+[NS]\d+$/.test(targetRoom) || typeof Game.map?.findRoute !== "function") return undefined;
-  const route = Game.map.findRoute(sourceRoom, targetRoom);
-  if (!Array.isArray(route)) return undefined;
+function defaultWarMapRoute(sourceRoom: string, targetRoom: string): { rooms?: string[]; trace: NonNullable<WarTask["routeTrace"]> } {
+  const avoided: Record<string, string> = {};
+  for (const room of Object.values(Game.rooms)) {
+    if (room.name === sourceRoom || room.name === targetRoom || room.controller?.my || typeof room.find !== "function") continue;
+    if (getRefillableHostileTowers(room).length > 0) avoided[room.name] = "current_tower_threat";
+    else if (room.find(FIND_HOSTILE_CREEPS).some(actor => actor.body?.some(part => part.hits > 0 && (part.type === ATTACK || part.type === RANGED_ATTACK)))) avoided[room.name] = "current_combat_creep";
+  }
+  const trace: NonNullable<WarTask["routeTrace"]> = { hops: 0, avoided, policy: "map_combat" };
+  if (!/^[WE]\d+[NS]\d+$/.test(sourceRoom) || !/^[WE]\d+[NS]\d+$/.test(targetRoom) || typeof Game.map?.findRoute !== "function") return { trace };
+  const route = Game.map.findRoute(sourceRoom, targetRoom, { routeCallback: name => avoided[name] ? Infinity : 1 });
+  if (!Array.isArray(route)) return { trace };
   const rooms = [sourceRoom, ...route.map((step) => step.room)];
-  return rooms[rooms.length - 1] === targetRoom ? rooms : undefined;
+  trace.hops = route.length;
+  return { rooms: rooms[rooms.length - 1] === targetRoom ? rooms : undefined, trace };
 }
 
 export function requestWarRoomClear(
   targetRoom: string,
   sourceRoom: string,
-  options?: { routeRooms?: string[]; reason?: "npc_reservation" | "manual"; squad?: WarSquad; boostTier?: WarBoostTier; oneShot?: boolean },
+  options?: { routeRooms?: string[]; reason?: "npc_reservation" | "manual"; squad?: WarSquad; boostTier?: WarBoostTier; oneShot?: boolean; npcAuto?: true },
 ): void {
   const store = ensureWarStore();
   const existing = store[targetRoom];
   const now = Game.time;
-  const squad = options?.squad ?? existing?.squad;
-  const changedSquad = !!existing && options?.squad !== undefined && existing.squad !== squad;
+  const restarting = !existing || existing.status === "done" || existing.status === "failed";
+  const npcAuto = options?.squad !== undefined || options?.boostTier !== undefined ? undefined
+    : options?.npcAuto ?? existing?.npcAuto ?? ((!existing || restarting) && (options?.reason === "npc_reservation" || Game.rooms[targetRoom] && isNpcWarTarget(Game.rooms[targetRoom])) ? true : undefined);
+  const inheritedRoute = existing?.sourceRoom === sourceRoom ? existing.routeRooms : undefined;
+  const plan = options?.routeRooms || inheritedRoute ? undefined : defaultWarMapRoute(sourceRoom, targetRoom);
+  const routeRooms = options?.routeRooms ?? inheritedRoute ?? plan?.rooms;
+  const decision = npcAuto && Game.rooms[targetRoom] ? assessUnboostedNpc(Game.rooms[targetRoom], routeRooms, TOWER_DRAIN_ATTACKER_BODY, TOWER_DRAIN_HEALER_BODY) : undefined;
+  const needsT3 = !restarting && existing?.squad === "t3Duo" || decision && !decision.sufficient && decision.reason !== "entry_not_proven";
+  const squad = options?.squad ?? (npcAuto ? needsT3 ? "t3Duo" : "towerDrainDuo" : existing?.squad);
+  const changedSquad = !!existing && existing.squad !== squad;
   const restart = !existing || existing.status === "done" || existing.status === "failed"
     || existing.sourceRoom !== sourceRoom || changedSquad;
   const nextStatus: WarStatus = restart ? "staging" : existing.status;
@@ -1459,11 +1514,15 @@ export function requestWarRoomClear(
     sourceRoom,
     status: nextStatus,
     reason: options?.reason ?? existing?.reason ?? "npc_reservation",
-    routeRooms: options?.routeRooms ?? (existing?.sourceRoom === sourceRoom ? existing.routeRooms : undefined) ?? defaultWarMapRoute(sourceRoom, targetRoom),
+    routeRooms,
     routeOrigin: options?.routeRooms ? "manual" : existing?.sourceRoom === sourceRoom && existing.routeRooms ? existing.routeOrigin ?? "manual" : "map",
     routePlannedAt: options?.routeRooms || !existing?.routeRooms ? now : existing.routePlannedAt,
+    routeTrace: options?.routeRooms ? { hops: Math.max(0, options.routeRooms.length - 1), avoided: {}, policy: "manual" } : inheritedRoute ? existing?.routeTrace ?? { hops: inheritedRoute.length - 1, avoided: {}, policy: existing?.routeOrigin === "map" ? "map_combat" : "manual" } : plan?.trace,
+    npcAuto,
+    squadDecision: npcAuto ? decision?.reason ?? "awaiting_vision" : "explicit_or_player_default",
+    squadAssessedAt: npcAuto && decision && decision.reason !== "entry_not_proven" ? now : undefined,
     squad,
-    boostTier: squad === "towerDrainDuo" ? undefined : options?.boostTier ?? existing?.boostTier,
+    boostTier: squad === "towerDrainDuo" ? undefined : options?.boostTier ?? (npcAuto && squad === "t3Duo" ? "t3" : existing?.boostTier),
     boostLabs: restart ? undefined : existing?.boostLabs,
     boostStatus: restart ? undefined : existing?.boostStatus,
     oneShot: options?.oneShot ?? existing?.oneShot,
@@ -1491,7 +1550,8 @@ export function startWarRoom(targetRoom: string, sourceRoom: string, options: St
     return "ERR_INVALID_ARGS:startWar(targetRoom, sourceRoom)";
   }
 
-  const squad = options.squad ?? "t3Duo";
+  const npcAuto = options.squad === undefined && options.boostTier === undefined && !!Game.rooms[targetRoom] && isNpcWarTarget(Game.rooms[targetRoom]);
+  const squad = npcAuto ? undefined : options.squad ?? "t3Duo";
   const boostTier = squad === "towerDrainDuo" ? undefined : options.boostTier ?? (squad === "t3Duo" ? "t3" : undefined);
   const oneShot = options.oneShot ?? true;
 
@@ -1501,6 +1561,7 @@ export function startWarRoom(targetRoom: string, sourceRoom: string, options: St
     squad,
     boostTier,
     oneShot,
+    npcAuto: npcAuto ? true : undefined,
   });
 
   const task = ensureWarStore()[targetRoom];
@@ -1725,7 +1786,7 @@ function runWarRebuildWatches(store: Record<string, WarTask>): void {
       target.lastTriggeredEvidenceIds = evidence;
       // 减少旧证据不是重建；例如creep已被击杀，但其工地仍残留。
       if (!newEvidence) continue;
-      requestWarRoomClear(name, config.sourceRoom, { reason: "manual", squad: "towerDrainDuo", oneShot: false });
+      requestWarRoomClear(name, config.sourceRoom, { reason: "manual", npcAuto: true, oneShot: false });
       target.lastTriggeredAt = Game.time;
       target.triggerCount = (target.triggerCount ?? 0) + 1;
       target.blocker = "clear_active";
