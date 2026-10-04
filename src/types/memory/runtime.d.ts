@@ -609,6 +609,8 @@ declare global {
       updatedAt: number;
       lastObservedRooms: string[];
       coveredRooms: string[];
+      /** 普通高速房搜索的每房下次扫描时刻，默认间隔 500 tick。 */
+      patrolNextScanAt?: Record<string, number>;
       /** 已发现 Bank 的有界复看请求：房间 -> 首次请求 tick。 */
       requestedRooms?: Record<string, number>;
       combatRequestedRooms?: Record<string, number>;

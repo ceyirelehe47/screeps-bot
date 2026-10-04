@@ -5,6 +5,7 @@ import { runPowerBankObserver, hasPowerBankObserverCoverage, requestPowerBankObs
   requestCombatObservation, requestDepositObservation, requestRemoteObservation } from "@/runtime/powerBankObserver";
 import { recordDepositDiscovery } from "@/runtime/depositDiscovery";
 import { registerRuntimeServices } from "@/runtime/runtimeServices";
+import * as search from "@/runtime/powerBankSearch";
 
 function createRoom(name: string, owned = true): Room {
   return {
@@ -30,6 +31,7 @@ function addObserver(room: Room): StructureObserver {
 }
 
 describe("PowerBank Observer 动态扫描", () => {
+  afterEach(() => jest.restoreAllMocks());
   beforeEach(() => {
     jest.clearAllMocks();
     delete (global as typeof global & { __runtimeServices?: unknown }).__runtimeServices;
@@ -103,6 +105,98 @@ describe("PowerBank Observer 动态扫描", () => {
     expect(calls.every(([roomName]) => isPowerBankSearchRoom(roomName))).toBe(true);
     expect(calls.some(([roomName]) => !/^E[0-9]N60$/.test(roomName))).toBe(true);
     expect(Memory.runtime?.powerBankObserver?.lastObservedRooms).toEqual([calls[1][0]]);
+  });
+
+  it("每房各自每 500 tick 轮巡，不是每 500 tick 只扫一间", () => {
+    jest.spyOn(search, "getPowerBankSearchRooms").mockReturnValue(["E0N59", "E10N60"]);
+    const observer = addObserver(createRoom("E3N59"));
+    runPowerBankObserver();
+    Game.time = 101; runPowerBankObserver();
+    expect((observer.observeRoom as jest.Mock).mock.calls.map(([name]) => name)).toEqual(["E0N59", "E10N60"]);
+    for (const tick of [102, 598, 599]) { Game.time = tick; runPowerBankObserver(); }
+    expect(observer.observeRoom).toHaveBeenCalledTimes(2);
+    Game.time = 600; runPowerBankObserver();
+    Game.time = 601; runPowerBankObserver();
+    expect((observer.observeRoom as jest.Mock).mock.calls.map(([name]) => name)).toEqual(["E0N59", "E10N60", "E0N59", "E10N60"]);
+  });
+
+  it("多 Observer 去重，尚未到期时全部空闲，不持续重复巡逻", () => {
+    jest.spyOn(search, "getPowerBankSearchRooms").mockReturnValue(["E0N59", "E10N60"]);
+    const observers = [addObserver(createRoom("E3N59")), addObserver(createRoom("E4N58"))];
+    runPowerBankObserver();
+    for (const observer of observers) expect(observer.observeRoom).toHaveBeenCalledTimes(1);
+    Game.time = 599; runPowerBankObserver();
+    for (const observer of observers) expect(observer.observeRoom).toHaveBeenCalledTimes(1);
+    Game.time = 600; runPowerBankObserver();
+    for (const observer of observers) expect(observer.observeRoom).toHaveBeenCalledTimes(2);
+    expect(new Set(Memory.runtime!.powerBankObserver!.lastObservedRooms).size).toBe(2);
+  });
+
+  it("现役 Bank 显式复看不等 500 tick，并推迟相同房间的重复普通搜索", () => {
+    jest.spyOn(search, "getPowerBankSearchRooms").mockReturnValue(["E0N59"]);
+    const observer = addObserver(createRoom("E3N59"));
+    runPowerBankObserver();
+    Game.time = 110;
+    expect(requestPowerBankObservation("E0N59")).toBe(true);
+    runPowerBankObserver();
+    expect(observer.observeRoom).toHaveBeenCalledTimes(2);
+    expect(Memory.runtime!.powerBankObserver!.patrolNextScanAt?.E0N59).toBe(610);
+    Game.time = 600; runPowerBankObserver();
+    expect(observer.observeRoom).toHaveBeenCalledTimes(2);
+  });
+
+  it("搜索未到期时，预留巡逻的唯一可达 Observer 仍接 combat 请求", () => {
+    jest.spyOn(search, "getPowerBankSearchRooms").mockReturnValue(["E0N59"]);
+    const first = addObserver(createRoom("E3N59"));
+    const second = addObserver(createRoom("E4N58"));
+    Memory.runtime!.powerBankObserver = { patrolIndex: 0, updatedAt: 100, coveredRooms: [], lastObservedRooms: [], patrolNextScanAt: { E0N59: 600 } };
+    (Game.map.getRoomLinearDistance as jest.Mock).mockImplementation((from: string, to: string) => to === "E2N54" && from !== first.room.name ? 11 : 1);
+    expect(requestCombatObservation("E2N54")).toBe(true);
+    runPowerBankObserver();
+    expect(first.observeRoom).toHaveBeenCalledWith("E2N54");
+    expect(second.observeRoom).not.toHaveBeenCalled();
+  });
+
+  it("原生观察失败不开始 500 tick 冷却，轮转后仍可重试", () => {
+    jest.spyOn(search, "getPowerBankSearchRooms").mockReturnValue(["E0N59", "E10N60"]);
+    const observer = addObserver(createRoom("E3N59"));
+    (observer.observeRoom as jest.Mock).mockReturnValueOnce(ERR_INVALID_ARGS);
+    runPowerBankObserver();
+    expect(Memory.runtime!.powerBankObserver!.patrolNextScanAt?.E0N59).toBeUndefined();
+    Game.time++; runPowerBankObserver();
+    Game.time++; runPowerBankObserver();
+    expect((observer.observeRoom as jest.Mock).mock.calls.map(([name]) => name)).toEqual(["E0N59", "E10N60", "E0N59"]);
+    expect(Memory.runtime!.powerBankObserver!.patrolNextScanAt?.E0N59).toBe(602);
+  });
+
+  it("扫描日期跨服务重建保留，失效或不再属于候选的日期清理", () => {
+    jest.spyOn(search, "getPowerBankSearchRooms").mockReturnValue(["E0N59"]);
+    const observer = addObserver(createRoom("E3N59"));
+    runPowerBankObserver();
+    const state = Memory.runtime!.powerBankObserver!;
+    state.patrolNextScanAt!.E50N50 = 600;
+    delete (global as typeof global & { __runtimeServices?: unknown }).__runtimeServices;
+    registerRuntimeServices();
+    Game.time = 599; runPowerBankObserver();
+    expect(observer.observeRoom).toHaveBeenCalledTimes(1);
+    expect(state.patrolNextScanAt!.E50N50).toBeUndefined();
+    state.patrolNextScanAt!.E0N59 = 10000;
+    Game.time = 600; runPowerBankObserver();
+    expect(observer.observeRoom).toHaveBeenCalledTimes(2);
+  });
+
+  it("自然视野已经扫到 Bank 时不再发布同房的普通观察", () => {
+    jest.spyOn(search, "getPowerBankSearchRooms").mockReturnValue(["E0N59", "E10N60"]);
+    const observer = addObserver(createRoom("E3N59"));
+    const visible = createRoom("E0N59", false);
+    const bank = { id: "pb-natural", structureType: STRUCTURE_POWER_BANK, pos: { x: 25, y: 25, roomName: visible.name }, hits: 2000000, power: 3000, ticksToDecay: 4000 };
+    (visible.find as jest.Mock).mockImplementation((kind: FindConstant) => kind === FIND_STRUCTURES ? [bank] : []);
+    Game.rooms[visible.name] = visible;
+    runPowerBankObserver();
+    expect(observer.observeRoom).toHaveBeenCalledTimes(1);
+    expect(observer.observeRoom).toHaveBeenCalledWith("E10N60");
+    expect(Memory.runtime!.powerBankObserver!.patrolNextScanAt?.E0N59).toBe(600);
+    expect(Memory.data?.powerBankHarvest?.["pb-natural"]).toMatchObject({ status: "discovered", targetRoom: visible.name });
   });
 
   it("覆盖判定包含其它来源周边，不能用自可达集合自证", () => {

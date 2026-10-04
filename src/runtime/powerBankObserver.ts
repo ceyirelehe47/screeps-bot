@@ -8,6 +8,7 @@ import { getMemoryService, getTickContextService } from "@/runtime/runtimeServic
 export { getPowerBankRoomThreat } from "@/runtime/powerBankThreat";
 
 export const OBSERVATION_REQUEST_TTL = 25;
+export const POWER_BANK_PATROL_INTERVAL = 500;
 const OBSERVATION_REQUEST_LIMIT = 64;
 const TRANSIT_DANGER_TTL = 500;
 const REQUEST_KINDS = ["combat", "powerBank", "deposit", "remote"] as const;
@@ -24,6 +25,8 @@ interface PowerBankObserverRuntime {
   updatedAt: number;
   lastObservedRooms: string[];
   coveredRooms: string[];
+  /** 普通搜索每房的下一次扫描时刻；显式任务复看不受此间隔限制。 */
+  patrolNextScanAt?: Record<string, number>;
   /** 房间 -> 首次请求 tick；实际 observe 统一由本模块的调度阶段发布。 */
   requestedRooms?: Record<string, number>;
   combatRequestedRooms?: Record<string, number>;
@@ -208,6 +211,16 @@ export function runPowerBankObserver(): void {
   const observers = getActiveObservers();
   const state = getRuntimeState();
   const candidates = getPowerBankSearchRooms();
+  const searchRooms = new Set(candidates);
+  if (!state.patrolNextScanAt || typeof state.patrolNextScanAt !== "object" || Array.isArray(state.patrolNextScanAt)) {
+    state.patrolNextScanAt = {};
+  }
+  const patrolNextScanAt = state.patrolNextScanAt;
+  for (const [name, nextAt] of Object.entries(patrolNextScanAt)) {
+    if (!searchRooms.has(name) || !Number.isFinite(nextAt) || nextAt < 0 || nextAt > Game.time + POWER_BANK_PATROL_INTERVAL) {
+      delete patrolNextScanAt[name];
+    }
+  }
   const reachability = new Map<string, boolean>();
   const reachable = (observer: StructureObserver, roomName: string): boolean => {
     const key = `${observer.room.name}:${roomName}`;
@@ -235,7 +248,13 @@ export function runPowerBankObserver(): void {
     for (let offset = 0; offset < candidates.length; offset += 1) {
       const index = (cursor + offset) % candidates.length;
       const roomName = candidates[index];
-      if (!assigned.has(roomName) && reachable(observer, roomName)) {
+      if (assigned.has(roomName) || Game.time < (patrolNextScanAt[roomName] ?? 0)) continue;
+      // 本 tick 的真实视野已由前面的发现扫描处理，复用它并延后普通观察。
+      if (Game.rooms[roomName]) {
+        patrolNextScanAt[roomName] = Game.time + POWER_BANK_PATROL_INTERVAL;
+        continue;
+      }
+      if (reachable(observer, roomName)) {
         cursor = (index + 1) % candidates.length;
         return roomName;
       }
@@ -291,6 +310,7 @@ export function runPowerBankObserver(): void {
     if (kind === "remote") scheduled!.remoteSlots += 1;
     if (observer.observeRoom(roomName) === OK) {
       observed.push(roomName);
+      if (searchRooms.has(roomName)) patrolNextScanAt[roomName] = Game.time + POWER_BANK_PATROL_INTERVAL;
       for (const requestKind of REQUEST_KINDS) delete requestsFor(state, requestKind)[roomName];
     } else if (kind) {
       requestsFor(state, kind)[roomName] = Game.time;
@@ -338,6 +358,11 @@ export function runPowerBankObserver(): void {
     if (available.includes(patrolObserver)) {
       const roomName = patrol(patrolObserver);
       if (roomName) submit(patrolObserver, roomName);
+      else {
+        // 没有到期搜索房时，空闲的巡逻名额继续服务当前任务复看。
+        const choice = rotateRequest(patrolObserver, REQUEST_KINDS);
+        if (choice) submit(patrolObserver, choice.roomName, choice.kind);
+      }
     }
   }
   state.priorityKindCursor = priorityCursor;
