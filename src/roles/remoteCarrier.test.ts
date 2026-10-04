@@ -235,6 +235,35 @@ describe("remoteCarrierRole", () => {
     expect(PathFinder.search).not.toHaveBeenCalled();
   });
 
+  it("暂缺目标视野只等观察，不在途中反向往返；恢复后继续原目标", () => {
+    const drop = { amount: 50, resourceType: RESOURCE_ENERGY, pos: new RoomPosition(44, 17, "W5N5") } as Resource;
+    const world = salvageFixture({ drops: [drop] });
+    const transit = { name: "W4N5", find: jest.fn(() => []) } as unknown as Room;
+    Game.rooms[transit.name] = transit; Object.assign(world.creep, { room: transit, pos: new RoomPosition(1, 21, transit.name) });
+    delete Game.rooms[world.room.name];
+    expect(world.role.source(world.creep)).toBe(false);
+    expect(moveToTargetRoom).not.toHaveBeenCalled();
+    Game.time++; Game.rooms[world.room.name] = world.room;
+    world.role.source(world.creep);
+    expect(moveToTargetRoom).toHaveBeenCalledWith(world.creep, world.room.name, undefined, expect.any(Object));
+  });
+
+  it("三个回收成员轮转使用两次寻路预算，固定执行顺序不会饿死第三只", () => {
+    const drop = { amount: 50, resourceType: RESOURCE_ENERGY, pos: new RoomPosition(44, 17, "W5N5") } as Resource;
+    const world = salvageFixture({ drops: [drop] });
+    world.creep.pickup = jest.fn(() => ERR_NOT_IN_RANGE);
+    const actors = ["a", "b", "c"].map((name) => ({ ...world.creep, name, memory: { ...world.creep.memory }, pickup: jest.fn(() => ERR_NOT_IN_RANGE) } as Creep));
+    Game.creeps = Object.fromEntries(actors.map((creep) => [creep.name, creep]));
+    const calls = new Map<string, number>();
+    for (let frame = 0; frame < 3; frame++) {
+      Game.time++; (moveToTarget as jest.Mock).mockClear();
+      for (const actor of actors) world.role.source(actor);
+      expect(moveToTarget).toHaveBeenCalledTimes(2);
+      for (const [actor] of (moveToTarget as jest.Mock).mock.calls) calls.set(actor.name, (calls.get(actor.name) ?? 0) + 1);
+    }
+    expect([...calls.values()]).toEqual([2, 2, 2]);
+  });
+
   it("INVADER mounted走近、取货、归仓卸货使用同一移动入口与真实Store相位", () => {
     const position = (x: number, y: number, roomName = "W5N5") => new RoomPosition(x, y, roomName);
     const drop = { amount: 50, resourceType: RESOURCE_ENERGY, pos: position(44, 17) } as Resource;

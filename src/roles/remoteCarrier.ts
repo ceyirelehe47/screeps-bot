@@ -1,5 +1,5 @@
 import { executeTreasuryFencedTerminalCargo, isTerminalCargoBlocked } from "@/runtime/treasuryTerminalCargo";
-import { moveToTarget, moveToTargetRoom } from "@/roles/shared";
+import { clearMovementState, moveToTarget, moveToTargetRoom } from "@/roles/shared";
 import { measureCreepDecision, measureCreepIntent } from "@/runtime/cpuPhaseProfiler";
 import { hasTerminalActionClaim } from "@/runtime/marketActionArbiter";
 import {
@@ -9,7 +9,8 @@ import {
 import type { RoleFactory } from "@/types/system";
 import { getCreepConfigService } from "@/runtime/runtimeServices";
 import { requestCombatObservation } from "@/runtime/powerBankObserver";
-import { getMoveIntentReceipt } from "@/movement/traffic";
+import { getMoveIntentReceipt, moveOffExit } from "@/movement/traffic";
+import { isExitTile } from "@/movement/common";
 
 type RemoteHaulTarget = AnyStoreStructure | Ruin | Tombstone | Resource;
 const SALVAGE_MODE = "invaderSalvage";
@@ -18,6 +19,7 @@ const salvageIntentTicks = new WeakMap<Creep, number>();
 let salvageSearchTick = -1;
 let salvageSearchGame: Game | undefined;
 let salvageSearches = 0;
+let salvageTurnNames: string[] = [];
 
 function isDrop(target: RemoteHaulTarget): target is Resource {
   return "amount" in target && "resourceType" in target;
@@ -73,7 +75,13 @@ function markSalvageIntent(creep: Creep): void {
 function moveSalvageSafely(creep: Creep, goal: RoomPosition, range = 1): void {
   if (salvageSearchTick !== Game.time || salvageSearchGame !== Game) {
     salvageSearchTick = Game.time; salvageSearchGame = Game; salvageSearches = 0;
+    const participants = Object.values(Game.creeps).filter((actor) => !actor.spawning && actor.memory.role === "remoteCarrier"
+      && (actor.memory.roleArgs?.[2] === SALVAGE_MODE || (actor.memory.configName && getCreepConfigService().get(actor.memory.configName)?.args[2] === SALVAGE_MODE)))
+      .map((actor) => actor.name).sort();
+    const start = participants.length ? Game.time % participants.length : 0;
+    salvageTurnNames = [...participants.slice(start), ...participants.slice(0, start)].slice(0, 2);
   }
+  if (salvageTurnNames.length && !salvageTurnNames.includes(creep.name)) return;
   if (salvageSearches >= 2) return;
   salvageSearches += 1;
   const options = {
@@ -319,6 +327,13 @@ export const remoteCarrierRole: RoleFactory = (targetRoom: string, targetX?: str
       requestCombatObservation(targetRoom);
       if (salvageIntentTicks.get(creep) === Game.time) return false;
       const room = Game.rooms[targetRoom];
+      if (salvageTaskActive(creep) && !room) {
+        if (creep.store.getUsedCapacity() > 0) return true;
+        // Observer并不保证逐tick可见；暂缺视野只等待，不能每隔一tick改向母房。
+        clearMovementState(creep);
+        if (isExitTile(creep.pos) && moveOffExit(creep, true, (_direction, pos) => isInvaderSalvagePositionSafe(creep.room, pos)) === OK) markSalvageIntent(creep);
+        return false;
+      }
       if (!salvageTaskActive(creep) || !isInvaderSalvageRoomClear(room)) {
         if (creep.store.getUsedCapacity() > 0) return true;
         const home = getHomeRoomName(creep);

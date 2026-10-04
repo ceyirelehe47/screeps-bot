@@ -9,10 +9,11 @@ jest.mock("@/runtime/cpuPhaseProfiler", () => ({
   measureCreepIntent: (fn: () => unknown) => fn(),
 }));
 
-jest.mock("@/movement/traffic", () => ({
+jest.mock("@/movement/traffic", () => ({ ...jest.requireActual("@/movement/traffic"),
   moveOffExit: jest.fn(() => OK),
 }));
 
+import { issueMove } from "@/movement/traffic";
 import { healerRole } from "@/roles/healer";
 import { clearCreepMovementStateForTest } from "@/movement/creepState";
 import { createMockPowerBankCreep } from "@mock/powerBank";
@@ -83,9 +84,21 @@ describe("healerRole war duo staging", () => {
     Game.creeps = { attacker, healer };
     (attacker.memory as CreepMemory & { _warMoveIntentAt?: number })._warMoveIntentAt = Game.time;
 
+    issueMove(attacker, RIGHT);
     healerRole(TARGET_ROOM, "", "", "", ATTACKER_CONFIG).target(healer);
 
     expect(healer.move).toHaveBeenCalledWith(healer.pos.getDirectionTo(attacker.pos));
     expect(moveToTarget).not.toHaveBeenCalled();
+  });
+
+  it.each(["marker_only", "destination_near", "destination_occupied"])("%s 不触发盲目跟随或覆盖通用让路", (kind) => {
+    Game.time++;
+    const attacker = createMockPowerBankCreep("meleeAttacker", { name: "red", roomName: TARGET_ROOM, x: 20, y: 20, memory: { role: "meleeAttacker", configName: ATTACKER_CONFIG, _warMoveIntentAt: Game.time } });
+    const healer = createMockPowerBankCreep("healer", { name: "green", roomName: TARGET_ROOM, x: 19, y: kind === "destination_occupied" ? 20 : 19, memory: { role: "healer", configName: HEALER_CONFIG } });
+    attacker.room.find = jest.fn(() => []) as Room["find"]; healer.room = attacker.room;
+    Game.creeps = { red: attacker, green: healer };
+    if (kind !== "marker_only") issueMove(attacker, LEFT);
+    healerRole(TARGET_ROOM, "", "", "", ATTACKER_CONFIG).target(healer);
+    expect(healer.move).not.toHaveBeenCalled();
   });
 });

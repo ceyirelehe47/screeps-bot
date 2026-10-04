@@ -1,13 +1,14 @@
 jest.mock("@/roles/shared", () => ({ clearMovementState: jest.fn(), moveToTarget: jest.fn(() => OK), moveToTargetRoom: jest.fn(() => OK) }));
 jest.mock("@/runtime/powerBankObserver", () => ({ requestCombatObservation: jest.fn(() => true) }));
 jest.mock("@/runtime/cpuPhaseProfiler", () => ({ measureCreepIntent: (fn: () => unknown) => fn(), measureCreepDecision: (fn: () => unknown) => fn() }));
-jest.mock("@/movement/traffic", () => ({ moveOffExit: jest.fn(() => OK) }));
+jest.mock("@/movement/traffic", () => ({ ...jest.requireActual("@/movement/traffic"), moveOffExit: jest.fn(() => OK) }));
 
 import { constrainTowerDrainBreachPath, runTowerDrainPair, towerDrainPairRange, type TowerDrainPairState } from "@/roles/towerDrainPair";
 import { meleeAttackerRole } from "@/roles/meleeAttacker";
 import * as meleeModule from "@/roles/meleeAttacker";
 import { healerRole } from "@/roles/healer";
 import { createMockPowerBankCreep, createMockStore, MockPos } from "@mock/powerBank";
+import { issueMove } from "@/movement/traffic";
 import { createHash } from "node:crypto";
 
 const TARGET = "E3N57";
@@ -624,6 +625,7 @@ describe("towerDrainDuo 公共战术门", () => {
     attacker.pos = new MockPos(2, 25, TARGET) as unknown as RoomPosition;
     healer.pos = new MockPos(1, 26, TARGET) as unknown as RoomPosition;
     attacker.memory._warMoveIntentAt = Game.time;
+    issueMove(attacker, RIGHT);
     const hold = jest.spyOn(meleeModule, "shouldWarHealerHoldForCounterstrike").mockReturnValue(true);
     try {
       healerRole(TARGET, "", "", "", RED_CONFIG, "towerDrainDuo").target(healer);

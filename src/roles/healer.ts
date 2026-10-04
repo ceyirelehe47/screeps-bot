@@ -6,7 +6,7 @@ import {
   shouldWarHealerHoldForCounterstrike,
 } from "@/roles/meleeAttacker";
 import { getCreepMovementState } from "@/movement/creepState";
-import { moveOffExit } from "@/movement/traffic";
+import { getMoveIntentReceipt, issueMove, moveOffExit } from "@/movement/traffic";
 import { measureCreepDecision, measureCreepIntent } from "@/runtime/cpuPhaseProfiler";
 import type { RoleFactory } from "@/types/system";
 
@@ -158,10 +158,14 @@ function coordinateCounterstrike(creep: Creep, attacker: Creep): boolean {
 function followMovingWarAttacker(creep: Creep, attacker: Creep): void {
   if (attacker.memory._warMoveIntentAt !== Game.time) return;
   if (getCreepMovementState(creep.name)?.movementPushedAt === Game.time) return;
+  const intent = getMoveIntentReceipt(attacker);
+  if (!intent?.to || intent.to.roomName !== creep.room.name) return;
+  if (intent.to.x === creep.pos.x && intent.to.y === creep.pos.y) return;
+  if (Math.max(Math.abs(intent.to.x - creep.pos.x), Math.abs(intent.to.y - creep.pos.y)) <= 1) return;
   const direction = creep.pos.getDirectionTo(attacker.pos);
   if (!direction) return;
   clearMovementState(creep);
-  measureCreepIntent(() => creep.move(direction));
+  issueMove(creep, direction);
 }
 
 function moveWithWarAttackerFormation(creep: Creep, targetRoom: string, encodedRouteRooms?: string, towerDrain = false): boolean {

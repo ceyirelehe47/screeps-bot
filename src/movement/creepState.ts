@@ -7,6 +7,8 @@ export interface CreepMovementState {
   travelState?: TravelState;
   movementPushedAt?: number;
   pathingRequestedAt?: number;
+  /** 业务下一步许可暂未满足；观察等待不等同于几何卡死。 */
+  stepPolicyWaitAt?: number;
   workAnchor?: WorkAnchor;
 }
 

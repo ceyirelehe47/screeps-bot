@@ -9,7 +9,7 @@ jest.mock("@/runtime/cpuPhaseProfiler", () => ({
   measureCreepIntent: (fn: () => unknown) => fn(),
 }));
 
-jest.mock("@/movement/traffic", () => ({
+jest.mock("@/movement/traffic", () => ({ ...jest.requireActual("@/movement/traffic"),
   moveOffExit: jest.fn(() => OK),
 }));
 

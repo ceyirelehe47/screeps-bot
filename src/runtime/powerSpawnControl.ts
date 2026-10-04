@@ -10,6 +10,7 @@ import {
 import { createCarrierTaskStep } from "@/runtime/carrierTaskHelpers";
 import { getTerminalAmountOutsideMarketSaleExposure } from "@/runtime/marketSaleExposure";
 import { isRoomInReserveMode } from "@/runtime/roomReserve";
+import { runPowerDistribution } from "@/runtime/powerDistribution";
 
 export const POWER_SPAWN_CARRIER_TASK_PRODUCER = "powerSpawnControl";
 export const POWER_SPAWN_SUPPLY_PRIORITY = 150;
@@ -20,7 +21,8 @@ type SupplySource = StructureStorage | StructureTerminal;
 
 function getOwnedPowerSpawn(room: Room): StructurePowerSpawn | null {
   return room.find(FIND_MY_STRUCTURES).find(
-    (structure): structure is StructurePowerSpawn => structure.structureType === STRUCTURE_POWER_SPAWN,
+    (structure): structure is StructurePowerSpawn => structure.structureType === STRUCTURE_POWER_SPAWN
+      && (typeof structure.isActive !== "function" || structure.isActive()),
   ) || null;
 }
 
@@ -159,6 +161,7 @@ export function isPowerSpawnProcessingEnabledForRoom(roomName: string): boolean 
 
 export function runPowerSpawnControl(): void {
   const validRoomNames = new Set<string>();
+  const processors = new Map<string, StructurePowerSpawn>();
   const rooms = Object.values(Game.rooms).sort((left, right) => left.name.localeCompare(right.name));
   for (const room of rooms) {
     if (!isPowerSpawnProcessingEnabledForRoom(room.name)) {
@@ -169,7 +172,9 @@ export function runPowerSpawnControl(): void {
       continue;
     }
     validRoomNames.add(room.name);
+    processors.set(room.name, powerSpawn);
     runRoomPowerSpawnControl(room, powerSpawn);
   }
   pruneCarrierTasksForProducer(POWER_SPAWN_CARRIER_TASK_PRODUCER, validRoomNames);
+  runPowerDistribution(rooms, processors);
 }

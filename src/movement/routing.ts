@@ -117,7 +117,7 @@ export function moveToTargetRoom(
   const currentPosKey = getPosKey(creep.pos);
   const currentOnExit = isExitTile(creep.pos);
   const repeatedExitTransition = travelState.lastWasExit && currentOnExit && travelState.lastPosKey !== currentPosKey;
-  if ((travelState.lastPosKey === currentPosKey || repeatedExitTransition) && creep.fatigue === 0) {
+  if ((travelState.lastPosKey === currentPosKey || repeatedExitTransition) && creep.fatigue === 0 && movementState.stepPolicyWaitAt !== Game.time - 1) {
     travelState.stuckTicks += 1;
   } else {
     // 位置恢复移动（或疲劳恢复）：stuck 与完整搜索退避一并清零。
@@ -204,7 +204,13 @@ export function moveToTargetRoom(
   if (isOnExitDirection(creep.pos, exitDirection as DirectionConstant)) {
     if (options.canMoveStep) {
       const destination = getMoveIntentDestination(creep.pos, exitDirection as DirectionConstant);
-      if (!destination || !options.canMoveStep(new RoomPosition(destination.x, destination.y, destination.roomName))) return ERR_NO_PATH;
+      if (!destination) return ERR_NO_PATH;
+      if (!options.canMoveStep(new RoomPosition(destination.x, destination.y, destination.roomName))) {
+        movementState.stepPolicyWaitAt = Game.time;
+        updateTravelState(creep, travelState);
+        return ERR_BUSY;
+      }
+      delete movementState.stepPolicyWaitAt;
     }
     const result = issueMove(creep, exitDirection as DirectionConstant);
     updateTravelState(creep, travelState);

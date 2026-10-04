@@ -80,7 +80,8 @@ export function moveToTarget(
   // stuckTicks + 本次无进展即达阈值"的先行式：若本次实际恢复了位置，最多多
   // 一次带 creep 避让的重寻路，语义不受影响。
   const cachedState = movementState.movePathState;
-  const stuckNeedsRepath = !!cachedState && cachedState.stuckTicks + 1 >= PATH_STUCK_REPATH_THRESHOLD;
+  const policyWaiting = movementState.stepPolicyWaitAt === Game.time - 1;
+  const stuckNeedsRepath = !policyWaiting && !!cachedState && cachedState.stuckTicks + 1 >= PATH_STUCK_REPATH_THRESHOLD;
   const ignoreCreeps = stuckNeedsRepath ? false : options.ignoreCreeps ?? true;
   // costCallback without cacheKey disables path caching to avoid stale safe-zone paths
   const noCacheReuse = !!options.costCallback && !options.cacheKey;
@@ -105,7 +106,7 @@ export function moveToTarget(
       movePathState.expiresAt > Game.time;
 
     if (isMatchingState && movePathState && movePathState.steps.length > 0) {
-      if (movePathState.lastPosKey === currentPosKey && (!isStandardCreep(creep) || creep.fatigue === 0)) {
+      if (!policyWaiting && movePathState.lastPosKey === currentPosKey && (!isStandardCreep(creep) || creep.fatigue === 0)) {
         movePathState.stuckTicks += 1;
       } else {
         movePathState.stuckTicks = 0;
@@ -343,7 +344,12 @@ function followStoredRoomPath(
   }
   if (options.canMoveStep) {
     const destination = getMoveIntentDestination(creep.pos, creep.pos.getDirectionTo(nextPos));
-    if (!destination || !options.canMoveStep(new RoomPosition(destination.x, destination.y, destination.roomName))) return ERR_NO_PATH;
+    if (!destination) return ERR_NO_PATH;
+    if (!options.canMoveStep(new RoomPosition(destination.x, destination.y, destination.roomName))) {
+      ensureCreepMovementState(creep).stepPolicyWaitAt = Game.time;
+      return ERR_BUSY;
+    }
+    delete ensureCreepMovementState(creep).stepPolicyWaitAt;
   }
 
   // ERR_BUSY 是暂时性阻塞（对位换位/推动失败），保留路径交由 stuckTicks

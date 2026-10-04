@@ -129,7 +129,7 @@ describe("外出 creep 与常驻 creep 的统一房内寻路", () => {
   it("同房路径、缓存命中和出口过房都执行当帧业务下一步安全门", () => {
     const { creep } = traveler();
     const allow = jest.fn(() => false);
-    expect(moveToTargetRoom(creep, "W0N1", "W1N1|W0N1", { canMoveStep: allow })).toBe(ERR_NO_PATH);
+    expect(moveToTargetRoom(creep, "W0N1", "W1N1|W0N1", { canMoveStep: allow })).toBe(ERR_BUSY);
     expect(creep.move).not.toHaveBeenCalled();
     allow.mockReturnValue(true);
     Game.time += 1;
@@ -137,9 +137,28 @@ describe("外出 creep 与常驻 creep 的统一房内寻路", () => {
     (creep.move as jest.Mock).mockClear();
     allow.mockReturnValue(false); Game.time += 1;
     creep.pos = new MockRoomPosition(49, 10, creep.room.name) as unknown as RoomPosition;
-    expect(moveToTargetRoom(creep, "W0N1", "W1N1|W0N1", { canMoveStep: allow })).toBe(ERR_NO_PATH);
+    expect(moveToTargetRoom(creep, "W0N1", "W1N1|W0N1", { canMoveStep: allow })).toBe(ERR_BUSY);
     expect(creep.move).not.toHaveBeenCalled();
     expect(allow).toHaveBeenLastCalledWith(expect.objectContaining({ roomName: "W0N1", x: 0 }));
+  });
+
+  it("下一房业务许可等待不销毁通路、不累积几何卡死，恢复后使用原通路", () => {
+    const { creep, search } = traveler("powerBankHauler");
+    const allow = jest.fn(() => false);
+    const options = { canMoveStep: allow };
+    expect(moveToTargetRoom(creep, "W0N1", "W1N1|W0N1", options)).toBe(ERR_BUSY);
+    const path = getCreepMovementState(creep)!.movePathState;
+    for (let frame = 0; frame < 4; frame++) {
+      Game.time++;
+      expect(moveToTargetRoom(creep, "W0N1", "W1N1|W0N1", options)).toBe(ERR_BUSY);
+      expect(getCreepMovementState(creep)!.movePathState).toBe(path);
+      expect(getCreepMovementState(creep)!.travelState!.stuckTicks).toBe(0);
+    }
+    expect(search).toHaveBeenCalledTimes(1);
+    allow.mockReturnValue(true); Game.time++;
+    expect(moveToTargetRoom(creep, "W0N1", "W1N1|W0N1", options)).toBe(OK);
+    expect(creep.move).toHaveBeenCalledWith(RIGHT);
+    expect(getCreepMovementState(creep)!.stepPolicyWaitAt).toBeUndefined();
   });
 
   it("到达目标房后不复用旧房路径，global reset后可重建", () => {
