@@ -164,7 +164,7 @@ describe("外出 creep 与常驻 creep 的统一房内寻路", () => {
   it("Keeper 感知的回收路线复用原生路由与房内执行器，普通角色保留避让", () => {
     const { creep } = traveler("remoteCarrier");
     const keeperRoom = createRoom("W0N1", []);
-    const keeper = { owner: { username: "Source Keeper" }, getActiveBodyparts: () => 1 } as Creep;
+    const keeper = { owner: { username: "Source Keeper" }, getActiveBodyparts: () => 1 } as unknown as Creep;
     const originalFind = keeperRoom.find.bind(keeperRoom);
     keeperRoom.find = jest.fn((type: FindConstant) => type === FIND_HOSTILE_CREEPS ? [keeper] : originalFind(type)) as Room["find"];
     Game.map.findRoute = jest.fn((_from, _to, options) => {
