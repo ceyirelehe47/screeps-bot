@@ -36,12 +36,12 @@ function healBody(actor: RecoveryBody, amount: number): void {
 /** 暂停反伤，先补攻击者缺血，再恢复治疗者；恢复期间的攻击时间不能计入DPS。 */
 export function predictPowerBankRecovery(attacker: Creep, healer: Creep): { ticks: number; attack: number } {
   const attack = effectivePower(attacker.body, ATTACK);
-  if (attack > 0 && effectivePower(healer.body, HEAL) >= damageAfterTough(attacker.body, attack * POWER_BANK_HIT_BACK)) return { ticks: 0, attack };
+  if (attack > 0 && attacker.body.some(part => part.type === TOUGH && part.hits > 0) && effectivePower(healer.body, HEAL) >= damageAfterTough(attacker.body, attack * POWER_BANK_HIT_BACK)) return { ticks: 0, attack };
   const red = { body: attacker.body.map((part) => ({ ...part })), hits: attacker.hits, hitsMax: attacker.hitsMax };
   const green = { body: healer.body.map((part) => ({ ...part })), hits: healer.hits, hitsMax: healer.hitsMax };
   for (let ticks = 0; ticks <= CREEP_LIFE_TIME; ticks++) {
     const attack = effectivePower(red.body, ATTACK), heal = effectivePower(green.body, HEAL);
-    if (attack > 0 && heal >= damageAfterTough(red.body, attack * POWER_BANK_HIT_BACK)) return { ticks, attack };
+    if (attack > 0 && red.body.some(part => part.type === TOUGH && part.hits > 0) && heal >= damageAfterTough(red.body, attack * POWER_BANK_HIT_BACK)) return { ticks, attack };
     if (heal <= 0) break;
     if (red.hits < red.hitsMax) healBody(red, heal);
     else if (green.hits < green.hitsMax) healBody(green, heal);

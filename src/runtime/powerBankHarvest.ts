@@ -1544,17 +1544,16 @@ function processAttacking(task: PowerBankHarvestTask): void {
   }
 
   const combatCapable = isPairCombatCapable(pair);
+  // combatReady记录已通过的出生/强化门，身体损毁不能把它改回未准备状态，
+  // 否则暂时分离的治疗者连共用补位都无法执行。攻击能力由角色逐帧核对。
+  if (task.combatReady === false && task.attackerReady !== false && task.healerReady !== false) task.combatReady = true;
   if (!combatCapable) {
-    task.combatReady = false;
     setPowerBankBlocker(task, "active_pair_missing_effective_parts", 1);
-  } else if (task.combatReady === false && task.attackerReady !== false && task.healerReady !== false) {
-    // 已通过强化与身份门的现役成员恢复身体后可以继续；不代替出生/强化准备门。
-    task.combatReady = true;
   } else if (pair.attacker.room.name !== pair.healer.room.name || !pair.attacker.pos.isNearTo(pair.healer)) {
     setPowerBankBlocker(task, "active_pair_not_adjacent", 1);
   }
 
-  const recovering = combatCapable && !powerBankAttackSustainable(pair.attacker, pair.healer);
+  const recovering = !combatCapable || !powerBankAttackSustainable(pair.attacker, pair.healer);
   const recovery = recovering ? predictPowerBankRecovery(pair.attacker, pair.healer) : { ticks: 0 };
   let recoveryProgress = false;
   if (recovering && Number.isFinite(recovery.ticks)) {
@@ -1571,7 +1570,7 @@ function processAttacking(task: PowerBankHarvestTask): void {
     task,
     pair,
     bank,
-    !combatCapable || !Number.isFinite(recovery.ticks) || task.blocker === "attack_no_progress" && !recoveryProgress,
+    !Number.isFinite(recovery.ticks) || task.blocker === "attack_no_progress" && !recoveryProgress,
   );
   processReinforcement(task);
   if (!combatCapable || shouldProactivelyHandoff(task, pair, bank) || task.blocker === "attack_no_progress") pair = promoteReinforcement(task) ?? pair;

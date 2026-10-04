@@ -723,6 +723,29 @@ describe("powerBankHarvest", () => {
     expect(Object.keys(Memory.data?.creepConfigs ?? {}).some((name) => name.includes(":attacker:2:") || name.includes(":healer:2:"))).toBe(false);
   });
 
+  it.each([TOUGH, ATTACK])("真实损毁的%s可由当前治疗者恢复，寿命足够时不派第二队", (lostPart) => {
+    Game.time = 400;
+    setupSourceRoom();
+    const taskId = `pb-recover-live-${lostPart}`;
+    const pair = setupOwnedCombatPair({ taskId, ticksToLive: 400 });
+    // 模拟Engine按身体尾端保留部件：装甲全损或所有攻击部件也已损毁。
+    const firstLiving = lostPart === TOUGH ? pair.attacker.body.findIndex(part => part.type === ATTACK)
+      : pair.attacker.body.findIndex(part => part.type === MOVE);
+    pair.attacker.body.slice(0, firstLiving).forEach(part => { part.hits = 0; });
+    pair.attacker.hits = pair.attacker.body.reduce((sum, part) => sum + part.hits, 0);
+    const bank = createMockPowerBank({ id: `${taskId}-bank`, hits: 100_000, ticksToDecay: 5000 });
+    mockObjects(pair.attacker, pair.healer, bank);
+    addTask(makeTask({ id: taskId, status: POWER_BANK_STATUS.ATTACKING, sourceRoom: SOURCE_ROOM,
+      bankId: bank.id, tier: 8, attackerId: pair.attacker.id, healerId: pair.healer.id,
+      activeGeneration: 0, activeIndex: 0, combatReady: true, routeDistance: 2,
+      lastBankHits: bank.hits, lastBankProgressAt: Game.time, stageEnteredAt: Game.time,
+      bankExpiresAt: Game.time + 5000 }));
+    runPowerBankHarvest();
+    expect(getTask(taskId)?.blocker).toBe("active_pair_recovering");
+    expect(getTask(taskId)?.reinforcement).toBeUndefined();
+    expect(getTask(taskId)?.combatReady).toBe(true);
+  });
+
   it("requests recovery at 100 idle ticks and fails closed after the 250-tick progress deadline", () => {
     Game.time = 400;
     setupSourceRoom();

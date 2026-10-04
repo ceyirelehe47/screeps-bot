@@ -42,4 +42,14 @@ describe("PowerBank 当前能力与暂停恢复", () => {
     healer.hits = 2500;
     expect(predictPowerBankFinishTicks(100_000, attacker, healer)).toBe(Infinity);
   });
+
+  it.each([[TOUGH, 1], [ATTACK, 7]] as const)("当前治疗者用%s损毁后的%s轮恢复保留主队", (lost, ticks) => {
+    const { attacker, healer } = pair();
+    const firstLiving = attacker.body.findIndex(part => part.type === (lost === TOUGH ? ATTACK : MOVE));
+    attacker.body.slice(0, firstLiving).forEach(part => { part.hits = 0; });
+    attacker.hits = attacker.body.reduce((sum, part) => sum + part.hits, 0);
+    expect(predictPowerBankRecovery(attacker, healer)).toEqual({ ticks, attack: 1920 });
+    expect(predictPowerBankFinishTicks(100_000, attacker, healer)).toBe(ticks + 53);
+    expect(attacker.body.filter(part => part.type === TOUGH).every(part => part.hits === 0)).toBe(true);
+  });
 });
