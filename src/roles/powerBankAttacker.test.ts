@@ -148,7 +148,7 @@ describe("powerBankAttackerRole", () => {
   });
 
   it("attacks only the task-owned bank when the pair is combat ready", () => {
-    setupTask();
+    const task = setupTask();
     const bank = setupBank();
     const { attacker } = setupPair();
 
@@ -157,6 +157,15 @@ describe("powerBankAttackerRole", () => {
     expect(attacker.attack).toHaveBeenCalledTimes(1);
     expect(attacker.attack).toHaveBeenCalledWith(bank);
     expect(clearMovementState).toHaveBeenCalledWith(attacker);
+    expect(task.attackStartedTick).toBe(Game.time);
+  });
+
+  it.each([ERR_NOT_IN_RANGE, ERR_BUSY])("没有成功接受攻击意图时不登记搬运开打窗口 (%s)", (code) => {
+    const task = setupTask(); setupBank(); const { attacker } = setupPair();
+    (attacker.attack as jest.Mock).mockReturnValue(code);
+    powerBankAttackerRole(TARGET_ROOM).target(attacker);
+    expect(attacker.attack).toHaveBeenCalled();
+    expect(task.attackStartedTick).toBeUndefined();
   });
 
   it("does not bind a same-task healer whose member ID is not task-owned", () => {

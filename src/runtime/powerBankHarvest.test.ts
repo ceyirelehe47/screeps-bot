@@ -17,6 +17,8 @@ import { clearCreepMovementStateForTest } from "@/movement/creepState";
 import * as powerBankPathDistance from "@/runtime/powerBankPathDistance";
 import * as powerBankObserver from "@/runtime/powerBankObserver";
 import { getPowerBankLifecycleFailure, getPowerBankStageTimeout } from "@/runtime/powerBankTaskState";
+import { recordPowerBankDiscovery } from "@/runtime/powerBankDiscovery";
+import { powerBankAttackerRole } from "@/roles/powerBankAttacker";
 
 type RuntimeGlobal = typeof global & {
   __runtimeServices?: unknown;
@@ -385,11 +387,13 @@ describe("powerBankHarvest", () => {
     addTask(task); runPowerBankHarvest();
     expect(Object.keys(Memory.data!.creepConfigs!).filter(n => n.includes(":hauler:"))).toHaveLength(0);
     expect(task.attackStartedTick).toBeUndefined();
-    Game.time++; bank.hits = dps * 276; runPowerBankHarvest();
+    powerBankAttackerRole(TARGET_ROOM).target(pair.attacker);
+    expect(task.attackStartedTick).toBe(Game.time);
+    Game.time++; bank.hits = dps * 276; recordPowerBankDiscovery(bank); runPowerBankHarvest();
     expect(task.attackStartedTick).toBe(Game.time - 1);
     expect(task.plannedKillTick).toBe(Game.time + 276);
     expect(Object.keys(Memory.data!.creepConfigs!).filter(n => n.includes(":hauler:"))).toHaveLength(0);
-    Game.time++; bank.hits -= dps; runPowerBankHarvest();
+    Game.time++; bank.hits -= dps; recordPowerBankDiscovery(bank); runPowerBankHarvest();
     expect(task.plannedKillTick).toBe(Game.time + 275);
     expect(Object.keys(Memory.data!.creepConfigs!).filter(n => n.includes(":hauler:"))).toHaveLength(1);
   });

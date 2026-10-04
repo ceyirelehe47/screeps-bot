@@ -68,7 +68,10 @@ export const powerBankAttackerRole: RoleFactory = (targetRoomArg?: string, encod
     coordinatePowerBankPairMovement(pair, encodedRouteRooms);
     const bank = Game.getObjectById(task.bankId as Id<StructurePowerBank>);
     // 管理器拥有阶段切换；本角色只对当帧仍有效且贴身的搭档发攻击。
-    if (bank && pairReadyForCombat(pair)) measureCreepIntent(() => creep.attack(bank));
+    if (bank && pairReadyForCombat(pair)) {
+      const code = measureCreepIntent(() => creep.attack(bank));
+      if (code === OK) task.attackStartedTick ??= Game.time;
+    }
 
     return false;
   },

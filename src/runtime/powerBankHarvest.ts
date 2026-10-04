@@ -1559,7 +1559,6 @@ function processAttacking(task: PowerBankHarvestTask): void {
     return;
   }
 
-  const bankWasDamaged = task.lastBankHits !== undefined && bank.hits < task.lastBankHits;
   updatePowerBankObservation(task, bank);
   processReinforcement(task);
 
@@ -1582,7 +1581,6 @@ function processAttacking(task: PowerBankHarvestTask): void {
     resetChangedActivePair(task);
     return;
   }
-  if (bankWasDamaged && pair.attacker.room.name === task.targetRoom && pair.attacker.pos.isNearTo(bank.pos)) task.attackStartedTick ??= Game.time - 1;
   if (abortUnfinishablePair(task, bank, pair)) return;
 
   const combatCapable = isPairCombatCapable(pair);
