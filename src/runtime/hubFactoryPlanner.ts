@@ -138,7 +138,7 @@ export function planHubFactory(): void {
   // 在途计入覆盖量；每种原料至多为一批补料（小于 100 时合并到 100）。
   for (const [name, needed] of Object.entries(COMMODITIES[first.resource].components)) {
     const resource = name as ResourceConstant;
-    const localMissing = Math.max(0, needed - localAvailable(resource));
+    const localMissing = Math.max(0, (typeof needed === "number" ? needed : 0) - localAvailable(resource));
     if (localMissing <= 0) continue;
     wanted.add(resource);
     state.missing[resource] = localMissing;
