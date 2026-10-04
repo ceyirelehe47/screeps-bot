@@ -542,7 +542,7 @@ describe("carrierRole mineral hauling", () => {
     Game.time++; cargo = 800; energy = 0;
     expect(role.source(creep)).toBe(true);
     role.target(creep);
-    expect(creep.transfer).toHaveBeenCalledWith(storage, RESOURCE_ENERGY, expect.any(Number));
+    expect(creep.transfer).toHaveBeenCalledWith(storage, RESOURCE_ENERGY);
   });
 
   it("低能量 Tower 可从 Storage/proto 取能，但不继承 Spawn 的 Terminal bootstrap 授权", () => {
