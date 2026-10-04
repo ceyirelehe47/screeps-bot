@@ -14,7 +14,7 @@ function room(name: string, minerals: Record<string, number> = {}): Room {
     getCapacity: () => capacity,
   });
   const labs = Array.from({ length: 3 }, (_, n) => ({ id: `${name}-lab-${n}`, structureType: STRUCTURE_LAB,
-    pos: new RoomPosition(20 + n, 20, name), store: store(3000, {}) }));
+    store: store(3000, {}) }));
   return { name, memory: {}, controller: { my: true, level: 8 },
     storage: { id: `${name}-storage`, structureType: STRUCTURE_STORAGE, store: store(1_000_000, { energy: 200_000, ...minerals }) },
     terminal: { id: `${name}-terminal`, structureType: STRUCTURE_TERMINAL, cooldown: 0, store: store(300_000, { energy: 20_000 }) },
