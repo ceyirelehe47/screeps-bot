@@ -132,10 +132,12 @@ describe("三个NPC目标共享一支清剿小队", () => {
     expect(tasks.filter((task) => task.failReason === "shared_squad_queued")).toHaveLength(2);
   });
 
-  it("无威胁时优先无强化现役，回收T3和多余成员并保留控制器任务", () => {
+  it("无威胁时优先无强化现役，回收T3和多余成员并取消控制器攻击任务", () => {
     installExistingPairs();
     const controllerName = "E1N57:war:E2N54:controllerAttacker:0";
     Memory.data!.creepConfigs![controllerName] = { role: "claimer", roomName: "E1N57", args: ["E2N54", "", "attack"], body: [CLAIM, MOVE] };
+    const controllerActor = createWarCreep("old-controller", "meleeAttacker", controllerName, "E2N54");
+    controllerActor.memory.role = "claimer"; Game.creeps[controllerActor.name] = controllerActor;
     runWarControl();
     expect(Object.values(Memory.runtime!.warRebuildWatch!)[0].sharedSquadOwner).toBe("E2N54");
     expect(Game.creeps['E2N54-red'].memory.configName).toBeDefined();
@@ -143,8 +145,9 @@ describe("三个NPC目标共享一支清剿小队", () => {
       expect(Game.creeps[`${name}-${role}`].memory).toMatchObject({ _warDetached: true, _warRetireToRoom: "E1N57" });
       expect(Game.creeps[`${name}-${role}`].memory.configName).toBeUndefined();
     }
-    expect(Memory.data!.creepConfigs![controllerName]).toBeDefined();
-    expect(Object.values(Memory.data!.creepConfigs!).filter((config) => config.role === "claimer")).toHaveLength(3);
+    expect(Memory.data!.creepConfigs![controllerName]).toBeUndefined();
+    expect(controllerActor.memory._recycleToRoom).toBe("E1N57");
+    expect(Object.values(Memory.data!.creepConfigs!).filter((config) => config.role === "claimer")).toHaveLength(0);
   });
 
   it("当前唯一现役为T3且无威胁时回收它，重新只生产一份无强化队", () => {
@@ -171,7 +174,7 @@ describe("三个NPC目标共享一支清剿小队", () => {
     expect(Game.creeps['E3N53-red'].memory._warRetireToRoom).toBeUndefined();
   });
 
-  it("清空一房后同一对成员原子换目标与搭档，不孵化另一队，降级任务继续", () => {
+  it("清空一房后同一对成员原子换目标与搭档，不孵化另一队并等待自然降级", () => {
     installExistingPairs(); runWarControl();
     const previous = Object.values(Memory.runtime!.warRebuildWatch!)[0].sharedSquadOwner!;
     const room = createTargetRoom([], [], [], previous); room.controller!.owner = { username: "TooAngel" }; room.controller!.level = 8;

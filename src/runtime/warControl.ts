@@ -834,6 +834,8 @@ function inferControllerAttackerQueuedAt(creep: Creep): number | undefined {
 }
 
 function ensureControllerAttackConfig(task: WarTask): void {
+  if (Object.values(Memory.cfg?.warRebuildWatch ?? {}).some(watch => watch.sharedSquad
+    && watch.sourceRoom === task.sourceRoom && watch.targetRooms.includes(task.targetRoom))) return;
   const configName = getControllerAttackConfigName(task);
   const encodedRoute = task.routeRooms?.join("|") || "";
   const store = ensureConfigStore();
@@ -1765,6 +1767,19 @@ function retireSharedCombat(task: WarTask): void {
   delete task.activeGeneration;
 }
 
+function retireSharedController(task: WarTask): void {
+  const name = getControllerAttackConfigName(task);
+  const spawning = collectSpawningForConfigs(new Set([name]));
+  for (const actor of getLiveCreepsByConfig(name)) {
+    actor.memory._recycleToRoom = task.sourceRoom;
+    resetWarCreepTargetState(actor);
+    delete actor.memory.configName;
+  }
+  for (const spawn of spawning) spawn.cancel();
+  clearControllerAttackConfig(task);
+  delete task.controllerAttackerLastQueuedAt;
+}
+
 function sharedSquadScore(task: WarTask): number {
   const generation = task.activeGeneration;
   if (!generation) return 0;
@@ -1835,6 +1850,7 @@ function runSharedWarSquads(store: Record<string, WarTask>): Set<WarTask> {
     for (const task of tasks) {
       managed.add(task);
       task.sharedSquadWatchId = id;
+      retireSharedController(task);
       if (!Game.rooms[config.sourceRoom]?.controller?.my) {
         retireSharedCombat(task);
         task.failReason = "shared_source_not_owned";
@@ -1917,8 +1933,6 @@ function runSharedWarSquads(store: Record<string, WarTask>): Set<WarTask> {
       activateFrontline(task);
       if (task.failReason === "shared_squad_queued") delete task.failReason;
       processTask(task);
-      // 战斗世代重建/降档不撤销独立的控制器攻击任务。
-      if (room && isControllerDowngradeReady(room) && task.status !== "done" && task.status !== "failed") ensureControllerAttackConfig(task);
     }
   }
   return managed;
