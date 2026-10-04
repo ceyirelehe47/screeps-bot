@@ -3,6 +3,8 @@ import { isDefenseMode } from "@/runtime/defenseMode";
 
 export const REMOTE_ENTRANCE_LINK_LAYOUT_KEY = "remote_entry_link";
 const ENTRANCE_RANGE = 6;
+// 路程较短时，link 损耗、发送等待和建造投入难以摊回；按真实可省路程筛选。
+const MIN_SAVED_STEPS = 30;
 type Layout = Record<string, { x: number; y: number }[]>;
 interface Entrance { targetRoom: string; pos: RoomPosition }
 const same = (a: { x: number; y: number }, b: { x: number; y: number }): boolean => a.x === b.x && a.y === b.y;
@@ -75,7 +77,7 @@ export function addRemoteEntranceLinkPlans(room: Room, layout: Layout): boolean 
     }
     if (spare <= 0 || typeof room.storage.pos.findPathTo !== "function") continue;
     const path = room.storage.pos.findPathTo(entry.pos, { range: 1, maxRooms: 1, ignoreCreeps: true, plainCost: 2, swampCost: 10, maxOps: 2000 });
-    if (path.length < ENTRANCE_RANGE * 2) continue;
+    if (path.length < MIN_SAVED_STEPS) continue;
     const walkKeys = new Set(path.map(p => `${p.x}:${p.y}`));
     const occupied = new Set(structures.filter(s => s.structureType !== STRUCTURE_RAMPART).map(s => `${s.pos.x}:${s.pos.y}`));
     for (const site of sites) occupied.add(`${site.pos.x}:${site.pos.y}`);
@@ -98,7 +100,7 @@ export function addRemoteEntranceLinkPlans(room: Room, layout: Layout): boolean 
     }
     candidates.sort((a, b) => b.saved - a.saved || terrain.get(a.x, a.y) - terrain.get(b.x, b.y) || a.x - b.x || a.y - b.y);
     const chosen = candidates[0];
-    if (!chosen || chosen.saved < Math.max(5, Math.ceil(path.length / 4))) continue;
+    if (!chosen || chosen.saved < Math.max(MIN_SAVED_STEPS, Math.ceil(path.length / 4))) continue;
     const pos = { x: chosen.x, y: chosen.y };
     planned.push(pos); markers.push({ ...pos }); spare--; changed = true;
   }

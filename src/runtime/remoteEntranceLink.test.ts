@@ -49,10 +49,24 @@ it("按真实道路旁选入口 link，不占回程道路，重复规划不新�
 
 it("坐标接近但真实寻路绕远时仍规划，不用直线距离否定收益", () => {
   const w = world(); w.room.storage!.pos = pos(40, 20); w.links[0].pos = pos(41, 20); w.layout.link[0] = { x: 41, y: 20 };
-  path = [...Array.from({ length: 10 }, (_, i) => ({ x: 40, y: 21 + i })),
-    ...Array.from({ length: 8 }, (_, i) => ({ x: 41 + i, y: 30 })),
-    ...Array.from({ length: 10 }, (_, i) => ({ x: 48, y: 29 - i }))] as PathStep[];
+  path = [...Array.from({ length: 15 }, (_, i) => ({ x: 40, y: 21 + i })),
+    ...Array.from({ length: 8 }, (_, i) => ({ x: 41 + i, y: 35 })),
+    ...Array.from({ length: 15 }, (_, i) => ({ x: 48, y: 34 - i }))] as PathStep[];
   expect(w.room.storage!.pos.getRangeTo(pos(49, 20))).toBe(9);
+  expect(addRemoteEntranceLinkPlans(w.room, w.layout)).toBe(true);
+});
+
+it.each([12, 17, 29])("实际可省路程仅 %i 步时不占用新 link 额度", length => {
+  const w = world();
+  path = Array.from({ length }, (_, i) => ({ x: 49 - length + i, y: 20 } as PathStep));
+  expect(addRemoteEntranceLinkPlans(w.room, w.layout)).toBe(false);
+  expect(w.layout.link).toHaveLength(1);
+  expect(w.layout[REMOTE_ENTRANCE_LINK_LAYOUT_KEY] ?? []).toEqual([]);
+});
+
+it("实际可省 30 步时进入候选，仍须有建设额度和接收网络", () => {
+  const w = world();
+  path = Array.from({ length: 30 }, (_, i) => ({ x: 19 + i, y: 20 } as PathStep));
   expect(addRemoteEntranceLinkPlans(w.room, w.layout)).toBe(true);
 });
 
