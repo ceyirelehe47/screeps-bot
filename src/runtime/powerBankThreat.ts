@@ -2,7 +2,8 @@ import { getTickContextService } from "@/runtime/runtimeServices";
 
 /** Observer 只用当前可见敌方战斗能力拒绝新的资源投入，不发布战斗意图。 */
 export function getPowerBankRoomThreat(room: Room): boolean {
-  const context = getTickContextService().getRoomContext(room);
+  const candidate = Game.rooms[room.name] === room ? getTickContextService().getRoomContext(room) : null;
+  const context = candidate?.room === room ? candidate : null;
   if ((context?.getHostilePowerCreeps() ?? room.find(FIND_HOSTILE_POWER_CREEPS)).length > 0) return true;
   return (context?.getHostileCreeps() ?? room.find(FIND_HOSTILE_CREEPS)).some((creep) => {
     if (typeof creep.getActiveBodyparts === "function") {

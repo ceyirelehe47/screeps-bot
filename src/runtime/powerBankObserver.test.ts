@@ -83,6 +83,15 @@ describe("PowerBank Observer 动态扫描", () => {
     expect(active).toHaveBeenCalledTimes(3);
   });
 
+  it("同tick替换Game世界对象会重读可达性，不沿用旧世界的距离", () => {
+    const observer = addObserver(createRoom("E3N59"));
+    const active = jest.spyOn(observer, "isActive");
+    expect(requestCombatObservation("E10N60")).toBe(true);
+    (global as typeof global & { Game: Game }).Game = { ...Game, map: { ...Game.map, getRoomLinearDistance: jest.fn(() => 11) } };
+    expect(requestCombatObservation("E10N60")).toBe(false);
+    expect(active).toHaveBeenCalledTimes(2);
+  });
+
   it("轮巡自动生成的高速房，不限原固定十房", () => {
     const observer = addObserver(createRoom("E3N59"));
     runPowerBankObserver();
