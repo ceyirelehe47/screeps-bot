@@ -47,6 +47,8 @@ export function getRemoteEntranceDeliveryLink(creep: Creep, targetRoom: string):
 /** 只补空闲额度；借用现有规划器的节流、工地上限和建造顺序。 */
 export function addRemoteEntranceLinkPlans(room: Room, layout: Layout): boolean {
   if (!room.controller?.my || !room.storage || isDefenseMode(room.name)) return false;
+  const entrances = getEntrances(room, true);
+  if (!entrances.length) return false;
   const ctx = getTickContextService().getRoomContext(room);
   if (!ctx) return false;
   const links = ctx.getLinks(), sites = ctx.getConstructionSites(), sources = ctx.getSources();
@@ -62,7 +64,7 @@ export function addRemoteEntranceLinkPlans(room: Room, layout: Layout): boolean 
   const structures = ctx.getStructures();
   const terrain = Game.map.getRoomTerrain(room.name);
   let changed = false;
-  for (const entry of getEntrances(room, true)) {
+  for (const entry of entrances) {
     const known = [...planned, ...links.map(l => ({ x: l.pos.x, y: l.pos.y }))].find(p => {
       const pos = new RoomPosition(p.x, p.y, room.name);
       return pos.getRangeTo(entry.pos) <= ENTRANCE_RANGE && !nearReceiver(room, pos) && !sources.some(s => pos.getRangeTo(s.pos) <= 2);

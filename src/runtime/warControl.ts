@@ -1338,7 +1338,7 @@ function runNpcLootHandoffs(store: Record<string, WarTask>): void {
     if (authority === "Invader" || authority === "TooAngel" || (!authority && room.find(FIND_HOSTILE_STRUCTURES)
       .some(s => s.structureType === STRUCTURE_INVADER_CORE))) task.lootAfterClear = true;
     if (!task.lootAfterClear) continue;
-    const hostile = getHostilePresence(room);
+    const hostile = getHostilePresence(room, task);
     if (hostile.hostileCreeps || hostile.hostileStructures) {
       if (!task.sharedSquadWatchId) delete task.combatClearSince;
       continue;
