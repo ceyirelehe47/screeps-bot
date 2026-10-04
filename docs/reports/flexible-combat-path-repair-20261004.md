@@ -29,3 +29,5 @@
 高负载工作仅在服务器 /srv/screeps-treasury-build/boost-lab-loop-20261004/candidate 进行。冻结产物及公开验证日志保存在 /Users/forst/Downloads/screeps-flexible-path-v11-20261004；完整上线前备份以0700目录、0600文件私密保存。
 
 默认NPC能力升级和整轮CPU验收继续按OpenSpec剩余任务执行，本次报告只记录已有证据支持的路径修复。
+
+后续tick74114183：同一E3N57第5世代红/绿到达(25,23)/(25,24)，满血。此前(25,25)的spawn已不在敌方结构列表，剩一处(24,15)spawn，三塔仍9/3/1。E3N53队继续进入E2N55，未停止在旧的虚构目标入口；PowerBank剩1293440HP，正常攻击并自然开始孵化运输者。捕获窗口无错误，bucket9545。
