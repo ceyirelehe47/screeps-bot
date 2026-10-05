@@ -306,9 +306,16 @@ function createUpgradeTask(room: Room): WorkerTask | null {
     return null;
   }
 
+  const support = Memory.cfg?.colonizationSupport?.[room.name];
+  const includeColonizationSupport = support?.enabled === true && controller.level < 6 &&
+    Memory.runtime?.colonizationSupport?.[room.name]?.status !== "complete";
   const liveWorkers = getTickContextService().getCreepsByRoom(room.name).filter((creep) => {
     const configName = creep.memory.configName;
-    return typeof configName === "string" && configName.startsWith(`${room.name}:worker:`);
+    if (typeof configName !== "string") return false;
+    if (configName.startsWith(`${room.name}:worker:`)) return true;
+    return includeColonizationSupport && creep.memory.role === "colonizerWorker" &&
+      (configName.startsWith(`${support!.sourceRoom}:colonize:${room.name}:worker:`) ||
+       configName === `${support!.sourceRoom}:colonizationSupport:${room.name}:worker:0`);
   }).length;
   const maxAssignees = Math.max(1, liveWorkers);
 

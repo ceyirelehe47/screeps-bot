@@ -13,6 +13,13 @@ import type { MarketTerminalEnergyReadinessObservation } from "@/runtime/resourc
 
 declare global {
   interface ScreepsMemoryRuntime {
+    colonizationSupport?: Record<string, {
+      sourceRoom: string;
+      runId: string;
+      status: "waiting_claim" | "supporting" | "complete" | "paused";
+      updatedAt: number;
+      completedAt?: number;
+    }>;
     warRebuildWatch?: Record<string, {
       clearedRooms: string[];
       armedAt?: number;

@@ -293,6 +293,13 @@ declare global {
         }
       >;
     };
+    colonizationSupport?: Record<string, {
+      enabled: boolean;
+      sourceRoom: string;
+      runId?: string;
+      routeRooms?: string[];
+      allowedTransitRooms?: string[];
+    }>;
     remoteMining?: {
       enabled?: boolean;
       scanInterval?: number;

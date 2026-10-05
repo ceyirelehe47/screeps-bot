@@ -4,6 +4,7 @@ import { isRcl3ExtensionBuildoutComplete } from "@/runtime/roomPlannerConstructi
 import { getCreepConfigService, getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
 import { clearWarRoomTask, isWarRoomClearDone, requestWarRoomClear } from "@/runtime/warControl";
 import { isDefenseMode } from "@/runtime/defenseMode";
+import { canUseColonizationTransit, colonizationTransitKey, runColonizationSupport } from "@/runtime/colonizationSupport";
 import {
   COLONIZATION_TRAVEL_PATH_RETRY_INTERVAL,
   getCachedStaticTravelMatrix,
@@ -632,7 +633,7 @@ function findSafeRouteInner(task: ColonizationTask): string[] | null {
         return Infinity;
       }
 
-      if (isDangerousVisibleRoomCached(roomName, myUsername)) {
+      if (isDangerousVisibleRoomCached(roomName, myUsername) && !canUseColonizationTransit(task.sourceRoom, task.targetRoom, roomName)) {
         return Infinity;
       }
 
@@ -674,7 +675,7 @@ function findSafeRoute(task: ColonizationTask): string[] | null {
   }
 
   const dangerousRooms = [...(task.dangerousRooms ?? [])].sort();
-  const cacheKey = `${task.sourceRoom}->${task.targetRoom}:${dangerousRooms.join("|")}`;
+  const cacheKey = `${task.sourceRoom}->${task.targetRoom}:${dangerousRooms.join("|")}:${colonizationTransitKey(task.sourceRoom, task.targetRoom)}`;
   const cached = safeRouteCache.get(cacheKey);
   if (cached !== undefined) {
     return cached;
@@ -687,7 +688,7 @@ function findSafeRoute(task: ColonizationTask): string[] | null {
 
 function getSafeRouteRetryKey(task: ColonizationTask): string {
   const dangerousRooms = [...(task.dangerousRooms ?? [])].sort();
-  return `${task.sourceRoom}->${task.targetRoom}:${dangerousRooms.join("|")}`;
+  return `${task.sourceRoom}->${task.targetRoom}:${dangerousRooms.join("|")}:${colonizationTransitKey(task.sourceRoom, task.targetRoom)}`;
 }
 
 function clearSafeRouteRetry(task: ColonizationTask): void {
@@ -953,6 +954,9 @@ function isScoutRouteInterruptedByDanger(task: ColonizationTask): boolean {
     if (dangerous.has(roomName)) {
       return true;
     }
+    const permission = Memory.cfg?.colonizationSupport?.[task.targetRoom];
+    if (permission?.enabled && permission.sourceRoom === task.sourceRoom && permission.allowedTransitRooms?.includes(roomName) &&
+        !canUseColonizationTransit(task.sourceRoom, task.targetRoom, roomName)) return true;
   }
 
   return false;
@@ -1559,4 +1563,5 @@ export function runColonizationByFlag(): void {
   }
 
   cleanupOrphanedColonizationConfigs(store);
+  runColonizationSupport();
 }

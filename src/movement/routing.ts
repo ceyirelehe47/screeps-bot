@@ -268,7 +268,10 @@ export const COLONIZATION_TRAVEL_PATH_RETRY_INTERVAL = 20;
 export function getColonizationTravelPathKey(sourceRoom: string, targetRoom: string, routeRooms: string[], dangerousRooms: string[]): string {
   const routePart = routeRooms.join(">");
   const dangerPart = [...new Set(dangerousRooms)].sort().join(">");
-  return `v${COLONIZATION_TRAVEL_PATH_VERSION}:${sourceRoom}->${targetRoom}|r:${routePart}|d:${dangerPart}`;
+  const permission = Memory.cfg?.colonizationSupport?.[targetRoom];
+  const transit = permission?.enabled && permission.sourceRoom === sourceRoom
+    ? [...new Set(permission.allowedTransitRooms ?? [])].sort().join(">") : "";
+  return `v${COLONIZATION_TRAVEL_PATH_VERSION}:${sourceRoom}->${targetRoom}|r:${routePart}|d:${dangerPart}${transit ? `|transit:${transit}` : ""}`;
 }
 
 // 跨房移动（buildMultiRoomTravelMatrix）与 colonization 持久路径生成
