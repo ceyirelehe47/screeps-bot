@@ -1278,7 +1278,7 @@ function hasLocalLiveSourceWorker(task: ColonizationTask, sourceId: string): boo
       return false;
     }
 
-    return getLiveCreepsByConfig(configName).length > 0;
+    return getLiveCreepsByConfig(configName).some((creep) => !creep.spawning);
   });
 }
 
@@ -1288,27 +1288,12 @@ function hasLocalSourceWorkerHandoff(task: ColonizationTask): boolean {
     return false;
   }
 
-  const sourceWorkerConfigs = getCreepConfigService().list(`${task.targetRoom}:`);
   const sources = targetRoom.find(FIND_SOURCES);
   if (sources.length === 0) {
     return false;
   }
 
-  return sources.every((source) => {
-    const sourceConfigNames = [
-      `${task.targetRoom}:harvester:${source.id}`,
-      `${task.targetRoom}:miner:${source.id}`,
-    ];
-
-    return sourceConfigNames.some((configName) => {
-      const config = sourceWorkerConfigs[configName];
-      if (!config?.roomName) {
-        return false;
-      }
-
-      return getLiveCreepsByConfig(configName).length > 0 || isConfigSpawning(configName);
-    });
-  });
+  return sources.every((source) => hasLocalLiveSourceWorker(task, source.id));
 }
 
 function retireHandedOffHarvesters(task: ColonizationTask): void {
@@ -1352,7 +1337,18 @@ function processTask(task: ColonizationTask): void {
     const targetRoomRcl = Game.rooms[task.targetRoom]?.controller?.level ?? 0;
     if (targetRoomRcl >= 3) {
       task.status = "managed";
-      if (!isManagedColonizationExtensionReady(task)) {
+      const extensionsReady = isManagedColonizationExtensionReady(task);
+      // managed 仍可能由母房供能；每 tick 修复缺失/已解绑的矿工配置，
+      // 扩展完成后只补尚无已出生本地矿工的矿点，避免交接空档。
+      for (const source of Game.rooms[task.targetRoom].find(FIND_SOURCES)) {
+        if (!extensionsReady || !hasLocalLiveSourceWorker(task, source.id)) {
+          ensureBootstrapHarvester(task, source.id);
+        }
+      }
+      if (!extensionsReady) {
+        for (let i = 0; i < BOOTSTRAP_WORKER_COUNT; i++) {
+          ensureBootstrapWorker(task, i);
+        }
         return;
       }
 
