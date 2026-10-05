@@ -16,6 +16,7 @@ const EXPECTED_ROLES = [
   "claimer",
   "colonizerHarvester",
   "colonizerWorker",
+  "colonizerUpgrader",
   "meleeAttacker",
   "healer",
   "homeDefender",
@@ -59,7 +60,7 @@ void roleGuardMatchesExpected;
 void assertRoleNameNarrowing;
 
 describe("roleCatalog", () => {
-  it("contains exactly the 27 supported role identities", () => {
+  it("contains exactly the 29 supported role identities", () => {
     expect(Object.keys(ROLE_CATALOG).sort()).toEqual(
       [...EXPECTED_ROLES].sort(),
     );
@@ -77,7 +78,7 @@ describe("roleCatalog", () => {
     expect(activeRoles).toEqual(
       EXPECTED_ROLES.filter((role) => role !== "hubUpgrader").sort(),
     );
-    expect(activeRoles).toHaveLength(27);
+    expect(activeRoles).toHaveLength(28);
     expect(legacyRoles).toEqual(["hubUpgrader"]);
     expect(Object.isFrozen(ROLE_CATALOG)).toBe(true);
   });

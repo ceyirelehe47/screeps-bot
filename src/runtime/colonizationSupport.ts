@@ -2,10 +2,11 @@ import { getMemoryService, getTickContextService } from "@/runtime/runtimeServic
 import { prepareBoosts, releaseBoostLabs } from "@/runtime/powerBankBoost";
 import { isDefenseMode } from "@/runtime/defenseMode";
 import type { CreepConfig } from "@/types/system";
+import { COLONIZATION_UPGRADER_BODY } from "@/config/colonizationSupport";
+import { releaseWorkerTask } from "@/runtime/workerTaskPool";
+import { releasePickupReservation } from "@/runtime/energyPickupReservation";
 
-export const COLONIZATION_SUPPORT_BODY: BodyPartConstant[] = [
-  ...Array(15).fill(WORK), ...Array(10).fill(CARRY), ...Array(25).fill(MOVE),
-];
+export const COLONIZATION_SUPPORT_BODY = COLONIZATION_UPGRADER_BODY;
 const ROOM_NAME = /^[WE]\d+[NS]\d+$/;
 export type ColonizationSupportPolicy = NonNullable<NonNullable<Memory["cfg"]>["colonizationSupport"]>[string];
 
@@ -79,6 +80,24 @@ export function runColonizationSupport(): void {
       delete configs[name].roomName;
       if (service.getCreepsByConfigName(name).length === 0) delete configs[name];
     }
+    const route = raw.routeRooms ?? Memory.data?.colonization?.[targetRoom]?.scoutRouteRooms ??
+      configs[configName]?.args[1]?.split("|").filter(Boolean) ?? [];
+    const args = [targetRoom, route.join("|"), boostOwner, "6", sourceRoom];
+    const liveConfigNames = [configName, ...Object.keys(configs).filter(name => name.startsWith(retiringPrefix))];
+    // 原位转换现役与过渡支援，释放 worker 租约，不重新孵化或重做已经完成的增强。
+    for (const name of liveConfigNames) {
+      if (configs[name] && (configs[name].role !== "colonizerUpgrader" || configs[name].args.join("\0") !== args.join("\0"))) {
+        configs[name].role = "colonizerUpgrader";
+        configs[name].args = [...args];
+      }
+      for (const creep of service.getCreepsByConfigName(name)) {
+        if (creep.memory.role === "colonizerUpgrader" && creep.memory.roleArgs?.join("\0") === args.join("\0")) continue;
+        releaseWorkerTask(creep); releasePickupReservation(creep);
+        creep.memory.role = "colonizerUpgrader";
+        creep.memory.roleArgs = [...args];
+        creep.memory.ready = false;
+      }
+    }
     const runId = raw.runId ?? `${sourceRoom}:${targetRoom}:rcl6`;
     let state = states[targetRoom];
     if (!state || state.runId !== runId || state.sourceRoom !== sourceRoom) {
@@ -97,18 +116,15 @@ export function runColonizationSupport(): void {
       continue;
     }
     state.status = "supporting";
-    const route = raw.routeRooms ?? Memory.data?.colonization?.[targetRoom]?.scoutRouteRooms ??
-      configs[configName]?.args[1]?.split("|").filter(Boolean) ?? [];
-    const args = [targetRoom, route.join("|"), boostOwner, "6", sourceRoom];
     const current = configs[configName];
-    if (current?.role !== "colonizerWorker" || current.roomName !== sourceRoom ||
+    if (current?.role !== "colonizerUpgrader" || current.roomName !== sourceRoom ||
         current.args.join("\0") !== args.join("\0") || current.body?.join("|") !== COLONIZATION_SUPPORT_BODY.join("|")) {
-      configs[configName] = { role: "colonizerWorker", roomName: sourceRoom, args, body: [...COLONIZATION_SUPPORT_BODY] } as CreepConfig;
+      configs[configName] = { role: "colonizerUpgrader", roomName: sourceRoom, args, body: [...COLONIZATION_SUPPORT_BODY] } as CreepConfig;
     }
     for (const creep of service.getCreepsByConfigName(configName)) {
       if (creep.spawning || creep.body.map(part => part.type).join("|") === COLONIZATION_SUPPORT_BODY.join("|")) continue;
       const retiringName = `${retiringPrefix}${creep.name}`;
-      configs[retiringName] = { role: "colonizerWorker", args: [...args], body: creep.body.map(part => part.type) } as CreepConfig;
+      configs[retiringName] = { role: "colonizerUpgrader", args: [...args], body: creep.body.map(part => part.type) } as CreepConfig;
       creep.memory.configName = retiringName;
     }
     const helpersAtSource = service.getCreepsByRoom(sourceRoom).filter(creep =>

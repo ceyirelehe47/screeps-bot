@@ -21,6 +21,7 @@ const EXPECTED_ROLE_STATUSES = {
   claimer: "active",
   colonizerHarvester: "active",
   colonizerWorker: "active",
+  colonizerUpgrader: "active",
   meleeAttacker: "active",
   healer: "active",
   homeDefender: "active",

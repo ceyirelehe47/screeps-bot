@@ -4,7 +4,7 @@ import { moveToTarget } from "@/roles/shared";
 import { measureCreepDecision, measureCreepIntent } from "@/runtime/cpuPhaseProfiler";
 import { releasePickupReservation } from "@/runtime/energyPickupReservation";
 import { isDedicatedUpgraderControllerRunnable } from "@/runtime/upgraderPolicy";
-import type { RoleFactory } from "@/types/system";
+import type { RoleFactory, RoleLifecycle } from "@/types/system";
 
 type ControllerLocalEnergySource = StructureLink | StructureContainer;
 type ControllerEnergySource = ControllerLocalEnergySource | StructureStorage;
@@ -47,47 +47,49 @@ function findControllerEnergySource(creep: Creep, controller: StructureControlle
   return storage?.store.getUsedCapacity(RESOURCE_ENERGY) > 0 ? storage : null;
 }
 
-export const upgraderRole: RoleFactory = (
-  roomName?: string,
-  boostTaskId?: string,
-) => ({
-  prepare: (creep): boolean => getActiveController(roomName, creep)
-    ? prepareCombatBoost(creep, boostTaskId, RESOURCE_CATALYZED_GHODIUM_ACID)
-    : true,
+/** 普通维护与殖民支援共用取能、直接升级执行；控制器准入由调用者限定。 */
+export function controllerUpgraderRole(getController: (creep: Creep) => StructureController | null): RoleLifecycle {
+  return {
+    source: (creep): boolean => {
+      const controller = getController(creep);
+      if (!controller) return false;
+      if (creep.store.getUsedCapacity(RESOURCE_ENERGY) > 0) return true;
 
-  source: (creep): boolean => {
-    const controller = getActiveController(roomName, creep);
-    if (!controller) return false;
-    if (creep.store.getUsedCapacity(RESOURCE_ENERGY) > 0) return true;
+      const source = findControllerEnergySource(creep, controller);
+      if (!source) {
+        const result = pickupEnergyFromPreferredTarget(creep, { swampCost: 8 });
+        const shouldSwitchToTarget = result.picked || creep.store.getFreeCapacity(RESOURCE_ENERGY) === 0;
+        if (shouldSwitchToTarget) {
+          releasePickupReservation(creep);
+        } else if (!result.outOfRange) {
+          moveToTarget(creep, controller, 3);
+        }
+        return shouldSwitchToTarget;
+      }
 
-    const source = findControllerEnergySource(creep, controller);
-    if (!source) {
-      const result = pickupEnergyFromPreferredTarget(creep, { swampCost: 8 });
-      const shouldSwitchToTarget = result.picked || creep.store.getFreeCapacity(RESOURCE_ENERGY) === 0;
-      if (shouldSwitchToTarget) {
-        releasePickupReservation(creep);
-      } else if (!result.outOfRange) {
+      const code = measureCreepIntent(() => creep.withdraw(source, RESOURCE_ENERGY));
+      if (code === ERR_NOT_IN_RANGE) {
+        moveToTarget(creep, source, 1);
+      }
+      return false;
+    },
+
+    target: (creep): boolean => {
+      const controller = getController(creep);
+      if (!controller) return false;
+      if (creep.store.getUsedCapacity(RESOURCE_ENERGY) <= 0) return true;
+
+      const code = measureCreepIntent(() => creep.upgradeController(controller));
+      if (code === ERR_NOT_IN_RANGE) {
         moveToTarget(creep, controller, 3);
       }
-      return shouldSwitchToTarget;
-    }
+      return false;
+    },
+  };
+}
 
-    const code = measureCreepIntent(() => creep.withdraw(source, RESOURCE_ENERGY));
-    if (code === ERR_NOT_IN_RANGE) {
-      moveToTarget(creep, source, 1);
-    }
-    return false;
-  },
-
-  target: (creep): boolean => {
-    const controller = getActiveController(roomName, creep);
-    if (!controller) return false;
-    if (creep.store.getUsedCapacity(RESOURCE_ENERGY) <= 0) return true;
-
-    const code = measureCreepIntent(() => creep.upgradeController(controller));
-    if (code === ERR_NOT_IN_RANGE) {
-      moveToTarget(creep, controller, 3);
-    }
-    return false;
-  },
+export const upgraderRole: RoleFactory = (roomName?: string, boostTaskId?: string) => ({
+  ...controllerUpgraderRole(creep => getActiveController(roomName, creep)),
+  prepare: creep => getActiveController(roomName, creep)
+    ? prepareCombatBoost(creep, boostTaskId, RESOURCE_CATALYZED_GHODIUM_ACID) : true,
 });

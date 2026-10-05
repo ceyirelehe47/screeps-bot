@@ -1,4 +1,5 @@
 import type { RoleName } from "@/types/system";
+import { COLONIZATION_UPGRADER_BODY } from "@/config/colonizationSupport";
 import {
   POWER_BANK_BODY_RCL6,
   POWER_BANK_BODY_RCL7,
@@ -297,6 +298,7 @@ export const spawnProfiles: Record<RoleName, SpawnBodyGenerator> = {
   claimer: () => [CLAIM, MOVE],
   colonizerHarvester: () => [...COLONIZER_HARVESTER_BODY],
   colonizerWorker: oneOneOneBody,
+  colonizerUpgrader: () => [...COLONIZATION_UPGRADER_BODY],
   meleeAttacker: meleeAttackBody,
   healer: healerBody,
   homeDefender: homeDefenderBody,

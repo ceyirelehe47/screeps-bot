@@ -535,6 +535,7 @@ function shouldQueueConfig(
 function isOutboundNonWarRole(role: CreepConfig["role"]): boolean {
   return role === "colonizerHarvester" ||
     role === "colonizerWorker" ||
+    role === "colonizerUpgrader" ||
     role === "crossShardColonizerHarvester" ||
     role === "crossShardColonizerWorker" ||
     role === "crossShardClaimer" ||
