@@ -665,6 +665,7 @@ function classifyTransferTask(
 ): HubTransferClassification | null {
   if (!reason) return null;
   if (reason.startsWith("hub:import:")) return "import";
+  if (reason.startsWith("hub:factory:")) return "import";
   if (reason.startsWith("hub:reclaim:")) return "reclaim";
   if (reason.startsWith("hub:export:")) return "export";
   return null;
@@ -1307,6 +1308,7 @@ function currentHubVisualSignature(): string {
   const hub = Memory.runtime?.hub;
   const hubRoomName = cfg?.hubRoomName || "";
   const synthesis = Memory.runtime?.synthesisControl?.rooms?.[hubRoomName];
+  const factory = Memory.runtime?.factoryControl?.rooms?.[hubRoomName];
   const attempt = hub?.currentProtectionAttempt;
   const committed = hub?.committedProtectionSnapshot;
 
@@ -1323,6 +1325,9 @@ function currentHubVisualSignature(): string {
     synthesis?.stage ?? null,
     synthesis?.activeProduct ?? null,
     synthesis?.targetAmount ?? null,
+    Memory.runtime?.factoryControl?.hubPlan?.status ?? null,
+    factory?.stage ?? null,
+    factory?.activeTarget ?? null,
     attempt?.attemptRevision ?? null,
     attempt?.status ?? null,
     attempt?.valid ?? null,

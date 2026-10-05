@@ -182,9 +182,12 @@ describe("HUB 工厂规划和执行", () => {
   it("HUB 状态投影与画面显示工厂的产品、阶段和缺料", () => {
     setup();
     const factory = { status: "acquiring", stage: "blocked", product: "H", missing: { reductant: 100 }, lastProducedAt: null };
+    const transfer = createResourceTransferTask("W2N1", "W1N1", "reductant", 100, "hub:factory:W1N1:reductant");
+    expect(typeof transfer).not.toBe("string");
     const snapshot = buildHubProgressSnapshot({ factory, hubConfig: Memory.cfg!.hub!, hubRuntime: null, synthesisRuntime: null,
-      hubStorageStore: { energy: 300000 }, hubTerminalStore: {}, resourceControlRooms: null, transferTasks: null, currentTick: 1000 });
+      hubStorageStore: { energy: 300000 }, hubTerminalStore: {}, resourceControlRooms: null, transferTasks: ensureResourceTransferTaskStore(), currentTick: 1000 });
     expect(snapshot.factory).toEqual(factory);
+    expect(snapshot.pendingImports).toBe(1);
     const visual = { text: jest.fn(), rect: jest.fn(), line: jest.fn() };
     drawHubVisualPanel(visual as any, buildHubVisualModel(snapshot));
     expect(visual.text.mock.calls.some(call => String(call[0]).includes("Factory"))).toBe(true);
