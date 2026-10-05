@@ -195,9 +195,9 @@ describe("collectLiveMarketSaleProtectionLedger", () => {
     const ledger = collectLiveMarketSaleProtectionLedger(config({}), undefined, {
       candidates: [{ roomName: ROOM, resource: RESOURCE_HYDROXIDE }, { roomName: ROOM, resource: RESOURCE_CATALYZED_GHODIUM_ALKALIDE }],
     });
-    expect(ledger.entries[getMarketProtectionEntryKey(ROOM, RESOURCE_HYDROXIDE)].contributions)
+    expect(ledger.entries[getMarketProtectionEntryKey(ROOM, RESOURCE_HYDROXIDE)].sourceContributions)
       .toContainEqual(expect.objectContaining({ stableKey: `hub:target:${ROOM}:OH`, amount: 50000, bucket: "absoluteTarget" }));
-    expect(ledger.entries[getMarketProtectionEntryKey(ROOM, RESOURCE_CATALYZED_GHODIUM_ALKALIDE)].contributions)
+    expect(ledger.entries[getMarketProtectionEntryKey(ROOM, RESOURCE_CATALYZED_GHODIUM_ALKALIDE)].sourceContributions)
       .toContainEqual(expect.objectContaining({ stableKey: `hub:target:${ROOM}:XGHO2`, amount: 20000, bucket: "absoluteTarget" }));
   });
 
