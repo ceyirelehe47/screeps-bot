@@ -630,11 +630,12 @@ function appendFactoryComponents(
   resource: ResourceConstant,
   amount: number,
   path: readonly string[] = [],
+  singleBatch = false,
 ): boolean {
   const recipe = getCommodityRecipe(resource);
   if (!recipe) return false;
   if (path.includes(resource) || path.length > 20) return false;
-  const batches = Math.ceil(amount / recipe.amount);
+  const batches = singleBatch ? 1 : Math.ceil(amount / recipe.amount);
   let complete = true;
   for (const [componentName, perBatch] of Object.entries(recipe.components)) {
     const component = componentName as ResourceConstant;
@@ -648,7 +649,7 @@ function appendFactoryComponents(
       status: "active",
       bucket: "consumptiveDemand",
     });
-    if (getCommodityRecipe(component)) {
+    if (!singleBatch && getCommodityRecipe(component)) {
       complete =
         appendFactoryComponents(
           facts,
@@ -712,6 +713,7 @@ function collectFactory(candidates: readonly MarketProtectionCandidate[]): {
         if (!factory) continue;
 
         const queue = resolveTargetQueue(config, roomName);
+        const singleBatch = config.rooms[roomName]?.managedBy === "hubFactoryPlanner";
         for (const target of queue) {
           const recipe = getCommodityRecipe(target.resource);
           const targetAmount =
@@ -750,6 +752,8 @@ function collectFactory(candidates: readonly MarketProtectionCandidate[]): {
                 target.resource,
                 target.resource,
                 targetGap,
+                [],
+                singleBatch,
               ) && componentsComplete;
           }
         }
@@ -778,6 +782,8 @@ function collectFactory(candidates: readonly MarketProtectionCandidate[]): {
                 activeTarget,
                 activeTarget,
                 activeRecipe.amount,
+                [],
+                singleBatch,
               ) && componentsComplete;
           }
         }

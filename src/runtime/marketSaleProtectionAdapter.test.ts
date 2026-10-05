@@ -185,6 +185,27 @@ beforeEach(() => {
 
 describe("collectLiveMarketSaleProtectionLedger", () => {
 
+  it.each([
+    ["H", "reductant", 100],
+    ["purifier", "X", 500],
+    ["battery", "energy", 600],
+    ["energy", "battery", 50],
+  ] as const)("HUB 的 %s 单批保护不递归进入压缩/解压循环", (product, component, amount) => {
+    Game.rooms[ROOM] = createRoom(ROOM, { [component]: 300000 }, { [component]: 1000 }, true);
+    mockedResolveRoomConfig.mockReturnValue({ energyFloor: 0, energyTarget: 0, energyExportStart: 0,
+      terminalEnergyReserve: 0, transferBatchSize: 100, mineralFloor: { [component]: 0 }, mineralExportStart: {} });
+    Memory.cfg!.factoryControl = { enabled: true, rooms: { [ROOM]: {
+      enabled: true, managedBy: "hubFactoryPlanner", targets: [{ resource: product, targetAmount: 500000 }],
+    } } };
+    Memory.runtime!.factoryControl = { updatedAt: TICK, rooms: { [ROOM]: { stage: "loading", activeTarget: product, lastTransitionAt: TICK } } };
+    const ledger = collectLiveMarketSaleProtectionLedger(config({ [component]: 0 }), undefined, {
+      candidates: [{ roomName: ROOM, resource: component }],
+    });
+    const entry = ledger.entries[getMarketProtectionEntryKey(ROOM, component)];
+    expect(entry.issues.some(issue => issue.sourceKind === "factoryComponents")).toBe(false);
+    expect(entry.consumptiveDemand).toBe(amount);
+  });
+
   it("keeps accepted cargo bound to its full producer ref after board deletion", () => {
     const displacedRoom = "W9N9";
     Game.rooms[ROOM] = createRoom(
