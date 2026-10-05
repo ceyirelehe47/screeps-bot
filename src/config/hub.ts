@@ -19,6 +19,15 @@ export function isHubOnlyReserveCompound(resource: ResourceConstant): boolean {
 export const HUB_PLAN_INTERVAL = 50;
 export const HUB_RESERVE_PER_ROOM = 5000;
 export const HUB_RESERVE_PER_COMPOUND = 20_000;
+/** T3 是供应网络的周转库存；发货只保留本房五千，生产补库目标独立。 */
+export const HUB_T3_SUPPLY_FLOOR = 5_000;
+export const HUB_OH_RESERVE = 50_000;
+
+export function getHubOnlyReserve(config: { hubOnlyReservePerCompound?: number } | undefined): number {
+  const amount = config?.hubOnlyReservePerCompound;
+  return typeof amount === "number" && Number.isFinite(amount) && amount >= 0
+    ? Math.floor(amount) : HUB_OH_RESERVE;
+}
 export const HUB_STORAGE_PAUSE_FREE_CAPACITY = 100_000;
 export const HUB_SURPLUS_THRESHOLD = HUB_RESERVE_PER_ROOM + 500;
 export const HUB_INTERNAL_ONLY = true;

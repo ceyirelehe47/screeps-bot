@@ -28,7 +28,7 @@ describe("OH 仅 HUB 储备", () => {
     Game.rooms = {};
     Game.creeps = {};
     Game.spawns = {};
-    Memory.cfg = { hub: { ...getDefaultHubConfig(), enabled: true, hubRoomName: HUB } };
+    Memory.cfg = { hub: { ...getDefaultHubConfig(), hubOnlyReservePerCompound: 20000, enabled: true, hubRoomName: HUB } };
     Memory.runtime = { hub: getDefaultHubRuntime() };
     Memory.data = {};
     (global as any).__runtimeServices = undefined;
@@ -36,6 +36,7 @@ describe("OH 仅 HUB 储备", () => {
   });
 
   it("默认及旧十种 T3 名单迁移加入 OH，保留自定义名单与储备数量", () => {
+    expect(getDefaultHubConfig()!.hubOnlyReservePerCompound).toBe(50000);
     expect(getDefaultHubConfig()!.targetCompounds).toContain(RESOURCE_HYDROXIDE);
     const old = { targetCompounds: HUB_TARGET_COMPOUNDS.filter(c => c !== RESOURCE_HYDROXIDE), hubReservePerCompound: 12345 };
     const migrated = normalizeHubConfig(old)!;
@@ -88,6 +89,9 @@ describe("OH 仅 HUB 储备", () => {
     expect(plan.dispatchAssignments.some(a => a.product === RESOURCE_HYDROXIDE)).toBe(true);
     expect(plan.dispatchAssignments.filter(a => a.product === RESOURCE_HYDROXIDE)
       .reduce((sum, a) => sum + a.targetAmount, 0)).toBe(20000);
+    const increased = planDistributedSynthesis(HUB, [RESOURCE_HYDROXIDE], 20000, 5000, {}, 100000, undefined, {}, 50000);
+    expect(increased.dispatchAssignments.filter(a => a.product === RESOURCE_HYDROXIDE)
+      .reduce((sum, a) => sum + a.targetAmount, 0)).toBe(50000);
   });
 
   it("新建 OH 补货已覆盖目标时不由 HUB fallback 重复合成", () => {
@@ -109,5 +113,42 @@ describe("OH 仅 HUB 储备", () => {
     expect(oh.hubReserve).toBe(20000);
     expect(oh.hubDeficit).toBe(19000);
     expect(oh.networkDeficit).toBe(0);
+  });
+
+  it("HUB 二万 T3 周转库存供应三个缺货房，只保留五千且在途不重复分配", () => {
+    Game.rooms = { [HUB]: room(HUB, { XGHO2: 20000 }), [SAT]: room(SAT), W3N1: room("W3N1"), W4N1: room("W4N1"), W5N1: room("W5N1") };
+    Memory.cfg!.hub!.targetCompounds = [RESOURCE_CATALYZED_GHODIUM_ALKALIDE];
+    planHubDistribution(Memory.cfg!.hub!);
+    const tasks = Object.values(ensureResourceTransferTaskStore());
+    expect(tasks).toHaveLength(3);
+    expect(tasks.every(t => t.amount === 5000 && t.fromRoomName === HUB && t.resource === RESOURCE_CATALYZED_GHODIUM_ALKALIDE)).toBe(true);
+    expect(tasks.reduce((sum, t) => sum + t.remainingAmount, 0)).toBe(15000);
+    planHubDistribution(Memory.cfg!.hub!);
+    expect(Object.values(ensureResourceTransferTaskStore())).toHaveLength(3);
+    expect(Memory.cfg!.hub!.hubReservePerCompound).toBe(20000);
+  });
+
+  it("默认 OH 五万目标独立于 T3 生产补库目标，进口和展示使用同一目标", () => {
+    delete Memory.cfg!.hub!.hubOnlyReservePerCompound;
+    Memory.cfg!.hub!.targetCompounds = [RESOURCE_HYDROXIDE];
+    Game.rooms = { [HUB]: room(HUB, { OH: 45000 }), [SAT]: room(SAT, { OH: 20000 }) };
+    planHubImports(Memory.cfg!.hub!);
+    expect(Object.values(ensureResourceTransferTaskStore()).reduce((sum, t) => sum + t.amount, 0)).toBe(5000);
+    const snapshot = buildHubProgressSnapshot({ currentTick: Game.time, hubConfig: Memory.cfg!.hub!, hubRuntime: null,
+      synthesisRuntime: null, hubStorageStore: { OH: 45000 }, hubTerminalStore: {}, resourceControlRooms: null,
+      transferTasks: null, satelliteStores: [] });
+    expect(snapshot.t3ReserveStatus.compounds[0]).toMatchObject({ hubReserve: 50000, hubDeficit: 5000, networkDeficit: 0 });
+    expect(planHubDistribution(Memory.cfg!.hub!)).toEqual([]);
+  });
+
+  it("运行时 OH 补货追踪五万，进口覆盖后不重复合成", () => {
+    delete Memory.cfg!.hub!.hubOnlyReservePerCompound;
+    Game.rooms = { [HUB]: room(HUB, { H: 100000, O: 100000 }), [SAT]: room(SAT, { OH: 70000 }) };
+    Memory.cfg!.hub!.targetCompounds = [RESOURCE_HYDROXIDE];
+    runHubPlanner();
+    expect(Object.values(ensureResourceTransferTaskStore()).filter(t => t.resource === RESOURCE_HYDROXIDE)
+      .reduce((sum, t) => sum + t.amount, 0)).toBe(50000);
+    expect((Memory.cfg?.synthesisControl?.rooms?.[HUB]?.reactions ?? []).some(r => r.product === RESOURCE_HYDROXIDE)).toBe(false);
+    expect(Memory.runtime!.hub!.committedProtectionSnapshot!.marker.hubOnlyReservePerCompound).toBe(50000);
   });
 });

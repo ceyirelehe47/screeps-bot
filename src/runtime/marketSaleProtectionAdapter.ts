@@ -1,3 +1,4 @@
+import { isHubOnlyReserveCompound } from "@/config/hub";
 import {
   listCarrierDispatchEntriesByRoom,
   type CarrierTask,
@@ -1179,7 +1180,7 @@ function collectHub(
     facts.push({
       roomName: cfg.hubRoomName,
       resource,
-      amount: reserve,
+      amount: isHubOnlyReserveCompound(resource) ? snapshot.marker.hubOnlyReservePerCompound! : reserve,
       stableKey: `hub:target:${cfg.hubRoomName}:${resource}`,
       status: "active",
       bucket: "absoluteTarget",

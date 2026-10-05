@@ -9,6 +9,7 @@ import {
   encodeCarrierDispatchStepKey,
 } from "@/runtime/dispatchOwnership/ref";
 import { reserveProductionResource } from "@/runtime/resourceReservation";
+import { createAutomaticResourceTransferTask } from "@/runtime/logistics/resourceTransferTasks";
 import * as marketBaseResourceAutomationModule from "@/runtime/marketBaseResourceAutomation";
 import * as marketSaleProtectionAdapterModule from "@/runtime/marketSaleProtectionAdapter";
 import {
@@ -210,6 +211,26 @@ function getMarketEnergyReadinessObservation(
 }
 
 describe("runResourceControl terminal feed tasks", () => {
+  it("HUB T3 补库在途不阻断现货向缺口房发货，发货仍保留五千", () => {
+    const resource = RESOURCE_CATALYZED_GHODIUM_ALKALIDE;
+    const hub = createRoom({ name: "W1N1", storageResources: { energy: 200000, [resource]: 5000 }, terminalResources: { energy: 60000, [resource]: 15000 } });
+    const source = createRoom({ name: "W2N1", storageResources: { energy: 200000 }, terminalResources: { energy: 60000, [resource]: 20000 } });
+    const receiver = createRoom({ name: "W3N1", storageResources: { energy: 200000 }, terminalResources: { energy: 60000 } });
+    source.terminal!.cooldown = 10;
+    Game.rooms = { [hub.name]: hub, [source.name]: source, [receiver.name]: receiver };
+    Memory.cfg!.hub = { enabled: true, hubRoomName: hub.name };
+    createAutomaticResourceTransferTask(source.name, hub.name, resource, 5000, `hub:import:${resource}`);
+    createAutomaticResourceTransferTask(hub.name, receiver.name, resource, 5000, `hub:export:${resource}`);
+    runResourceControl();
+    expect(hub.terminal!.send).toHaveBeenCalledWith(resource, expect.any(Number), receiver.name, expect.any(String));
+    expect((hub.terminal!.send as jest.Mock).mock.calls[0][1]).toBeLessThanOrEqual(15000);
+
+    Game.time += 10; resetRuntimeServices(); clearMarketActionArbiterForTest();
+    const emptyHub = createRoom({ name: hub.name, storageResources: { energy: 200000 }, terminalResources: { energy: 60000, [resource]: 5000 } });
+    Game.rooms[hub.name] = emptyHub;
+    runResourceControl();
+    expect(emptyHub.terminal!.send).not.toHaveBeenCalled();
+  });
   beforeEach(() => {
     resourceControlReadinessDeriveSpy = jest
       .spyOn(

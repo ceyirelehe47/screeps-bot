@@ -224,6 +224,8 @@ declare global {
       planInterval?: number;
       reservePerRoom?: number;
       hubReservePerCompound?: number;
+      /** HUB 专用 OH 的补库目标，与 T3 周转库存分开。 */
+      hubOnlyReservePerCompound?: number;
       targetCompounds?: ResourceConstant[];
       storagePauseFreeCapacity?: number;
       surplusThreshold?: number;

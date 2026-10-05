@@ -1,5 +1,5 @@
 import { getCreepConfigService, getMemoryService } from "@/runtime/runtimeServices";
-import { HUB_RESERVE_PER_COMPOUND, HUB_RESERVE_PER_ROOM, isHubOnlyReserveCompound } from "@/config/hub";
+import { HUB_RESERVE_PER_COMPOUND, HUB_RESERVE_PER_ROOM, isHubOnlyReserveCompound, getHubOnlyReserve } from "@/config/hub";
 import type { ResourceTransferTask } from "@/runtime/logistics/resourceTransferTasks";
 import { ensureResourceTransferTaskStore } from "@/runtime/logistics/resourceTransferTasks";
 import type {
@@ -32,6 +32,7 @@ export interface HubProgressInput {
     targetCompounds?: ResourceConstant[];
     reservePerRoom?: number;
     hubReservePerCompound?: number;
+    hubOnlyReservePerCompound?: number;
   } | null;
   hubRuntime:
     | ({
@@ -975,6 +976,7 @@ function buildT3ReserveStatus(
   reservePerRoom: number,
   hubReservePerCompound: number,
   satelliteStores: HubProgressInput["satelliteStores"],
+  hubOnlyReserve: number,
 ): {
   hubSurplus: number;
   totalDeficit: Array<{ compound: string; needed: number }>;
@@ -985,7 +987,7 @@ function buildT3ReserveStatus(
   for (const compound of targetCompounds) {
     const hubAmount = (hubStorageStore?.[compound] || 0) + (hubTerminalStore?.[compound] || 0) + (hubLabInventory[compound] || 0);
     hubAmountByCompound[compound] = hubAmount;
-    hubSurplus += Math.max(0, hubAmount - hubReservePerCompound);
+    hubSurplus += Math.max(0, hubAmount - (isHubOnlyReserveCompound(compound) ? hubOnlyReserve : hubReservePerCompound));
   }
 
   const compoundDeficit: Record<string, number> = {};
@@ -1008,12 +1010,13 @@ function buildT3ReserveStatus(
 
   const compounds = targetCompounds.map<HubT3CompoundStatus>(compound => {
     const hubAmount = hubAmountByCompound[compound] || 0;
+    const reserve = isHubOnlyReserveCompound(compound) ? hubOnlyReserve : hubReservePerCompound;
     return {
       compound,
       hubAmount,
-      hubReserve: hubReservePerCompound,
-      hubSurplus: Math.max(0, hubAmount - hubReservePerCompound),
-      hubDeficit: Math.max(0, hubReservePerCompound - hubAmount),
+      hubReserve: reserve,
+      hubSurplus: Math.max(0, hubAmount - reserve),
+      hubDeficit: Math.max(0, reserve - hubAmount),
       networkDeficit: compoundDeficit[compound] || 0,
     };
   });
@@ -1172,6 +1175,7 @@ export function buildHubProgressSnapshot(input: HubProgressInput): HubProgressSn
     reservePerRoom,
     hubReservePerCompound,
     input.satelliteStores,
+    getHubOnlyReserve(hubConfig),
   );
 
   return {
@@ -1317,6 +1321,7 @@ function currentHubVisualSignature(): string {
     hubRoomName,
     cfg?.reservePerRoom ?? null,
     cfg?.hubReservePerCompound ?? null,
+    cfg?.hubOnlyReservePerCompound ?? null,
     cfg?.targetCompounds?.join(",") ?? "",
     hub?.status ?? null,
     hub?.needsPlan ?? false,

@@ -185,6 +185,22 @@ beforeEach(() => {
 
 describe("collectLiveMarketSaleProtectionLedger", () => {
 
+  it("OH 专用五万与 T3 周转生产目标分别进入 committed 保护", () => {
+    Game.rooms[ROOM] = createRoom(ROOM, { OH: 70000, XGHO2: 30000 }, {}, true);
+    mockFloors({ [ROOM]: {} });
+    Memory.cfg!.hub = { enabled: true, hubRoomName: ROOM, hubReservePerCompound: 20000,
+      hubOnlyReservePerCompound: 50000, targetCompounds: [RESOURCE_HYDROXIDE, RESOURCE_CATALYZED_GHODIUM_ALKALIDE] };
+    Memory.runtime!.hub = { updatedAt: TICK, distributedSynthesis: { dispatchAssignments: [], routeDecisions: [], allocationLedger: {} } };
+    commitCurrentHubProtection("fallback");
+    const ledger = collectLiveMarketSaleProtectionLedger(config({}), undefined, {
+      candidates: [{ roomName: ROOM, resource: RESOURCE_HYDROXIDE }, { roomName: ROOM, resource: RESOURCE_CATALYZED_GHODIUM_ALKALIDE }],
+    });
+    expect(ledger.entries[getMarketProtectionEntryKey(ROOM, RESOURCE_HYDROXIDE)].contributions)
+      .toContainEqual(expect.objectContaining({ stableKey: `hub:target:${ROOM}:OH`, amount: 50000, bucket: "absoluteTarget" }));
+    expect(ledger.entries[getMarketProtectionEntryKey(ROOM, RESOURCE_CATALYZED_GHODIUM_ALKALIDE)].contributions)
+      .toContainEqual(expect.objectContaining({ stableKey: `hub:target:${ROOM}:XGHO2`, amount: 20000, bucket: "absoluteTarget" }));
+  });
+
   it.each([
     ["H", "reductant", 100],
     ["purifier", "X", 500],

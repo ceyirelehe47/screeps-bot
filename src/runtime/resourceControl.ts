@@ -111,7 +111,7 @@ import {
   getReservedProductionAmount,
   listProductionReservations,
 } from "@/runtime/resourceReservation";
-import { HUB_TARGET_COMPOUNDS } from "@/config/hub";
+import { HUB_TARGET_COMPOUNDS, HUB_T3_SUPPLY_FLOOR } from "@/config/hub";
 import {
   declareMarketActionIntent,
   executeMarketDeal,
@@ -5468,12 +5468,16 @@ function executeTransferTasks(
       syncResourceControlTransferTask(context, task);
     }
 
+    const isHubBufferExport = taskReason.startsWith("hub:export:") &&
+      task.fromRoomName === Memory.cfg?.hub?.hubRoomName &&
+      HUB_TARGET_COMPOUNDS.includes(task.resource) && !isHubOnlyReserveCompound(task.resource);
     if (taskReason.startsWith("hub:export:")) {
       const exportResource = taskReason.split(":").pop()!;
       const pendingResources = hubPendingImportResources.get(task.fromRoomName);
       if (
         pendingResources &&
         pendingResources.has(exportResource) &&
+        !isHubBufferExport &&
         !storageConstrainedRooms.has(task.fromRoomName)
       ) {
         continue;
@@ -5485,6 +5489,9 @@ function executeTransferTasks(
       donor.transferBatchSize,
       receiverCapacity,
       synthesisDemand.status === "bounded" ? synthesisDemand.amount : Number.POSITIVE_INFINITY,
+      isHubBufferExport ? Math.max(0, getStock(donor, task.resource) - HUB_T3_SUPPLY_FLOOR -
+        getProductionCommitmentAmount(donor.roomName, task.resource, context) -
+        getHealthyOutgoingCommitment(donor.roomName, task.resource, context, task.id)) : Number.POSITIVE_INFINITY,
     );
     if (isCapacityRelief) {
       requestedAmount = computeSafeCapacityReliefAmount(

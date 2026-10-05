@@ -7,6 +7,7 @@
  */
 
 import { MARKET_BASE_RESOURCE_CATALOG } from "@/runtime/marketBaseResourcePolicy";
+import { getHubOnlyReserve } from "@/config/hub";
 
 export const HUB_PROTECTION_SNAPSHOT_SCHEMA = "hub-protection-snapshot-v1";
 
@@ -92,6 +93,7 @@ export interface HubCommittedProtectionSnapshot {
     planMode: "distributed" | "fallback" | "blocked";
     targetCompounds: ResourceConstant[];
     hubReservePerCompound: number;
+    hubOnlyReservePerCompound?: number;
   };
   synthesisConfig: HubProtectionRevisionMarker & {
     rooms: Record<string, unknown>;
@@ -124,6 +126,7 @@ export interface HubProtectionConfigInput {
   planInterval?: number;
   reservePerRoom?: number;
   hubReservePerCompound?: number;
+  hubOnlyReservePerCompound?: number;
   targetCompounds?: readonly ResourceConstant[];
   storagePauseFreeCapacity?: number;
   surplusThreshold?: number;
@@ -232,6 +235,7 @@ export function getHubProtectionConfigFingerprint(
     planInterval: config.planInterval ?? null,
     reservePerRoom: config.reservePerRoom ?? null,
     hubReservePerCompound: config.hubReservePerCompound ?? null,
+    hubOnlyReservePerCompound: config.hubOnlyReservePerCompound ?? null,
     targetCompounds: [...(config.targetCompounds ?? [])],
     storagePauseFreeCapacity: config.storagePauseFreeCapacity ?? null,
     surplusThreshold: config.surplusThreshold ?? null,
@@ -595,6 +599,7 @@ export function buildCommittedHubProtectionSnapshot(
       )
         ? input.config.hubReservePerCompound
         : 10_000,
+      hubOnlyReservePerCompound: getHubOnlyReserve(input.config),
     },
     synthesisConfig: {
       ...marker,
@@ -651,6 +656,7 @@ export function createInvalidHubProtectionSnapshot(input: {
       planMode: "blocked",
       targetCompounds: [],
       hubReservePerCompound: 0,
+      hubOnlyReservePerCompound: 0,
     },
     synthesisConfig: { ...marker, rooms: {} },
     transferTasks: { ...marker, tasks: [] },
@@ -838,6 +844,8 @@ export function readFreshCommittedHubProtectionSnapshot(
     new Set(marker.targetCompounds as unknown[]).size !==
       marker.targetCompounds.length ||
     !finiteNonNegative(marker?.hubReservePerCompound) ||
+    !finiteNonNegative(marker?.hubOnlyReservePerCompound) ||
+    marker?.hubOnlyReservePerCompound !== getHubOnlyReserve(config) ||
     !asRecord(synthesisConfig?.rooms) ||
     !Array.isArray(transferTasks?.tasks) ||
     !Array.isArray(distributed?.dispatchAssignments) ||

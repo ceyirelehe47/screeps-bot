@@ -89,6 +89,17 @@ function commit(
 
 describe("Hub committed market protection snapshot", () => {
 
+  it("OH 五万目标绑定配置指纹和 committed marker，变更或损坏后必须重规划", () => {
+    const runtime = distributedRuntime();
+    const cfg = config({ targetCompounds: [RESOURCE_HYDROXIDE], hubOnlyReservePerCompound: 50000 });
+    const snapshot = commit(runtime, cfg);
+    expect(snapshot.marker.hubOnlyReservePerCompound).toBe(50000);
+    expect(readFreshCommittedHubProtectionSnapshot(runtime, cfg, TICK)).toBeDefined();
+    expect(readFreshCommittedHubProtectionSnapshot(runtime, { ...cfg, hubOnlyReservePerCompound: 20000 }, TICK)).toBeUndefined();
+    runtime.committedProtectionSnapshot = { ...snapshot, marker: { ...snapshot.marker, hubOnlyReservePerCompound: 0 } };
+    expect(readFreshCommittedHubProtectionSnapshot(runtime, cfg, TICK)).toBeUndefined();
+  });
+
   it("never reuses a prior config incarnation after A→B→A", () => {
     const runtime = distributedRuntime();
     const configA = config();
