@@ -916,6 +916,9 @@ function processDiscovered(task: PowerBankHarvestTask): void {
     return;
   }
   const evaluation = evaluateSourceCandidates(task);
+  // 只有实际耗尽当帧新测量预算才计作获得过名额。失去视野、退避或
+  // 资源不合格不能把等待任务排到队尾；记录随任务存活，global reset 不清零。
+  if (!canMeasurePowerBankTravelThisTick()) task.admissionLastMeasuredAt = Game.time;
   const selected = evaluation.candidates[0];
   if (!selected && evaluation.pendingRetryAt !== undefined) {
     requestPowerBankObservation(task.targetRoom);
@@ -2134,6 +2137,18 @@ function maintainPatrolScout(): void {
   };
 }
 
+function orderAdmissionTasks(tasks: PowerBankHarvestTask[]): PowerBankHarvestTask[] {
+  const lastMeasuredAt = (task: PowerBankHarvestTask): number => {
+    const tick = task.admissionLastMeasuredAt;
+    return typeof tick === "number" && Number.isFinite(tick) && tick >= 0 && tick <= Game.time ? tick : -1;
+  };
+  const waiting = tasks.filter(task => task.status === POWER_BANK_STATUS.DISCOVERED)
+    .sort((left, right) => lastMeasuredAt(left) - lastMeasuredAt(right));
+  let index = 0;
+  // 只重排 discovered 所占的位置，保留战斗、运输与终态清理的原有相对顺序。
+  return tasks.map(task => task.status === POWER_BANK_STATUS.DISCOVERED ? waiting[index++] : task);
+}
+
 export function runPowerBankHarvest(): void {
   maintainPatrolScout();
   cleanupStaleDiscoveries();
@@ -2141,7 +2156,7 @@ export function runPowerBankHarvest(): void {
   const store = getTaskStore();
   const tasks = Object.values(store);
 
-  for (const task of tasks) {
+  for (const task of orderAdmissionTasks(tasks)) {
     processTask(task);
   }
 

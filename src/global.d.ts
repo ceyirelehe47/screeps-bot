@@ -503,6 +503,8 @@ declare global {
     freeTiles: number;
     discoveredTick: number;
     lastSeenTick: number;
+    /** 最近实际消耗新测路预算的 tick；只用于公平调度，不代表路径已准入。 */
+    admissionLastMeasuredAt?: number;
     attackerId?: string;
     healerId?: string;
     haulerIds: string[];
