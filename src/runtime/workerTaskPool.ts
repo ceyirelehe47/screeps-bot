@@ -315,7 +315,8 @@ function createUpgradeTask(room: Room): WorkerTask | null {
     if (configName.startsWith(`${room.name}:worker:`)) return true;
     return includeColonizationSupport && creep.memory.role === "colonizerWorker" &&
       (configName.startsWith(`${support!.sourceRoom}:colonize:${room.name}:worker:`) ||
-       configName === `${support!.sourceRoom}:colonizationSupport:${room.name}:worker:0`);
+       configName === `${support!.sourceRoom}:colonizationSupport:${room.name}:worker:0` ||
+       configName.startsWith(`${support!.sourceRoom}:colonizationSupport:${room.name}:worker:0:retiring:`));
   }).length;
   const maxAssignees = Math.max(1, liveWorkers);
 

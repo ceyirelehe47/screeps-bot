@@ -17,7 +17,7 @@ describe("殖民 T3 支援生命周期", () => {
     Memory.data = {}; Memory.runtime = {}; Memory.creeps = {};
     (prepareBoosts as jest.Mock).mockClear();
   });
-  it("先完成占领才产生支援，35 节身体与原普通 upgrader 管理分开", () => {
+  it("先完成占领才产生支援，15 WORK / 10 CARRY / 25 MOVE 与普通 upgrader 管理分开", () => {
     runColonizationSupport();
     const name = supportConfigName(SOURCE, TARGET);
     expect(Memory.data!.creepConfigs![name]).toBeUndefined();
@@ -25,9 +25,29 @@ describe("殖民 T3 支援生命周期", () => {
     Game.rooms[TARGET] = room(TARGET, 1); runColonizationSupport();
     expect(Memory.data!.creepConfigs![name]).toMatchObject({ role: "colonizerWorker", roomName: SOURCE,
       args: [TARGET, "", `colonizationSupport:${SOURCE}:${TARGET}`, "6", SOURCE], body: COLONIZATION_SUPPORT_BODY });
-    expect(COLONIZATION_SUPPORT_BODY).toHaveLength(35);
+    expect(COLONIZATION_SUPPORT_BODY).toHaveLength(50);
+    expect(COLONIZATION_SUPPORT_BODY.filter(part => part === WORK)).toHaveLength(15);
+    expect(COLONIZATION_SUPPORT_BODY.filter(part => part === CARRY)).toHaveLength(10);
+    expect(COLONIZATION_SUPPORT_BODY.filter(part => part === MOVE)).toHaveLength(25);
     runHubUpgradeControl();
     expect(Memory.data!.creepConfigs![name]).toBeDefined();
+  });
+  it("旧 35 节现役继续服役但不补员，常规名释放给新身体，死亡后清除过渡配置", () => {
+    Game.rooms[TARGET] = room(TARGET, 2); runColonizationSupport();
+    const name = supportConfigName(SOURCE, TARGET), suicide = jest.fn();
+    const oldBody = [...Array(15).fill(WORK), ...Array(5).fill(CARRY), ...Array(15).fill(MOVE)];
+    Game.creeps.old = { name: "old", room: Game.rooms[TARGET], memory: { configName: name, role: "colonizerWorker" },
+      body: oldBody.map(type => ({ type, hits: 100, boost: type === WORK ? RESOURCE_CATALYZED_GHODIUM_ACID : undefined })), suicide } as unknown as Creep;
+    Game.time++; runColonizationSupport();
+    const retiring = `${name}:retiring:old`;
+    expect(Game.creeps.old.memory.configName).toBe(retiring);
+    expect(Memory.data!.creepConfigs![retiring]).toMatchObject({ role: "colonizerWorker", body: oldBody });
+    expect(Memory.data!.creepConfigs![retiring].roomName).toBeUndefined();
+    expect(Memory.data!.creepConfigs![name]).toMatchObject({ roomName: SOURCE, body: COLONIZATION_SUPPORT_BODY });
+    expect(suicide).not.toHaveBeenCalled();
+    Game.creeps = {}; Game.time++; runColonizationSupport();
+    expect(Memory.data!.creepConfigs![retiring]).toBeUndefined();
+    expect(Memory.data!.creepConfigs![name].roomName).toBe(SOURCE);
   });
   it("殖民旗在 RCL3 移除后仍支援，强化按当前源房未强化 WORK 计算", () => {
     Game.rooms[TARGET] = room(TARGET, 4); Game.flags = {};

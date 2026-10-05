@@ -4,7 +4,7 @@ import { isDefenseMode } from "@/runtime/defenseMode";
 import type { CreepConfig } from "@/types/system";
 
 export const COLONIZATION_SUPPORT_BODY: BodyPartConstant[] = [
-  ...Array(15).fill(WORK), ...Array(5).fill(CARRY), ...Array(15).fill(MOVE),
+  ...Array(15).fill(WORK), ...Array(10).fill(CARRY), ...Array(25).fill(MOVE),
 ];
 const ROOM_NAME = /^[WE]\d+[NS]\d+$/;
 export type ColonizationSupportPolicy = NonNullable<NonNullable<Memory["cfg"]>["colonizationSupport"]>[string];
@@ -72,7 +72,13 @@ export function runColonizationSupport(): void {
     if (!ROOM_NAME.test(targetRoom) || !raw || !ROOM_NAME.test(raw.sourceRoom) || raw.sourceRoom === targetRoom) continue;
     const sourceRoom = raw.sourceRoom;
     const configName = supportConfigName(sourceRoom, targetRoom);
+    const retiringPrefix = `${configName}:retiring:`;
     const boostOwner = `colonizationSupport:${sourceRoom}:${targetRoom}`;
+    // 旧身体无法原地替换：独立保留现役配置，不补员，空出常规名孵化新身体。
+    for (const name of Object.keys(configs).filter(name => name.startsWith(retiringPrefix))) {
+      delete configs[name].roomName;
+      if (service.getCreepsByConfigName(name).length === 0) delete configs[name];
+    }
     const runId = raw.runId ?? `${sourceRoom}:${targetRoom}:rcl6`;
     let state = states[targetRoom];
     if (!state || state.runId !== runId || state.sourceRoom !== sourceRoom) {
@@ -99,13 +105,21 @@ export function runColonizationSupport(): void {
         current.args.join("\0") !== args.join("\0") || current.body?.join("|") !== COLONIZATION_SUPPORT_BODY.join("|")) {
       configs[configName] = { role: "colonizerWorker", roomName: sourceRoom, args, body: [...COLONIZATION_SUPPORT_BODY] } as CreepConfig;
     }
-    const toBoost = service.getCreepsByConfigName(configName).filter(creep => creep.room.name === sourceRoom &&
+    for (const creep of service.getCreepsByConfigName(configName)) {
+      if (creep.spawning || creep.body.map(part => part.type).join("|") === COLONIZATION_SUPPORT_BODY.join("|")) continue;
+      const retiringName = `${retiringPrefix}${creep.name}`;
+      configs[retiringName] = { role: "colonizerWorker", args: [...args], body: creep.body.map(part => part.type) } as CreepConfig;
+      creep.memory.configName = retiringName;
+    }
+    const helpersAtSource = service.getCreepsByRoom(sourceRoom).filter(creep =>
+      creep.memory.configName === configName || creep.memory.configName?.startsWith(retiringPrefix));
+    const toBoost = helpersAtSource.filter(creep =>
       creep.body.some(part => part.type === WORK && part.hits > 0 && part.boost !== RESOURCE_CATALYZED_GHODIUM_ACID));
     if (toBoost.length > 0) {
       const needed = toBoost.reduce((sum, creep) => sum + creep.body.filter(part => part.type === WORK &&
         part.hits > 0 && part.boost !== RESOURCE_CATALYZED_GHODIUM_ACID).length * LAB_BOOST_MINERAL, 0);
       prepareBoosts(boostOwner, sourceRoom, 8, new Map([[RESOURCE_CATALYZED_GHODIUM_ACID, needed]]), { requireLabEnergy: true });
-    } else if (service.getCreepsByConfigName(configName).length > 0) {
+    } else if (helpersAtSource.length > 0 || service.getCreepsByConfigName(configName).length > 0) {
       releaseBoostLabs(boostOwner, sourceRoom);
     }
   }

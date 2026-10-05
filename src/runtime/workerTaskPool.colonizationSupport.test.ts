@@ -11,10 +11,11 @@ it("本次殖民的实际支援与 bootstrap worker 计入升级席位，其他 
     local: actor("local", "E4N57:worker:0", "worker"),
     helper: actor("helper", "E1N57:colonizationSupport:E4N57:worker:0", "colonizerWorker"),
     bootstrap: actor("bootstrap", "E1N57:colonize:E4N57:worker:0", "colonizerWorker"),
+    retiring: actor("retiring", "E1N57:colonizationSupport:E4N57:worker:0:retiring:old", "colonizerWorker"),
     other: actor("other", "E2N57:colonize:E4N57:worker:0", "colonizerWorker"),
   };
   refreshWorkerTasks();
-  expect(getWorkerTasksByRoom(room.name)["upgrade:controller"].maxAssignees).toBe(3);
+  expect(getWorkerTasksByRoom(room.name)["upgrade:controller"].maxAssignees).toBe(4);
   Game.time = 6; Memory.cfg!.colonizationSupport!.E4N57.enabled = false; refreshWorkerTasks();
   expect(getWorkerTasksByRoom(room.name)["upgrade:controller"].maxAssignees).toBe(1);
 });
