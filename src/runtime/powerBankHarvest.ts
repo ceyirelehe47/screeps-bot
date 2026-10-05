@@ -41,6 +41,7 @@ import {
 import { recordPowerBankHistory } from "@/runtime/powerBankStatus";
 import { spawnProfiles } from "@/config/spawnProfiles";
 import { getPowerBankOwnedAvoidRooms } from "@/runtime/powerBankTransit";
+import { isSpawnActive } from "@/runtime/tickContext";
 
 const PATROL_SCOUT_CONFIG_NAME = "powerbank:patrol:scout:0";
 
@@ -96,24 +97,24 @@ function canUseLegacyTaskScope(task: PowerBankHarvestTask): boolean {
 
 function getTaskConfigNames(task: PowerBankHarvestTask): string[] {
   const prefix = `${task.sourceRoom}:powerbank:${task.targetRoom}:`;
-  const all = getCreepConfigService().list(prefix);
   const allowLegacy = canUseLegacyTaskScope(task);
-  const names = new Set(
-    Object.entries(all)
-      .filter(([, config]) => config.taskId === task.id || (config.taskId === undefined && allowLegacy))
-      .map(([name]) => name),
-  );
+  const names: string[] = [];
+  const previousSourceNames: string[] = [];
 
   // 同一 bank 中止后重新发现可能改选 sourceRoom；旧源房名下仍挂着本任务
   // taskId 的配置必须保持可达，否则 hauling/terminal 清理永远扫不到它们，
   // 孵化器又会为这些孤儿配置无限重排（出生即自杀烧能量循环）。
-  for (const [name, config] of Object.entries(getCreepConfigService().list())) {
-    if (config.taskId === task.id) {
-      names.add(name);
+  // 一次读取当前配置；保留旧版“本来源 prefix 在前、旧来源 taskId 在后”顺序。
+  for (const [name, config] of Object.entries(getConfigStore())) {
+    if (name.startsWith(prefix) &&
+        (config.taskId === task.id || (config.taskId === undefined && allowLegacy))) {
+      names.push(name);
+    } else if (config.taskId === task.id) {
+      previousSourceNames.push(name);
     }
   }
 
-  return [...names];
+  return names.concat(previousSourceNames);
 }
 
 function getCombatGeneration(task: PowerBankHarvestTask, index: number): number {
@@ -215,14 +216,6 @@ function ensureCombatTaskIds(task: PowerBankHarvestTask, index: number, stage?: 
   }
 }
 
-function removeSpawnQueueEntries(task: PowerBankHarvestTask): void {
-  const ownedNames = new Set(getTaskConfigNames(task));
-  for (const spawn of getTickContextService().getSpawnsByRoom(task.sourceRoom)) {
-    if (!spawn.memory.spawnList) continue;
-    spawn.memory.spawnList = spawn.memory.spawnList.filter((name) => !ownedNames.has(name));
-  }
-}
-
 function removeSpawnQueueEntry(configName: string): void {
   for (const room of getTickContextService().getMyRooms()) {
     for (const spawn of getTickContextService().getSpawnsByRoom(room.name)) {
@@ -232,26 +225,35 @@ function removeSpawnQueueEntry(configName: string): void {
   }
 }
 
-function removeConfigWhenIdle(configName: string): void {
-  const liveCreeps = getTickContextService().getCreepsByConfigName(configName);
-  if (liveCreeps.length > 0) return;
-
+/** 批量清理队列与空闲配置；每次调用重读可变 Memory，不跨调用缓存。 */
+function cleanupConfigNames(configNames: readonly string[], queueRoomName?: string): void {
+  if (configNames.length === 0) return;
+  const names = new Set(configNames);
+  const tickContext = getTickContextService();
+  const ownedSpawns = tickContext.getMyRooms().flatMap(room => tickContext.getSpawnsByRoom(room.name));
+  const queueSpawns = queueRoomName === undefined ? ownedSpawns : tickContext.getSpawnsByRoom(queueRoomName);
+  for (const spawn of queueSpawns) {
+    if (!spawn.memory.spawnList) continue;
+    spawn.memory.spawnList = spawn.memory.spawnList.filter(name => !names.has(name));
+  }
+  const spawningConfigNames = new Set<string>();
   const creepMemory = Memory.creeps || {};
-  for (const room of getTickContextService().getMyRooms()) {
-    for (const spawn of getTickContextService().getSpawnsByRoom(room.name)) {
-      if (!spawn.spawning) continue;
-      if (creepMemory[spawn.spawning.name]?.configName === configName) return;
+  for (const spawn of ownedSpawns) {
+    if (!spawn.spawning) continue;
+    const configName = creepMemory[spawn.spawning.name]?.configName;
+    if (configName) spawningConfigNames.add(configName);
+  }
+  const store = getConfigStore();
+  for (const name of names) {
+    if (tickContext.getCreepsByConfigName(name).length === 0 && !spawningConfigNames.has(name)) {
+      delete store[name];
     }
   }
-
-  const store = getConfigStore();
-  delete store[configName];
 }
 
 function cleanupCombatConfig(task: PowerBankHarvestTask, role: "attacker" | "healer", index: number): void {
   const configName = getCombatConfigName(task, role, index);
-  removeSpawnQueueEntry(configName);
-  removeConfigWhenIdle(configName);
+  cleanupConfigNames([configName]);
 }
 
 function cleanupReinforcement(task: PowerBankHarvestTask): void {
@@ -288,14 +290,12 @@ function retireCombatGeneration(task: PowerBankHarvestTask, index: number): void
 }
 
 function cleanupAllCombatConfigs(task: PowerBankHarvestTask): void {
-  for (const configName of getTaskConfigNames(task)) {
+  const names = getTaskConfigNames(task).filter(configName => {
     const parts = configName.split(":");
     const role = parts[3];
-    if (role !== "attacker" && role !== "healer") continue;
-
-    removeSpawnQueueEntry(configName);
-    removeConfigWhenIdle(configName);
-  }
+    return role === "attacker" || role === "healer";
+  });
+  cleanupConfigNames(names);
 }
 
 function cleanupInactiveCombatConfigs(task: PowerBankHarvestTask): void {
@@ -306,16 +306,13 @@ function cleanupInactiveCombatConfigs(task: PowerBankHarvestTask): void {
   if (attacker?.memory.configName) activeConfigNames.add(attacker.memory.configName);
   if (healer?.memory.configName) activeConfigNames.add(healer.memory.configName);
 
-  for (const configName of getTaskConfigNames(task)) {
-    if (activeConfigNames.has(configName)) continue;
-
+  const names = getTaskConfigNames(task).filter(configName => {
+    if (activeConfigNames.has(configName)) return false;
     const parts = configName.split(":");
     const role = parts[3];
-    if (role !== "attacker" && role !== "healer") continue;
-
-    removeSpawnQueueEntry(configName);
-    removeConfigWhenIdle(configName);
-  }
+    return role === "attacker" || role === "healer";
+  });
+  cleanupConfigNames(names);
 }
 
 function cleanupOrphanPowerBankConfigs(tasks: PowerBankHarvestTask[]): void {
@@ -324,6 +321,7 @@ function cleanupOrphanPowerBankConfigs(tasks: PowerBankHarvestTask[]): void {
   const activePrefixes = new Set(activeTasks.map((task) => `${task.sourceRoom}:powerbank:${task.targetRoom}:`));
 
   const configs = getCreepConfigService().list();
+  const orphanNames: string[] = [];
   for (const [configName, config] of Object.entries(configs)) {
     const parts = configName.split(":");
     if (parts[1] !== "powerbank") continue;
@@ -336,17 +334,13 @@ function cleanupOrphanPowerBankConfigs(tasks: PowerBankHarvestTask[]): void {
       if (activePrefixes.has(prefix)) continue;
     }
 
-    removeSpawnQueueEntry(configName);
-    removeConfigWhenIdle(configName);
+    orphanNames.push(configName);
   }
+  cleanupConfigNames(orphanNames);
 }
 
 function cleanupTaskConfigs(task: PowerBankHarvestTask): void {
-  const configNames = getTaskConfigNames(task);
-  removeSpawnQueueEntries(task);
-  for (const configName of configNames) {
-    removeConfigWhenIdle(configName);
-  }
+  cleanupConfigNames(getTaskConfigNames(task), task.sourceRoom);
 }
 
 function neutralizeTaskCreeps(task: PowerBankHarvestTask): void {
@@ -448,9 +442,7 @@ function getLocalCompoundStock(
   if (room.storage) total += room.storage.store.getUsedCapacity(resource);
   if (room.terminal) total += room.terminal.store.getUsedCapacity(resource);
   const reservedLabIds = getActivePowerBankBoostLabIds(room.name, ownerId);
-  for (const structure of room.find(FIND_MY_STRUCTURES)) {
-    if (structure.structureType !== STRUCTURE_LAB) continue;
-    const lab = structure as StructureLab;
+  for (const lab of getTickContextService().getRoomContext(room)!.getLabs()) {
     if (!reservedLabIds.has(lab.id)) total += lab.store.getUsedCapacity(resource);
   }
   return total;
@@ -506,7 +498,7 @@ function getPowerReceivingHeadroom(room: Room): number {
 function getSpawnReadyIn(roomName: string): number[] {
   const configStore = getConfigStore();
   return getTickContextService().getSpawnsByRoom(roomName)
-    .filter((spawn) => typeof spawn.isActive !== "function" || spawn.isActive())
+    .filter(isSpawnActive)
     .map((spawn) => {
       let readyIn = spawn.spawning?.remainingTime ?? 0;
       for (const configName of spawn.memory.spawnList ?? []) {
@@ -557,7 +549,7 @@ function evaluateSourceCandidates(task: PowerBankHarvestTask): {
   for (const room of getTickContextService().getMyRooms()) {
     if (!room.controller || room.controller.level < 6 || isDefenseMode(room.name)) continue;
     if (!getTickContextService().getSpawnsByRoom(room.name)
-      .some((spawn) => typeof spawn.isActive !== "function" || spawn.isActive())) continue;
+      .some(isSpawnActive)) continue;
     const routeRooms = getAdmissionSafeRoute(room.name, task.targetRoom);
     if (!routeRooms) {
       rejectionReasons.push(`${room.name}:no_safe_route`);
@@ -589,9 +581,8 @@ function evaluateSourceCandidates(task: PowerBankHarvestTask): {
     if (!profile) continue;
     const ownerId = `${task.id}:primary:g${task.activeGeneration ?? 0}`;
     const reservedLabs = getActivePowerBankBoostLabIds(room.name, ownerId);
-    const availableLabCount = room.find(FIND_MY_STRUCTURES, {
-      filter: (structure) => structure.structureType === STRUCTURE_LAB && !reservedLabs.has(structure.id),
-    }).length;
+    const availableLabCount = getTickContextService().getRoomContext(room)!.getLabs()
+      .filter(lab => !reservedLabs.has(lab.id)).length;
 
     const compoundAvailability = new Map<ResourceConstant, boolean>();
     for (const [compound, amount] of profile.requiredCompounds) {
@@ -629,7 +620,7 @@ function evaluateSourceCandidates(task: PowerBankHarvestTask): {
         ? room.storage
         : room.terminal ?? room.storage;
     const spawns = getTickContextService().getSpawnsByRoom(room.name)
-      .filter((spawn) => typeof spawn.isActive !== "function" || spawn.isActive());
+      .filter(isSpawnActive);
     const measurements: Array<Extract<ReturnType<typeof measurePowerBankTravel>, { status: "ready" }>> = [];
     let sourcePending = false;
     for (const spawn of spawns) {
