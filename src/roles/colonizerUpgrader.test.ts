@@ -6,6 +6,7 @@ import { colonizerUpgraderRole } from "@/roles/colonizerUpgrader";
 import { moveToTargetRoom, moveToTarget } from "@/roles/shared";
 import { prepareCombatBoost } from "@/roles/combatBoosts";
 import { pickupEnergyFromPreferredTarget } from "@/roles/energyTargets";
+import { releasePickupReservation } from "@/runtime/energyPickupReservation";
 import { createMockStore } from "@mock/powerBank";
 
 const SOURCE = "E1N57", TARGET = "E4N57", ROUTE = "E1N57|E2N57|E3N57|E4N57";
@@ -27,9 +28,37 @@ describe("殖民 upgrader：直接升级与本地取能", () => {
     jest.clearAllMocks();
     Memory.cfg = { colonizationSupport: { [TARGET]: { enabled: true, sourceRoom: SOURCE } } };
     Memory.runtime = {};
+    Memory.data = {};
+    Game.spawns = {}; Game.creeps = {};
+    delete (global as typeof global & { __runtimeServices?: unknown }).__runtimeServices;
     Game.rooms = { [SOURCE]: room(SOURCE, 8), [TARGET]: room(TARGET, 2) };
   });
   const role = () => colonizerUpgraderRole(TARGET, ROUTE, "boost-owner", "6", SOURCE);
+  function queueMiner(r: Room, energy: number) {
+    r.energyAvailable = energy; r.energyCapacityAvailable = 800;
+    const name = `${r.name}:harvester:source-a`;
+    Memory.data!.creepConfigs = { [name]: { role: "harvester", args: ["source-a"], roomName: r.name } };
+    Game.spawns.ColonySpawn = { name: "ColonySpawn", room: r, memory: { spawnList: [name] } } as unknown as StructureSpawn;
+  }
+  it("本地矿工队列缺650能量时不取能，并释放拾取租约", () => {
+    const r = Game.rooms[TARGET], c = actor(r);
+    queueMiner(r, 300);
+    expect(role().source!(c)).toBe(false);
+    expect(c.withdraw).not.toHaveBeenCalled();
+    expect(pickupEnergyFromPreferredTarget).not.toHaveBeenCalled();
+    expect(releasePickupReservation).toHaveBeenCalledWith(c);
+  });
+  it("矿工补员缺能量时把持有的能量放回房间，够支付后继续直接升级", () => {
+    const r = Game.rooms[TARGET], c = actor(r, 500);
+    queueMiner(r, 300);
+    expect(role().target(c)).toBe(false);
+    expect(c.drop).toHaveBeenCalledWith(RESOURCE_ENERGY);
+    expect(c.upgradeController).not.toHaveBeenCalled();
+    r.energyAvailable = 650;
+    role().target(c);
+    expect(c.upgradeController).toHaveBeenCalledWith(r.controller);
+    expect(c.build).not.toHaveBeenCalled();
+  });
   it("源房只增强并空手 travel，不调用本地取能或升级", () => {
     const c = actor(Game.rooms[SOURCE]);
     expect(role().prepare!(c)).toBe(true);

@@ -48,14 +48,14 @@ export function colonizationTransitKey(sourceRoom: string, targetRoom: string): 
   return policy?.sourceRoom === sourceRoom ? [...new Set(policy.allowedTransitRooms ?? [])].sort().join("|") : "";
 }
 
-function stopConfig(configName: string, sourceRoom: string, boostOwner: string): void {
+function stopConfig(configName: string, sourceRoom: string, boostOwner?: string): void {
   const service = getTickContextService();
   for (const spawn of service.getSpawnsByRoom(sourceRoom)) {
     if (spawn.memory.spawnList?.includes(configName)) spawn.memory.spawnList = spawn.memory.spawnList.filter(name => name !== configName);
   }
   const configs = getMemoryService().getCreepConfigStore();
   if (configs[configName]) delete configs[configName].roomName;
-  releaseBoostLabs(boostOwner, sourceRoom);
+  if (boostOwner) releaseBoostLabs(boostOwner, sourceRoom);
   const spawning = service.getSpawnsByRoom(sourceRoom).some(spawn => spawn.spawning &&
     Memory.creeps?.[spawn.spawning.name]?.configName === configName);
   if (!spawning && service.getCreepsByConfigName(configName).length === 0) delete configs[configName];
@@ -65,6 +65,16 @@ function stopConfig(configName: string, sourceRoom: string, boostOwner: string):
 export function runColonizationSupport(): void {
   const memory = getMemoryService();
   const policies = Memory.cfg?.colonizationSupport;
+  const existing = Memory.data?.creepConfigs ?? {};
+  // 增援矿工与仍然有效的支援策略同寿，不依赖已结束的殖民旗任务。
+  for (const name of Object.keys(existing)) {
+    const [home, kind, target, role] = name.split(":");
+    if (kind !== "colonizationSupport" || role !== "harvester") continue;
+    const policy = readColonizationSupportPolicy(target);
+    const controller = Game.rooms[target]?.controller;
+    if (policy?.sourceRoom !== home || !controller?.my || controller.level >= 6 ||
+        !Game.rooms[home]?.controller?.my || isDefenseMode(home)) stopConfig(name, home);
+  }
   if (!policies) return;
   const configs = memory.getCreepConfigStore();
   const states = memory.ensureRuntime().colonizationSupport ??= {};
@@ -72,6 +82,7 @@ export function runColonizationSupport(): void {
   for (const [targetRoom, raw] of Object.entries(policies)) {
     if (!ROOM_NAME.test(targetRoom) || !raw || !ROOM_NAME.test(raw.sourceRoom) || raw.sourceRoom === targetRoom) continue;
     const sourceRoom = raw.sourceRoom;
+    const runId = raw.runId ?? `${sourceRoom}:${targetRoom}:rcl6`;
     const configName = supportConfigName(sourceRoom, targetRoom);
     const retiringPrefix = `${configName}:retiring:`;
     const boostOwner = `colonizationSupport:${sourceRoom}:${targetRoom}`;
@@ -80,8 +91,10 @@ export function runColonizationSupport(): void {
       delete configs[name].roomName;
       if (service.getCreepsByConfigName(name).length === 0) delete configs[name];
     }
+    const previousState = states[targetRoom];
+    const savedRoute = previousState?.sourceRoom === sourceRoom && previousState.runId === runId ? previousState.routeRooms : undefined;
     const route = raw.routeRooms ?? Memory.data?.colonization?.[targetRoom]?.scoutRouteRooms ??
-      configs[configName]?.args[1]?.split("|").filter(Boolean) ?? [];
+      (configs[configName]?.args[1] ? configs[configName].args[1].split("|").filter(Boolean) : savedRoute) ?? [];
     const args = [targetRoom, route.join("|"), boostOwner, "6", sourceRoom];
     const liveConfigNames = [configName, ...Object.keys(configs).filter(name => name.startsWith(retiringPrefix))];
     // 原位转换现役与过渡支援，释放 worker 租约，不重新孵化或重做已经完成的增强。
@@ -98,7 +111,6 @@ export function runColonizationSupport(): void {
         creep.memory.ready = false;
       }
     }
-    const runId = raw.runId ?? `${sourceRoom}:${targetRoom}:rcl6`;
     let state = states[targetRoom];
     if (!state || state.runId !== runId || state.sourceRoom !== sourceRoom) {
       if (state) stopConfig(supportConfigName(state.sourceRoom, targetRoom), state.sourceRoom, `colonizationSupport:${state.sourceRoom}:${targetRoom}`);
@@ -109,13 +121,31 @@ export function runColonizationSupport(): void {
       state.status = "complete"; state.completedAt ??= Game.time;
     }
     state.updatedAt = Game.time;
+    state.routeRooms = [...route];
     if (state.status === "complete" || raw.enabled !== true || !Game.rooms[sourceRoom]?.controller?.my ||
         !controller?.my || isDefenseMode(sourceRoom)) {
       if (state.status !== "complete") state.status = raw.enabled && !controller?.my ? "waiting_claim" : "paused";
       stopConfig(configName, sourceRoom, boostOwner);
+      for (const name of Object.keys(configs).filter(name => name.startsWith(`${sourceRoom}:colonizationSupport:${targetRoom}:harvester:`))) {
+        stopConfig(name, sourceRoom);
+      }
       continue;
     }
     state.status = "supporting";
+    const miningPrefix = `${sourceRoom}:colonizationSupport:${targetRoom}:harvester:`;
+    const validMiningNames = new Set<string>();
+    for (const source of service.getRoomContext(Game.rooms[targetRoom])!.getSources()) {
+      const miningName = `${miningPrefix}${source.id}`;
+      validMiningNames.add(miningName);
+      // RCL3 的首次本地出生不终止外部供能；持续补员至既有 RCL6 支援停点。
+      configs[miningName] = {
+        role: "colonizerHarvester", roomName: sourceRoom,
+        args: [targetRoom, source.id, route.join("|")],
+      };
+    }
+    for (const name of Object.keys(configs).filter(name => name.startsWith(miningPrefix))) {
+      if (!validMiningNames.has(name)) stopConfig(name, sourceRoom);
+    }
     const current = configs[configName];
     if (current?.role !== "colonizerUpgrader" || current.roomName !== sourceRoom ||
         current.args.join("\0") !== args.join("\0") || current.body?.join("|") !== COLONIZATION_SUPPORT_BODY.join("|")) {

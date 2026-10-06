@@ -10,7 +10,7 @@ jest.mock("@/runtime/roomPlannerConstruction", () => ({
 }));
 
 import { colonizerHarvesterRole } from "@/roles/colonizerHarvester";
-import { moveToTarget } from "@/roles/shared";
+import { moveToTarget, moveToTargetRoom } from "@/roles/shared";
 import { getPlannedSourceContainerPos } from "@/runtime/roomPlannerConstruction";
 
 const mockedMoveToTarget = moveToTarget as jest.MockedFunction<typeof moveToTarget>;
@@ -83,6 +83,14 @@ describe("colonizerHarvesterRole", () => {
     Game.rooms = {};
     Memory.runtime = {};
     Game.getObjectById = jest.fn(() => null) as typeof Game.getObjectById;
+  });
+  it("持久增援的采矿许可解绑后停止采矿并按原路线返乡", () => {
+    const creep = createCreep("W1N0", createPosition(10, 10));
+    creep.memory.configName = "W1N1:colonizationSupport:W1N0:harvester:source-a";
+    Memory.data = { creepConfigs: { [creep.memory.configName]: { role: "colonizerHarvester", args: ["W1N0", "source-a", "W1N1|W1N0"] } } };
+    colonizerHarvesterRole("W1N0", "source-a", "W1N1|W1N0").source!(creep);
+    expect(creep.harvest).not.toHaveBeenCalled();
+    expect(moveToTargetRoom).toHaveBeenCalledWith(creep, "W1N1", "W1N0|W1N1", expect.any(Object));
   });
 
   it("stops the invalid harvest intent while standing on its full work container", () => {

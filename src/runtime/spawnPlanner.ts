@@ -11,12 +11,13 @@ import { isRcl8MaintenanceUpgraderConfig } from "@/runtime/upgraderPolicy";
 import { getPowerBankConfigName, POWER_BANK_STATUS } from "@/runtime/powerBankConstants";
 import { canSpawnDepositConfig } from "@/runtime/depositHarvest";
 import { reconcileSpawnQueueOwnership } from "@/runtime/spawnQueueOwnership";
-import { remoteHarvesterPreSpawnThreshold } from "@/runtime/remoteHarvesterPreSpawn";
+import { colonizationHarvesterPreSpawnThreshold } from "@/runtime/colonizationHarvesterPreSpawn";
 import type { CreepConfig } from "@/types/system";
 
 const CARRIER_PRESPAWN_BUFFER_TICKS = 30;
 const UPGRADER_PRESPAWN_BUFFER_TICKS = 30;
 const SOURCE_WORKER_COMMUTE_CACHE_TTL = 1000;
+const LOCAL_SOURCE_RECOVERY_BUFFER_TICKS = 100;
 
 interface SpawnPlanningContext {
   spawnTimeByConfigName: Map<string, number>;
@@ -279,12 +280,12 @@ function estimateSourceWorkerPreSpawnThreshold(
   config: CreepConfig,
   context?: SpawnPlanningContext,
 ): number {
-  const remoteThreshold = config.role === "colonizerHarvester"
-    ? remoteHarvesterPreSpawnThreshold(spawn, configName, config, getSpawnBody(spawn, configName)) : undefined;
-  if (remoteThreshold !== undefined) {
+  const supportThreshold = config.role === "colonizerHarvester"
+    ? colonizationHarvesterPreSpawnThreshold(spawn, configName, config, getSpawnBody(spawn, configName)) : undefined;
+  if (supportThreshold !== undefined) {
     const queueDelay = (spawn.spawning?.remainingTime ?? 0) + (spawn.memory.spawnList ?? [])
       .reduce((sum, name) => sum + getSpawnTime(spawn, name, context), 0);
-    return remoteThreshold + queueDelay;
+    return supportThreshold + queueDelay;
   }
   const workPos = getSourceWorkerWorkPos(config);
   if (!workPos) {
@@ -371,7 +372,8 @@ function shouldPreSpawnSourceWorker(
     return false;
   }
 
-  const threshold = estimateSourceWorkerPreSpawnThreshold(spawn, configName, config, context);
+  const threshold = estimateSourceWorkerPreSpawnThreshold(spawn, configName, config, context) +
+    (config.role !== "colonizerHarvester" && !spawn.room.storage ? LOCAL_SOURCE_RECOVERY_BUFFER_TICKS : 0);
   const soonestDying = creeps.reduce((minCreep, creep) =>
     creep.ticksToLive < minCreep.ticksToLive ? creep : minCreep,
   );

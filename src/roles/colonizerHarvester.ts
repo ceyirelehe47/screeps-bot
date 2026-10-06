@@ -1,7 +1,9 @@
 import { createHarvesterRole } from "@/roles/harvester";
-import { moveToTargetRoom } from "@/roles/shared";
+import { moveToTarget, moveToTargetRoom } from "@/roles/shared";
 import type { RoleFactory } from "@/types/system";
 import { shouldPauseRemoteEnergyExtraction } from "@/runtime/energyInflowGuard";
+import { canUseColonizationTransit, readColonizationSupportPolicy } from "@/runtime/colonizationSupport";
+import { getTickContextService } from "@/runtime/runtimeServices";
 
 function shouldSkipFullContainerHarvestIntent(creep: Creep): boolean {
   const configName = creep.memory?.configName;
@@ -27,8 +29,24 @@ export const colonizerHarvesterRole: RoleFactory = (targetRoom?: string, sourceI
 
   return {
     source: (creep): boolean => {
+      const configName = creep.memory.configName;
+      const [home, kind, supportedRoom, role] = (configName ?? "").split(":");
+      const persistentSupport = kind === "colonizationSupport" && role === "harvester" && supportedRoom === targetRoom;
+      if (persistentSupport && Memory.data?.creepConfigs?.[configName!]?.roomName !== home) {
+        if (creep.room.name !== home) {
+          moveToTargetRoom(creep, home, encodedRouteRooms?.split("|").reverse().join("|"), { plainCost: 2, swampCost: 10 });
+        } else {
+          const spawn = getTickContextService().getSpawnsByRoom(home)[0];
+          if (spawn && spawn.recycleCreep(creep) === ERR_NOT_IN_RANGE) moveToTarget(creep, spawn, 1);
+        }
+        return false;
+      }
       if (targetRoom && creep.room.name !== targetRoom) {
-        moveToTargetRoom(creep, targetRoom, encodedRouteRooms, { plainCost: 2, swampCost: 10 });
+        moveToTargetRoom(creep, targetRoom, encodedRouteRooms, { plainCost: 2, swampCost: 10,
+          ...(persistentSupport ? { canMoveStep: (pos: RoomPosition) =>
+            !readColonizationSupportPolicy(targetRoom)?.allowedTransitRooms?.includes(pos.roomName) ||
+            canUseColonizationTransit(home, targetRoom, pos.roomName) } : {}),
+        });
         return false;
       }
 

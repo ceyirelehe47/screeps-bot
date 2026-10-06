@@ -14,6 +14,7 @@ import type { MarketTerminalEnergyReadinessObservation } from "@/runtime/resourc
 declare global {
   interface ScreepsMemoryRuntime {
     colonizationSupport?: Record<string, {
+      routeRooms?: string[];
       sourceRoom: string;
       runId: string;
       status: "waiting_claim" | "supporting" | "complete" | "paused";
