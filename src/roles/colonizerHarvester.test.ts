@@ -92,6 +92,25 @@ describe("colonizerHarvesterRole", () => {
     expect(creep.harvest).not.toHaveBeenCalled();
     expect(moveToTargetRoom).toHaveBeenCalledWith(creep, "W1N1", "W1N0|W1N1", expect.any(Object));
   });
+  it.each([
+    ["colonizationSupport", true],
+    ["remoteMine", false],
+  ] as const)("%s 己方工作位被占用且当前已能采矿时的站位策略", (kind, harvestHere) => {
+    const workPos = createPosition(10, 10, [], [{ my: true } as Creep]);
+    const creep = createCreep("W1N0", createPosition(12, 12));
+    const source = bindSource(workPos);
+    Object.assign(source.pos, { x: 11, y: 11, roomName: "W1N0" });
+    creep.memory.configName = `W1N1:${kind}:W1N0:harvester:source-a`;
+    Memory.data = { creepConfigs: { [creep.memory.configName]: { role: "colonizerHarvester", roomName: "W1N1", args: ["W1N0", "source-a"] } } };
+    colonizerHarvesterRole("W1N0", "source-a").source!(creep);
+    if (harvestHere) {
+      expect(creep.harvest).toHaveBeenCalledWith(source);
+      expect(mockedMoveToTarget).not.toHaveBeenCalled();
+    } else {
+      expect(creep.harvest).not.toHaveBeenCalled();
+      expect(mockedMoveToTarget).toHaveBeenCalledWith(creep, workPos, 1, { reusePath: 5 });
+    }
+  });
 
   it("stops the invalid harvest intent while standing on its full work container", () => {
     const workPos = createPosition(10, 10, [createContainer(0)]);

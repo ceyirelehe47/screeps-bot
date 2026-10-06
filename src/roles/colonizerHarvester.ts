@@ -25,6 +25,10 @@ function shouldSkipFullContainerHarvestIntent(creep: Creep): boolean {
 export const colonizerHarvesterRole: RoleFactory = (targetRoom?: string, sourceId?: string, encodedRouteRooms?: string) => {
   const baseRole = createHarvesterRole(sourceId, {
     shouldSkipHarvestIntent: shouldSkipFullContainerHarvestIntent,
+    harvestInRangeWhileWorkPosOccupied: creep => {
+      const [, kind, supportedRoom, role] = (creep.memory.configName ?? "").split(":");
+      return kind === "colonizationSupport" && role === "harvester" && supportedRoom === targetRoom;
+    },
   });
 
   return {
