@@ -11,6 +11,7 @@ import { isRcl8MaintenanceUpgraderConfig } from "@/runtime/upgraderPolicy";
 import { getPowerBankConfigName, POWER_BANK_STATUS } from "@/runtime/powerBankConstants";
 import { canSpawnDepositConfig } from "@/runtime/depositHarvest";
 import { reconcileSpawnQueueOwnership } from "@/runtime/spawnQueueOwnership";
+import { remoteHarvesterPreSpawnThreshold } from "@/runtime/remoteHarvesterPreSpawn";
 import type { CreepConfig } from "@/types/system";
 
 const CARRIER_PRESPAWN_BUFFER_TICKS = 30;
@@ -25,6 +26,12 @@ interface SpawnPlanningContext {
 }
 
 const RESERVER_PRESPAWN_BUFFER_TICKS = 100;
+
+function hasRoomSourceWorker(roomName: string): boolean {
+  return getTickContextService().getCreepsByRoom(roomName).some(creep =>
+    creep.spawning !== true && (creep.memory.role === "harvester" || creep.memory.role === "miner" ||
+      (creep.memory.role === "colonizerHarvester" && creep.memory.roleArgs?.[0] === roomName)));
+}
 
 function getSpawnRolePriority(role: CreepConfig["role"] | undefined): number {
   if (role === "carrier" || role === "remoteCarrier") {
@@ -58,6 +65,11 @@ function getSpawnRolePriority(role: CreepConfig["role"] | undefined): number {
 
 function getSpawnConfigPriority(roomName: string, configName: string): number {
   const config = getCreepConfigService().get(configName);
+  if (configName.startsWith(`${roomName}:manual:bootstrapHarvester:`)) return -2;
+  if (config?.roomName === roomName &&
+      ((config.role === "harvester" && configName.startsWith(`${roomName}:harvester:`)) ||
+       (config.role === "miner" && configName.startsWith(`${roomName}:miner:`))) &&
+      !hasRoomSourceWorker(roomName) && !shouldSkipConfigInDefenseMode(config)) return -2;
   if (isRcl8MaintenanceUpgraderConfig(configName, config)) {
     return -1;
   }
@@ -267,6 +279,13 @@ function estimateSourceWorkerPreSpawnThreshold(
   config: CreepConfig,
   context?: SpawnPlanningContext,
 ): number {
+  const remoteThreshold = config.role === "colonizerHarvester"
+    ? remoteHarvesterPreSpawnThreshold(spawn, configName, config, getSpawnBody(spawn, configName)) : undefined;
+  if (remoteThreshold !== undefined) {
+    const queueDelay = (spawn.spawning?.remainingTime ?? 0) + (spawn.memory.spawnList ?? [])
+      .reduce((sum, name) => sum + getSpawnTime(spawn, name, context), 0);
+    return remoteThreshold + queueDelay;
+  }
   const workPos = getSourceWorkerWorkPos(config);
   if (!workPos) {
     return 0;
@@ -960,6 +979,33 @@ function ensureEmergencyCarrier(spawn: StructureSpawn): void {
   spawnMaxCarrierRaw(roomName);
 }
 
+/** 无本地采矿单位且满体型无法支付时，先恢复收入，避免 carrier 队首永久等能量。 */
+function ensureRecoveryHarvester(
+  room: Room, spawns: StructureSpawn[], configs: Record<string, CreepConfig>, context: SpawnPlanningContext,
+): boolean {
+  const local = Object.entries(configs).filter(([name, config]) => config.roomName === room.name &&
+    ((name.startsWith(`${room.name}:harvester:`) && config.role === "harvester") ||
+     (name.startsWith(`${room.name}:miner:`) && config.role === "miner")));
+  if (local.length === 0 || hasRoomSourceWorker(room.name)) return false;
+  if (local.some(([name]) => isConfigSpawning(name, context))) return false;
+  const prefix = `${room.name}:manual:bootstrapHarvester:`;
+  if (Object.keys(configs).some(name => name.startsWith(prefix) &&
+      (isConfigQueuedInSpawns(spawns, name) || isConfigSpawning(name, context)))) return true;
+  const targetSpawn = selectLeastLoadedSpawn(spawns.filter(isSpawnActive));
+  if (!targetSpawn || local.some(([name]) => getSpawnBody(targetSpawn, name)
+    .reduce((sum, part) => sum + BODYPART_COST[part], 0) <= room.energyAvailable)) return false;
+  if (room.energyAvailable < BODYPART_COST[WORK] + BODYPART_COST[MOVE]) return true;
+  const entry = local.find(([, config]) => !shouldSkipConfigInDefenseMode(config) &&
+    Game.getObjectById<Source>(config.args[0] as Id<Source>)?.energy);
+  if (!entry) return false;
+  const [, config] = entry;
+  const body: BodyPartConstant[] = room.energyAvailable >= 250 ? [WORK, WORK, MOVE] : [WORK, MOVE];
+  const name = `${prefix}${Game.time}`;
+  getMemoryService().getCreepConfigStore()[name] = { role: "harvester", args: [config.args[0]], roomName: room.name, body };
+  queueConfig(targetSpawn, name, { toFront: true });
+  return true;
+}
+
 /**
  * RCL1 with zero creeps in the room: only queue one harvester and skip
  * everything else (carrier, workers, etc.) so the very first creep to
@@ -1029,7 +1075,9 @@ export function scheduleSpawnTasks(): void {
   }
 
   for (const spawn of spawnByRoom.values()) {
-    if (!initialHarvesterRooms.has(spawn.room.name)) {
+    if (!initialHarvesterRooms.has(spawn.room.name) && !ensureRecoveryHarvester(
+      spawn.room, spawnsByRoom.get(spawn.room.name) ?? [], initialConfigs, planningContext,
+    )) {
       ensureEmergencyCarrier(spawn);
     }
   }

@@ -6,6 +6,10 @@ jest.mock("@/runtime/safeZone", () => ({
   getSafeZone: jest.fn(() => new Set()),
 }));
 
+jest.mock("@/movement/pathing", () => ({
+  getRoomStaticMatrix: jest.fn(() => ({ get: () => 0 })),
+}));
+
 import { scheduleSpawnTasks } from "@/runtime/spawnPlanner";
 import { isDefenseMode } from "@/runtime/defenseMode";
 import { getSafeZone } from "@/runtime/safeZone";
@@ -86,6 +90,174 @@ const resetScenarioWorld = () => {
   Game.creeps = {};
   Memory.spawns = {};
 };
+
+describe("采矿持续补员回归", () => {
+  let scenarioTick = 100000;
+  function remoteWorld(visible = true) {
+    resetScenarioWorld();
+    Game.time = scenarioTick += 10000;
+    Memory.runtime = {};
+    const room = createRoom("E1N57", 8);
+    room.energyAvailable = room.energyCapacityAvailable = 12900;
+    const spawn = createSpawn(room, "remote-home");
+    Game.rooms[room.name] = room; Game.spawns[spawn.name] = spawn; addLiveCarrier(room);
+    const name = "E1N57:remoteMine:E1N58:harvester:remote-source";
+    Memory.data = { creepConfigs: { [name]: { role: "colonizerHarvester", args: ["E1N58", "remote-source"], roomName: room.name } },
+      remoteMining: { E1N58: { sourceRoom: room.name, targetRoom: "E1N58", status: "active", sourceIds: ["remote-source"],
+        assignedAt: 1, updatedAt: 1, containerPositions: { "remote-source": { x: 43, y: 5, roomName: "E1N58" } } } } };
+    const target = { name: "E1N58" } as Room;
+    if (visible) Game.rooms[target.name] = target;
+    Game.creeps.oldMiner = { name: "oldMiner", room: target, ticksToLive: 120,
+      memory: { role: "colonizerHarvester", roleArgs: [target.name, "remote-source"], configName: name } } as Creep;
+    const source = { id: "remote-source", pos: { x: 44, y: 4, roomName: target.name,
+      findInRange: () => [] } } as unknown as Source;
+    Game.getObjectById = jest.fn(id => visible && id === source.id ? source : null) as unknown as typeof Game.getObjectById;
+    Game.map = { getRoomTerrain: () => ({ get: () => 0 }) } as unknown as GameMap;
+    (global as unknown as { RoomPosition: unknown }).RoomPosition = class {
+      constructor(public x: number, public y: number, public roomName: string) {}
+    };
+    (global as unknown as { PathFinder: { search: jest.Mock } }).PathFinder = { search: jest.fn(() => ({
+      incomplete: false, path: Array.from({ length: 100 }, () => ({ x: 20, y: 20, roomName: target.name })),
+    })) };
+    return { room, spawn, name, source };
+  }
+
+  it("跨房矿工按完整100格通勤提前孵化，隔离旧20格缓存并复用新估算", () => {
+    const { spawn, name } = remoteWorld();
+    Memory.runtime = { spawnPlanner: { sourceWorkerCommutes: {
+      "E1N57:E1N57:10:10:E1N58:44:4": { commute: 20, updatedAt: Game.time },
+    } } };
+    scheduleSpawnTasks();
+    expect(spawn.memory.spawnList).toContain(name);
+    expect(PathFinder.search).toHaveBeenCalledTimes(1);
+    expect(PathFinder.search).toHaveBeenCalledWith(spawn.pos, expect.anything(), expect.objectContaining({ maxRooms: 2, maxOps: 2000 }));
+    spawn.memory.spawnList = [];
+    Game.time += 1; resetRuntimeServices();
+    scheduleSpawnTasks();
+    expect(spawn.memory.spawnList).toContain(name);
+    expect(PathFinder.search).toHaveBeenCalledTimes(1);
+  });
+
+  it("失去外矿视野时仍按持久矿点补员，两个已存活矿工不重复增员", () => {
+    const { spawn, name } = remoteWorld(false);
+    scheduleSpawnTasks();
+    expect(spawn.memory.spawnList).toContain(name);
+    spawn.memory.spawnList = [];
+    Game.creeps.newMiner = { ...Game.creeps.oldMiner, name: "newMiner", ticksToLive: 1400 } as Creep;
+    Game.time += 1; resetRuntimeServices();
+    scheduleSpawnTasks();
+    expect(spawn.memory.spawnList).not.toContain(name);
+  });
+
+  it("旧矿工结束前预留孵化与行程，接班后下一轮仍提前补员", () => {
+    const { spawn, name } = remoteWorld();
+    Game.creeps.oldMiner.ticksToLive = 170;
+    scheduleSpawnTasks();
+    expect(spawn.memory.spawnList).not.toContain(name);
+    Game.time += 10; Game.creeps.oldMiner.ticksToLive = 160; resetRuntimeServices();
+    scheduleSpawnTasks();
+    expect(spawn.memory.spawnList).toContain(name);
+    // 用100格通勤与30tick孵化推进调度状态，接班时旧矿工尚余30TTL。
+    spawn.memory.spawnList = [];
+    Game.time += 130; Game.creeps.oldMiner.ticksToLive = 30;
+    Game.creeps.nextMiner = { ...Game.creeps.oldMiner, name: "nextMiner", ticksToLive: 1400 } as Creep;
+    resetRuntimeServices(); scheduleSpawnTasks();
+    expect(spawn.memory.spawnList).not.toContain(name);
+    delete Game.creeps.oldMiner;
+    Game.time += 31; resetRuntimeServices(); scheduleSpawnTasks();
+    expect(spawn.memory.spawnList).not.toContain(name);
+    Game.creeps.nextMiner.ticksToLive = 150;
+    Game.time += 1; resetRuntimeServices(); scheduleSpawnTasks();
+    expect(spawn.memory.spawnList).toContain(name);
+  });
+
+  it("外矿补员同时预留当前Spawn占用时间", () => {
+    const { spawn, name } = remoteWorld();
+    Game.creeps.oldMiner.ticksToLive = 300;
+    spawn.spawning = { name: "unrelated", remainingTime: 200 } as Spawning;
+    scheduleSpawnTasks();
+    expect(spawn.memory.spawnList).toContain(name);
+  });
+
+  it("不完整跨房路径不当作短通勤，多个冷缓存每tick最多搜索一次", () => {
+    const { spawn, name } = remoteWorld();
+    (PathFinder.search as jest.Mock).mockReturnValue({ incomplete: true, path: [{ x: 20, y: 20, roomName: "E1N57" }] });
+    const second = name.replace("remote-source", "second-source");
+    Memory.data!.creepConfigs![second] = { role: "colonizerHarvester", args: ["E1N58", "second-source"], roomName: "E1N57" };
+    Memory.data!.remoteMining!.E1N58.sourceIds.push("second-source");
+    Memory.data!.remoteMining!.E1N58.containerPositions!["second-source"] = { x: 10, y: 19, roomName: "E1N58" };
+    Game.creeps.secondOld = { ...Game.creeps.oldMiner, name: "secondOld", memory: { ...Game.creeps.oldMiner.memory, configName: second } } as Creep;
+    scheduleSpawnTasks();
+    expect(spawn.memory.spawnList).toEqual(expect.arrayContaining([name, second]));
+    expect(PathFinder.search).toHaveBeenCalledTimes(1);
+  });
+
+  function stalledRoom(energy: number) {
+    resetScenarioWorld();
+    const room = createRoom("E3N54", 3);
+    delete room.storage;
+    room.energyCapacityAvailable = 800; room.energyAvailable = energy;
+    const spawn = createSpawn(room, "Spawn25");
+    Game.rooms[room.name] = room; Game.spawns[spawn.name] = spawn; addLiveCarrier(room);
+    const miner = `${room.name}:harvester:local-source`, carrier = `${room.name}:carrier:0`;
+    Memory.data = { creepConfigs: { [miner]: { role: "harvester", args: ["local-source"], roomName: room.name },
+      [carrier]: { role: "carrier", args: [], roomName: room.name } } };
+    Game.getObjectById = jest.fn(() => ({ id: "local-source", energy: 3000 })) as unknown as typeof Game.getObjectById;
+    spawn.memory.spawnList = [carrier, miner];
+    return { room, spawn, miner, carrier };
+  }
+
+  it("213能量、空容器和carrier队首时优先孵化可支付采矿体，重复tick不重复排队", () => {
+    const { room, spawn, miner, carrier } = stalledRoom(213);
+    scheduleSpawnTasks();
+    const rescue = spawn.memory.spawnList![0];
+    expect(rescue).toContain(`${room.name}:manual:bootstrapHarvester:`);
+    expect(Memory.data!.creepConfigs![rescue].body).toEqual([WORK, MOVE]);
+    expect(Memory.data!.creepConfigs![miner].body).toBeUndefined();
+    Game.time += 1; resetRuntimeServices();
+    scheduleSpawnTasks();
+    expect(spawn.memory.spawnList![0]).toBe(rescue);
+    expect(spawn.memory.spawnList!.filter(n => n.includes(":bootstrapHarvester:"))).toHaveLength(1);
+    expect(spawn.memory.spawnList).toContain(carrier);
+  });
+
+  it("650能量足以支付正常矿工时直接把矿工排在800能量carrier前", () => {
+    const { spawn, miner } = stalledRoom(650);
+    scheduleSpawnTasks();
+    expect(spawn.memory.spawnList![0]).toBe(miner);
+    expect(spawn.memory.spawnList!.some(n => n.includes(":bootstrapHarvester:"))).toBe(false);
+  });
+
+  it("已出生本地矿工和仍在孵化的矿工均不会触发额外紧急采矿单位", () => {
+    let scenario = stalledRoom(213);
+    Game.creeps.miner = { name: "miner", room: scenario.room, memory: { role: "harvester", configName: scenario.miner }, ticksToLive: 1400 } as Creep;
+    scheduleSpawnTasks();
+    expect(scenario.spawn.memory.spawnList!.some(n => n.includes(":bootstrapHarvester:"))).toBe(false);
+    scenario = stalledRoom(213);
+    Memory.creeps.inSpawn = { role: "harvester", configName: scenario.miner } as CreepMemory;
+    scenario.spawn.spawning = { name: "inSpawn", remainingTime: 10 } as Spawning;
+    scheduleSpawnTasks();
+    expect(scenario.spawn.memory.spawnList!.some(n => n.includes(":bootstrapHarvester:"))).toBe(false);
+  });
+
+  it("紧急矿工寿命结束后重新恢复收入，母房防御仍禁止外矿提前补员", () => {
+    const { room, spawn } = stalledRoom(213);
+    scheduleSpawnTasks();
+    const first = spawn.memory.spawnList!.shift()!;
+    delete Memory.data!.creepConfigs![first];
+    Game.creeps.recovery = { name: "recovery", room, memory: { role: "harvester", configName: first }, ticksToLive: 1000 } as Creep;
+    Game.time += 1; resetRuntimeServices(); scheduleSpawnTasks();
+    expect(spawn.memory.spawnList!.some(n => n.includes(":bootstrapHarvester:"))).toBe(false);
+    delete Game.creeps.recovery;
+    Game.time += 1001; resetRuntimeServices(); scheduleSpawnTasks();
+    expect(spawn.memory.spawnList![0]).toContain(":bootstrapHarvester:");
+    const remote = remoteWorld();
+    (isDefenseMode as jest.Mock).mockReturnValue(true);
+    scheduleSpawnTasks();
+    expect(remote.spawn.memory.spawnList).not.toContain(remote.name);
+    expect(PathFinder.search).not.toHaveBeenCalled();
+  });
+});
 
 describe("spawnPlanner queue ownership 重合同", () => {
   it("清剿后的有限搬运优先于常规 worker，仍遵守 spawnOnce 去重", () => {
