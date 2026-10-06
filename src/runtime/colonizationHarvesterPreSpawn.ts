@@ -25,7 +25,8 @@ export function colonizationHarvesterPreSpawnThreshold(
   const moves = body.filter(part => part === MOVE).length;
   const weight = body.filter(part => part !== MOVE && part !== CARRY).length;
   const stepTicks = (cost: number): number => Math.max(1, Math.ceil(weight * cost / Math.max(1, moves * 2)));
-  const key = `colony-v1:${home}:${spawn.pos.x}:${spawn.pos.y}:${target}:${goal.x}:${goal.y}:${weight}:${moves}:${route.join("|")}`;
+  // 定期清理按首段识别所属母房，保持与既有通勤缓存相同的键契约。
+  const key = `${home}:colony-v1:${spawn.pos.x}:${spawn.pos.y}:${target}:${goal.x}:${goal.y}:${weight}:${moves}:${route.join("|")}`;
   const cache = (getMemoryService().ensureRuntime().spawnPlanner ??= { sourceWorkerCommutes: {} }).sourceWorkerCommutes;
   const previous = cache[key];
   let commute = previous && Game.time - previous.updatedAt <= CACHE_TTL ? previous.commute : undefined;

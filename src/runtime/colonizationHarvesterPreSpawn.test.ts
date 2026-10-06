@@ -1,5 +1,6 @@
 jest.mock("@/movement/pathing", () => ({ getRoomStaticMatrix: () => ({ get: () => 0 }) }));
 import { colonizationHarvesterPreSpawnThreshold } from "@/runtime/colonizationHarvesterPreSpawn";
+import { runMemoryCleanup } from "@/runtime/memoryCleanup";
 import type { CreepConfig } from "@/types/system";
 
 let tick = 200000;
@@ -37,6 +38,23 @@ describe("新房增援矿工完整路线提前补员", () => {
     Memory.runtime = {}; Game.time++;
     Game.getObjectById = jest.fn(() => null) as typeof Game.getObjectById;
     expect(colonizationHarvesterPreSpawnThreshold(spawn(), NAME, CONFIG, BODY)).toBe(510);
+  });
+  it("通勤缓存跨过定期清理仍复用，过期和母房丢失后才移除", () => {
+    Game.creeps = {}; Game.spawns = {}; Memory.creeps = {}; Memory.data = undefined;
+    Game.rooms = { E1N57: { name: "E1N57", controller: { my: true, level: 8 }, memory: {}, find: () => [] } as unknown as Room };
+    expect(colonizationHarvesterPreSpawnThreshold(spawn(), NAME, CONFIG, BODY)).toBe(160);
+    Game.time += 17 - Game.time % 17;
+    runMemoryCleanup();
+    expect(colonizationHarvesterPreSpawnThreshold(spawn(), NAME, CONFIG, BODY)).toBe(160);
+    expect(PathFinder.search).toHaveBeenCalledTimes(1);
+    Game.time += 1003;
+    Game.time += 17 - Game.time % 17;
+    runMemoryCleanup();
+    expect(colonizationHarvesterPreSpawnThreshold(spawn(), NAME, CONFIG, BODY)).toBe(160);
+    expect(PathFinder.search).toHaveBeenCalledTimes(2);
+    Game.rooms = {}; Game.time += 17;
+    runMemoryCleanup();
+    expect(Memory.runtime?.spawnPlanner?.sourceWorkerCommutes).toBeUndefined();
   });
   it("常规外矿配置不进入新房支援补员策略", () => {
     expect(colonizationHarvesterPreSpawnThreshold(spawn(), "E1N57:remoteMine:E4N57:harvester:source-a", CONFIG, BODY)).toBeUndefined();
