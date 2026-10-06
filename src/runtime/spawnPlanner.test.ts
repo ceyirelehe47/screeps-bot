@@ -96,6 +96,7 @@ describe("采矿持续补员回归", () => {
     room.energyCapacityAvailable = 800; room.energyAvailable = energy;
     const spawn = createSpawn(room, "Spawn25");
     Game.rooms[room.name] = room; Game.spawns[spawn.name] = spawn; addLiveCarrier(room);
+    Memory.cfg = { colonizationSupport: { [room.name]: { enabled: true, sourceRoom: "E1N57" } } };
     const miner = `${room.name}:harvester:local-source`, carrier = `${room.name}:carrier:0`;
     Memory.data = { creepConfigs: { [miner]: { role: "harvester", args: ["local-source"], roomName: room.name },
       [carrier]: { role: "carrier", args: [], roomName: room.name } } };
@@ -122,6 +123,13 @@ describe("采矿持续补员回归", () => {
     const { spawn, miner } = stalledRoom(650);
     scheduleSpawnTasks();
     expect(spawn.memory.spawnList![0]).toBe(miner);
+    expect(spawn.memory.spawnList!.some(n => n.includes(":bootstrapHarvester:"))).toBe(false);
+  });
+  it("没有新房支援策略的房间保持原有队列和身体策略", () => {
+    const { spawn, carrier } = stalledRoom(213);
+    Memory.cfg = {};
+    scheduleSpawnTasks();
+    expect(spawn.memory.spawnList![0]).toBe(carrier);
     expect(spawn.memory.spawnList!.some(n => n.includes(":bootstrapHarvester:"))).toBe(false);
   });
 

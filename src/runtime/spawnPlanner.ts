@@ -28,6 +28,13 @@ interface SpawnPlanningContext {
 
 const RESERVER_PRESPAWN_BUFFER_TICKS = 100;
 
+function isNewRoomMiningRecovery(roomName: string): boolean {
+  const policy = Memory.cfg?.colonizationSupport?.[roomName];
+  const controller = Game.rooms[roomName]?.controller;
+  return policy?.enabled === true && policy.sourceRoom !== roomName &&
+    controller?.my === true && controller.level <= 6;
+}
+
 function hasRoomSourceWorker(roomName: string): boolean {
   return getTickContextService().getCreepsByRoom(roomName).some(creep =>
     creep.spawning !== true && (creep.memory.role === "harvester" || creep.memory.role === "miner" ||
@@ -70,7 +77,7 @@ function getSpawnConfigPriority(roomName: string, configName: string): number {
   if (config?.roomName === roomName &&
       ((config.role === "harvester" && configName.startsWith(`${roomName}:harvester:`)) ||
        (config.role === "miner" && configName.startsWith(`${roomName}:miner:`))) &&
-      !hasRoomSourceWorker(roomName) && !shouldSkipConfigInDefenseMode(config)) return -2;
+      isNewRoomMiningRecovery(roomName) && !hasRoomSourceWorker(roomName) && !shouldSkipConfigInDefenseMode(config)) return -2;
   if (isRcl8MaintenanceUpgraderConfig(configName, config)) {
     return -1;
   }
@@ -373,7 +380,8 @@ function shouldPreSpawnSourceWorker(
   }
 
   const threshold = estimateSourceWorkerPreSpawnThreshold(spawn, configName, config, context) +
-    (config.role !== "colonizerHarvester" && !spawn.room.storage ? LOCAL_SOURCE_RECOVERY_BUFFER_TICKS : 0);
+    (config.role !== "colonizerHarvester" && !spawn.room.storage && isNewRoomMiningRecovery(spawn.room.name)
+      ? LOCAL_SOURCE_RECOVERY_BUFFER_TICKS : 0);
   const soonestDying = creeps.reduce((minCreep, creep) =>
     creep.ticksToLive < minCreep.ticksToLive ? creep : minCreep,
   );
@@ -985,6 +993,7 @@ function ensureEmergencyCarrier(spawn: StructureSpawn): void {
 function ensureRecoveryHarvester(
   room: Room, spawns: StructureSpawn[], configs: Record<string, CreepConfig>, context: SpawnPlanningContext,
 ): boolean {
+  if (!isNewRoomMiningRecovery(room.name)) return false;
   const local = Object.entries(configs).filter(([name, config]) => config.roomName === room.name &&
     ((name.startsWith(`${room.name}:harvester:`) && config.role === "harvester") ||
      (name.startsWith(`${room.name}:miner:`) && config.role === "miner")));
