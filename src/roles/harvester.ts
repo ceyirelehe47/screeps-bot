@@ -45,7 +45,7 @@ export function createHarvesterRole(
           }
           // WorkPos occupied by a friendly creep (pre-spawn overlap).  Move to
           // an adjacent tile so we are ready to step in the moment it frees up.
-          const canHarvestHere = options.harvestInRangeWhileWorkPosOccupied?.(creep) && creep.pos.inRangeTo(source, 1);
+          const canHarvestHere = options.harvestInRangeWhileWorkPosOccupied?.(creep) && creep.pos.inRangeTo(source.pos, 1);
           if (!canHarvestHere && !creep.pos.inRangeTo(workPos, 1)) {
             moveToTarget(creep, workPos, 1, { reusePath: 5 });
             return false;
