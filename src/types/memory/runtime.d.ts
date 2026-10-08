@@ -14,6 +14,7 @@ import type { MarketTerminalEnergyReadinessObservation } from "@/runtime/resourc
 declare global {
   interface ScreepsMemoryRuntime {
     colonizationSupport?: Record<string, {
+      miningHandoffs?: Record<string, { creepName: string; readySince: number }>;
       routeRooms?: string[];
       sourceRoom: string;
       runId: string;

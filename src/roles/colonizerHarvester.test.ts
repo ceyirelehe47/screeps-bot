@@ -84,6 +84,18 @@ describe("colonizerHarvesterRole", () => {
     Memory.runtime = {};
     Game.getObjectById = jest.fn(() => null) as typeof Game.getObjectById;
   });
+  it("交接完成的多余增援只前往新房Spawn回收，不再采矿", () => {
+    delete (global as typeof global & { __runtimeServices?: unknown }).__runtimeServices;
+    const creep = createCreep("W1N0", createPosition(10, 10));
+    creep.memory.configName = "W1N1:colonizationSupport:W1N0:harvester:source-a:retiring:old";
+    creep.memory._colonizationRetiring = "W1N0";
+    const spawn = { name: "Local", room: creep.room, recycleCreep: jest.fn(() => ERR_NOT_IN_RANGE) } as unknown as StructureSpawn;
+    Game.spawns = { Local: spawn };
+    colonizerHarvesterRole("W1N0", "source-a").source!(creep);
+    expect(spawn.recycleCreep).toHaveBeenCalledWith(creep);
+    expect(moveToTarget).toHaveBeenCalledWith(creep, spawn, 1);
+    expect(creep.harvest).not.toHaveBeenCalled();
+  });
   it("持久增援的采矿许可解绑后停止采矿并按原路线返乡", () => {
     const creep = createCreep("W1N0", createPosition(10, 10));
     creep.memory.configName = "W1N1:colonizationSupport:W1N0:harvester:source-a";

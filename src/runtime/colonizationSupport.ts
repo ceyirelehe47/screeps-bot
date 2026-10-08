@@ -58,7 +58,31 @@ function stopConfig(configName: string, sourceRoom: string, boostOwner?: string)
   if (boostOwner) releaseBoostLabs(boostOwner, sourceRoom);
   const spawning = service.getSpawnsByRoom(sourceRoom).some(spawn => spawn.spawning &&
     Memory.creeps?.[spawn.spawning.name]?.configName === configName);
-  if (!spawning && service.getCreepsByConfigName(configName).length === 0) delete configs[configName];
+  // 同tick交接会改写configName，旧索引不能证明新退役配置已无活体。
+  if (!spawning && !Object.values(Game.creeps).some(creep => creep.memory.configName === configName)) delete configs[configName];
+}
+
+/** 只对实际就位、采力足够且不临近死亡的接班矿工计时。 */
+function readySourceMiner(creep: Creep, source: Source): boolean {
+  if (creep.spawning || creep.memory.ready !== true || creep.memory._colonizationRetiring ||
+      creep.room.name !== source.room.name || (creep.ticksToLive ?? 0) <= 100 ||
+      creep.pos.getRangeTo(source.pos) > 1) return false;
+  const harvestPower = creep.body.reduce((sum, part) => {
+    if (part.type !== WORK || part.hits <= 0) return sum;
+    const boost = part.boost ? (BOOSTS[WORK] as Record<string, { harvest?: number }>)[part.boost] : undefined;
+    return sum + HARVEST_POWER * (boost?.harvest ?? 1);
+  }, 0);
+  return harvestPower >= (source.energyCapacity || SOURCE_ENERGY_CAPACITY) / ENERGY_REGEN_TIME;
+}
+
+function retireSupportMiner(creep: Creep, configName: string, targetRoom: string): void {
+  if (creep.memory._colonizationRetiring) return;
+  const configs = getMemoryService().getCreepConfigStore();
+  const config = configs[configName];
+  const retiringName = `${configName}:retiring:${creep.name}`;
+  configs[retiringName] = { role: "colonizerHarvester", args: [...(config?.args ?? creep.memory.roleArgs ?? [])] };
+  creep.memory.configName = retiringName;
+  creep.memory._colonizationRetiring = targetRoom;
 }
 
 /** 在 flagControl 内维持独立支援，不依赖 RCL3 后被移除的殖民旗。 */
@@ -134,14 +158,42 @@ export function runColonizationSupport(): void {
     state.status = "supporting";
     const miningPrefix = `${sourceRoom}:colonizationSupport:${targetRoom}:harvester:`;
     const validMiningNames = new Set<string>();
+    const handoffs = state.miningHandoffs ??= {};
+    const localCanSpawnFiveWork = (Game.rooms[targetRoom].energyCapacityAvailable ?? 0) >= 5 * BODYPART_COST[WORK] + 3 * BODYPART_COST[MOVE]
+      && service.getSpawnsByRoom(targetRoom).some(spawn => spawn.isActive());
     for (const source of service.getRoomContext(Game.rooms[targetRoom])!.getSources()) {
       const miningName = `${miningPrefix}${source.id}`;
       validMiningNames.add(miningName);
-      // RCL3 的首次本地出生不终止外部供能；持续补员至既有 RCL6 支援停点。
+      const supportMiners = service.getCreepsByConfigName(miningName).filter(creep => !creep.memory._colonizationRetiring);
+      const localMiners = service.getCreepsByRoom(targetRoom).filter(creep => {
+        const config = configs[creep.memory.configName ?? ""];
+        const args = config?.args ?? creep.memory.roleArgs;
+        return creep.memory.role === "harvester" &&
+          creep.memory.configName?.startsWith(`${targetRoom}:harvester:`) && args?.[0] === source.id;
+      });
+      const successor = [...localMiners.filter(creep => readySourceMiner(creep, source)),
+        ...supportMiners.filter(creep => readySourceMiner(creep, source)).sort((left, right) => (right.ticksToLive ?? 0) - (left.ticksToLive ?? 0))][0];
+      if (!successor) delete handoffs[source.id];
+      else if (handoffs[source.id]?.creepName !== successor.name) handoffs[source.id] = { creepName: successor.name, readySince: Game.time };
+      const ready = successor && Game.time - handoffs[source.id].readySince >= 5;
+      if (ready) {
+        for (const creep of supportMiners) if (creep !== successor) retireSupportMiner(creep, miningName, targetRoom);
+        if (localMiners.includes(successor)) {
+          stopConfig(miningName, sourceRoom);
+          continue;
+        }
+      }
+      // 本地可生产5WORK后停止外部补员；已有矿工等本地实际就位后回收。
       configs[miningName] = {
-        role: "colonizerHarvester", roomName: sourceRoom,
+        role: "colonizerHarvester", roomName: !localCanSpawnFiveWork || supportMiners.length > 0 ? sourceRoom : undefined,
         args: [targetRoom, source.id, route.join("|")],
+        ...(localCanSpawnFiveWork ? { spawnOnce: { queuedAt: configs[miningName]?.spawnOnce?.queuedAt ?? Game.time } } : {}),
       };
+      if (localCanSpawnFiveWork) {
+        for (const spawn of service.getSpawnsByRoom(sourceRoom)) {
+          if (spawn.memory.spawnList?.includes(miningName)) spawn.memory.spawnList = spawn.memory.spawnList.filter(name => name !== miningName);
+        }
+      }
     }
     for (const name of Object.keys(configs).filter(name => name.startsWith(miningPrefix))) {
       if (!validMiningNames.has(name)) stopConfig(name, sourceRoom);

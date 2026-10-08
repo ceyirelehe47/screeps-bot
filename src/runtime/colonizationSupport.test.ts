@@ -9,6 +9,8 @@ import { releaseWorkerTask } from "@/runtime/workerTaskPool";
 import { scheduleSpawnTasks } from "@/runtime/spawnPlanner";
 import { isDefenseMode } from "@/runtime/defenseMode";
 
+import { createMockPowerBankCreep, MockPos } from "@mock/powerBank";
+
 const SOURCE = "E1N57", TARGET = "E3N54";
 function room(name: string, level: number): Room {
   return { name, controller: { my: true, level }, find: () => [] } as unknown as Room;
@@ -35,6 +37,80 @@ describe("殖民 T3 支援生命周期", () => {
     const names = sources.map(source => `${SOURCE}:colonizationSupport:${TARGET}:harvester:${source.id}`);
     return { target, sources, names };
   }
+  function localMiningWorld() {
+    const world = miningWorld();
+    world.target.energyCapacityAvailable = 650;
+    Game.spawns.Local = { name: "Local", room: world.target, memory: { spawnList: [] }, isActive: () => true } as unknown as StructureSpawn;
+    for (const source of world.sources) Object.assign(source, { pos: new MockPos(10, 10, TARGET), energyCapacity: 3000 });
+    return world;
+  }
+  function miner(name: string, target: Room, configName: string, work = 5, ttl = 1000): Creep {
+    const creep = createMockPowerBankCreep("colonizerHarvester", { name, roomName: TARGET, x: 9, y: 10,
+      body: [...Array.from({ length: work }, () => ({ type: WORK, hits: 100 })), { type: MOVE, hits: 100 }],
+      memory: { configName, ready: true } });
+    creep.room = target; creep.ticksToLive = ttl;
+    return creep;
+  }
+  it("本地已有650容量和活跃Spawn即停止新的增援，不等待本地首次出生", () => {
+    const { names } = localMiningWorld();
+    Game.spawns.Mother.memory.spawnList = [...names];
+    runColonizationSupport();
+    for (const name of names) {
+      expect(Memory.data!.creepConfigs![name].spawnOnce?.queuedAt).toBe(Game.time);
+      expect(Memory.data!.creepConfigs![name].roomName).toBeUndefined();
+      expect(Game.spawns.Mother.memory.spawnList).not.toContain(name);
+    }
+  });
+  it("本地5WORK就位五tick后在新房回收增援，保留可解析的退役配置", () => {
+    const { target, names } = localMiningWorld();
+    const localConfig = `${TARGET}:harvester:source-a`;
+    const local = miner("local-ready", target, localConfig);
+    local.memory.role = "harvester";
+    const support = miner("support-old", target, names[0]);
+    Game.creeps = { local, support };
+    Memory.data!.creepConfigs = { [localConfig]: { role: "harvester", roomName: TARGET, args: ["source-a"] } };
+    runColonizationSupport();
+    expect(support.memory._colonizationRetiring).toBeUndefined();
+    Game.time += 5; runColonizationSupport();
+    expect(support.memory._colonizationRetiring).toBe(TARGET);
+    expect(support.memory.configName).toContain(":retiring:support-old");
+    expect(Memory.data!.creepConfigs![support.memory.configName!]).toMatchObject({ role: "colonizerHarvester" });
+    expect(Memory.data!.creepConfigs![support.memory.configName!].roomName).toBeUndefined();
+    expect(local.memory._colonizationRetiring).toBeUndefined();
+  });
+  it.each(["路上", "不足5WORK", "仍在孵化"])("本地矿工%s时停止补员但不提前回收在岗增援", condition => {
+    const { target, names } = localMiningWorld();
+    const localConfig = `${TARGET}:harvester:source-a`;
+    const local = miner("local", target, localConfig, condition === "不足5WORK" ? 4 : 5);
+    local.memory.role = "harvester";
+    if (condition === "路上") local.pos = new MockPos(25, 25, TARGET) as unknown as RoomPosition;
+    if (condition === "仍在孵化") local.spawning = true;
+    const support = miner("support", target, names[0]);
+    Game.creeps = { local, support };
+    Memory.data!.creepConfigs = { [localConfig]: { role: "harvester", roomName: TARGET, args: ["source-a"] } };
+    runColonizationSupport(); Game.time += 6; runColonizationSupport();
+    expect(support.memory._colonizationRetiring).toBeUndefined();
+    expect(Memory.data!.creepConfigs![names[0]]).toMatchObject({ roomName: SOURCE, spawnOnce: { queuedAt: 100 } });
+  });
+  it("增援后继真正就位后退役旧代，单个配置仍只有新代在岗", () => {
+    const { target, sources, names } = miningWorld();
+    for (const source of sources) Object.assign(source, { pos: new MockPos(10, 10, TARGET), energyCapacity: 3000 });
+    const old = miner("old", target, names[0], 5, 200);
+    const fresh = miner("fresh", target, names[0], 5, 1000);
+    Game.creeps = { old, fresh };
+    runColonizationSupport(); Game.time += 5; runColonizationSupport();
+    expect(old.memory._colonizationRetiring).toBe(TARGET);
+    expect(fresh.memory.configName).toBe(names[0]);
+    expect(fresh.memory._colonizationRetiring).toBeUndefined();
+  });
+  it("本地失去5WORK生产能力后按源恢复补员，不改动升级支援策略", () => {
+    const { target, names } = localMiningWorld();
+    runColonizationSupport(); target.energyCapacityAvailable = 600; Game.time++;
+    runColonizationSupport();
+    expect(Memory.data!.creepConfigs![names[0]]).toMatchObject({ roomName: SOURCE });
+    expect(Memory.data!.creepConfigs![names[0]].spawnOnce).toBeUndefined();
+    expect(Memory.cfg!.colonizationSupport![TARGET].enabled).toBe(true);
+  });
   it("殖民旗与旧任务消失后仍维持每源一份采矿支援，本地首次出生不撤援", () => {
     const { target, names } = miningWorld();
     Game.flags = {}; Memory.data!.colonization = {};

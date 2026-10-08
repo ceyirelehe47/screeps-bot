@@ -830,7 +830,7 @@ export const meleeAttackerRole: RoleFactory = (
   },
   source: (creep): boolean => {
     synchronizeWarPartnerConfigName(creep, partnerConfigName);
-    if (tactic === "towerDrainDuo" && targetRoom && runTowerDrainPair(creep, targetRoom, partnerConfigName ?? "")) return false;
+    if ((tactic === "towerDrainDuo" || tactic === "t3TowerDrainDuo") && targetRoom && runTowerDrainPair(creep, targetRoom, partnerConfigName ?? "", tactic === "t3TowerDrainDuo")) return false;
     if (targetRoom && waitForWarHealerFormation(creep, targetRoom, encodedRouteRooms)) {
       attackAdjacentWhileHoldingFormation(creep, creep.room.name === targetRoom);
       return false;
@@ -845,7 +845,7 @@ export const meleeAttackerRole: RoleFactory = (
   },
   target: (creep): boolean => {
     synchronizeWarPartnerConfigName(creep, partnerConfigName);
-    if (tactic === "towerDrainDuo" && targetRoom && runTowerDrainPair(creep, targetRoom, partnerConfigName ?? "")) return false;
+    if ((tactic === "towerDrainDuo" || tactic === "t3TowerDrainDuo") && targetRoom && runTowerDrainPair(creep, targetRoom, partnerConfigName ?? "", tactic === "t3TowerDrainDuo")) return false;
     if (targetRoom && waitForWarHealerFormation(creep, targetRoom, encodedRouteRooms)) {
       attackAdjacentWhileHoldingFormation(creep, creep.room.name === targetRoom);
       return false;
@@ -861,15 +861,15 @@ export const meleeAttackerRole: RoleFactory = (
       return false;
     }
 
-    if (tactic !== "towerDrainDuo" && targetRoom && creep.room.name === targetRoom && runCounterstrikeApproach(creep)) return false;
+    if ((tactic !== "towerDrainDuo" && tactic !== "t3TowerDrainDuo") && targetRoom && creep.room.name === targetRoom && runCounterstrikeApproach(creep)) return false;
 
-    const targetMoveOptions = targetRoom ? getTargetRoomMoveOptions(creep, tactic === "towerDrainDuo") : TARGET_ROOM_MOVE_OPTIONS;
-    const warApproach = targetRoom ? measureCreepDecision(() => chooseWarApproach(creep, tactic === "towerDrainDuo")) : null;
+    const targetMoveOptions = targetRoom ? getTargetRoomMoveOptions(creep, (tactic === "towerDrainDuo" || tactic === "t3TowerDrainDuo")) : TARGET_ROOM_MOVE_OPTIONS;
+    const warApproach = targetRoom ? measureCreepDecision(() => chooseWarApproach(creep, (tactic === "towerDrainDuo" || tactic === "t3TowerDrainDuo"))) : null;
     const target = targetRoom ? warApproach?.target : measureCreepDecision(() => findTarget(creep));
     if (!target) {
       delete creep.memory._warBreachTargetId;
       if (targetRoom) {
-        moveWarAttackerToTarget(creep, new RoomPosition(25, 25, targetRoom), 3, targetMoveOptions, tactic === "towerDrainDuo");
+        moveWarAttackerToTarget(creep, new RoomPosition(25, 25, targetRoom), 3, targetMoveOptions, (tactic === "towerDrainDuo" || tactic === "t3TowerDrainDuo"));
       }
       return false;
     }
@@ -881,7 +881,7 @@ export const meleeAttackerRole: RoleFactory = (
         creep.memory._warBreachTargetId = plannedBreach.id;
         const breachCode = measureCreepIntent(() => creep.attack(plannedBreach));
         if (breachCode === ERR_NOT_IN_RANGE) {
-          moveWarAttackerToTarget(creep, plannedBreach, 1, targetMoveOptions, tactic === "towerDrainDuo");
+          moveWarAttackerToTarget(creep, plannedBreach, 1, targetMoveOptions, (tactic === "towerDrainDuo" || tactic === "t3TowerDrainDuo"));
         }
         return false;
       }
@@ -894,7 +894,7 @@ export const meleeAttackerRole: RoleFactory = (
 
     const code = measureCreepIntent(() => creep.attack(target));
     if (code === ERR_NOT_IN_RANGE) {
-      const moveCode = moveWarAttackerToTarget(creep, target, 1, targetMoveOptions, tactic === "towerDrainDuo");
+      const moveCode = moveWarAttackerToTarget(creep, target, 1, targetMoveOptions, (tactic === "towerDrainDuo" || tactic === "t3TowerDrainDuo"));
       if (moveCode === ERR_NO_PATH && creep.room.name === target.pos.roomName && !approach?.open) {
         attackAdjacentBreachTarget(creep, target);
       }
@@ -902,11 +902,11 @@ export const meleeAttackerRole: RoleFactory = (
     }
 
     if (code === ERR_INVALID_TARGET && (target as Creep | Structure).id) {
-      const fallback = creep.pos.findClosestByRange(getHostileStructures(creep.room, tactic === "towerDrainDuo", creep));
+      const fallback = creep.pos.findClosestByRange(getHostileStructures(creep.room, (tactic === "towerDrainDuo" || tactic === "t3TowerDrainDuo"), creep));
       if (fallback) {
         const fallbackCode = measureCreepIntent(() => creep.attack(fallback));
         if (fallbackCode === ERR_NOT_IN_RANGE) {
-          moveWarAttackerToTarget(creep, fallback, 1, targetMoveOptions, tactic === "towerDrainDuo");
+          moveWarAttackerToTarget(creep, fallback, 1, targetMoveOptions, (tactic === "towerDrainDuo" || tactic === "t3TowerDrainDuo"));
         }
       }
     }

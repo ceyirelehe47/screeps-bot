@@ -257,8 +257,8 @@ export const healerRole: RoleFactory = (
   },
   source: (creep): boolean => {
     synchronizeWarPartnerConfigName(creep, partnerConfigName);
-    if (tactic === "towerDrainDuo" && targetRoom && runTowerDrainPair(creep, targetRoom, partnerConfigName ?? "")) return false;
-    if (targetRoom && moveWithWarAttackerFormation(creep, targetRoom, encodedRouteRooms, tactic === "towerDrainDuo")) return false;
+    if ((tactic === "towerDrainDuo" || tactic === "t3TowerDrainDuo") && targetRoom && runTowerDrainPair(creep, targetRoom, partnerConfigName ?? "", tactic === "t3TowerDrainDuo")) return false;
+    if (targetRoom && moveWithWarAttackerFormation(creep, targetRoom, encodedRouteRooms, (tactic === "towerDrainDuo" || tactic === "t3TowerDrainDuo"))) return false;
 
     if (targetRoom && creep.room.name !== targetRoom) {
       moveToTargetRoom(creep, targetRoom, encodedRouteRooms, TRAVEL_OPTIONS);
@@ -269,8 +269,8 @@ export const healerRole: RoleFactory = (
   },
   target: (creep): boolean => {
     synchronizeWarPartnerConfigName(creep, partnerConfigName);
-    if (tactic === "towerDrainDuo" && targetRoom && runTowerDrainPair(creep, targetRoom, partnerConfigName ?? "")) return false;
-    if (targetRoom && moveWithWarAttackerFormation(creep, targetRoom, encodedRouteRooms, tactic === "towerDrainDuo")) return false;
+    if ((tactic === "towerDrainDuo" || tactic === "t3TowerDrainDuo") && targetRoom && runTowerDrainPair(creep, targetRoom, partnerConfigName ?? "", tactic === "t3TowerDrainDuo")) return false;
+    if (targetRoom && moveWithWarAttackerFormation(creep, targetRoom, encodedRouteRooms, (tactic === "towerDrainDuo" || tactic === "t3TowerDrainDuo"))) return false;
 
     if (targetRoom && creep.room.name !== targetRoom) {
       moveToTargetRoom(creep, targetRoom, encodedRouteRooms, TRAVEL_OPTIONS);

@@ -56,6 +56,19 @@ function pair(outside = false, structures: Structure[] = [tower("tower")], hosti
   return { attacker, healer, target };
 }
 
+function t3Pair(outside = false, structures: Structure[] = [tower("tower")], hostiles: Creep[] = []) {
+  const result = pair(outside, structures, hostiles);
+  const parts = (type: BodyPartConstant, count: number, boost: ResourceConstant): BodyPartDefinition[] =>
+    Array.from({ length: count }, () => ({ type, hits: 100, boost } as BodyPartDefinition));
+  result.attacker.body.splice(0, result.attacker.body.length,
+    ...parts(TOUGH, 10, RESOURCE_CATALYZED_GHODIUM_ALKALIDE), ...parts(ATTACK, 30, RESOURCE_CATALYZED_UTRIUM_ACID), ...parts(MOVE, 10, RESOURCE_CATALYZED_ZYNTHIUM_ALKALIDE));
+  result.healer.body.splice(0, result.healer.body.length,
+    ...parts(TOUGH, 10, RESOURCE_CATALYZED_GHODIUM_ALKALIDE), ...parts(HEAL, 20, RESOURCE_CATALYZED_LEMERGIUM_ALKALIDE), ...parts(MOVE, 8, RESOURCE_CATALYZED_ZYNTHIUM_ALKALIDE));
+  result.attacker.hits = result.attacker.hitsMax = 5000;
+  result.healer.hits = result.healer.hitsMax = 3800;
+  return result;
+}
+
 /** 独立按已安装Engine的clamp→edge interRoom顺序提交；连本帧idle的边缘actor也会迁房。 */
 function deferredEngineFrame(actors: Creep[]): () => void {
   const pending = new Map<Creep, DirectionConstant>();
@@ -93,6 +106,88 @@ describe("towerDrainDuo 公共战术门", () => {
     moveToTarget.mockImplementation(() => OK);
     Object.assign(global, { RoomPosition: MockPos });
     Game.map = { describeExits: jest.fn((name: string) => name === TARGET ? { [LEFT]: RETREAT } : name === RETREAT ? { [RIGHT]: TARGET } : {}), getRoomTerrain: jest.fn(() => ({ get: jest.fn(() => 0) })) } as unknown as GameMap;
+  });
+
+  it("T3必须耗尽塔能量才推进，即使当前塔伤低于强化治疗", () => {
+    const { attacker, healer } = t3Pair(false, [tower("last-shot", 10)]);
+    meleeAttackerRole(TARGET, "", "", "", GREEN_CONFIG, "t3TowerDrainDuo").target(attacker);
+    healerRole(TARGET, "", "", "", RED_CONFIG, "t3TowerDrainDuo").target(healer);
+    expect(attacker.attack).not.toHaveBeenCalled();
+    expect(moveToTarget).not.toHaveBeenCalled();
+    expect(attacker.memory._warTowerDrain).toMatchObject({ phase: "draining", strictT3: true, healingPower: 960 });
+    expect(healer.heal).toHaveBeenCalledWith(attacker);
+  });
+
+  it.each(["approach", "recovering"] as const)("真实T3八MOVE治疗在%s阶段满血可入房", phase => {
+    const { attacker, healer } = t3Pair(true);
+    attacker.memory._warTowerDrain!.phase = phase;
+    runTowerDrainPair(attacker, TARGET, GREEN_CONFIG, true);
+    runTowerDrainPair(healer, TARGET, RED_CONFIG, true);
+    expect(attacker.move).toHaveBeenCalledWith(RIGHT);
+    expect(healer.move).toHaveBeenCalledWith(RIGHT);
+  });
+
+  it("TOUGH一节打穿时即使仍有98%总血量也停止贴身攻击并撤退治疗", () => {
+    const { attacker, healer } = t3Pair(false, []);
+    attacker.body[0].hits = 0; attacker.hits = 4900;
+    attacker.pos = new MockPos(5, 25, TARGET) as unknown as RoomPosition;
+    healer.pos = new MockPos(6, 25, TARGET) as unknown as RoomPosition;
+    meleeAttackerRole(TARGET, "", "", "", GREEN_CONFIG, "t3TowerDrainDuo").target(attacker);
+    healerRole(TARGET, "", "", "", RED_CONFIG, "t3TowerDrainDuo").target(healer);
+    expect(attacker.attack).not.toHaveBeenCalled();
+    expect(attacker.memory._warTowerDrain).toMatchObject({ phase: "retreating", blocker: "tough_broken" });
+    expect(attacker.move).toHaveBeenCalled();
+    expect(healer.heal).toHaveBeenCalledWith(attacker);
+  });
+
+  it("两名UH2O近战下一步可贴身时，装甲完整也提前撤退", () => {
+    const defenders = [carrier(6, 25), carrier(6, 26)];
+    for (const defender of defenders) {
+      defender.fatigue = 0;
+      defender.body = [...Array.from({ length: 25 }, () => ({ type: ATTACK, hits: 100, boost: RESOURCE_UTRIUM_ACID })), { type: MOVE, hits: 100 }];
+    }
+    const { attacker, healer } = t3Pair(false, [], defenders);
+    attacker.pos = new MockPos(4, 25, TARGET) as unknown as RoomPosition;
+    healer.pos = new MockPos(4, 26, TARGET) as unknown as RoomPosition;
+    expect(runTowerDrainPair(attacker, TARGET, GREEN_CONFIG, true)).toBe(true);
+    expect(attacker.memory._warTowerDrain).toMatchObject({ phase: "retreating", blocker: "hostile_pressure" });
+    expect(attacker.attack).not.toHaveBeenCalled();
+  });
+
+  it("出口附近新增两名强化近战时拒绝T3入场，不等跨房受击再撤退", () => {
+    const defenders = [carrier(2, 25), carrier(2, 26)];
+    for (const defender of defenders) {
+      defender.fatigue = 0;
+      defender.body = [...Array.from({ length: 25 }, () => ({ type: ATTACK, hits: 100, boost: RESOURCE_UTRIUM_ACID })), { type: MOVE, hits: 100 }];
+    }
+    const { attacker, healer } = t3Pair(true, [], defenders);
+    runTowerDrainPair(attacker, TARGET, GREEN_CONFIG, true);
+    runTowerDrainPair(healer, TARGET, RED_CONFIG, true);
+    expect(attacker.move).not.toHaveBeenCalled();
+    expect(healer.move).not.toHaveBeenCalled();
+    expect(attacker.memory._warTowerDrain).toMatchObject({ phase: "recovering", blocker: "entry_damage_or_healing" });
+  });
+
+  it("T3行进矩阵拒绝下一步会进入两个强化近战攻击范围的格子", () => {
+    const defenders = [carrier(6, 25), carrier(6, 26)];
+    for (const defender of defenders) {
+      defender.fatigue = 0;
+      defender.body = [...Array.from({ length: 25 }, () => ({ type: ATTACK, hits: 100, boost: RESOURCE_UTRIUM_ACID })), { type: MOVE, hits: 100 }];
+    }
+    const { attacker } = t3Pair(false, [], defenders);
+    attacker.memory._warTowerDrain = { ...state("breaching"), strictT3: true };
+    const cells = new Map<string, number>();
+    const matrix = { set: (x: number, y: number, value: number) => cells.set(`${x}:${y}`, value), get: (x: number, y: number) => cells.get(`${x}:${y}`) ?? 0 } as unknown as CostMatrix;
+    constrainTowerDrainBreachPath(attacker, TARGET, matrix);
+    expect(matrix.get(4, 25)).toBe(0xff);
+    expect(matrix.get(2, 25)).not.toBe(0xff);
+  });
+
+  it("空塔且队伍完整时解除耗塔门进入近战阶段", () => {
+    const { attacker } = t3Pair(false, [tower("empty", 0)]);
+    expect(runTowerDrainPair(attacker, TARGET, GREEN_CONFIG, true)).toBe(true);
+    expect(attacker.memory._warTowerDrain?.phase).toBe("breaching");
+    expect(attacker.move).toHaveBeenCalled();
   });
 
   it("跨房49/0实际相邻，含E/W及N/S原点边界", () => {

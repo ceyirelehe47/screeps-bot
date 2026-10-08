@@ -727,6 +727,7 @@ declare global {
     _warRetireToRoom?: string;
     /** 已终止任务的空载成员通过共用交通返回此房回收。 */
     _recycleToRoom?: string;
+    _colonizationRetiring?: string;
     _warTowerDrain?: import("@/roles/towerDrainPair").TowerDrainPairState;
     _move?: {
       dest?: {

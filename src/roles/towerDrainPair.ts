@@ -2,6 +2,7 @@ import { getHostileTowers as activeTowers, getHostileTowerThreats as towerThreat
 import { clearMovementState, moveToTarget } from "@/roles/shared";
 import { isWalkableStructure } from "@/movement/common";
 import { measureCreepIntent } from "@/runtime/cpuPhaseProfiler";
+import { damageAfterTough } from "@/runtime/powerBankCapability";
 import { requestCombatObservation } from "@/runtime/powerBankObserver";
 
 export interface TowerDrainPairState {
@@ -17,6 +18,7 @@ export interface TowerDrainPairState {
   healerDamage?: number;
   enteredAt?: number;
   healingPower?: number;
+  strictT3?: true;
 }
 
 const MOVE_OPTIONS = { plainCost: 2, swampCost: 8, reusePath: 0, maxRooms: 1, ignoreCreeps: false, avoidExitTiles: false } as const;
@@ -26,9 +28,9 @@ const DAMAGE_RESERVE = 1000;
 
 type DrainMemory = CreepMemory & { _warTowerDrain?: TowerDrainPairState };
 
-function plainOnlyMatrix(roomName: string, matrix: CostMatrix): CostMatrix {
+function plainOnlyMatrix(roomName: string, matrix: CostMatrix, force = false): CostMatrix {
   const visible = Game.rooms[roomName];
-  if (visible && refillableTowers(visible).length === 0) return matrix;
+  if (!force && visible && refillableTowers(visible).length === 0) return matrix;
   const terrain = Game.map.getRoomTerrain(roomName);
   // 道路覆盖沼泽后按道路疲劳结算，不能把现成通道一起封掉。
   const roads = new Set(Game.rooms[roomName]?.find(FIND_STRUCTURES).filter((s) => s.structureType === STRUCTURE_ROAD).map((s) => s.pos.x * 50 + s.pos.y) ?? []);
@@ -84,6 +86,35 @@ function outsideTile(tile: { x: number; y: number }, direction: DirectionConstan
   return { x: tile.x, y: interior ? 1 : 0 };
 }
 
+/** 每次门控读取新鲜守军快照，矩阵逐格复用已折算的部件火力。 */
+function hostileDamageModel(room: Room): (tile: { x: number; y: number }) => number {
+  const threats = room.find(FIND_HOSTILE_CREEPS).map(hostile => {
+    const canStep = hostile.fatigue === 0 && hostile.body.some(part => part.type === MOVE && part.hits > 0);
+    let melee = 0; let ranged = 0;
+    for (const part of hostile.body) {
+      if (part.hits <= 0) continue;
+      const boosts = part.boost ? (BOOSTS[part.type] as Record<string, { attack?: number; rangedAttack?: number }>)[part.boost] : undefined;
+      if (part.type === ATTACK) melee += ATTACK_POWER * (boosts?.attack ?? 1);
+      if (part.type === RANGED_ATTACK) ranged += RANGED_ATTACK_POWER * (boosts?.rangedAttack ?? 1);
+    }
+    return { pos: hostile.pos, melee, ranged, canStep };
+  });
+  return tile => threats.reduce((sum, threat) => {
+    const distance = range(tile, threat.pos);
+    return sum + (distance <= (threat.canStep ? 2 : 1) ? threat.melee : 0)
+      + (distance <= (threat.canStep ? 4 : 3) ? threat.ranged : 0);
+  }, 0);
+}
+
+function fullActiveBody(creep: Creep, type: BodyPartConstant): boolean {
+  const count = creep.body.filter(part => part.type === type).length;
+  return count > 0 && creep.getActiveBodyparts(type) === count;
+}
+
+function armorBroken(creep: Creep): boolean {
+  return creep.body.some(part => part.type === TOUGH && part.hits <= 0);
+}
+
 function damageAt(towers: StructureTower[], tile: { x: number; y: number }): number {
   return towers.reduce((sum, tower) => sum + (tower.store.getUsedCapacity(RESOURCE_ENERGY) >= TOWER_ENERGY_COST ? towerPowerAt(tower, tile) : 0), 0);
 }
@@ -100,7 +131,7 @@ function exitPaths(room: Room, state: TowerDrainPairState, entry: { x: number; y
   const blocked = new Uint8Array(2500);
   const terrain = Game.map.getRoomTerrain(room.name);
   const roads = new Set(room.find(FIND_STRUCTURES).filter((s) => s.structureType === STRUCTURE_ROAD).map((s) => s.pos.x * 50 + s.pos.y));
-  const allowSwamps = towers.length === 0;
+  const allowSwamps = towers.length === 0 && !state.strictT3;
   const index = (x: number, y: number): number => x * 50 + y;
   const damage = (x: number, y: number): number => {
     const at = index(x, y);
@@ -179,7 +210,7 @@ export function constrainTowerDrainBreachPath(creep: Creep, roomName: string, ma
   const state = (creep.memory as DrainMemory)._warTowerDrain;
   const room = Game.rooms[roomName];
   if (!state || state.phase !== "breaching" || state.targetRoom !== roomName || !state.attackerEntry || !room) return matrix;
-  plainOnlyMatrix(roomName, matrix);
+  plainOnlyMatrix(roomName, matrix, state.strictT3 === true);
   const partner = Object.values(Game.creeps).find((candidate) => candidate.memory.configName === creep.memory._warPartnerConfigName && !candidate.memory._warDetached);
   if (!partner) return matrix;
   const attacker = creep.memory.role === "meleeAttacker" ? creep : partner;
@@ -190,10 +221,14 @@ export function constrainTowerDrainBreachPath(creep: Creep, roomName: string, ma
   const evaluate = createPairExitEvaluator(attacker, healer, threats);
   const linkedExit = createLinkedExitProof(redPaths, greenPaths);
   const heal = bodyModel(healer).heal(healer.hits);
+  const hostileDamage = state.strictT3 ? hostileDamageModel(room) : undefined;
   for (let x = 1; x < 49; x++) for (let y = 1; y < 49; y++) {
     const at = x * 50 + y;
     const redSteps = redPaths.distances[at];
     if (redSteps === UNREACHABLE) { matrix.set(x, y, 0xff); continue; }
+    if (state.strictT3 && damageAfterTough(creep.body, hostileDamage!({ x, y })) > heal) {
+      matrix.set(x, y, 0xff); continue;
+    }
     let greenSteps = 0;
     const peak = threats.map((_, i) => redPaths.peaks[i][at]);
     let greenReachable = false;
@@ -249,6 +284,8 @@ function chooseEntry(state: TowerDrainPairState, attacker: Creep, healer: Creep,
   if (!state.retreatRoom || !state.exitDirection) return false;
   const outside = Game.rooms[state.retreatRoom];
   const towers = refillableTowers(room);
+  const hostileDamage = state.strictT3 ? hostileDamageModel(room) : undefined;
+  const healing = bodyModel(healer).heal(healer.hits);
   let best: { attacker: { x: number; y: number }; healer: { x: number; y: number }; score: number } | undefined;
   for (let coordinate = 1; coordinate < 48; coordinate++) {
     const red = borderTile(state.exitDirection, coordinate);
@@ -257,6 +294,8 @@ function chooseEntry(state: TowerDrainPairState, attacker: Creep, healer: Creep,
       && walkable(state.retreatRoom!, outsideTile(tile, state.exitDirection!), outside)
       && walkable(state.retreatRoom!, outsideTile(tile, state.exitDirection!, true), outside))) continue;
     const worst = Math.max(towers.reduce((sum, tower) => sum + towerPowerAt(tower, red), 0), towers.reduce((sum, tower) => sum + towerPowerAt(tower, green), 0));
+    if (hostileDamage && Math.max(damageAfterTough(attacker.body, worst + hostileDamage(red)),
+      damageAfterTough(healer.body, worst + hostileDamage(green))) > healing) continue;
     const travel = attacker.room.name === state.retreatRoom && healer.room.name === state.retreatRoom
       ? range(attacker.pos, outsideTile(red, state.exitDirection, true)) + range(healer.pos, outsideTile(green, state.exitDirection, true)) : 0;
     const score = worst * 1000 + travel;
@@ -417,7 +456,7 @@ function leaveBreachExit(creep: Creep, attacker: Creep, healer: Creep, state: To
  * 新模式独立在原 formation/破墙逻辑之前消费本 tick。
  * fresh 视野、塔能量、双方身体与体力每次重读；此前空塔不是继续破墙的证据。
  */
-export function runTowerDrainPair(creep: Creep, targetRoom: string, partnerConfigName: string): boolean {
+export function runTowerDrainPair(creep: Creep, targetRoom: string, partnerConfigName: string, strictT3 = false): boolean {
   requestCombatObservation(targetRoom);
   const red = creep.memory.role === "meleeAttacker";
   const partner = Object.values(Game.creeps).find((candidate) => candidate.memory.configName === partnerConfigName && candidate.memory.role === (red ? "healer" : "meleeAttacker") && !candidate.memory._warDetached && !candidate.spawning);
@@ -425,6 +464,8 @@ export function runTowerDrainPair(creep: Creep, targetRoom: string, partnerConfi
   const healer = red ? partner : creep;
   let state = (attacker?.memory as DrainMemory | undefined)?._warTowerDrain ?? (creep.memory as DrainMemory)._warTowerDrain;
   if (!state || state.targetRoom !== targetRoom) state = { targetRoom, phase: "approach" };
+  if (strictT3) state.strictT3 = true;
+  else delete state.strictT3;
   if (!attacker || !healer || attacker.memory._warDetached || healer.memory._warDetached || partner?.memory._warPartnerConfigName !== creep.memory.configName) {
     state.phase = "retreating";
     state.blocker = "partner_missing";
@@ -470,7 +511,14 @@ export function runTowerDrainPair(creep: Creep, targetRoom: string, partnerConfi
   state.towerEnergy = towers.reduce((sum, tower) => sum + tower.store.getUsedCapacity(RESOURCE_ENERGY), 0);
   state.attackerDamage = room ? damageAt(towers, attacker.room.name === targetRoom ? attacker.pos : state.attackerEntry) : undefined;
   state.healerDamage = room ? damageAt(towers, healer.room.name === targetRoom ? healer.pos : state.healerEntry) : undefined;
-  const unsafe = attacker.getActiveBodyparts(MOVE) <= 0 || healer.getActiveBodyparts(MOVE) <= 0 || healer.getActiveBodyparts(HEAL) <= 0
+  const brokenArmor = strictT3 && (armorBroken(attacker) || armorBroken(healer));
+  const healPower = bodyModel(healer).heal(healer.hits);
+  const hostileDamage = strictT3 && room ? hostileDamageModel(room) : undefined;
+  const hostilePressure = strictT3 && room && bothInside && Math.max(
+    damageAfterTough(attacker.body, hostileDamage!(attacker.pos) + (state.attackerDamage ?? 0)),
+    damageAfterTough(healer.body, hostileDamage!(healer.pos) + (state.healerDamage ?? 0)),
+  ) > healPower;
+  const unsafe = brokenArmor || hostilePressure || attacker.getActiveBodyparts(MOVE) <= 0 || healer.getActiveBodyparts(MOVE) <= 0 || healer.getActiveBodyparts(HEAL) <= 0
     || attacker.hits <= attacker.hitsMax * RETREAT_RATIO
     || !pairExitSafe(attacker, healer, state);
   if (!bothOutside && (unsafe || !room)) state.phase = "retreating";
@@ -481,9 +529,9 @@ export function runTowerDrainPair(creep: Creep, targetRoom: string, partnerConfi
   }
   if (state.phase === "retreating" || state.phase === "recovering") {
     state.phase = bothOutside ? "recovering" : "retreating";
-    const recovered = bothOutside && attacker.hits === attacker.hitsMax && healer.hits === healer.hitsMax && attacker.getActiveBodyparts(MOVE) >= 25 && healer.getActiveBodyparts(MOVE) >= 25 && healer.getActiveBodyparts(HEAL) >= 25 && attacker.fatigue === 0 && healer.fatigue === 0;
+    const recovered = bothOutside && attacker.hits === attacker.hitsMax && healer.hits === healer.hitsMax && fullActiveBody(attacker, MOVE) && fullActiveBody(healer, MOVE) && fullActiveBody(healer, HEAL) && attacker.fatigue === 0 && healer.fatigue === 0;
     if (!recovered) {
-      state.blocker = unsafe ? "healing_or_body" : undefined;
+      state.blocker = brokenArmor ? "tough_broken" : hostilePressure ? "hostile_pressure" : unsafe ? "healing_or_body" : undefined;
       withdraw(creep, state, creep === attacker ? state.attackerEntry : state.healerEntry);
       publish(state, attacker, healer);
       return true;
@@ -493,7 +541,7 @@ export function runTowerDrainPair(creep: Creep, targetRoom: string, partnerConfi
   if (!room) { state.blocker = "target_not_visible"; withdraw(creep, state, creep === attacker ? state.attackerEntry : state.healerEntry); publish(state, attacker, healer); return true; }
   const canFire = towers.some((tower) => tower.store.getUsedCapacity(RESOURCE_ENERGY) >= TOWER_ENERGY_COST);
   state.healingPower = bodyModel(healer).heal(healer.hits);
-  const canAdvance = !canFire || Math.max(state.attackerDamage ?? Infinity, state.healerDamage ?? Infinity) < state.healingPower;
+  const canAdvance = strictT3 ? !canFire && refillableTowers(room).length === 0 : !canFire || Math.max(state.attackerDamage ?? Infinity, state.healerDamage ?? Infinity) < state.healingPower;
   if (canAdvance && bothInside && !unsafe) {
     state.phase = "breaching";
     if (towerDrainPairRange(attacker.pos, healer.pos) > 1) {
@@ -531,7 +579,11 @@ export function runTowerDrainPair(creep: Creep, targetRoom: string, partnerConfi
     // 入房也预留两轮受击；没有 fresh 目标视野时绝不盲穿出口。
     const potential = refillableTowers(room);
     const admissionDamage = Math.max(potential.reduce((sum, tower) => sum + towerPowerAt(tower, state.attackerEntry!), 0), potential.reduce((sum, tower) => sum + towerPowerAt(tower, state.healerEntry!), 0));
-    if (attacker.hits < attacker.hitsMax || healer.hits < healer.hitsMax || attacker.getActiveBodyparts(ATTACK) < 25 || attacker.getActiveBodyparts(MOVE) < 25 || healer.getActiveBodyparts(HEAL) < 25 || healer.getActiveBodyparts(MOVE) < 25 || admissionDamage * 2 + DAMAGE_RESERVE >= Math.min(attacker.hits, healer.hits) || attacker.fatigue > 0 || healer.fatigue > 0) {
+    const entryUnsafe = strictT3 && Math.max(
+      damageAfterTough(attacker.body, admissionDamage + hostileDamage!(state.attackerEntry)),
+      damageAfterTough(healer.body, admissionDamage + hostileDamage!(state.healerEntry)),
+    ) > healPower;
+    if (entryUnsafe || attacker.hits < attacker.hitsMax || healer.hits < healer.hitsMax || !fullActiveBody(attacker, ATTACK) || !fullActiveBody(attacker, MOVE) || !fullActiveBody(healer, HEAL) || !fullActiveBody(healer, MOVE) || admissionDamage * 2 + DAMAGE_RESERVE >= Math.min(attacker.hits, healer.hits) || attacker.fatigue > 0 || healer.fatigue > 0) {
       state.blocker = "entry_damage_or_healing";
       state.phase = "recovering";
       // source0/49也会自动迁房；拒绝再入时先回source1/48，不能假称边界hold能留在原房。

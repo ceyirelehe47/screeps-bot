@@ -39,7 +39,7 @@ const MEMORY_BRANCHES = {
   runtime: {
     declaration: "src/types/memory/runtime.d.ts",
     interfaceName: "ScreepsMemoryRuntime",
-    schemaFingerprint: "a4a44d584281506f3d0d3ae419b0e9e790f0cceb6ced19619d957bfca2dee9f2",
+    schemaFingerprint: "48a7e366efb5f2c37492a49bf0730bc0b698380733123ce47d0873c816a879db",
     imports: [
       "@/runtime/hubPlanner:AllocationLedgerEntry",
       "@/runtime/hubPlanner:DirectRouteDecision",
@@ -87,8 +87,8 @@ const MEMORY_BRANCHES = {
   data: {
     declaration: "src/types/memory/data.d.ts",
     interfaceName: "ScreepsMemoryData",
-    // NPC 清场后的 lootAfterClear 与搬运任务已有 emptyObservedAt 生命周期。
-    schemaFingerprint: "8588e1f08328b3f07e3e0edc75f8b8fb6edf28143d772c9ff5cfcf94f9e561b9",
+    // 新增显式T3耗塔战术；现有NPC与搬运生命周期保持原字段。
+    schemaFingerprint: "836e5cfb470f8d5cdc7ed9b9d68b47a28b3fcd8411d983e45275c0c363a352f4",
     imports: [
       "@/runtime/depositHarvest:DepositHarvestTask",
       "@/runtime/marketActionArbiter:MarketAccountClaim",

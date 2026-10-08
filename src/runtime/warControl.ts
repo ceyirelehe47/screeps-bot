@@ -42,6 +42,7 @@ interface WarTask {
   squadDecision?: string;
   squadAssessedAt?: number;
   squad?: WarSquad;
+  tactic?: "t3TowerDrainDuo";
   boostTier?: "t3";
   boostLabs?: string[];
   boostStatus?: "preparing" | "ready" | "failed";
@@ -78,6 +79,7 @@ export interface StopWarOptions {
 export interface StartWarOptions {
   routeRooms?: string[];
   squad?: WarSquad;
+  tactic?: "t3TowerDrainDuo";
   boostTier?: WarBoostTier;
   oneShot?: boolean;
 }
@@ -93,6 +95,7 @@ export interface StartWarResult {
   status: WarStatus;
   reason: "manual";
   squad?: WarSquad;
+  tactic?: "t3TowerDrainDuo";
   routeRooms?: string[];
   routeTrace?: WarTask["routeTrace"];
   squadDecision?: string;
@@ -153,6 +156,7 @@ export interface WarStatusTaskSnapshot {
   status: WarStatus;
   reason: "npc_reservation" | "manual";
   squad?: WarSquad;
+  tactic?: "t3TowerDrainDuo";
   routeRooms?: string[];
   routeTrace?: WarTask["routeTrace"];
   squadDecision?: string;
@@ -360,6 +364,7 @@ function getRoleArgs(
     boostTaskId,
     encodeBoosts(role === "meleeAttacker" ? T3_ATTACKER_BOOSTS : T3_HEALER_BOOSTS),
     partnerConfigName,
+    ...(task.tactic === "t3TowerDrainDuo" ? [task.tactic] : []),
   ];
 }
 
@@ -1275,6 +1280,7 @@ function buildTaskStatusSnapshot(task: WarTask): WarStatusTaskSnapshot {
     status: task.status,
     reason: task.reason,
     squad: task.squad,
+    tactic: task.tactic,
     routeRooms: task.routeRooms,
     routeTrace: task.routeTrace,
     squadDecision: task.squadDecision,
@@ -1391,7 +1397,7 @@ function processTask(task: WarTask): void {
     }
     if (task.failReason === "npc_source_capacity_insufficient") delete task.failReason;
   }
-  if (isTowerDrainDuoTask(task)) requestCombatObservation(task.targetRoom);
+  if (isTowerDrainDuoTask(task) || task.tactic === "t3TowerDrainDuo") requestCombatObservation(task.targetRoom);
   task.statusSince ??= task.createdAt;
 
   if (task.status === "patrol_waiting") {
@@ -1527,7 +1533,7 @@ function defaultWarMapRoute(sourceRoom: string, targetRoom: string): { rooms?: s
 export function requestWarRoomClear(
   targetRoom: string,
   sourceRoom: string,
-  options?: { routeRooms?: string[]; reason?: "npc_reservation" | "manual"; squad?: WarSquad; boostTier?: WarBoostTier; oneShot?: boolean; npcAuto?: true },
+  options?: { routeRooms?: string[]; reason?: "npc_reservation" | "manual"; squad?: WarSquad; tactic?: "t3TowerDrainDuo"; boostTier?: WarBoostTier; oneShot?: boolean; npcAuto?: true },
 ): void {
   const store = ensureWarStore();
   const existing = store[targetRoom];
@@ -1564,6 +1570,7 @@ export function requestWarRoomClear(
     squadDecision: npcAuto ? decision?.reason ?? "awaiting_vision" : "explicit_or_player_default",
     squadAssessedAt: npcAuto && decision && decision.reason !== "entry_not_proven" ? now : undefined,
     squad,
+    tactic: squad === "t3Duo" ? options?.tactic ?? existing?.tactic : undefined,
     boostTier: squad === "towerDrainDuo" ? undefined : options?.boostTier ?? (npcAuto && squad === "t3Duo" ? "t3" : existing?.boostTier),
     boostLabs: restart ? undefined : existing?.boostLabs,
     boostStatus: restart ? undefined : existing?.boostStatus,
@@ -1592,7 +1599,9 @@ export function startWarRoom(targetRoom: string, sourceRoom: string, options: St
     return "ERR_INVALID_ARGS:startWar(targetRoom, sourceRoom)";
   }
 
-  const npcAuto = options.squad === undefined && options.boostTier === undefined && !!Game.rooms[targetRoom] && isNpcWarTarget(Game.rooms[targetRoom]);
+  if (options.tactic && (options.tactic !== "t3TowerDrainDuo" || (options.squad !== undefined && options.squad !== "t3Duo"))) return "ERR_INVALID_ARGS:T3 tactic requires t3Duo";
+
+  const npcAuto = options.tactic === undefined && options.squad === undefined && options.boostTier === undefined && !!Game.rooms[targetRoom] && isNpcWarTarget(Game.rooms[targetRoom]);
   const squad = npcAuto ? undefined : options.squad ?? "t3Duo";
   const boostTier = squad === "towerDrainDuo" ? undefined : options.boostTier ?? (squad === "t3Duo" ? "t3" : undefined);
   const oneShot = options.oneShot ?? true;
@@ -1601,6 +1610,7 @@ export function startWarRoom(targetRoom: string, sourceRoom: string, options: St
     routeRooms: options.routeRooms,
     reason: "manual",
     squad,
+    tactic: options.tactic,
     boostTier,
     oneShot,
     npcAuto: npcAuto ? true : undefined,
@@ -1614,6 +1624,7 @@ export function startWarRoom(targetRoom: string, sourceRoom: string, options: St
     status: task.status,
     reason: "manual",
     squad: task.squad,
+    tactic: task.tactic,
     boostTier: task.boostTier,
     oneShot: task.oneShot === true,
     attempts: task.attempts,

@@ -281,6 +281,7 @@ declare global {
         squadDecision?: string;
         squadAssessedAt?: number;
         squad?: "standard" | "t3Duo" | "towerDrainDuo";
+        tactic?: "t3TowerDrainDuo";
         boostTier?: "t3";
         boostLabs?: string[];
         boostStatus?: "preparing" | "ready" | "failed";

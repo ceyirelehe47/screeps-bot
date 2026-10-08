@@ -712,6 +712,28 @@ describe("towerDrainDuo 战争控制", () => {
     expect(task.activeGeneration!.boostGateOpenedAt).toBe(Game.time);
   });
 
+  it("显式T3耗塔战术保留强化预约与原身体，并同步六参数到双人角色", () => {
+    const prepare = jest.spyOn(combatBoosts, "prepareBoosts").mockReturnValue({ status: "ready", labs: [] });
+    startWarRoom("E3N57", "E1N57", { squad: "t3Duo", tactic: "t3TowerDrainDuo", oneShot: true });
+    runWarControl();
+    const task = Memory.data!.war!.E3N57;
+    const configs = Memory.data!.creepConfigs!;
+    for (const name of Object.values(task.activeGeneration!.configNames)) {
+      expect(configs[name].args).toHaveLength(6);
+      expect(configs[name].args[5]).toBe("t3TowerDrainDuo");
+      expect(configs[name].args[3]).toContain(RESOURCE_CATALYZED_GHODIUM_ALKALIDE);
+    }
+    expect(task).toMatchObject({ squad: "t3Duo", boostTier: "t3", tactic: "t3TowerDrainDuo", oneShot: true });
+    expect(configs[task.activeGeneration!.configNames.healer].body?.filter(part => part === MOVE)).toHaveLength(8);
+    expect(prepare).toHaveBeenCalledTimes(1);
+    expect(combatObserver.requestCombatObservation).toHaveBeenCalledWith("E3N57");
+  });
+
+  it("拒绝将T3战术配到未强化队伍，且不创建任务", () => {
+    expect(startWarRoom("E3N57", "E1N57", { squad: "towerDrainDuo", tactic: "t3TowerDrainDuo" })).toContain("ERR_INVALID_ARGS");
+    expect(Memory.data?.war?.E3N57).toBeUndefined();
+  });
+
   it.each([false, true])("无塔但有中性墙时，controller.owner=%s 不能触发 done 或 CLAIM 捷径", (owned) => {
     const wall = { id: "neutral-wall", structureType: STRUCTURE_WALL, hits: 10_000 } as unknown as StructureWall;
     const target = createTargetRoom([], [], [wall]);

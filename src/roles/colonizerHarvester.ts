@@ -35,6 +35,20 @@ export const colonizerHarvesterRole: RoleFactory = (targetRoom?: string, sourceI
     source: (creep): boolean => {
       const configName = creep.memory.configName;
       const [home, kind, supportedRoom, role] = (configName ?? "").split(":");
+      const recycleRoom = creep.memory._colonizationRetiring;
+      if (recycleRoom) {
+        const service = getTickContextService();
+        const spawn = service.getSpawnsByRoom(recycleRoom)[0] ?? service.getSpawnsByRoom(home)[0];
+        if (spawn) {
+          if (creep.room.name !== spawn.room.name) moveToTargetRoom(creep, spawn.room.name,
+            spawn.room.name === targetRoom ? encodedRouteRooms : encodedRouteRooms?.split("|").reverse().join("|"),
+            { plainCost: 2, swampCost: 10, canMoveStep: (pos: RoomPosition) =>
+              !targetRoom || !readColonizationSupportPolicy(targetRoom)?.allowedTransitRooms?.includes(pos.roomName) ||
+              canUseColonizationTransit(home, targetRoom, pos.roomName) });
+          else if (spawn.recycleCreep(creep) === ERR_NOT_IN_RANGE) moveToTarget(creep, spawn, 1);
+        }
+        return false;
+      }
       const persistentSupport = kind === "colonizationSupport" && role === "harvester" && supportedRoom === targetRoom;
       if (persistentSupport && Memory.data?.creepConfigs?.[configName!]?.roomName !== home) {
         if (creep.room.name !== home) {
