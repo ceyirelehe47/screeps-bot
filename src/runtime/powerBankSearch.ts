@@ -61,7 +61,8 @@ function getGeometryRooms(key: string, origins: readonly string[], worldSize: nu
       }
     }
   }
-  const result = Object.freeze([...rooms]);
+  // 顺序只由几何输入决定；先在跨 tick 缓存中排序，再逐帧过滤开放状态。
+  const result = Object.freeze([...rooms].sort());
   if (geometryMemo.size >= GEOMETRY_MEMO_LIMIT) geometryMemo.delete(geometryMemo.keys().next().value!);
   geometryMemo.set(key, result);
   return result;
@@ -92,7 +93,7 @@ export function getPowerBankSearchRooms(originRoomName?: string): string[] {
   const key = JSON.stringify([POWER_BANK_SEARCH_RADIUS, origins, worldSize ?? null]);
   const cached = searchMemo.get(key);
   if (cached) return [...cached];
-  const result = getGeometryRooms(key, origins, worldSize).filter(isOpenWorldRoom).sort();
+  const result = getGeometryRooms(key, origins, worldSize).filter(isOpenWorldRoom);
   searchMemo.set(key, result);
   return [...result];
 }
