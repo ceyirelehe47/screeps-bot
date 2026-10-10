@@ -2,6 +2,7 @@ import { getCreepConfigService, getMemoryService, getTickContextService } from "
 import { isOwnedManagedRoom } from "@/runtime/roomTypes";
 import { isDefenseMode } from "@/runtime/defenseMode";
 import { requestRemoteObservation } from "@/runtime/powerBankObserver";
+import { claimHeavyPlanningSlot, hasPlanningCpuHeadroom } from "@/runtime/planningCpuBudget";
 
 export type RemoteMiningStatus = "scouting" | "active" | "suspended" | "defending" | "abandoned";
 
@@ -848,6 +849,7 @@ function generateRoadPlan(
       return cm;
     };
 
+    if (!hasPlanningCpuHeadroom()) return null;
     const result = PathFinder.search(
       startPos,
       { pos: source.pos, range: 1 },
@@ -893,6 +895,15 @@ function generateRoadPlan(
   return { positions: deduped, containers };
 }
 
+let roadPlanningGame: Game | undefined;
+let roadPlanningTick = -1;
+let roadPlanningCursor = 0;
+
+function isRoadPlanDue(task: RemoteMiningTask, config: RemoteMiningConfig): boolean {
+  return !task.roadPlan || Game.time < task.roadPlan.generatedAt ||
+    Game.time - task.roadPlan.generatedAt >= config.roadInterval;
+}
+
 export function processRemoteConstruction(
   store: Record<string, RemoteMiningTask>,
   config: RemoteMiningConfig,
@@ -906,17 +917,33 @@ export function processRemoteConstruction(
     return;
   }
 
-  for (const task of Object.values(store)) {
+  const tasks = Object.values(store);
+  const candidates = tasks.filter(task => task.status === "active" && task.sourceIds.length > 0)
+    .sort((left, right) => left.targetRoom.localeCompare(right.targetRoom));
+  if (Game.time < roadPlanningTick || (Game.time === roadPlanningTick && roadPlanningGame !== Game)) {
+    roadPlanningCursor = 0;
+  }
+  roadPlanningGame = Game;
+  roadPlanningTick = Game.time;
+  let selectedTask: RemoteMiningTask | undefined;
+  // 失败也推进游标；没有视野的任务不抢名额。延后不消费 generatedAt。
+  for (let offset = 0; offset < candidates.length; offset += 1) {
+    const task = candidates[(roadPlanningCursor + offset) % candidates.length];
+    if (Game.rooms[task.sourceRoom] && Game.rooms[task.targetRoom] &&
+        !Game.rooms[task.targetRoom].controller?.my && isRoadPlanDue(task, config)) {
+      selectedTask = task;
+      break;
+    }
+  }
+
+  for (const task of tasks) {
     if (task.status !== "active") continue;
 
     const visibleTarget = Game.rooms[task.targetRoom];
     if (visibleTarget && visibleTarget.controller?.my) continue;
 
-    const needsPlan = !task.roadPlan ||
-      (task.roadPlan.generatedAt <= Game.time && Game.time - task.roadPlan.generatedAt >= config.roadInterval) ||
-      Game.time < task.roadPlan.generatedAt;
-
-    if (needsPlan && task.sourceIds.length > 0) {
+    if (task === selectedTask && claimHeavyPlanningSlot()) {
+      roadPlanningCursor = candidates.indexOf(task) + 1;
       const plan = generateRoadPlan(task);
       if (plan) {
         task.roadPlan = {

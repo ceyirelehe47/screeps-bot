@@ -1,6 +1,7 @@
 import { runPlannerForRoom, savePlannerForRoom } from "@/modules/autoplanner";
 import { getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
 import { hasSourceAdjacentLink } from "@/runtime/sourceLink";
+import { claimHeavyPlanningSlot, hasPlanningCpuHeadroom } from "@/runtime/planningCpuBudget";
 import { addRemoteEntranceLinkPlans, REMOTE_ENTRANCE_LINK_LAYOUT_KEY } from "@/runtime/remoteEntranceLink";
 
 const CONSTRUCTION_PRIORITY: BuildableStructureConstant[] = [
@@ -827,10 +828,14 @@ export function runRoomPlannerConstruction(): void {
     return;
   }
 
-  const rooms = getTickContextService().getMyRooms();
+  const roomRuns = ensureRoomPlannerBuildRuntime().rooms;
+  const rooms = getTickContextService().getMyRooms().slice().sort((left, right) =>
+    (roomRuns[left.name]?.lastRunAt ?? -1) - (roomRuns[right.name]?.lastRunAt ?? -1) ||
+    left.name.localeCompare(right.name));
   const configuredMaxNewSitesPerRoom = Memory.cfg?.roomPlannerBuild?.maxNewSitesPerRoom ?? DEFAULT_MAX_NEW_SITES_PER_ROOM;
   const maxNewSitesPerRoom = Math.min(configuredMaxNewSitesPerRoom, MAX_NEW_SITES_PER_ROOM_PER_RUN);
   let globalRemaining = GLOBAL_SITE_SOFT_CAP - currentGlobalSiteCount;
+  let roomsProcessed = 0;
 
   for (const room of rooms) {
     if (globalRemaining <= 0) {
@@ -841,9 +846,12 @@ export function runRoomPlannerConstruction(): void {
       continue;
     }
 
+    let roomPlan = Memory.data?.roomPlanner?.[room.name];
+    if (roomsProcessed >= 1 || !hasPlanningCpuHeadroom()) break;
+    if (!roomPlan?.layout && !claimHeavyPlanningSlot()) continue;
+    roomsProcessed += 1;
     markRoomPlannerConstructionRun(room.name);
 
-    let roomPlan = Memory.data?.roomPlanner?.[room.name];
     if (!roomPlan?.layout) {
       const planned = runPlannerForRoom(room.name);
       if (planned) {

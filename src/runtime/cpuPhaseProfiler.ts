@@ -5,6 +5,7 @@ import {
   getCpuMonitorHistory,
 } from "@/runtime/cpuMonitor";
 import type { CpuMonitorSnapshotV2, CpuMonitorRoomSummary } from "@/runtime/cpuMonitor";
+import { beginCpuTickHealth, markCpuTickPhase, markCpuTickCreep, completeCpuTickHealth } from "@/runtime/cpuTickHealth";
 
 export interface TickCpuProfiler {
   measure<T>(phase: string, fn: () => T): T;
@@ -24,21 +25,25 @@ export function getCpuPhaseHistory(): CpuMonitorSnapshotV2[] {
   return getCpuMonitorHistory();
 }
 
-function createNoopProfiler(): TickCpuProfiler {
+function createNoopProfiler(trackHealth = false): TickCpuProfiler {
   return {
     measure<T>(_phase: string, fn: () => T): T {
+      if (trackHealth) markCpuTickPhase(_phase);
       return fn();
     },
     recordFixedAction(_phase: string, _count = 1): void {
       return;
     },
     measureCreep(_creep: Creep, fn: () => void): void {
+      if (trackHealth) markCpuTickCreep(_creep.name);
       fn();
+      if (trackHealth) markCpuTickCreep();
     },
     measureRoomPhase<T>(_phase: string, _roomName: string, fn: () => T): T {
       return fn();
     },
     flush(): void {
+      if (trackHealth) completeCpuTickHealth();
       return;
     },
   };
@@ -119,10 +124,11 @@ export function createTickCpuProfiler(): TickCpuProfiler {
   if (!config.enabled) {
     return createNoopProfiler();
   }
+  beginCpuTickHealth();
 
   // Zero-overhead: enabled but non-sample tick never calls Game.cpu.getUsed()
   if (Game.time % config.sampleInterval !== 0) {
-    return createNoopProfiler();
+    return createNoopProfiler(true);
   }
 
   // Sample tick: measure CPU with full instrumentation
@@ -133,6 +139,7 @@ export function createTickCpuProfiler(): TickCpuProfiler {
   // roomRoleAggregation=false 时不逐 creep 成对计时：顶层 creepWork phase
   // 仍由 measure() 覆盖总开销，fixed action count 照常记录。
   const perCreepTiming = config.roomRoleAggregation;
+  let measurementDepth = 0;
 
   function ensureRoom(roomName: string): CpuMonitorRoomSummary {
     if (!rooms[roomName]) {
@@ -153,10 +160,13 @@ export function createTickCpuProfiler(): TickCpuProfiler {
 
   return {
     measure<T>(phase: string, fn: () => T): T {
+      if (measurementDepth === 0) markCpuTickPhase(phase);
+      measurementDepth += 1;
       const start = Game.cpu.getUsed();
       try {
         return fn();
       } finally {
+        measurementDepth -= 1;
         const delta = Math.max(0, Game.cpu.getUsed() - start);
         phases[phase] = (phases[phase] || 0) + delta;
       }
@@ -167,13 +177,16 @@ export function createTickCpuProfiler(): TickCpuProfiler {
     },
 
     measureCreep(creep: Creep, fn: () => void): void {
+      markCpuTickCreep(creep.name);
       if (!perCreepTiming) {
         fn();
+        markCpuTickCreep();
         return;
       }
       const start = Game.cpu.getUsed();
       try {
         fn();
+        markCpuTickCreep();
       } finally {
         const delta = Math.max(0, Game.cpu.getUsed() - start);
         const role = creep.memory?.role || "unknown";
@@ -224,6 +237,7 @@ export function createTickCpuProfiler(): TickCpuProfiler {
       };
 
       persistCpuMonitorSample(snapshot, config);
+      completeCpuTickHealth();
     },
   };
 }

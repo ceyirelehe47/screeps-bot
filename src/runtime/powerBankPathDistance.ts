@@ -2,6 +2,7 @@ import { getCachedStaticTravelMatrix } from "@/movement/routing";
 import { getRoomTopologyRevision } from "@/movement/roomTopologyRevision";
 import { getTickContextService } from "@/runtime/runtimeServices";
 import type { PowerBankTierProfile } from "@/runtime/powerBankViability";
+import { hasPlanningCpuHeadroom } from "@/runtime/planningCpuBudget";
 
 const CACHE_LIMIT = 64;
 const CACHE_TTL = 100;
@@ -66,17 +67,6 @@ function validPosition(pos: RoomPosition): boolean {
   return Boolean(pos && typeof pos.roomName === "string" && roomCoordinates(pos.roomName) &&
     Number.isSafeInteger(pos.x) && pos.x >= 0 && pos.x <= 49 &&
     Number.isSafeInteger(pos.y) && pos.y >= 0 && pos.y <= 49);
-}
-
-function worldPosition(pos: RoomPosition): { x: number; y: number } {
-  const room = roomCoordinates(pos.roomName)!;
-  return { x: room.x * 50 + pos.x, y: room.y * 50 + pos.y };
-}
-
-function worldRange(left: RoomPosition, right: RoomPosition): number {
-  const a = worldPosition(left);
-  const b = worldPosition(right);
-  return Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
 }
 
 function movementBody(body: readonly BodyPartConstant[]): MovementBody | undefined {
@@ -213,13 +203,16 @@ export function measurePowerBankTravel(input: PowerBankTravelMeasurementInput): 
     return cached.result;
   }
   measurements.delete(key);
-  if (!availableBudget) {
+  if (!availableBudget || !hasPlanningCpuHeadroom()) {
     // 未测量的候选不能占 LRU：大量 source/spawn 在预算用尽后排队时，
     // 若把它们全部缓存，会驱逐已测 ready 并阻止完整 source 集合收敛。
     return pending("budget", 1);
   }
   measurementsThisTick += 1;
 
+  // 房名到世界坐标是纯几何转换；同一次测量的三段路径共用已验证的
+  // route 输入，逐格只校验本地坐标和相邻步，不反复解析相同房名。
+  const routeCoordinates = new Map(input.routeRooms.map(room => [room, roomCoordinates(room)!]));
   const matrices = new Map<string, CostMatrix>();
   const roads = new Map<string, Set<string>>();
   const terrains = new Map<string, RoomTerrain>();
@@ -236,18 +229,33 @@ export function measurePowerBankTravel(input: PowerBankTravelMeasurementInput): 
     ? matrixFor(roomName).clone()
     : false;
   const validPath = (path: readonly RoomPosition[], origin: RoomPosition, goal: RoomPosition): boolean => {
-    let previous = origin;
+    const sourceRoom = routeCoordinates.get(origin.roomName)!;
+    let previousX = sourceRoom.x * 50 + origin.x;
+    let previousY = sourceRoom.y * 50 + origin.y;
+    let previousRoomName = origin.roomName;
     for (const pos of path) {
-      if (!validPosition(pos) || !safeRoom(pos.roomName) || worldRange(previous, pos) !== 1 ||
+      if (!pos || typeof pos.roomName !== "string" || !Number.isSafeInteger(pos.x) || pos.x < 0 || pos.x > 49 ||
+        !Number.isSafeInteger(pos.y) || pos.y < 0 || pos.y > 49 || !safeRoom(pos.roomName)) return false;
+      const coordinates = routeCoordinates.get(pos.roomName);
+      if (!coordinates) return false;
+      const x = coordinates.x * 50 + pos.x;
+      const y = coordinates.y * 50 + pos.y;
+      if (Math.max(Math.abs(previousX - x), Math.abs(previousY - y)) !== 1 ||
         matrixFor(pos.roomName).get(pos.x, pos.y) === 0xff) return false;
-      previous = pos;
+      previousX = x;
+      previousY = y;
+      previousRoomName = pos.roomName;
     }
     // 移动跨房仍按世界坐标验证相邻步；ATTACK/pickup/transfer 的 range
     // 却只在同房间成立，不能把另一侧出口格当作已抵达目标。
-    return previous.roomName === goal.roomName && worldRange(previous, goal) <= 1;
+    const goalRoom = routeCoordinates.get(goal.roomName)!;
+    return previousRoomName === goal.roomName && Math.max(
+      Math.abs(previousX - (goalRoom.x * 50 + goal.x)),
+      Math.abs(previousY - (goalRoom.y * 50 + goal.y)),
+    ) <= 1;
   };
   const search = (origin: RoomPosition, goal: RoomPosition, plainCost: number, swampCost: number): RoomPosition[] | undefined => {
-    if (searchesThisTick >= MAX_SEARCHES_PER_TICK) return undefined;
+    if (searchesThisTick >= MAX_SEARCHES_PER_TICK || !hasPlanningCpuHeadroom()) return undefined;
     searchesThisTick += 1;
     const result = PathFinder.search(origin, { pos: goal, range: 1 }, {
       plainCost,

@@ -14,6 +14,7 @@ import {
   CPU_PROFILER_MIN_SAMPLE_INTERVAL,
 } from "@/runtime/cpuProfilerConfig";
 import { getMemoryService } from "@/runtime/runtimeServices";
+import type { CpuTickHealthSummary } from "@/runtime/cpuTickHealth";
 
 // ─── v2 Config ────────────────────────────────────────────────────────────────
 
@@ -121,6 +122,8 @@ export interface CpuMonitorMemoryV2 {
   historyLimit: number;
   latest: CpuMonitorSnapshotV2;
   summary: CpuMonitorSummaryV2 | null;
+  /** global 丢失时只能记录重建与完成 tick 缺口，不能推断丢失的阶段。 */
+  health?: CpuTickHealthSummary;
 }
 
 // ─── Raw config input type (read from Memory.cfg.cpuProfiler) ─────────────────

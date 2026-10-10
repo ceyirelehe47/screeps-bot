@@ -375,18 +375,22 @@ function transitionTask(task: PowerBankHarvestTask, status: PowerBankHarvestStat
   transitionPowerBankTask(task, status);
 }
 
-function getActiveDangerRooms(targetRoom?: string): string[] {
+function getActiveDangerRooms(targetRoom?: string, ownedRooms = getPowerBankOwnedAvoidRooms()): string[] {
   const transient = Object.entries(Memory.runtime?.transitDangerRooms ?? {})
     .filter(([, expiresAt]) => expiresAt > Game.time)
     .map(([roomName]) => roomName);
   const permanent = Object.keys(Memory.runtime?.powerBankPermanentDangerRooms ?? {});
-  return [...new Set([...transient, ...permanent, ...getPowerBankOwnedAvoidRooms()])]
+  return [...new Set([...transient, ...permanent, ...ownedRooms])]
     .filter((roomName) => roomName !== targetRoom);
 }
 
-function findSafeRoute(fromRoom: string, toRoom: string): string[] | null {
-  if (getPowerBankOwnedAvoidRooms().includes(toRoom)) return null;
-  const avoidRooms = new Set(getActiveDangerRooms(toRoom));
+function findSafeRoute(fromRoom: string, toRoom: string, dangerRooms?: readonly string[]): string[] | null {
+  if (dangerRooms === undefined) {
+    const ownedRooms = getPowerBankOwnedAvoidRooms();
+    if (ownedRooms.includes(toRoom)) return null;
+    dangerRooms = getActiveDangerRooms(toRoom, ownedRooms);
+  }
+  const avoidRooms = new Set(dangerRooms);
   const route = Game.map.findRoute(fromRoom, toRoom, {
     routeCallback: (roomName) => avoidRooms.has(roomName) ? Infinity : 1,
   });
@@ -416,10 +420,13 @@ function getAdmissionSafeRoute(fromRoom: string, toRoom: string): string[] | nul
     admissionRouteMemoMap = Game.map;
     admissionRouteMemoReader = Game.map.findRoute;
   }
-  const key = JSON.stringify([fromRoom, toRoom, getActiveDangerRooms(toRoom).sort()]);
+  const ownedRooms = getPowerBankOwnedAvoidRooms();
+  if (ownedRooms.includes(toRoom)) return null;
+  const dangerRooms = getActiveDangerRooms(toRoom, ownedRooms).sort();
+  const key = JSON.stringify([fromRoom, toRoom, dangerRooms]);
   const cached = admissionRouteMemo.get(key);
   if (cached !== undefined) return cached === null ? null : [...cached];
-  const route = findSafeRoute(fromRoom, toRoom);
+  const route = findSafeRoute(fromRoom, toRoom, dangerRooms);
   if (admissionRouteMemo.size >= 64) {
     const oldest = admissionRouteMemo.keys().next().value as string | undefined;
     if (oldest !== undefined) admissionRouteMemo.delete(oldest);

@@ -80,6 +80,7 @@ describe("Power Bank 静态完整路径测量", () => {
   beforeEach(() => {
     jest.resetModules();
     Game.time = 1_000;
+    Game.cpu = { limit: 120, tickLimit: 500, bucket: 10000, getUsed: jest.fn(() => 0) } as Game["cpu"];
     Game.rooms = { W1N1: visibleRoom("W1N1") };
     Game.map = {
       ...Game.map,
@@ -96,6 +97,25 @@ describe("Power Bank 静态完整路径测量", () => {
     const module = require("@/runtime/powerBankPathDistance") as typeof import("@/runtime/powerBankPathDistance");
     measure = module.measurePowerBankTravel;
     canMeasure = module.canMeasurePowerBankTravelThisTick;
+  });
+
+  it("CPU 忙时不搜索、不消费名额，恢复后同 tick 能完成测路", () => {
+    jest.mocked(Game.cpu.getUsed).mockReturnValue(200);
+    expect(measure(input())).toMatchObject({ status: "pending", reason: "budget" });
+    expect(search).not.toHaveBeenCalled();
+    expect(canMeasure()).toBe(true);
+    jest.mocked(Game.cpu.getUsed).mockReturnValue(80);
+    expect(measure(input())).toMatchObject({ status: "ready" });
+    expect(search).toHaveBeenCalledTimes(3);
+  });
+
+  it("CPU 忙时仍可读取已经验证的完整路径，不重做搜索", () => {
+    expect(measure(input())).toMatchObject({ status: "ready" });
+    Game.time += 1;
+    search.mockClear();
+    jest.mocked(Game.cpu.getUsed).mockReturnValue(200);
+    expect(measure(input())).toMatchObject({ status: "ready" });
+    expect(search).not.toHaveBeenCalled();
   });
 
   it("三段独立搜索使用实际空车末点返程，时间来自负重地形而非 PF cost", () => {
@@ -160,6 +180,9 @@ describe("Power Bank 静态完整路径测量", () => {
     ["incomplete partial", { path: [pos(11), pos(12)], incomplete: true, ops: 6_000, cost: 2 }],
     ["jump", { path: [pos(12)], incomplete: false, ops: 1, cost: 1 }],
     ["invalid coordinate", { path: [pos(50)], incomplete: false, ops: 1, cost: 1 }],
+    ["fractional coordinate", { path: [pos(11.5)], incomplete: false, ops: 1, cost: 1 }],
+    ["nonfinite coordinate", { path: [pos(NaN)], incomplete: false, ops: 1, cost: 1 }],
+    ["invalid room", { path: [pos(11, 10, "bad-room")], incomplete: false, ops: 1, cost: 1 }],
     ["wrong goal", { path: [pos(11)], incomplete: false, ops: 1, cost: 1 }],
     ["false empty", { path: [], incomplete: false, ops: 1, cost: 0 }],
   ])("拒绝 %s，并对同输入短退避", (_name, result) => {
@@ -258,6 +281,38 @@ describe("Power Bank 静态完整路径测量", () => {
       .mockReturnValueOnce({ path: loadedReturn, incomplete: false, cost: 2, ops: 1 });
     expect(measure({ ...input(), sourceSpawnPos: sourcePos, bankPos, returnTargetPos: returnPos, routeRooms: [source, target] }))
       .toMatchObject({ status: "ready", pathDistance: 2 });
+  });
+
+  it("长路径跨西东零坐标，三段完整证据与逐步相邻检查保持一致", () => {
+    const rooms = ["W1N0", "W0N0", "E0N0"];
+    Game.rooms = Object.fromEntries(rooms.map(name => [name, visibleRoom(name)]));
+    const candidate = {
+      ...input(), sourceSpawnPos: pos(10, 10, rooms[0]), bankPos: pos(13, 10, rooms[2]),
+      returnTargetPos: pos(9, 10, rooms[0]), routeRooms: rooms,
+    };
+    search.mockImplementation((origin: RoomPosition, goal: { pos: RoomPosition; range: number }) => {
+      const worldX = (point: RoomPosition) => (point.roomName[0] === "W"
+        ? -Number(point.roomName.slice(1).split("N")[0]) - 1
+        : Number(point.roomName.slice(1).split("N")[0])) * 50 + point.x;
+      let x = worldX(origin);
+      const targetX = worldX(goal.pos);
+      const path: RoomPosition[] = [];
+      while (Math.abs(x - targetX) > 1) {
+        x += Math.sign(targetX - x);
+        const roomX = Math.floor(x / 50);
+        path.push(pos(x - roomX * 50, 10, `${roomX < 0 ? `W${-roomX - 1}` : `E${roomX}`}N0`));
+      }
+      return { path, incomplete: false, ops: 100, cost: path.length };
+    });
+    expect(measure(candidate)).toEqual({
+      status: "ready", pathDistance: 102, combatTravelTicks: 102,
+      haulerOutboundTravelTicks: 102, haulerReturnTravelTicks: 102,
+    });
+    expect(search).toHaveBeenCalledTimes(3);
+    // 相同路线/端点仍不能把非相邻步当成完整证明。
+    Game.time += 101;
+    search.mockReturnValue({ path: [pos(12, 10, rooms[0])], incomplete: false, ops: 1, cost: 1 });
+    expect(measure(candidate)).toMatchObject({ status: "pending", reason: "path_incomplete" });
   });
 
   it("目标在出口时，相邻房边缘末点不能冒充同房 range 1", () => {
