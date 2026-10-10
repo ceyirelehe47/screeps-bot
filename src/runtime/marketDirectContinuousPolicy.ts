@@ -117,6 +117,23 @@ function avalanche32(value: number): number {
   return result >>> 0;
 }
 
+interface CanonicalHashPrefix {
+  readonly text: string;
+  readonly words: readonly [number, number, number, number];
+}
+
+const CANONICAL_HASH_PREFIX_MIN_LENGTH = 2048;
+const CANONICAL_HASH_PREFIX_MAX_LENGTH = 65_536;
+const CANONICAL_HASH_PREFIX_LIMIT = 8;
+const canonicalHashPrefixes: CanonicalHashPrefix[] = [];
+
+function rememberCanonicalHashPrefix(prefix: CanonicalHashPrefix): void {
+  canonicalHashPrefixes.unshift(prefix);
+  if (canonicalHashPrefixes.length > CANONICAL_HASH_PREFIX_LIMIT) {
+    canonicalHashPrefixes.pop();
+  }
+}
+
 /**
  * 稳定、排序键、无 Node 依赖的 v1 canonical hash。
  *
@@ -134,7 +151,44 @@ export function canonicalStableHashV1(value: unknown): string {
   let second = 0x9e3779b9;
   let third = 0x85ebca6b;
   let fourth = 0xc2b2ae35;
-  for (let index = 0; index < canonical.length; index += 1) {
+  let start = 0;
+  // 当前数据仍先完整规范化；这里只复用已逐字匹配的字符串前缀所对应的
+  // 四个未 avalanche 的累积器。不是对象身份/自报 digest 的权限缓存。
+  // updatedAt 等尾部变化时，后续字符照原 v1 算法继续混合，输出逐位不变。
+  const prefixLength = Math.min(
+    CANONICAL_HASH_PREFIX_MAX_LENGTH,
+    Math.floor((canonical.length - 256) / 256) * 256,
+  );
+  if (prefixLength >= CANONICAL_HASH_PREFIX_MIN_LENGTH) {
+    for (let entryIndex = 0; entryIndex < canonicalHashPrefixes.length; entryIndex += 1) {
+      const prefix = canonicalHashPrefixes[entryIndex];
+      if (canonical.startsWith(prefix.text)) {
+        [first, second, third, fourth] = prefix.words;
+        start = prefix.text.length;
+        canonicalHashPrefixes.splice(entryIndex, 1);
+        canonicalHashPrefixes.unshift(prefix);
+        break;
+      }
+    }
+  }
+  const prefixEnd =
+    prefixLength >= CANONICAL_HASH_PREFIX_MIN_LENGTH
+      ? Math.max(start, prefixLength)
+      : start;
+  for (let index = start; index < prefixEnd; index += 1) {
+    const code = canonical.charCodeAt(index);
+    first = Math.imul(first ^ code, 0x01000193);
+    second = Math.imul(second ^ code, 0x85ebca6b);
+    third = Math.imul(third ^ code, 0xc2b2ae35);
+    fourth = Math.imul(fourth ^ code, 0x27d4eb2f);
+  }
+  if (prefixEnd > start) {
+    rememberCanonicalHashPrefix({
+      text: canonical.slice(0, prefixEnd),
+      words: [first, second, third, fourth],
+    });
+  }
+  for (let index = prefixEnd; index < canonical.length; index += 1) {
     const code = canonical.charCodeAt(index);
     first = Math.imul(first ^ code, 0x01000193);
     second = Math.imul(second ^ code, 0x85ebca6b);
