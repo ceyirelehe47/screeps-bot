@@ -5,7 +5,7 @@ describe("规划 CPU 余量", () => {
   beforeEach(() => {
     Game.time += 10;
     used = 80;
-    Game.cpu = { limit: 120, tickLimit: 500, bucket: 10_000, getUsed: () => used } as Game["cpu"];
+    Game.cpu = { ...Game.cpu, limit: 120, tickLimit: 500, bucket: 10_000, getUsed: () => used };
   });
 
   it("两个重规划入口同 tick 共用一个名额，下一 tick 恢复", () => {

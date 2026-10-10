@@ -33,7 +33,7 @@ describe("外矿重规划错峰", () => {
     Game.constructionSites = {};
     Memory.cfg = { roomPlannerBuild: { enabled: true } };
     used = 80;
-    Game.cpu = { limit: 120, tickLimit: 500, bucket: 10000, getUsed: () => used } as Game["cpu"];
+    Game.cpu = { ...Game.cpu, limit: 120, tickLimit: 500, bucket: 10000, getUsed: () => used };
     objects = {};
     Game.getObjectById = jest.fn(id => objects[String(id)] ?? null) as Game["getObjectById"];
     search = jest.fn((_origin, goal) => ({ path: [new TestPosition(9, 9, goal.pos.roomName)], incomplete: false }));

@@ -80,7 +80,7 @@ describe("Power Bank 静态完整路径测量", () => {
   beforeEach(() => {
     jest.resetModules();
     Game.time = 1_000;
-    Game.cpu = { limit: 120, tickLimit: 500, bucket: 10000, getUsed: jest.fn(() => 0) } as Game["cpu"];
+    Game.cpu = { ...Game.cpu, limit: 120, tickLimit: 500, bucket: 10000, getUsed: jest.fn(() => 0) };
     Game.rooms = { W1N1: visibleRoom("W1N1") };
     Game.map = {
       ...Game.map,

@@ -15,10 +15,10 @@ describe("房间建设检查错峰", () => {
     Game.spawns = {};
     Game.constructionSites = {};
     Memory.runtime = {};
-    Memory.data = { roomPlanner: Object.fromEntries(Object.keys(Game.rooms).map(name => [name, { layout: {}, savedAt: 1 }])) };
+    Memory.data = { roomPlanner: Object.fromEntries(Object.keys(Game.rooms).map(name => [name, { layout: {}, timestamp: "fixture", savedAt: 1 }])) };
     Memory.cfg = { roomPlannerBuild: { enabled: true } };
     used = 80;
-    Game.cpu = { limit: 120, tickLimit: 500, bucket: 10000, getUsed: () => used } as Game["cpu"];
+    Game.cpu = { ...Game.cpu, limit: 120, tickLimit: 500, bucket: 10000, getUsed: () => used };
     jest.mocked(runPlannerForRoom).mockClear();
   });
   it("三个同周期房间分三 tick 检查，旧布局不重新计算", () => {

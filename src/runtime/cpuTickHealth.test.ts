@@ -9,7 +9,7 @@ describe("CPU 中断与重建诊断", () => {
     Game.time = 100;
     Memory.analytics = undefined;
     Memory.cfg = { cpuProfiler: { enabled: true, sampleInterval: 7, historyLimit: 120 } };
-    Game.cpu = { limit: 120, tickLimit: 500, bucket: 10000, getUsed: jest.fn(() => 0) } as Game["cpu"];
+    Game.cpu = { ...Game.cpu, limit: 120, tickLimit: 500, bucket: 10000, getUsed: jest.fn(() => 0) };
     Game.shard = { name: "shard1" } as Game["shard"];
   });
   function seedMonitor(): void {
