@@ -485,13 +485,12 @@ function roomResourceAmount(room: Room, resource: ResourceConstant): number {
     total += room.terminal.store.getUsedCapacity(resource);
   }
 
-  const roomContext = getTickContextService().getRoomContext(room);
-  const structures = (roomContext?.getMyStructures() ?? room.find(FIND_MY_STRUCTURES)).filter(
-    (structure) =>
+  const structures = room.find(FIND_MY_STRUCTURES, {
+    filter: (structure) =>
       structure.structureType === STRUCTURE_LAB ||
       structure.structureType === STRUCTURE_FACTORY ||
       structure.structureType === STRUCTURE_POWER_SPAWN,
-  ) as AnyStoreStructure[];
+  }) as AnyStoreStructure[];
   for (const structure of structures) {
     total += structure.store.getUsedCapacity(resource);
   }
@@ -501,7 +500,7 @@ function roomResourceAmount(room: Room, resource: ResourceConstant): number {
 
 function roomSynthesisProductAmount(room: Room, product: ResourceConstant): number {
   let amount = roomResourceAmount(room, product);
-  for (const creep of getTickContextService().getAllCreeps()) {
+  for (const creep of Object.values(Game.creeps)) {
     const assignment = getCreepAssignmentState(creep.name);
     if (assignment?.synthesisCarrierPendingResource !== product || !assignment.synthesisCarrierPendingToId) continue;
     const target = Game.getObjectById(assignment.synthesisCarrierPendingToId as Id<AnyStoreStructure>);
@@ -713,7 +712,7 @@ function getConfiguredLab(room: Room, id: string): StructureLab | null {
 }
 
 function resolveLabTopology(room: Room, roomCfg: SynthesisRoomConfig): LabTopology | null {
-  const labs = getTickContextService().getRoomContext(room)?.getLabs() ?? room.find(FIND_MY_STRUCTURES, {
+  const labs = room.find(FIND_MY_STRUCTURES, {
     filter: (structure) => structure.structureType === STRUCTURE_LAB,
   }) as StructureLab[];
   if (labs.length < 3) {
