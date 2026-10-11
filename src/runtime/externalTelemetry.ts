@@ -87,6 +87,9 @@ interface CpuMonitorTelemetryEntry {
   tick: number;
   shard: string;
   totalUsed: number;
+  startupUsed?: number;
+  tickUsedAtFlush?: number;
+  topLevelUsed?: number;
   bucket: number;
   limit: number;
   tickLimit: number;
@@ -397,8 +400,7 @@ function getCreepTargetRoom(creep: Creep): string | undefined {
   return args[0];
 }
 
-function isInterestingDebugCreep(creep: Creep): boolean {
-  const state = getCreepMovementState(creep.name);
+function isInterestingDebugCreep(creep: Creep, state: ReturnType<typeof getCreepMovementState>): boolean {
   const role = creep.memory.role;
   if (state?.travelState || state?.movePathState || state?.workAnchor) {
     return true;
@@ -413,8 +415,7 @@ function isInterestingDebugCreep(creep: Creep): boolean {
   );
 }
 
-function scoreDebugCreep(creep: Creep): number {
-  const state = getCreepMovementState(creep.name);
+function scoreDebugCreep(creep: Creep, state: ReturnType<typeof getCreepMovementState>): number {
   const role = creep.memory.role;
   let score = 0;
   if (role === "scout" || role === "flagScout") score += 100;
@@ -427,46 +428,41 @@ function scoreDebugCreep(creep: Creep): number {
   return score;
 }
 
-function collectDebugCreeps(): DebugCreepTelemetry[] {
-  return Object.values(Game.creeps)
-    .filter(isInterestingDebugCreep)
-    .sort((left, right) => scoreDebugCreep(right) - scoreDebugCreep(left) || left.name.localeCompare(right.name))
-    .slice(0, MAX_DEBUG_CREEPS)
-    .map((creep) => {
-      const state = getCreepMovementState(creep.name);
-      const movePathState = state?.movePathState;
-      return {
-        name: creep.name,
-        role: creep.memory.role,
-        roomName: creep.room.name,
-        x: creep.pos.x,
-        y: creep.pos.y,
-        ticksToLive: creep.ticksToLive,
-        configName: creep.memory.configName,
-        targetRoom: state?.travelState?.targetRoom || getCreepTargetRoom(creep),
-        roleArgs: Array.isArray(creep.memory.roleArgs) ? creep.memory.roleArgs.slice(0, 4) : undefined,
-        scoutVisitedRooms: creep.memory.scoutVisitedRooms?.slice(-MAX_DEBUG_VISITED_ROOMS),
-        travelState: state?.travelState
-          ? {
-              targetRoom: state.travelState.targetRoom,
-              stuckTicks: state.travelState.stuckTicks,
-              lastPosKey: state.travelState.lastPosKey,
-              lastWasExit: state.travelState.lastWasExit,
-            }
-          : undefined,
-        movePathState: movePathState
-          ? {
-              targetRoom: movePathState.targetRoom,
-              targetX: movePathState.targetX,
-              targetY: movePathState.targetY,
-              range: movePathState.range,
-              stuckTicks: movePathState.stuckTicks,
-              expiresAt: movePathState.expiresAt,
-            }
-          : undefined,
-        workAnchor: state?.workAnchor,
-      } satisfies DebugCreepTelemetry;
-    });
+function projectDebugCreeps(selected: Array<{ creep: Creep; state: ReturnType<typeof getCreepMovementState> }>): DebugCreepTelemetry[] {
+  return selected.map(({ creep, state }) => {
+    const movePathState = state?.movePathState;
+    return {
+      name: creep.name,
+      role: creep.memory.role,
+      roomName: creep.room.name,
+      x: creep.pos.x,
+      y: creep.pos.y,
+      ticksToLive: creep.ticksToLive,
+      configName: creep.memory.configName,
+      targetRoom: state?.travelState?.targetRoom || getCreepTargetRoom(creep),
+      roleArgs: Array.isArray(creep.memory.roleArgs) ? creep.memory.roleArgs.slice(0, 4) : undefined,
+      scoutVisitedRooms: creep.memory.scoutVisitedRooms?.slice(-MAX_DEBUG_VISITED_ROOMS),
+      travelState: state?.travelState
+        ? {
+            targetRoom: state.travelState.targetRoom,
+            stuckTicks: state.travelState.stuckTicks,
+            lastPosKey: state.travelState.lastPosKey,
+            lastWasExit: state.travelState.lastWasExit,
+          }
+        : undefined,
+      movePathState: movePathState
+        ? {
+            targetRoom: movePathState.targetRoom,
+            targetX: movePathState.targetX,
+            targetY: movePathState.targetY,
+            range: movePathState.range,
+            stuckTicks: movePathState.stuckTicks,
+            expiresAt: movePathState.expiresAt,
+          }
+        : undefined,
+      workAnchor: state?.workAnchor,
+    } satisfies DebugCreepTelemetry;
+  });
 }
 
 function collectDebugColonization(): DebugColonizationTelemetry[] {
@@ -487,41 +483,37 @@ function collectDebugColonization(): DebugColonizationTelemetry[] {
   }));
 }
 
-function countMovementStates(): ExternalTelemetryDebugSnapshot["counts"] {
+function collectDebugTelemetry(): ExternalTelemetryDebugSnapshot {
   let creepsWithMovementState = 0;
   let creepsWithTravelState = 0;
   let stuckCreeps = 0;
 
-  for (const creep of Object.values(Game.creeps)) {
+  let interestingCount = 0;
+  const selected: Array<{ creep: Creep; state: ReturnType<typeof getCreepMovementState>; score: number }> = [];
+  for (const creep of getTickContextService().getAllCreeps()) {
     const state = getCreepMovementState(creep.name);
-    if (!state) {
-      continue;
+    if (state) {
+      creepsWithMovementState += 1;
+      if (state.travelState) creepsWithTravelState += 1;
+      if ((state.travelState?.stuckTicks ?? 0) >= 2 || (state.movePathState?.stuckTicks ?? 0) >= 2) stuckCreeps += 1;
     }
-    creepsWithMovementState += 1;
-    if (state.travelState) {
-      creepsWithTravelState += 1;
-    }
-    if ((state.travelState?.stuckTicks ?? 0) >= 2 || (state.movePathState?.stuckTicks ?? 0) >= 2) {
-      stuckCreeps += 1;
+    if (!isInterestingDebugCreep(creep, state)) continue;
+    interestingCount += 1;
+    const score = scoreDebugCreep(creep, state);
+    const index = selected.findIndex(entry => score > entry.score || (score === entry.score && creep.name.localeCompare(entry.creep.name) < 0));
+    if (index < 0) {
+      if (selected.length < MAX_DEBUG_CREEPS) selected.push({ creep, state, score });
+    } else {
+      selected.splice(index, 0, { creep, state, score });
+      if (selected.length > MAX_DEBUG_CREEPS) selected.pop();
     }
   }
-
   return {
-    creepsWithMovementState,
-    creepsWithTravelState,
-    stuckCreeps,
-    colonizationTasks: Object.keys(Memory.data?.colonization || {}).length,
-  };
-}
-
-function collectDebugTelemetry(): ExternalTelemetryDebugSnapshot {
-  const creeps = collectDebugCreeps();
-  const colonization = collectDebugColonization();
-  return {
-    creeps,
-    colonization,
-    counts: countMovementStates(),
-    truncated: Object.values(Game.creeps).filter(isInterestingDebugCreep).length > creeps.length,
+    creeps: projectDebugCreeps(selected),
+    colonization: collectDebugColonization(),
+    counts: { creepsWithMovementState, creepsWithTravelState, stuckCreeps,
+      colonizationTasks: Object.keys(Memory.data?.colonization || {}).length },
+    truncated: interestingCount > MAX_DEBUG_CREEPS,
   };
 }
 
@@ -551,6 +543,9 @@ function toTelemetryEntry(
     tick: snap.tick,
     shard: snap.shard,
     totalUsed: snap.totalUsed,
+    ...(snap.startupUsed !== undefined ? { startupUsed: snap.startupUsed } : {}),
+    ...(snap.tickUsedAtFlush !== undefined ? { tickUsedAtFlush: snap.tickUsedAtFlush } : {}),
+    ...(snap.topLevelUsed !== undefined ? { topLevelUsed: snap.topLevelUsed } : {}),
     bucket: snap.bucket,
     limit: snap.limit,
     tickLimit: snap.tickLimit,

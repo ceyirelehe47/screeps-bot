@@ -53,7 +53,24 @@ let observerSnapshot: {
   context: ReturnType<typeof getTickContextService>;
   observers: StructureObserver[];
   reachability: Map<string, boolean>;
+  worldSize?: number;
 } | undefined;
+
+// 只保留已与原生结果一致的纯坐标距离；不缓存活跃 Observer 或任务资格。
+const observerDistances = new Map<string, number>();
+const OBSERVER_DISTANCE_CACHE_LIMIT = 1024;
+
+function coordinateDistance(from: string, to: string): number | undefined {
+  const coordinates = (name: string): [number, number] | undefined => {
+    const match = /^([EW])(0|[1-9]\d*)([NS])(0|[1-9]\d*)$/.exec(name);
+    if (!match) return undefined;
+    const x = Number(match[2]), y = Number(match[4]);
+    if (!Number.isSafeInteger(x) || !Number.isSafeInteger(y)) return undefined;
+    return [match[1] === "E" ? x : -x - 1, match[3] === "S" ? y : -y - 1];
+  };
+  const a = coordinates(from), b = coordinates(to);
+  return a && b ? Math.max(Math.abs(a[0] - b[0]), Math.abs(a[1] - b[1])) : undefined;
+}
 
 let coverageSnapshot: {
   game: Game;
@@ -80,6 +97,7 @@ function getActiveObservers(): StructureObserver[] {
   const tickContext = getTickContextService();
   if (observerSnapshot?.game === Game && observerSnapshot.tick === Game.time && observerSnapshot.context === tickContext &&
       observerSnapshot.observers.every(observer => Game.rooms[observer.room.name] === observer.room && observer.room.controller?.my)) return observerSnapshot.observers;
+  if (observerSnapshot && (Game.time <= observerSnapshot.tick)) observerDistances.clear();
   const observers: StructureObserver[] = [];
   for (const room of tickContext.getMyRooms()) {
     const currentRoom = Game.rooms[room.name];
@@ -91,7 +109,7 @@ function getActiveObservers(): StructureObserver[] {
     observers.push(...roomObservers);
   }
   observers.sort((left, right) => left.id.localeCompare(right.id));
-  observerSnapshot = { game: Game, tick: Game.time, context: tickContext, observers, reachability: new Map() };
+  observerSnapshot = { game: Game, tick: Game.time, context: tickContext, observers, reachability: new Map(), worldSize: worldSizeLimit() };
   return observers;
 }
 
@@ -99,7 +117,17 @@ function canObserve(observer: StructureObserver, roomName: string): boolean {
   const key = `${observer.room.name}:${roomName}`;
   const cached = observerSnapshot?.reachability.get(key);
   if (cached !== undefined) return cached;
-  const distance = Game.map.getRoomLinearDistance(observer.room.name, roomName);
+  const geometryKey = `${Game.shard?.name ?? "unknown"}:${observerSnapshot?.worldSize ?? "unknown"}:${key}`;
+  let distance = observerDistances.get(geometryKey);
+  if (distance === undefined) {
+    distance = Game.map.getRoomLinearDistance(observer.room.name, roomName);
+    // native 默认 continuous=false，即不环绕边界的 Chebyshev 距离。
+    // 自定义地图或不一致的 mock 回到原生逐帧查询，不把未知结果持久复用。
+    if (distance === coordinateDistance(observer.room.name, roomName)) {
+      if (observerDistances.size >= OBSERVER_DISTANCE_CACHE_LIMIT) observerDistances.delete(observerDistances.keys().next().value!);
+      observerDistances.set(geometryKey, distance);
+    }
+  }
   const result = Number.isFinite(distance) && distance >= 0 && distance <= POWER_BANK_SEARCH_RADIUS;
   observerSnapshot?.reachability.set(key, result);
   return result;

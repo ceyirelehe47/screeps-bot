@@ -99,6 +99,40 @@ describe("cpu profiler low-overhead guarantees", () => {
     expect(getUsed).not.toHaveBeenCalled();
   });
 
+  it("启动边界单独报告，inclusive 子阶段不掩盖业务阶段外的 CPU", () => {
+    profilerConfig({ sampleInterval: 1 });
+    let used = 7;
+    Game.cpu.getUsed = jest.fn(() => used);
+    const profiler = createTickCpuProfiler();
+    profiler.measure("parent", () => {
+      used += 2;
+      profiler.measure("child", () => { used += 3; });
+      used += 1;
+    });
+    used += 4;
+    profiler.flush();
+    expect(Memory.analytics!.cpuMonitor!.latest).toMatchObject({
+      totalUsed: 10, startupUsed: 7, tickUsedAtFlush: 17, topLevelUsed: 6,
+      untracked: 4, phases: { parent: 6, child: 3 },
+    });
+    // 沿用原有边界计时数量，未为了 startup 或 top-level 再调用时钟。
+    expect(Game.cpu.getUsed).toHaveBeenCalledTimes(6);
+  });
+
+  it("子阶段异常被父阶段处理后，后续顶层统计仍各记一次", () => {
+    profilerConfig({ sampleInterval: 1 });
+    let used = 0;
+    Game.cpu.getUsed = () => used;
+    const profiler = createTickCpuProfiler();
+    profiler.measure("parent", () => {
+      try { profiler.measure("child", () => { used += 3; throw new Error("fixture"); }); } catch { used += 1; }
+    });
+    profiler.measure("next", () => { used += 2; });
+    used += 1;
+    profiler.flush();
+    expect(Memory.analytics!.cpuMonitor!.latest).toMatchObject({ topLevelUsed: 6, untracked: 1 });
+  });
+
   it("非 sample tick 不调用 Game.cpu.getUsed", () => {
     profilerConfig({ sampleInterval: 10 });
     Game.time = 101; // 101 % 10 !== 0

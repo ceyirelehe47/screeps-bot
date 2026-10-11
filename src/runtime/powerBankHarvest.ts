@@ -42,6 +42,7 @@ import { recordPowerBankHistory } from "@/runtime/powerBankStatus";
 import { spawnProfiles } from "@/config/spawnProfiles";
 import { getPowerBankOwnedAvoidRooms } from "@/runtime/powerBankTransit";
 import { isSpawnActive } from "@/runtime/tickContext";
+import { getPowerBankAdmissionRoute } from "@/runtime/powerBankRouteCache";
 
 const PATROL_SCOUT_CONFIG_NAME = "powerbank:patrol:scout:0";
 
@@ -404,35 +405,13 @@ function findSafeRoute(fromRoom: string, toRoom: string, dangerRooms?: readonly 
   return rooms;
 }
 
-let admissionRouteMemoGame: Game | undefined;
-let admissionRouteMemoTick = -1;
-let admissionRouteMemoMap: GameMap | undefined;
-let admissionRouteMemoReader: GameMap["findRoute"] | undefined;
-const admissionRouteMemo = new Map<string, readonly string[] | null>();
-
-/** 同 tick 复用房间级 route；危险集合变化必须重新规划，不缓存资源准入。 */
+/** 正路线有界跨 tick 复用；所有权、危险集合、闭房与连通性均重新核验。 */
 function getAdmissionSafeRoute(fromRoom: string, toRoom: string): string[] | null {
-  if (admissionRouteMemoGame !== Game || admissionRouteMemoTick !== Game.time ||
-    admissionRouteMemoMap !== Game.map || admissionRouteMemoReader !== Game.map.findRoute) {
-    admissionRouteMemo.clear();
-    admissionRouteMemoGame = Game;
-    admissionRouteMemoTick = Game.time;
-    admissionRouteMemoMap = Game.map;
-    admissionRouteMemoReader = Game.map.findRoute;
-  }
   const ownedRooms = getPowerBankOwnedAvoidRooms();
   if (ownedRooms.includes(toRoom)) return null;
   const dangerRooms = getActiveDangerRooms(toRoom, ownedRooms).sort();
-  const key = JSON.stringify([fromRoom, toRoom, dangerRooms]);
-  const cached = admissionRouteMemo.get(key);
-  if (cached !== undefined) return cached === null ? null : [...cached];
-  const route = findSafeRoute(fromRoom, toRoom, dangerRooms);
-  if (admissionRouteMemo.size >= 64) {
-    const oldest = admissionRouteMemo.keys().next().value as string | undefined;
-    if (oldest !== undefined) admissionRouteMemo.delete(oldest);
-  }
-  admissionRouteMemo.set(key, route === null ? null : Object.freeze([...route]));
-  return route;
+  return getPowerBankAdmissionRoute(fromRoom, toRoom, dangerRooms,
+    () => findSafeRoute(fromRoom, toRoom, dangerRooms));
 }
 
 function getRouteDistance(fromRoom: string, toRoom: string): number {

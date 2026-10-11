@@ -329,6 +329,26 @@ describe("PowerBank Observer 动态扫描", () => {
     expect(recordDepositDiscovery).toHaveBeenCalledWith(deposit);
   });
 
+  it("只有原生已验证的距离跨 tick 复用，Game/map 重建不重复查；边界与所有权仍新鲜", () => {
+    const observer = addObserver(createRoom("E3N59"));
+    const firstDistance = jest.fn(() => 7);
+    Game.map.getRoomLinearDistance = firstDistance;
+    expect(requestCombatObservation("E10N60")).toBe(true);
+    expect(firstDistance).toHaveBeenCalledTimes(1);
+    const nextDistance = jest.fn(() => 7);
+    (global as typeof global & { Game: Game }).Game = { ...Game, time: Game.time + 1,
+      map: { ...Game.map, getRoomLinearDistance: nextDistance } };
+    expect(requestCombatObservation("E10N60")).toBe(true);
+    expect(nextDistance).not.toHaveBeenCalled();
+    Game.time++;
+    Game.map.getWorldSize = () => 204;
+    expect(requestCombatObservation("E10N60")).toBe(true);
+    expect(nextDistance).toHaveBeenCalledTimes(1);
+    Game.time++;
+    observer.room.controller!.my = false;
+    expect(requestCombatObservation("E10N60")).toBe(false);
+  });
+
   it.each([
     ["combat", requestCombatObservation, "E2N55"],
     ["deposit", requestDepositObservation, "E0N59"],

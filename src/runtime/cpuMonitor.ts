@@ -46,6 +46,12 @@ export interface CpuMonitorSnapshotV2 {
   tick: number;
   shard: string;
   totalUsed: number;
+  /** 业务阶段计时前已经消耗的 CPU；包含首次 Memory 解析等启动开销。 */
+  startupUsed?: number;
+  /** flush 边界的累计 CPU；不含其后的样本持久化及引擎收尾。 */
+  tickUsedAtFlush?: number;
+  /** 仅最外层 measure 的总量，不重复累加 inclusive 子阶段。 */
+  topLevelUsed?: number;
   bucket: number;
   limit: number;
   tickLimit: number;

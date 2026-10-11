@@ -92,6 +92,32 @@ function workerTask(id: string, type: WorkerTask["type"]): WorkerTask {
   };
 }
 
+it("debug top 25 保留分数与同分名称顺序，未选中成员仍计入 movement/truncated", () => {
+  setupBasicEnv();
+  clearCreepMovementStateForTest();
+  delete (global as typeof global & { __runtimeServices?: unknown }).__runtimeServices;
+  const creeps: Record<string, Creep> = {};
+  for (let index = 39; index >= 0; index--) {
+    const name = `scout-${String(index).padStart(2, "0")}`;
+    creeps[name] = { name, memory: { role: "scout" }, room: Game.rooms.W1N1,
+      pos: { x: 10, y: 20, roomName: "W1N1" } } as unknown as Creep;
+    if (index >= 30) {
+      const state = ensureCreepMovementState(name);
+      state.travelState = { targetRoom: "E1N1", stuckTicks: index % 2 ? 3 : 0 };
+    }
+  }
+  Game.creeps = creeps;
+  runExternalTelemetryExport();
+  const debug = JSON.parse(RawMemory.segments[42]).debug;
+  expect(debug.creeps.map((creep: { name: string }) => creep.name)).toEqual([
+    "scout-31", "scout-33", "scout-35", "scout-37", "scout-39",
+    "scout-30", "scout-32", "scout-34", "scout-36", "scout-38",
+    ...Array.from({ length: 15 }, (_, index) => `scout-${String(index).padStart(2, "0")}`),
+  ]);
+  expect(debug.truncated).toBe(true);
+  expect(debug.counts).toMatchObject({ creepsWithMovementState: 10, creepsWithTravelState: 10, stuckCreeps: 5 });
+});
+
 describe("runExternalTelemetryExport Worker task observation", () => {
   beforeEach(() => {
     setupBasicEnv();
@@ -336,6 +362,16 @@ describe("runExternalTelemetryExport cpu monitor v2", () => {
 
     const payload = JSON.parse(RawMemory.segments[42]);
     expect(payload.cpuMonitor.latest.fixedActionEstimate).toBeCloseTo(35 * 0.3, 4);
+  });
+
+  it("透传新增 CPU 边界，保留旧样本的可选字段兼容", () => {
+    const snap = Object.assign(makeV2Snapshot(), { startupUsed: 7, tickUsedAtFlush: 19.5, topLevelUsed: 10 });
+    Memory.analytics = { cpuMonitor: { version: 2, updatedAt: 100, sampleInterval: 7,
+      historyLimit: 120, latest: snap, summary: null } } as unknown as Memory["analytics"];
+    runExternalTelemetryExport();
+    expect(JSON.parse(RawMemory.segments[42]).cpuMonitor.latest).toMatchObject({
+      totalUsed: 12.5, startupUsed: 7, tickUsedAtFlush: 19.5, topLevelUsed: 10,
+    });
   });
 });
 

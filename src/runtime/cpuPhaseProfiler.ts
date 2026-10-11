@@ -140,6 +140,7 @@ export function createTickCpuProfiler(): TickCpuProfiler {
   // 仍由 measure() 覆盖总开销，fixed action count 照常记录。
   const perCreepTiming = config.roomRoleAggregation;
   let measurementDepth = 0;
+  let topLevelUsed = 0;
 
   function ensureRoom(roomName: string): CpuMonitorRoomSummary {
     if (!rooms[roomName]) {
@@ -169,6 +170,7 @@ export function createTickCpuProfiler(): TickCpuProfiler {
         measurementDepth -= 1;
         const delta = Math.max(0, Game.cpu.getUsed() - start);
         phases[phase] = (phases[phase] || 0) + delta;
+        if (measurementDepth === 0) topLevelUsed += delta;
       }
     },
 
@@ -206,15 +208,18 @@ export function createTickCpuProfiler(): TickCpuProfiler {
     },
 
     flush(): void {
-      const totalUsed = Math.max(0, Game.cpu.getUsed() - loopStartUsed);
-      const tracked = Object.values(phases).reduce((sum, used) => sum + used, 0);
-      const untracked = Math.max(0, totalUsed - tracked);
+      const tickUsedAtFlush = Game.cpu.getUsed();
+      const totalUsed = Math.max(0, tickUsedAtFlush - loopStartUsed);
+      const untracked = Math.max(0, totalUsed - topLevelUsed);
       const heap = captureCpuMonitorHeap(config);
 
       const snapshot: CpuMonitorSnapshotV2 = {
         tick: Game.time,
         shard: Game.shard.name,
         totalUsed,
+        startupUsed: loopStartUsed,
+        tickUsedAtFlush,
+        topLevelUsed,
         bucket: Game.cpu.bucket,
         limit: Game.cpu.limit,
         tickLimit: Game.cpu.tickLimit,
