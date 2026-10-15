@@ -6,6 +6,7 @@ import type { CreepConfig } from "@/types/system";
 import { assessUnboostedNpc, isNpcWarTarget } from "@/runtime/warNpcPolicy";
 import { getRefillableHostileTowers } from "@/runtime/combatTowerThreat";
 import { ensureClearedNpcLootHandoff } from "@/runtime/flagHauling";
+import { isInvaderSalvageTarget } from "@/runtime/invaderSalvageSafety";
 import { isRebuildStructureRelevant } from "@/runtime/warRebuildScope";
 
 type WarStatus = "queued" | "staging" | "clearing" | "downgrading" | "patrol_waiting" | "done" | "failed";
@@ -1340,10 +1341,11 @@ function runNpcLootHandoffs(store: Record<string, WarTask>): void {
     if (task.status === "failed") continue;
     const room = Game.rooms[task.targetRoom];
     if (!room) continue;
-    const authority = room.controller?.owner?.username ?? room.controller?.reservation?.username;
-    if (authority === "Invader" || authority === "TooAngel" || (!authority && room.find(FIND_HOSTILE_STRUCTURES)
-      .some(s => s.structureType === STRUCTURE_INVADER_CORE))) task.lootAfterClear = true;
-    if (!task.lootAfterClear) continue;
+    if (!isInvaderSalvageTarget(room)) {
+      delete task.lootAfterClear;
+      continue;
+    }
+    task.lootAfterClear = true;
     const hostile = getHostilePresence(room, task);
     if (hostile.hostileCreeps || hostile.hostileStructures) {
       if (!task.sharedSquadWatchId) delete task.combatClearSince;

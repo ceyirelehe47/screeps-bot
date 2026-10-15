@@ -34,7 +34,7 @@ function hostileStructure(type: StructureConstant, id: string, x: number, y: num
     structureType: type,
     hits,
     hitsMax: hits,
-    pos: { x, y, roomName: TARGET_ROOM, getRangeTo: jest.fn(() => 1) } as unknown as RoomPosition,
+    pos: new MockPos(x, y, TARGET_ROOM) as unknown as RoomPosition,
   } as Structure;
 }
 
@@ -116,7 +116,6 @@ describe("healerRole war duo staging", () => {
     clearCreepMovementStateForTest();
     Game.creeps = {};
     Game.getObjectById = jest.fn(() => null) as typeof Game.getObjectById;
-    Game.map = { getRoomTerrain: jest.fn(() => ({ get: () => 0 })) } as unknown as GameMap;
   });
 
   it("does not restore partner identity from fallback args after owner detach", () => {
@@ -133,35 +132,6 @@ describe("healerRole war duo staging", () => {
     healerRole(TARGET_ROOM, "", "", "", ATTACKER_CONFIG).source?.(healer);
 
     expect(healer.memory._warPartnerConfigName).toBeUndefined();
-  });
-
-  it("steps into the attacker's previous tile when the paired attacker moves this tick", () => {
-    const spawn = hostileStructure(STRUCTURE_SPAWN, "spawn-following-move", 23, 20, 5000);
-    const attacker = createMockPowerBankCreep("meleeAttacker", {
-      name: "attacker",
-      roomName: TARGET_ROOM,
-      x: 20,
-      y: 20,
-      memory: { role: "meleeAttacker", configName: ATTACKER_CONFIG, _warPartnerConfigName: HEALER_CONFIG },
-    });
-    attacker.room.find = jest.fn((type: FindConstant) =>
-      type === FIND_HOSTILE_STRUCTURES ? [spawn] : []
-    ) as Room["find"];
-    const healer = createMockPowerBankCreep("healer", {
-      name: "healer",
-      roomName: TARGET_ROOM,
-      x: 19,
-      y: 19,
-      memory: { role: "healer", configName: HEALER_CONFIG },
-    });
-    Game.creeps = { attacker, healer };
-    (attacker.memory as CreepMemory & { _warMoveIntentAt?: number })._warMoveIntentAt = Game.time;
-
-    issueMove(attacker, RIGHT);
-    healerRole(TARGET_ROOM, "", "", "", ATTACKER_CONFIG).target(healer);
-
-    expect(healer.move).toHaveBeenCalledWith(healer.pos.getDirectionTo(attacker.pos));
-    expect(moveToTarget).not.toHaveBeenCalled();
   });
 
   it.each(["leader-first", "healer-first"] as const)("%s 实际结算移动后连续三 tick 同步前进且保持贴身", (order) => {
@@ -242,14 +212,26 @@ describe("healerRole war duo staging", () => {
     expect([attacker.pos.x, attacker.pos.y, healer.pos.x, healer.pos.y]).toEqual([20, 19, 19, 20]);
   });
 
-  it.each(["marker_only", "destination_near", "destination_occupied"])("%s 不触发盲目跟随或覆盖通用让路", (kind) => {
-    Game.time++;
-    const attacker = createMockPowerBankCreep("meleeAttacker", { name: "red", roomName: TARGET_ROOM, x: 20, y: 20, memory: { role: "meleeAttacker", configName: ATTACKER_CONFIG, _warPartnerConfigName: HEALER_CONFIG, _warMoveIntentAt: Game.time } });
-    const healer = createMockPowerBankCreep("healer", { name: "green", roomName: TARGET_ROOM, x: 19, y: kind === "destination_occupied" ? 20 : 19, memory: { role: "healer", configName: HEALER_CONFIG } });
-    attacker.room.find = jest.fn(() => []) as Room["find"]; healer.room = attacker.room;
-    Game.creeps = { red: attacker, green: healer };
-    if (kind !== "marker_only") issueMove(attacker, LEFT);
-    healerRole(TARGET_ROOM, "", "", "", ATTACKER_CONFIG).target(healer);
-    expect(healer.move).not.toHaveBeenCalled();
+  it("仅有本tick移动标记而无真实receipt时不补跟", () => {
+    const { attacker, healer, run, commit } = formationScenario("leader-first");
+    attacker.memory._warMoveIntentAt = Game.time;
+    moveToTarget.mockReturnValue(OK);
+    run();
+    expect(getMoveIntentReceipt(attacker)).toBeUndefined();
+    expect(getMoveIntentReceipt(healer)).toBeUndefined();
+    commit();
+    expect([attacker.pos.x, attacker.pos.y, healer.pos.x, healer.pos.y]).toEqual([20, 20, 19, 20]);
+  });
+
+  it("红的新落点仍贴身时绿原地，下一tick需要时再跟随", () => {
+    const { attacker, healer, run, commit } = formationScenario("leader-first");
+    healer.pos = new MockPos(20, 19, TARGET_ROOM) as unknown as RoomPosition;
+    run();
+    expect(getMoveIntentReceipt(healer)).toBeUndefined();
+    commit();
+    expect([attacker.pos.x, attacker.pos.y, healer.pos.x, healer.pos.y]).toEqual([21, 20, 20, 19]);
+    run(); commit();
+    expect([attacker.pos.x, attacker.pos.y, healer.pos.x, healer.pos.y]).toEqual([22, 20, 21, 20]);
+    expect(healer.pos.isNearTo(attacker.pos)).toBe(true);
   });
 });

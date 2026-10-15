@@ -89,9 +89,12 @@ describe("remoteCarrierRole", () => {
 
   function salvageFixture(objects: { drops?: Resource[]; tombstones?: Tombstone[]; structures?: Structure[]; hostiles?: Creep[]; escorts?: Creep[]; homeRoomName?: string } = {}) {
     const home = createHomeRoom(objects.homeRoomName ?? "W1N1");
+    const invaderRuin = { structure: { structureType: STRUCTURE_INVADER_CORE },
+      pos: new RoomPosition(44, 17, "W5N5"), store: createStore({}) } as Ruin;
     const room = {
       name: "W5N5",
       find: jest.fn((type: FindConstant) => type === FIND_STRUCTURES ? objects.structures ?? []
+        : type === FIND_RUINS ? [invaderRuin]
         : type === FIND_DROPPED_RESOURCES ? objects.drops ?? []
           : type === FIND_TOMBSTONES ? objects.tombstones ?? []
             : type === FIND_HOSTILE_CREEPS ? objects.hostiles ?? []
@@ -110,6 +113,42 @@ describe("remoteCarrierRole", () => {
     Game.creeps[creep.name] = creep;
     return { home, room, creep, resources, role: remoteCarrierRole("W5N5", "44,17", "invaderSalvage") };
   }
+
+  it.each(["player", "ordinary_drops", "live_core"] as const)("managed INVADER任务不能绕过%s的取货资格门", kind => {
+    const drop = { amount: 50, resourceType: RESOURCE_ENERGY, pos: new RoomPosition(20, 20, "W5N5") } as Resource;
+    const world = salvageFixture({ drops: [drop] });
+    const flag = "HAUL_W1N1_INVADER_W5N5";
+    Memory.data!.flagHauling = { [flag]: { sourceRoom: "W1N1", targetRoom: "W5N5", flagName: flag,
+      targetX: 20, targetY: 20, createdAt: Game.time, updatedAt: Game.time } };
+    Game.flags = { [flag]: { name: flag } as Flag };
+    if (kind === "player") world.room.controller = { owner: { username: "TooAngel" } } as StructureController;
+    else world.room.find = ((type: FindConstant) => type === FIND_DROPPED_RESOURCES ? [drop]
+      : type === FIND_STRUCTURES && kind === "live_core" ? [{ structureType: STRUCTURE_INVADER_CORE }] : []) as Room["find"];
+    expect(world.role.source(world.creep)).toBe(false);
+    expect(world.creep.pickup).not.toHaveBeenCalled();
+    expect(world.creep.withdraw).not.toHaveBeenCalled();
+  });
+
+  it("非法目标已载货成员仍向E1N57归仓并交付，直到下一tick Store清空才完成", () => {
+    const world = salvageFixture({ homeRoomName: "E1N57" });
+    world.room.controller = { owner: { username: "TooAngel" } } as StructureController;
+    world.resources.energy = 50;
+    const config = Object.values(Memory.data!.creepConfigs!)[0];
+    delete config.roomName;
+    expect(world.role.source(world.creep)).toBe(true);
+    expect(world.role.target(world.creep)).toBe(false);
+    expect(moveToTargetRoom).toHaveBeenCalledWith(world.creep, "E1N57", undefined, expect.any(Object));
+    const returnOptions = (moveToTargetRoom as jest.Mock).mock.calls[0][3];
+    expect(returnOptions.canMoveStep(new RoomPosition(19, 20, world.room.name))).toBe(true);
+    expect(returnOptions.routeRoomCost(world.home.name)).toBe(1);
+    Game.time += 1; Object.assign(world.creep, { room: world.home, pos: world.home.storage!.pos });
+    world.role.target(world.creep);
+    expect(world.creep.transfer).toHaveBeenCalledWith(world.home.storage, RESOURCE_ENERGY);
+    expect(world.creep.store.getUsedCapacity()).toBe(50);
+    Game.time += 1; world.resources.energy = 0;
+    expect(world.role.target(world.creep)).toBe(true);
+    expect(world.creep.suicide).not.toHaveBeenCalled();
+  });
 
   it("INVADER 拾取掉落与墓碑全部资源，取货/归仓只按次 tick Store 完成", () => {
     const drops = [{ amount: 50, resourceType: RESOURCE_CATALYZED_UTRIUM_ACID,

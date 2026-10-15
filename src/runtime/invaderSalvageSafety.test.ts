@@ -35,4 +35,21 @@ describe("INVADER 搬运使用实际房间与位置威胁", () => {
     expect(isInvaderSalvageTransitAllowed(owned, owned.name)).toBe(false);
     expect(isInvaderSalvageTransitAllowed(undefined)).toBe(false);
   });
+  it.each(["owner", "reservation", "no_invader_evidence"] as const)("%s 不能仅凭INVADER名称被当成回收目标", kind => {
+    const room = world();
+    if (kind === "owner") room.controller = { owner: { username: "TooAngel" } } as StructureController;
+    else if (kind === "reservation") room.controller!.reservation = { username: "another-player", ticksToEnd: 5000 };
+    else room.controller = undefined;
+    expect(isInvaderSalvageRoomClear(room)).toBe(false);
+  });
+  it.each(["core_ruin", "invader_tombstone"] as const)("Core已销毁后，空的%s仍证明同房NPC遗产资格", kind => {
+    const room = world(); room.controller = undefined;
+    const proof = kind === "core_ruin"
+      ? { structure: { structureType: STRUCTURE_INVADER_CORE }, store: { getUsedCapacity: () => 0 } }
+      : { creep: { owner: { username: "Invader" } }, store: { getUsedCapacity: () => 0 } };
+    room.find = ((type: FindConstant) => type === (kind === "core_ruin" ? FIND_RUINS : FIND_TOMBSTONES) ? [proof] : []) as Room["find"];
+    expect(isInvaderSalvageRoomClear(room)).toBe(true);
+    room.controller = { owner: { username: "TooAngel" } } as StructureController;
+    expect(isInvaderSalvageRoomClear(room)).toBe(false);
+  });
 });

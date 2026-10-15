@@ -1,4 +1,4 @@
-import { cancelMoveIntent, getMoveIntentDestination, getMoveIntentReceipt, issueMove } from "@/movement/traffic";
+import { cancelMoveIntent, getMoveIntentAttemptedPosition, getMoveIntentDestination, getMoveIntentReceipt, issueMove } from "@/movement/traffic";
 import { moveToTarget } from "@/movement/pathing";
 import { createMockPowerBankCreep } from "@mock/powerBank";
 jest.mock("@/runtime/cpuPhaseProfiler", () => ({ measureCreepIntent: (fn: () => unknown) => fn() }));
@@ -63,6 +63,29 @@ describe("actual move receipts", () => {
     expect(getMoveIntentReceipt(creep)!.to).toEqual({ x: 0, y: 25, roomName: "E0N0" });
     expect(getMoveIntentDestination({ x: 0, y: 25, roomName: "E0N0" }, TOP)).toEqual({ x: 49, y: 24, roomName: "W0N0" });
     expect(getMoveIntentDestination({ x: 0, y: 25, roomName: "E0N0" }, RIGHT)).toEqual({ x: 1, y: 25, roomName: "E0N0" });
+  });
+  it("四边越界斜步整条忽略，普通与 PowerCreep 都从原边界坐标迁房", () => {
+    const exits = { [TOP]: "W0N1", [RIGHT]: "E0N0", [BOTTOM]: "W0S0", [LEFT]: "W1N0" };
+    Game.map.describeExits = jest.fn((name: string) => name === "W0N0" ? exits : null);
+    const cases = [
+      { x: 25, y: 0, direction: TOP_RIGHT, roomName: "W0N1", finalX: 25, finalY: 49 },
+      { x: 49, y: 25, direction: BOTTOM_RIGHT, roomName: "E0N0", finalX: 0, finalY: 25 },
+      { x: 25, y: 49, direction: BOTTOM_LEFT, roomName: "W0S0", finalX: 25, finalY: 0 },
+      { x: 0, y: 25, direction: TOP_LEFT, roomName: "W1N0", finalX: 49, finalY: 25 },
+    ] as const;
+    for (const value of cases) {
+      const from = { x: value.x, y: value.y, roomName: "W0N0" };
+      const destination = { x: value.finalX, y: value.finalY, roomName: value.roomName };
+      expect(getMoveIntentAttemptedPosition(from, value.direction)).toEqual(from);
+      expect(getMoveIntentDestination(from, value.direction)).toEqual(destination);
+      for (const power of [false, true]) {
+        const base = createMockPowerBankCreep("powerBankAttacker", { roomName: from.roomName, x: from.x, y: from.y });
+        const actor = power ? { ...base, powers: {}, id: `power-${value.direction}`, move: jest.fn(() => OK) } as unknown as PowerCreep : base;
+        expect(issueMove(actor, value.direction)).toBe(OK);
+        expect(getMoveIntentReceipt(actor)!.attempted).toEqual(from);
+        expect(getMoveIntentReceipt(actor)!.to).toEqual(destination);
+      }
+    }
   });
   it("does not project inaccessible closed rooms as a valid final tile", () => {
     Game.map.getRoomStatus = jest.fn(() => ({ status: "closed" as const, timestamp: null }));

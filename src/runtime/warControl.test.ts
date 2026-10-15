@@ -106,22 +106,21 @@ describe("三个NPC目标共享一支清剿小队", () => {
   });
   afterEach(() => { Memory.cfg = {}; });
 
-  it("已确认 NPC 目标清剿后无需人工 flag，当帧按残留货量衔接搬运", () => {
+  it("Invader 回收交接不会承接 TooAngel 玩家目标", () => {
     shared(); runWarControl();
-    expect(Memory.data!.war!.E3N57.lootAfterClear).toBe(true);
+    expect(Memory.data!.war!.E3N57.lootAfterClear).toBeUndefined();
     const room = Game.rooms.E3N57;
-    const ruin = { id: "npc-loot", pos: new MockPos(44, 17, room.name), store: createMockStore({ energy: 239 }) } as unknown as Ruin;
+    const ruin = { id: "player-loot", pos: new MockPos(44, 17, room.name), store: createMockStore({ energy: 239 }),
+      structure: { structureType: STRUCTURE_EXTENSION, owner: { username: "TooAngel" } } } as unknown as Ruin;
     room.find = jest.fn((kind: FindConstant) => kind === FIND_RUINS ? [ruin] : []) as Room["find"];
     room.createFlag = jest.fn((_pos: RoomPosition, name: string) => name) as unknown as Room["createFlag"];
     Game.time++; runWarControl();
     expect(room.createFlag).not.toHaveBeenCalled();
     Game.time += 19; runWarControl();
-    const flag = "HAUL_E1N57_INVADER_E3N57";
-    expect(room.createFlag).toHaveBeenCalledWith(ruin.pos, flag);
-    expect(Memory.data!.flagHauling![flag].sourceRoom).toBe("E1N57");
+    expect(room.createFlag).not.toHaveBeenCalled();
+    expect(Memory.data!.flagHauling?.HAUL_E1N57_INVADER_E3N57).toBeUndefined();
     const carriers = Object.entries(Memory.data!.creepConfigs!).filter(([name]) => name.includes(":haul:E3N57:"));
-    expect(carriers).toHaveLength(1);
-    expect(carriers[0][1].body?.filter(part => part === CARRY)).toHaveLength(5);
+    expect(carriers).toHaveLength(0);
   });
 
   function installExistingPairs(): void {
@@ -241,6 +240,68 @@ describe("三个NPC目标共享一支清剿小队", () => {
   it("源房失去所有权时停止整个共享组生产，不回落到旧并行规则", () => {
     shared(); Game.rooms.E1N57.controller!.my = false; runWarControl();
     expect(Object.values(Memory.data!.war!).every((task) => task.failReason === "shared_source_not_owned" && !task.activeGeneration)).toBe(true);
+  });
+});
+
+describe("Invader 回收自动交接的新鲜身份门", () => {
+  beforeEach(() => {
+    jest.restoreAllMocks(); jest.clearAllMocks(); resetRuntimeServices();
+    Game.time = 1000; Game.flags = {}; Game.creeps = {};
+    Memory.cfg = {}; Memory.runtime = {}; Memory.creeps = {};
+    Memory.data = { war: { E3N57: {
+      targetRoom: "E3N57", sourceRoom: "E1N57", status: "done", reason: "manual", attempts: 1,
+      createdAt: 900, updatedAt: Game.time, completedAt: 980, assetsReleasedAt: 980,
+    } } };
+    const source = createSourceRoom(); source.energyCapacityAvailable = 1600;
+    Game.rooms = { E1N57: source }; Game.spawns = { Spawn1: createSpawn(source) };
+  });
+
+  function installLootRoom(proof?: "reservation" | "core-ruin" | "invader-tombstone") {
+    const room = createTargetRoom();
+    const drop = { id: "remaining-loot", amount: 239, resourceType: RESOURCE_ENERGY,
+      pos: new MockPos(44, 17, room.name) } as unknown as Resource;
+    // 身份证据独立于货量：空的 core 遗迹/Invader 墓碑仍能证明尚未衰减的遗产。
+    const ruins = proof === "core-ruin" ? [{ id: "empty-core-remains", store: createMockStore({}),
+      pos: new MockPos(25, 25, room.name), structure: { structureType: STRUCTURE_INVADER_CORE } } as unknown as Ruin] : [];
+    const tombstones = proof === "invader-tombstone" ? [{ id: "empty-invader-remains", store: createMockStore({}),
+      pos: new MockPos(26, 25, room.name), creep: { owner: { username: "Invader" } } } as unknown as Tombstone] : [];
+    if (proof === "reservation") room.controller!.reservation = { username: "Invader", ticksToEnd: 5000 };
+    room.find = jest.fn((kind: FindConstant) => kind === FIND_RUINS ? ruins : kind === FIND_TOMBSTONES ? tombstones
+      : kind === FIND_DROPPED_RESOURCES ? [drop] : []) as Room["find"];
+    room.createFlag = jest.fn((_pos: RoomPosition, name: string) => name) as unknown as Room["createFlag"];
+    Game.rooms[room.name] = room;
+    return { room, drop };
+  }
+
+  it.each(["reservation", "core-ruin", "invader-tombstone"] as const)("Invader 回收交接以当前%s证据启动，并保留原清场等待与货量配置", proof => {
+    const { room, drop } = installLootRoom(proof);
+    runWarControl();
+    expect(Memory.data!.war!.E3N57.lootAfterClear).toBe(true);
+    expect(room.createFlag).not.toHaveBeenCalled();
+    Game.time += 18; runWarControl();
+    expect(room.createFlag).not.toHaveBeenCalled();
+    Game.time += 1; runWarControl();
+    const name = "HAUL_E1N57_INVADER_E3N57";
+    expect(room.createFlag).toHaveBeenCalledTimes(1);
+    expect(room.createFlag).toHaveBeenCalledWith(drop.pos, name);
+    expect(Memory.data!.flagHauling?.[name]).toMatchObject({ sourceRoom: "E1N57", targetRoom: room.name });
+    const carriers = Object.entries(Memory.data!.creepConfigs ?? {}).filter(([configName]) => configName.includes(":haul:E3N57:"));
+    expect(carriers).toHaveLength(1);
+    expect(carriers[0][1].body?.filter(part => part === CARRY)).toHaveLength(5);
+  });
+
+  it.each(["unproven-room", "player-reservation"] as const)("Invader 回收交接不信旧lootAfterClear，当前%s必须撤销许可且不派车", identity => {
+    const { room } = installLootRoom(identity === "player-reservation" ? "core-ruin" : undefined);
+    if (identity === "player-reservation") room.controller!.reservation = { username: "a-player", ticksToEnd: 5000 };
+    const task = Memory.data!.war!.E3N57;
+    task.lootAfterClear = true; task.combatClearSince = Game.time - 30;
+    runWarControl();
+    expect(task.lootAfterClear).toBeUndefined();
+    expect(room.createFlag).not.toHaveBeenCalled();
+    expect(Memory.data!.flagHauling?.HAUL_E1N57_INVADER_E3N57).toBeUndefined();
+    expect(Object.keys(Memory.data!.creepConfigs ?? {}).some(name => name.includes(":haul:E3N57:"))).toBe(false);
+    expect(task.status).toBe("done");
+    expect(task.combatClearSince).toBe(970);
   });
 });
 

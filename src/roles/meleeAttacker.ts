@@ -197,28 +197,36 @@ function findCombatApproach(creep: Creep, target: Creep | Structure, towerDrain 
   if (covering) return { open: false, breach: covering };
   if (creep.pos.getRangeTo(target.pos) <= 1) return { open: true, breach: null };
   if (barriers.length === 0 && !towerDrain) return { open: true, breach: null };
-  const matrix = new PathFinder.CostMatrix();
-  for (const structure of structures) if (structure.structureType === STRUCTURE_ROAD) matrix.set(structure.pos.x, structure.pos.y, 1);
-  for (const structure of structures) if (!isWalkableStructure(structure)) matrix.set(structure.pos.x, structure.pos.y, 0xff);
-  for (const natural of [...creep.room.find(FIND_SOURCES), ...creep.room.find(FIND_MINERALS), ...creep.room.find(FIND_DEPOSITS)]) matrix.set(natural.pos.x, natural.pos.y, 0xff);
+  const naturals = [...creep.room.find(FIND_SOURCES), ...creep.room.find(FIND_MINERALS), ...creep.room.find(FIND_DEPOSITS)];
+  const geometryMatrix = (): CostMatrix => {
+    const result = new PathFinder.CostMatrix();
+    for (const structure of structures) if (structure.structureType === STRUCTURE_ROAD) result.set(structure.pos.x, structure.pos.y, 1);
+    for (const structure of structures) if (!isWalkableStructure(structure)) result.set(structure.pos.x, structure.pos.y, 0xff);
+    for (const natural of naturals) result.set(natural.pos.x, natural.pos.y, 0xff);
+    return result;
+  };
+  const matrix = geometryMatrix();
   if (towerDrain) constrainTowerDrainBreachPath(creep, creep.room.name, matrix);
-  const search = () => PathFinder.search(creep.pos, { pos: target.pos, range: 1 }, {
+  const search = (costs: CostMatrix) => PathFinder.search(creep.pos, { pos: target.pos, range: 1 }, {
     plainCost: 2, swampCost: 8, maxRooms: 1, maxOps: COMBAT_APPROACH_MAX_OPS,
-    roomCallback: (roomName) => roomName === creep.room.name ? matrix : false,
+    roomCallback: (roomName) => roomName === creep.room.name ? costs : false,
   });
-  const openPath = search();
+  const openPath = search(matrix);
   if (!openPath.incomplete && openPath.path.every((step) => matrix.get(step.x, step.y) < 0xff)) return { open: true, breach: null };
   // 搜索预算耗尽只说明尚未找到绕路，不能作为允许破墙的无路证明。
   if (openPath.incomplete && openPath.ops >= COMBAT_APPROACH_MAX_OPS) return { open: false, breach: null };
+  // 退路门按当前未拆墙的世界封锁墙后区域。突破搜索只用原物理几何寻找第一道屏障，
+  // 不能继承袋外的255；这不授予墙后移动许可，实际每步仍走 fresh 安全回调。
+  const breachMatrix = towerDrain ? geometryMatrix() : matrix;
   const breachByPosition = new Map<string, StructureRampart | StructureWall>();
   const hostileCreeps = getHostileCreeps(creep.room);
   for (const barrier of barriers) {
     if (isWalkableStructure(barrier)) continue;
-    matrix.set(barrier.pos.x, barrier.pos.y, getCombatBreachCost(barrier, hostileCreeps));
+    breachMatrix.set(barrier.pos.x, barrier.pos.y, getCombatBreachCost(barrier, hostileCreeps));
     breachByPosition.set(`${barrier.pos.x}:${barrier.pos.y}`, barrier);
   }
-  for (const other of [...creep.room.find(FIND_MY_CREEPS), ...hostileCreeps]) if (other.name !== creep.name) matrix.set(other.pos.x, other.pos.y, 0xfe);
-  const result = search();
+  for (const other of [...creep.room.find(FIND_MY_CREEPS), ...hostileCreeps]) if (other.name !== creep.name) breachMatrix.set(other.pos.x, other.pos.y, 0xfe);
+  const result = search(breachMatrix);
   if (!result.incomplete) for (const step of result.path) {
     const breach = breachByPosition.get(`${step.x}:${step.y}`);
     if (breach) return { open: false, breach };

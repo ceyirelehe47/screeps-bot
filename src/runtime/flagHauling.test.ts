@@ -100,6 +100,8 @@ describe("runFlagHaulingByFlag", () => {
     const spawn = createSpawn(home);
     const objects = { structures: [] as Structure[], ruins: [] as Ruin[], tombstones: [] as Tombstone[],
       drops: [] as Resource[], hostiles: [] as Creep[], escorts: [] as Creep[] };
+    objects.ruins.push({ structure: { structureType: STRUCTURE_INVADER_CORE }, pos: position(44, 17),
+      store: createStoredStructure("empty-core-proof", STRUCTURE_CONTAINER, {}).store } as Ruin);
     const target = {
       name: "W5N5", controller: undefined,
       find: jest.fn((type: FindConstant) => type === FIND_STRUCTURES ? objects.structures
@@ -118,6 +120,52 @@ describe("runFlagHaulingByFlag", () => {
   const position = (x: number, y: number): RoomPosition => ({ x, y, roomName: "W5N5",
     getRangeTo: (other: RoomPosition) => Math.max(Math.abs(x - other.x), Math.abs(y - other.y)),
   } as RoomPosition);
+
+  it.each(["player", "ordinary_drops"] as const)("INVADER旗名不能授权%s的回收任务或生产", kind => {
+    const world = salvageFixture();
+    world.objects.drops.push({ amount: 1800, resourceType: RESOURCE_ENERGY, pos: position(44, 17) } as Resource);
+    if (kind === "player") world.target.controller = { owner: { username: "TooAngel" } } as StructureController;
+    else world.objects.ruins.length = 0;
+    runFlagHaulingByFlag();
+    expect(Memory.data?.flagHauling?.[world.flag.name]).toBeUndefined();
+    expect(getCreepConfigService().list()).toEqual({});
+    expect(world.flag.remove).toHaveBeenCalled();
+  });
+
+  it("既有非法玩家回收撤flag与孵化，空车回收，载货归仓后才删除配置和任务", () => {
+    const world = salvageFixture();
+    world.objects.drops.push({ amount: 1800, resourceType: RESOURCE_ENERGY, pos: position(44, 17) } as Resource);
+    runFlagHaulingByFlag();
+    const names = [world.configName, world.configName + ":2", world.configName + ":3"];
+    const empty = createRemoteCarrierCreep(names[0], 0);
+    const loaded = createRemoteCarrierCreep(names[1], 100);
+    let cargo = 100;
+    Object.assign(loaded, { store: { getUsedCapacity: () => cargo }, suicide: jest.fn() });
+    Game.creeps = { [empty.name]: empty, [loaded.name]: loaded };
+    const cancel = jest.fn(() => OK);
+    Object.assign(world.spawn, { spawning: { name: "queued-invalid-salvage", cancel } });
+    Memory.creeps!["queued-invalid-salvage"] = { configName: names[2] } as CreepMemory;
+    world.spawn.memory.spawnList = [...names];
+    world.target.controller = { owner: { username: "TooAngel" } } as StructureController;
+    Game.time += 1; runFlagHaulingByFlag();
+    expect(world.flag.remove).toHaveBeenCalled();
+    expect(world.spawn.memory.spawnList).toEqual([]);
+    expect(cancel).toHaveBeenCalled();
+    expect(empty.memory._recycleToRoom).toBe(world.home.name);
+    expect(empty.memory.configName).toBeUndefined();
+    expect(loaded.memory.configName).toBe(names[1]);
+    expect(loaded.memory.working).toBe(true);
+    expect(getCreepConfigService().get(names[1])?.roomName).toBeUndefined();
+    expect(loaded.suicide).not.toHaveBeenCalled();
+    expect(Memory.data?.flagHauling?.[world.flag.name]).toBeDefined();
+    delete Game.flags[world.flag.name];
+    Object.assign(world.spawn, { spawning: null });
+    cargo = 0;
+    Game.time += 1; runFlagHaulingByFlag();
+    expect(getCreepConfigService().list()).toEqual({});
+    expect(Memory.data?.flagHauling?.[world.flag.name]).toBeUndefined();
+    expect(loaded.memory._recycleToRoom).toBe(world.home.name);
+  });
 
   it("小额 NPC 资源只派一只按货量配体型的 carrier，已有成员不预补出生", () => {
     const world = salvageFixture();

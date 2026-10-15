@@ -343,8 +343,7 @@ export const remoteCarrierRole: RoleFactory = (targetRoom: string, targetX?: str
       if (salvageIntentTicks.get(creep) === Game.time) return false;
       const room = Game.rooms[targetRoom];
       if (!room && creep.store.getUsedCapacity() > 0) return true;
-      if (!salvageTaskActive(creep) || (room && (!isInvaderSalvageTransitAllowed(room, targetRoom) ||
-        (!getManagedSalvageTask(creep) && !isInvaderSalvageRoomClear(room)))) ||
+      if (!salvageTaskActive(creep) || (room && !isInvaderSalvageRoomClear(room)) ||
         (!room && (Memory.runtime?.invaderSalvageDangerRooms?.[targetRoom] ?? 0) > Game.time)) {
         if (creep.store.getUsedCapacity() > 0) return true;
         const home = getHomeRoomName(creep);

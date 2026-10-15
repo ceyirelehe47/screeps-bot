@@ -3,7 +3,7 @@ import { buildStandardCarrierBody } from "@/runtime/carrierBodyPolicy";
 import { getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
 import type { CreepConfig } from "@/types/system";
 import { requestCombatObservation } from "@/runtime/powerBankObserver";
-import { isInvaderSalvageRoomClear, isInvaderSalvagePositionSafe } from "@/runtime/invaderSalvageSafety";
+import { isInvaderSalvageTarget, isInvaderSalvageRoomClear, isInvaderSalvagePositionSafe } from "@/runtime/invaderSalvageSafety";
 import { clearMovementState } from "@/roles/shared";
 
 interface FlagHaulTask {
@@ -261,13 +261,18 @@ function cleanupFlagHaulConfig(task: FlagHaulTask): boolean {
     if (config?.roomName) {
       delete config.roomName;
     }
+    if (isInvaderFlag(task.flagName)) {
+      for (const spawn of getTickContextService().getSpawnsByRoom(task.sourceRoom)) {
+        if (spawn.spawning && Memory.creeps?.[spawn.spawning.name]?.configName === configName) spawn.spawning.cancel();
+      }
+    }
 
     const liveCreeps = getLiveCreepsByConfig(configName);
     for (const creep of liveCreeps) {
       if (creep.store.getUsedCapacity() === 0) {
         if (isInvaderFlag(task.flagName)) retireEmptySalvageMember(task, creep);
         else creep.suicide();
-      }
+      } else if (isInvaderFlag(task.flagName)) creep.memory.working = true;
     }
 
     if (isConfigSpawning(configName) || liveCreeps.some((creep) => creep.store.getUsedCapacity() > 0)) {
@@ -358,6 +363,9 @@ function upsertFlagHaulTask(flag: Flag): boolean {
   if (salvage) {
     requestCombatObservation(targetRoom);
     if (!flag.name.endsWith(`_INVADER_${targetRoom}`)) return false;
+    const room = Game.rooms[targetRoom];
+    if (!room) return false;
+    if (!isInvaderSalvageTarget(room)) { flag.remove(); return true; }
   }
   const targetRoomVisible = Game.rooms[targetRoom];
   if (targetRoomVisible?.controller?.my) {
@@ -423,6 +431,11 @@ function processFlagHaulTask(task: FlagHaulTask): boolean {
     const room = Game.rooms[task.targetRoom];
     if (!room) {
       pause(); task.updatedAt = Game.time; return true;
+    }
+    if (!isInvaderSalvageTarget(room)) {
+      Game.flags[task.flagName]?.remove();
+      if (cleanupFlagHaulConfig(task)) delete ensureFlagHaulStore()[task.flagName];
+      return true;
     }
     if (isDefenseMode(task.sourceRoom) || !isInvaderSalvageRoomClear(room)) {
       pause(); delete task.emptyObservedAt; task.updatedAt = Game.time; return true;

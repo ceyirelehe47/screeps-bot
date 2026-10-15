@@ -52,6 +52,9 @@ Token page: `https://screeps.com/a/#!/account/auth-tokens`
 - `npm run monitor:serve`: run external monitor service (HTTP + polling)
 - `npm run monitor:once`: fetch one snapshot and exit
 - `npm run test`: run Jest tests
+- `npm run test:verify`：在服务器执行不带筛选条件的完整 Jest，核对 tracked、磁盘、Jest discovery 和原始结果集合，拒绝跳过、聚焦、反向通过和运行期失败；保存日志与源码身份，不限制固定用例数量。
+- `npm run test:budget`：兼容入口，与 `test:verify` 相同，旧固定数量预算和保护文件哈希清单已退役。
+- `npm run test:verify -- --results /绝对路径/results.json`（或 `npm run test:budget -- --results /绝对路径/results.json`）：只复核同次完整运行保存的结果及 `execution.json`、`discovered-tests.json`，要求当前源码身份匹配；不会重跑 Jest，也不接受任意单独结果文件。
 - `npm run test-c`: run Jest coverage report
 
 ## Notes

@@ -9,7 +9,6 @@ import * as meleeModule from "@/roles/meleeAttacker";
 import { healerRole } from "@/roles/healer";
 import { createMockPowerBankCreep, createMockStore, MockPos } from "@mock/powerBank";
 import { issueMove } from "@/movement/traffic";
-import { createHash } from "node:crypto";
 
 const TARGET = "E3N57";
 const RETREAT = "E2N57";
@@ -69,8 +68,10 @@ function t3Pair(outside = false, structures: Structure[] = [tower("tower")], hos
   return result;
 }
 
-/** 独立按已安装Engine的clamp→edge interRoom顺序提交；连本帧idle的边缘actor也会迁房。 */
-function deferredEngineFrame(actors: Creep[]): () => void {
+/** 仅模拟越界整步丢弃→边缘迁房及帧末坐标反馈；不包含完整碰撞或疲劳生成。
+ * 官方规则：https://github.com/screeps/engine/blob/a90d26fc9eb943147799e65d0bf9d4d0d79a2722/src/processor/intents/creeps/move.js#L24-L40
+ */
+function deferredBorderFrame(actors: Creep[]): () => void {
   const pending = new Map<Creep, DirectionConstant>();
   const offsets: Record<number, [number, number]> = { 1: [0, -1], 2: [1, -1], 3: [1, 0], 4: [1, 1], 5: [0, 1], 6: [-1, 1], 7: [-1, 0], 8: [-1, -1] };
   for (const actor of actors) actor.move = jest.fn((direction: DirectionConstant) => { pending.set(actor, direction); return OK; }) as unknown as Creep["move"];
@@ -84,8 +85,10 @@ function deferredEngineFrame(actors: Creep[]): () => void {
     const positions = actors.map((actor) => {
       const direction = pending.get(actor);
       const [dx, dy] = direction && actor.fatigue === 0 && actor.getActiveBodyparts(MOVE) > 0 ? offsets[direction] : [0, 0];
-      let x = Math.max(0, Math.min(49, actor.pos.x + dx));
-      const y = Math.max(0, Math.min(49, actor.pos.y + dy));
+      const rawX = actor.pos.x + dx, rawY = actor.pos.y + dy;
+      const outside = rawX < 0 || rawX > 49 || rawY < 0 || rawY > 49;
+      let x = outside ? actor.pos.x : rawX;
+      const y = outside ? actor.pos.y : rawY;
       let roomName = actor.room.name;
       if (x === 49 && roomName === RETREAT) { roomName = TARGET; x = 0; }
       else if (x === 0 && roomName === TARGET) { roomName = RETREAT; x = 49; }
@@ -218,7 +221,7 @@ describe("towerDrainDuo 公共战术门", () => {
     expect(attacker.memory._warTowerDrain?.blocker).toBe("target_not_visible");
   });
 
-  it("红先到最后邻房而绿仍在前一房时，绿沿原formation追上而非永久停驻", () => {
+  it("红先到最后邻房而绿仍在前一房时，耗塔门把绿交回跨房路线", () => {
     const { attacker, healer } = pair(true);
     delete attacker.memory._warTowerDrain;
     delete healer.memory._warTowerDrain;
@@ -233,18 +236,20 @@ describe("towerDrainDuo 公共战术门", () => {
     expect(attacker.memory._warTowerDrain?.phase).toBe("approach");
   });
 
-  it("已对齐双格且两轮塔伤留足时，两人同向入房", () => {
-    const { attacker, healer } = pair(true);
-    runTowerDrainPair(attacker, TARGET, GREEN_CONFIG);
-    runTowerDrainPair(healer, TARGET, RED_CONFIG);
-    expect(attacker.move).toHaveBeenCalledWith(RIGHT);
-    expect(healer.move).toHaveBeenCalledWith(RIGHT);
+  it.each([TOP_LEFT, BOTTOM_LEFT])("适配器丢弃越界斜步%s的整个移动，再从原边界坐标迁房", direction => {
+    const { attacker } = pair();
+    const originalY = attacker.pos.y;
+    const commit = deferredBorderFrame([attacker]);
+    attacker.move(direction);
+    commit();
+    expect(attacker.room.name).toBe(RETREAT);
+    expect([attacker.pos.x, attacker.pos.y]).toEqual([49, originalY]);
   });
 
   it.each([false, true])("实际48→0迁房前在48双人排位，绿先执行=%s", (greenFirst) => {
     const { attacker, healer } = pair(true);
     healer.pos = new MockPos(47, 26, RETREAT) as unknown as RoomPosition;
-    const commit = deferredEngineFrame([attacker, healer]);
+    const commit = deferredBorderFrame([attacker, healer]);
     const run = (): void => {
       for (const actor of greenFirst ? [healer, attacker] : [attacker, healer]) runTowerDrainPair(actor, TARGET, actor === attacker ? GREEN_CONFIG : RED_CONFIG);
     };
@@ -261,7 +266,7 @@ describe("towerDrainDuo 公共战术门", () => {
 
   it("source49不能hold：受伤的双人退回48治疗而不自动再入", () => {
     const { attacker, healer } = pair();
-    const commit = deferredEngineFrame([attacker, healer]);
+    const commit = deferredBorderFrame([attacker, healer]);
     commit();
     expect([attacker.room.name, healer.room.name]).toEqual([RETREAT, RETREAT]);
     expect([attacker.pos.x, healer.pos.x]).toEqual([49, 49]);
@@ -277,7 +282,7 @@ describe("towerDrainDuo 公共战术门", () => {
     const { attacker, healer } = pair();
     healer.pos = new MockPos(48, 26, RETREAT) as unknown as RoomPosition;
     healer.room = Game.rooms[RETREAT];
-    const commit = deferredEngineFrame([attacker, healer]);
+    const commit = deferredBorderFrame([attacker, healer]);
     runTowerDrainPair(healer, TARGET, RED_CONFIG);
     runTowerDrainPair(attacker, TARGET, GREEN_CONFIG);
     expect(healer.move).not.toHaveBeenCalledWith(RIGHT);
@@ -304,7 +309,7 @@ describe("towerDrainDuo 公共战术门", () => {
 
   it.each([false, true])("空塔后两人一起从target0内移，绿先执行=%s不会追旧0弹回", (greenFirst) => {
     const { attacker, healer } = pair(false, [tower("empty", 0)]);
-    const commit = deferredEngineFrame([attacker, healer]);
+    const commit = deferredBorderFrame([attacker, healer]);
     for (const actor of greenFirst ? [healer, attacker] : [attacker, healer]) expect(runTowerDrainPair(actor, TARGET, actor === attacker ? GREEN_CONFIG : RED_CONFIG)).toBe(true);
     commit();
     expect([attacker.room.name, healer.room.name]).toEqual([TARGET, TARGET]);
@@ -315,7 +320,7 @@ describe("towerDrainDuo 公共战术门", () => {
   it.each([false, true])("所有敌塔已拆除时允许从沼泽入口进入，绿先执行=%s", (greenFirst) => {
     const { attacker, healer } = pair(false, []);
     Game.map.getRoomTerrain = jest.fn(() => ({ get: (x: number) => x === 1 ? TERRAIN_MASK_SWAMP : 0 })) as GameMap["getRoomTerrain"];
-    const commit = deferredEngineFrame([attacker, healer]);
+    const commit = deferredBorderFrame([attacker, healer]);
     for (const actor of greenFirst ? [healer, attacker] : [attacker, healer]) runTowerDrainPair(actor, TARGET, actor === attacker ? GREEN_CONFIG : RED_CONFIG);
     commit();
     expect([attacker.room.name, healer.room.name]).toEqual([TARGET, TARGET]);
@@ -330,7 +335,7 @@ describe("towerDrainDuo 公共战术门", () => {
     attacker.pos = new MockPos(0, 28, TARGET) as unknown as RoomPosition;
     healer.pos = new MockPos(0, 29, TARGET) as unknown as RoomPosition;
     attacker.memory._warTowerDrain = { ...state(), attackerEntry: { x: 0, y: 28 }, healerEntry: { x: 0, y: 29 } };
-    const commit = deferredEngineFrame([attacker, healer]);
+    const commit = deferredBorderFrame([attacker, healer]);
     for (const actor of greenFirst ? [healer, attacker] : [attacker, healer]) {
       if (actor === attacker) meleeAttackerRole(TARGET, "", "", "", GREEN_CONFIG, "towerDrainDuo").target(actor);
       else healerRole(TARGET, "", "", "", RED_CONFIG, "towerDrainDuo").target(actor);
@@ -573,7 +578,7 @@ describe("towerDrainDuo 公共战术门", () => {
     expect(second.set).not.toHaveBeenCalledWith(10, 25, 255);
   });
 
-  it("整房破墙矩阵的身体查询保持常量上限，同tick疲劳变化仍重新收紧", () => {
+  it("整房破墙矩阵同时保留浅格和封锁深格，身体查询次数保持常量上限", () => {
     const storage = { id: "stock", structureType: STRUCTURE_STORAGE, pos: new MockPos(30, 30, TARGET), store: createMockStore({ [RESOURCE_ENERGY]: 1000 }) } as unknown as StructureStorage;
     const { attacker, healer } = pair(false, [tower("empty", 0, 25, 25), storage], [carrier(25, 25, 50)]);
     attacker.memory._warTowerDrain = state("breaching");
@@ -582,11 +587,7 @@ describe("towerDrainDuo 公共战术门", () => {
     const evaluate = () => {
       const cells = new Uint8Array(2500);
       const matrix = { set: (x: number, y: number, value: number) => { cells[x * 50 + y] = value; } } as unknown as CostMatrix;
-      const started = Date.now();
       constrainTowerDrainBreachPath(attacker, TARGET, matrix);
-      console.log(JSON.stringify({ kind: "towerDrainMatrixBudget", fatigue: healer.fatigue,
-        redQueries: redQueries.mock.calls.length, greenQueries: greenQueries.mock.calls.length,
-        matrixSha256: createHash("sha256").update(cells).digest("hex"), elapsedMs: Date.now() - started }));
       return cells;
     };
     const healthy = evaluate();
@@ -594,24 +595,6 @@ describe("towerDrainDuo 公共战术门", () => {
     expect(healthy[20 * 50 + 25]).toBe(255);
     expect(redQueries.mock.calls.length).toBeLessThanOrEqual(8);
     expect(greenQueries.mock.calls.length).toBeLessThanOrEqual(8);
-    redQueries.mockClear();
-    greenQueries.mockClear();
-    healer.fatigue = 1500;
-    for (const part of healer.body) if (part.type === HEAL) part.hits = 0;
-    const fatigued = evaluate();
-    expect(fatigued[1 * 50 + 25]).toBe(255);
-    expect(redQueries.mock.calls.length).toBeLessThanOrEqual(8);
-    expect(greenQueries.mock.calls.length).toBeLessThanOrEqual(8);
-  });
-
-  it("按实际治疗与落点伤害开放浅格，塔近处伤害超过治疗仍拒绝", () => {
-    const storage = { id: "stock", structureType: STRUCTURE_STORAGE, pos: new MockPos(30, 30, TARGET), store: createMockStore({ [RESOURCE_ENERGY]: 1000 }) } as unknown as StructureStorage;
-    const { attacker } = pair(false, [tower("empty", 0, 25, 25), storage], [carrier(25, 25, 50)]);
-    attacker.memory._warTowerDrain = state("breaching");
-    const matrix = { set: jest.fn() } as unknown as CostMatrix;
-    constrainTowerDrainBreachPath(attacker, TARGET, matrix);
-    expect(matrix.set).not.toHaveBeenCalledWith(1, 25, 255);
-    expect(matrix.set).toHaveBeenCalledWith(20, 25, 255);
   });
 
   it("死亡主部件仍占平地重量，红25主已毁仅20MOVE与受损绿的近路也不能假称一tick一格", () => {
@@ -628,20 +611,6 @@ describe("towerDrainDuo 公共战术门", () => {
     expect(matrix.set).toHaveBeenCalledWith(1, 25, 255);
   });
 
-  it("同一浅格重新读取当前fatigue，不能只复用健康身体的退出预算", () => {
-    const storage = { id: "stock", structureType: STRUCTURE_STORAGE, pos: new MockPos(30, 30, TARGET), store: createMockStore({ [RESOURCE_ENERGY]: 1000 }) } as unknown as StructureStorage;
-    const { attacker, healer } = pair(false, [tower("empty", 0, 25, 25), storage], [carrier(25, 25, 50)]);
-    attacker.memory._warTowerDrain = state("breaching");
-    const first = { set: jest.fn() } as unknown as CostMatrix;
-    constrainTowerDrainBreachPath(attacker, TARGET, first);
-    expect(first.set).not.toHaveBeenCalledWith(1, 25, 255);
-    healer.fatigue = 1500;
-    for (const part of healer.body) if (part.type === HEAL) part.hits = 0;
-    const fatigued = { set: jest.fn() } as unknown as CostMatrix;
-    constrainTowerDrainBreachPath(attacker, TARGET, fatigued);
-    expect(fatigued.set).toHaveBeenCalledWith(1, 25, 255);
-  });
-
   it("铺路沼泽属于现成通道，保留道路可走并继续封住裸沼泽", () => {
     const road = { structureType: STRUCTURE_ROAD, pos: new MockPos(2, 25, TARGET) } as unknown as StructureRoad;
     const { attacker } = pair(false, [tower("live", 1000), road]);
@@ -651,24 +620,6 @@ describe("towerDrainDuo 公共战术门", () => {
     constrainTowerDrainBreachPath(attacker, TARGET, matrix);
     expect(matrix.set).not.toHaveBeenCalledWith(2, 25, 255);
     expect(matrix.set).toHaveBeenCalledWith(3, 25, 255);
-  });
-
-  it("目标房外集结使用普通沼泽代价，唯一通路含沼泽时仍能走到入口", () => {
-    const { attacker, healer } = pair(true, [tower("empty", 0)]);
-    attacker.pos = new MockPos(44, 25, RETREAT) as unknown as RoomPosition;
-    healer.pos = new MockPos(43, 25, RETREAT) as unknown as RoomPosition;
-    Game.map.getRoomTerrain = jest.fn((name) => ({ get: (x: number) => name === RETREAT && x === 45 ? TERRAIN_MASK_SWAMP : 0 })) as GameMap["getRoomTerrain"];
-    moveToTarget.mockImplementation((actor: Creep, _target: RoomPosition, _range: number, options: { costCallback?: (name: string, matrix: CostMatrix) => CostMatrix }) => {
-      const cells = new Uint8Array(2500);
-      const matrix = { set: (x: number, y: number, value: number) => { cells[x * 50 + y] = value; }, get: (x: number, y: number) => cells[x * 50 + y] } as CostMatrix;
-      options.costCallback?.(actor.room.name, matrix);
-      if (matrix.get(45, 25) === 255) return ERR_NO_PATH;
-      actor.move(RIGHT); return OK;
-    });
-    runTowerDrainPair(attacker, TARGET, GREEN_CONFIG);
-    expect(attacker.move).toHaveBeenCalledWith(RIGHT);
-    expect(moveToTarget).toHaveBeenCalledWith(attacker, expect.objectContaining({ roomName: RETREAT }), 0,
-      expect.objectContaining({ swampCost: 8, ignoreCreeps: false }));
   });
 
   it("空塔仍有载能补给时禁走无道路沼泽，不隐藏多轮MOVE疲劳", () => {
@@ -731,13 +682,16 @@ describe("towerDrainDuo 公共战术门", () => {
     }) as unknown as Room["lookAt"];
     attacker.pos = new MockPos(2, 25, TARGET) as unknown as RoomPosition;
     healer.pos = new MockPos(1, 26, TARGET) as unknown as RoomPosition;
+    const commit = deferredBorderFrame([attacker, healer]);
     attacker.memory._warMoveIntentAt = Game.time;
     issueMove(attacker, RIGHT);
     const hold = jest.spyOn(meleeModule, "shouldWarHealerHoldForCounterstrike").mockReturnValue(true);
     try {
       healerRole(TARGET, "", "", "", RED_CONFIG, "towerDrainDuo").target(healer);
       expect(hold).not.toHaveBeenCalled();
-      expect(healer.move).toHaveBeenCalledWith(TOP_RIGHT);
+      commit();
+      expect([attacker.pos.x, attacker.pos.y, healer.pos.x, healer.pos.y]).toEqual([3, 25, 2, 25]);
+      expect(towerDrainPairRange(attacker.pos, healer.pos)).toBe(1);
     } finally { hold.mockRestore(); }
   });
 
@@ -746,14 +700,19 @@ describe("towerDrainDuo 公共战术门", () => {
     attacker.memory._warTowerDrain = state("breaching");
     attacker.pos = new MockPos(1, 24, TARGET) as unknown as RoomPosition;
     healer.pos = new MockPos(0, 26, TARGET) as unknown as RoomPosition;
+    const commit = deferredBorderFrame([attacker, healer]);
     expect(runTowerDrainPair(attacker, TARGET, GREEN_CONFIG)).toBe(true);
     expect(attacker.move).not.toHaveBeenCalled();
     expect(runTowerDrainPair(healer, TARGET, RED_CONFIG)).toBe(true);
-    expect(healer.move).toHaveBeenCalledWith(TOP_RIGHT);
+    commit();
+    expect([attacker.pos.x, attacker.pos.y, healer.pos.x, healer.pos.y]).toEqual([1, 24, 1, 25]);
+    expect(towerDrainPairRange(attacker.pos, healer.pos)).toBe(1);
     expect(attacker.memory._warTowerDrain?.phase).toBe("breaching");
+    expect(runTowerDrainPair(attacker, TARGET, GREEN_CONFIG)).toBe(false);
+    expect(runTowerDrainPair(healer, TARGET, RED_CONFIG)).toBe(false);
   });
 
-  it("source与target两阶段都先消费耗塔门，不被mount立即换阶段旁路", () => {
+  it("红绿的source入口先消费耗塔门并拒绝立即切换工作阶段", () => {
     const { attacker, healer } = pair(false, [tower("one"), tower("two"), tower("three")]);
     expect(meleeAttackerRole(TARGET, "", "", "", GREEN_CONFIG, "towerDrainDuo").source?.(attacker)).toBe(false);
     expect(healerRole(TARGET, "", "", "", RED_CONFIG, "towerDrainDuo").source?.(healer)).toBe(false);

@@ -1,277 +1,207 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
-import { createRequire } from "node:module";
-import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import integrityGuard from "./lib/testIntegrityGuard.cjs";
 
-const require = createRequire(import.meta.url);
-const ts = require("typescript");
+const { compareFileSets, isTestFile, scanForbiddenJestCalls, validateResults } = integrityGuard;
+
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const manifestPath = path.join(repoRoot, "test", "test-suite-budget.json");
 const jestEntrypoint = path.join(repoRoot, "node_modules", "jest", "bin", "jest.js");
-const ignoredDirectories = new Set([".git", ".worktrees", "dist", "monitor-data", "node_modules"]);
-const requiredBaselineCommit = "c3284cb";
-const requiredTarget = Object.freeze({
-  suites: 193,
-  tests: 683,
-  passed: 683,
-  failed: 0,
-  pending: 0,
-  todo: 0
-});
-const requiredProtectedFiles = Object.freeze([
-  "src/main.test.ts",
-  "src/movement/routing.segmentCache.test.ts",
-  "src/runtime/bootstrapArchitecture.test.ts",
-  "src/runtime/externalTelemetry.test.ts",
-  "src/runtime/linkNetworkMemoryOwnership.test.ts",
-  "src/runtime/marketWriteArchitecture.test.ts",
-  "test/ambientGlobalAbiBoundaries.test.ts",
-  "test/localDispatchArchitectureBoundaries.test.ts",
-  "test/localDispatchPerformanceBaseline.test.ts",
-  "test/memoryDeclarationBoundaries.test.ts",
-  "test/roleIdentityCatalogBoundaries.test.ts",
-  "test/taskSystemArchitectureBoundaries.test.ts",
-  "test/taskSystemCatalogBoundaries.test.ts",
-  "test/typescriptConfigBoundaries.test.ts",
-  "test/warWorkflowLifecycleBoundaries.test.ts"
-]);
-const forbiddenJestModifiers = new Set(["failing", "only", "skip", "todo"]);
-const forbiddenJestAliases = new Set(["fdescribe", "fit", "xdescribe", "xit", "xtest"]);
-const jestRoots = new Set(["describe", "it", "test"]);
+const schema = "screeps-jest-integrity/v1";
+const listArgs = ["--config", "jest.config.cjs", "--listTests", "--json"];
+const errors = [];
 
-function normalizeRelative(filePath) {
-  return path.relative(repoRoot, filePath).split(path.sep).join("/");
-}
-
-function sorted(values) {
-  return [...values].sort((left, right) => left.localeCompare(right));
-}
-
-function compareFileSets(label, expected, actual, errors) {
-  const expectedSet = new Set(expected);
-  const actualSet = new Set(actual);
-  const missing = sorted([...expectedSet].filter(file => !actualSet.has(file)));
-  const unexpected = sorted([...actualSet].filter(file => !expectedSet.has(file)));
-  if (missing.length > 0 || unexpected.length > 0) {
-    errors.push(`${label}: missing=${JSON.stringify(missing)} unexpected=${JSON.stringify(unexpected)}`);
+function parseArguments(args) {
+  const options = {};
+  for (let index = 0; index < args.length; index += 1) {
+    const flag = args[index];
+    if (flag === "--help") return { help: true };
+    if (flag !== "--output-dir" && flag !== "--results") throw new Error(`Unknown argument ${flag}; Jest filters are not accepted`);
+    const value = args[++index];
+    if (!value || value.startsWith("--") || options[flag]) throw new Error(`Expected one value for ${flag}`);
+    options[flag] = path.resolve(value);
   }
+  if (options["--output-dir"] && options["--results"]) throw new Error("--output-dir and --results cannot be combined");
+  return options;
 }
 
-function discoverRepositoryTests(directory = repoRoot, results = []) {
-  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
-    if (entry.isDirectory()) {
-      if (!ignoredDirectories.has(entry.name)) {
-        discoverRepositoryTests(path.join(directory, entry.name), results);
-      }
-      continue;
-    }
-    if (entry.isFile() && /\.test\.(?:ts|tsx|js|jsx)$/.test(entry.name)) {
-      results.push(normalizeRelative(path.join(directory, entry.name)));
-    }
-  }
-  return results;
+function git(args) {
+  return execFileSync("git", args, { cwd: repoRoot, encoding: "utf8", maxBuffer: 32 * 1024 * 1024 });
 }
 
-function readBaselineTestFiles() {
-  return sorted(execFileSync("git", ["ls-tree", "-r", "--name-only", requiredBaselineCommit], {
-    cwd: repoRoot,
-    encoding: "utf8"
-  }).split("\n").filter(file => /\.test\.(?:ts|tsx|js|jsx)$/.test(file)));
-}
-
-function hash(value) {
+function digest(value) {
   return createHash("sha256").update(value).digest("hex");
 }
 
-function expressionChain(expression) {
-  if (ts.isIdentifier(expression)) return [expression.text];
-  if (ts.isPropertyAccessExpression(expression)) {
-    const parent = expressionChain(expression.expression);
-    return parent ? [...parent, expression.name.text] : null;
+function sourceIdentity() {
+  const inputFiles = git(["ls-files", "--cached", "--others", "--exclude-standard", "-z"])
+    .split("\0").filter(Boolean).sort();
+  const hash = createHash("sha256");
+  for (const file of inputFiles) {
+    hash.update(`${file}\0`);
+    const absolute = path.join(repoRoot, file);
+    if (!fs.existsSync(absolute)) {
+      hash.update("missing\0");
+      continue;
+    }
+    hash.update(fs.readFileSync(absolute));
+    hash.update("\0");
   }
-  if (ts.isElementAccessExpression(expression) && expression.argumentExpression && ts.isStringLiteralLike(expression.argumentExpression)) {
-    const parent = expressionChain(expression.expression);
-    return parent ? [...parent, expression.argumentExpression.text] : null;
-  }
-  if (ts.isCallExpression(expression)) return expressionChain(expression.expression);
-  if (ts.isTaggedTemplateExpression(expression)) return expressionChain(expression.tag);
-  return null;
+  return { commit: git(["rev-parse", "HEAD"]).trim(), workspaceSha256: hash.digest("hex") };
 }
 
-function scanForbiddenJestCalls(file, errors) {
-  const absolutePath = path.join(repoRoot, file);
-  const sourceText = fs.readFileSync(absolutePath, "utf8");
-  const scriptKind = file.endsWith(".tsx")
-    ? ts.ScriptKind.TSX
-    : file.endsWith(".jsx")
-      ? ts.ScriptKind.JSX
-      : file.endsWith(".js")
-        ? ts.ScriptKind.JS
-        : ts.ScriptKind.TS;
-  const sourceFile = ts.createSourceFile(file, sourceText, ts.ScriptTarget.Latest, true, scriptKind);
-  const findings = new Set();
-  function recordChain(node, chain) {
-    if (!chain) return;
-    const [root, ...members] = chain;
-    if (forbiddenJestAliases.has(root) || (jestRoots.has(root) && members.some(member => forbiddenJestModifiers.has(member)))) {
-      const position = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile));
-      findings.add(`${file}:${position.line + 1}:${position.character + 1} ${chain.join(".")}`);
+function discoverDiskTests(directory = repoRoot, results = []) {
+  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+    if (entry.name === ".git" || entry.name === "node_modules") continue;
+    const absolute = path.join(directory, entry.name);
+    if (entry.isDirectory()) discoverDiskTests(absolute, results);
+    else if (entry.isFile()) {
+      const relative = path.relative(repoRoot, absolute).split(path.sep).join("/");
+      if (isTestFile(relative)) results.push(relative);
     }
   }
-  function visit(node) {
-    if (ts.isCallExpression(node)) {
-      const chain = expressionChain(node.expression);
-      recordChain(node, chain);
-    } else if (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) {
-      recordChain(node, expressionChain(node));
+  return results.sort();
+}
+
+function normalizeTestPath(file, originalRoot = repoRoot) {
+  return path.relative(originalRoot, path.resolve(originalRoot, file)).split(path.sep).join("/");
+}
+
+function readJson(file) {
+  return JSON.parse(fs.readFileSync(file, "utf8"));
+}
+
+function writeJson(file, value) {
+  fs.writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+function checkOutputDirectory(directory) {
+  const relative = path.relative(repoRoot, directory);
+  if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) return;
+  const ignored = spawnSync("git", ["check-ignore", "--no-index", "-q", "--", `${relative}/`], { cwd: repoRoot });
+  if (!relative || ignored.status !== 0) throw new Error("Output directory must be outside the repository or Git-ignored, so artifacts do not change the input fingerprint");
+}
+
+function runJest(args, outputDirectory, prefix) {
+  const stdout = fs.openSync(path.join(outputDirectory, `${prefix}.stdout.log`), "wx");
+  const stderr = fs.openSync(path.join(outputDirectory, `${prefix}.stderr.log`), "wx");
+  try {
+    const result = spawnSync(process.execPath, [jestEntrypoint, ...args], {
+      cwd: repoRoot, stdio: ["ignore", stdout, stderr],
+    });
+    return { status: result.status, signal: result.signal, error: result.error?.message };
+  } finally {
+    fs.closeSync(stdout);
+    fs.closeSync(stderr);
+  }
+}
+
+function verifyArtifacts(resultsPath, currentIdentity, trackedTests, diskTests) {
+  const directory = path.dirname(resultsPath);
+  const metadata = readJson(path.join(directory, "execution.json"));
+  if (metadata.schema !== schema) errors.push("Unsupported or missing integrity artifact schema");
+  for (const field of ["commit", "workspaceSha256"]) {
+    if (metadata.sourceBefore?.[field] !== currentIdentity[field]
+      || metadata.sourceAfter?.[field] !== currentIdentity[field]) {
+      errors.push(`Artifact source ${field} does not match the current working tree`);
     }
-    ts.forEachChild(node, visit);
   }
-  visit(sourceFile);
-  for (const finding of findings) errors.push(`forbidden Jest modifier: ${finding}`);
-}
-
-function runJest(args, options = {}) {
-  return spawnSync(process.execPath, [jestEntrypoint, "--config", "jest.config.cjs", ...args], {
-    cwd: repoRoot,
-    encoding: "utf8",
-    ...options
-  });
-}
-
-const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
-if (manifest.schema !== "screeps-jest-test-budget/v1") {
-  throw new Error(`Unsupported test budget schema: ${String(manifest.schema)}`);
-}
-
-const manifestFiles = sorted(Object.keys(manifest.files));
-const manifestBudget = Object.values(manifest.files)
-  .reduce((sum, entry) => sum + Number(entry.budget || 0), 0);
-const errors = [];
-
-if (manifest.baseline?.commit !== requiredBaselineCommit) {
-  errors.push(`manifest baseline commit ${String(manifest.baseline?.commit)} != required ${requiredBaselineCommit}`);
-}
-for (const [field, expected] of Object.entries(requiredTarget)) {
-  if (manifest.target?.[field] !== expected) {
-    errors.push(`manifest target ${field} ${String(manifest.target?.[field])} != required ${expected}`);
+  const expectedRunArgs = ["--config", "jest.config.cjs", "--runInBand", "--json", `--outputFile=${metadata.resultsPath}`];
+  if (JSON.stringify(metadata.listArgs) !== JSON.stringify(listArgs)
+    || JSON.stringify(metadata.runArgs) !== JSON.stringify(expectedRunArgs)) {
+    errors.push("Artifact commands were not the unfiltered full Jest commands");
   }
-}
-if (manifestFiles.length !== requiredTarget.suites) {
-  errors.push(`manifest suite total ${manifestFiles.length} != required ${requiredTarget.suites}`);
-}
-if (manifestBudget !== requiredTarget.tests) {
-  errors.push(`manifest test total ${manifestBudget} != required ${requiredTarget.tests}`);
-}
-for (const [file, entry] of Object.entries(manifest.files)) {
-  if (!Number.isInteger(entry.budget) || entry.budget < 1) {
-    errors.push(`${file}: invalid budget ${String(entry.budget)}`);
+  if (metadata.discoveryRun?.status !== 0 || metadata.testRun?.status !== 0
+    || metadata.discoveryRun?.signal || metadata.testRun?.signal
+    || metadata.discoveryRun?.error || metadata.testRun?.error) {
+    errors.push("Artifact Jest discovery or full run did not exit successfully");
   }
-}
-for (const file of requiredProtectedFiles) {
-  if (manifest.files[file]?.tier !== "protected-full") {
-    errors.push(`${file}: required protected-full tier is missing`);
-    continue;
+  const discoveryText = fs.readFileSync(path.join(directory, "discovered-tests.json"), "utf8");
+  const resultsText = fs.readFileSync(resultsPath, "utf8");
+  if (digest(discoveryText) !== metadata.discoverySha256 || digest(resultsText) !== metadata.resultsSha256) {
+    errors.push("Raw discovery/results digest differs from the recorded run");
   }
-  const current = fs.readFileSync(path.join(repoRoot, file));
-  const baseline = execFileSync("git", ["show", `${requiredBaselineCommit}:${file}`], {
-    cwd: repoRoot
-  });
-  if (hash(current) !== hash(baseline)) {
-    errors.push(`${file}: protected content differs from ${requiredBaselineCommit}`);
-  }
+  const listed = JSON.parse(discoveryText);
+  if (!Array.isArray(listed) || listed.some(file => typeof file !== "string")) throw new Error("Jest discovery must be an array of file paths");
+  const listedTests = listed.map(file => normalizeTestPath(file, metadata.repoRoot));
+  const results = JSON.parse(resultsText);
+  errors.push(...compareFileSets("tracked vs disk", trackedTests, diskTests));
+  errors.push(...compareFileSets("tracked vs Jest discovery", trackedTests, listedTests));
+  errors.push(...validateResults(trackedTests, results, file => normalizeTestPath(file, metadata.repoRoot)));
+  return { suites: results.numTotalTestSuites, cases: results.numTotalTests };
 }
 
-const repositoryTests = sorted(discoverRepositoryTests());
-const baselineTests = readBaselineTestFiles();
-compareFileSets(`repository vs ${requiredBaselineCommit}`, baselineTests, repositoryTests, errors);
-compareFileSets(`manifest vs ${requiredBaselineCommit}`, baselineTests, manifestFiles, errors);
-compareFileSets("repository vs manifest", manifestFiles, repositoryTests, errors);
-for (const file of repositoryTests) scanForbiddenJestCalls(file, errors);
-
-const listRun = runJest(["--listTests", "--json"]);
-if (listRun.status !== 0) {
-  errors.push(`jest --listTests exited ${String(listRun.status)}: ${listRun.stderr.trim()}`);
+function main() {
+  const options = parseArguments(process.argv.slice(2));
+  if (options.help) {
+    console.log("Usage: npm run test:verify -- [--output-dir DIRECTORY | --results DIRECTORY/results.json]");
+    console.log("Runs one unfiltered full Jest suite and preserves logs. --results only rechecks that run and its source-bound sidecars.");
+    return;
+  }
+  const trackedFiles = git(["ls-files", "-z"]).split("\0").filter(Boolean).sort();
+  const trackedTests = trackedFiles.filter(isTestFile);
+  const diskTests = discoverDiskTests();
+  errors.push(...compareFileSets("tracked vs disk", trackedTests, diskTests));
+  if (trackedTests.length === 0) errors.push("The tracked test inventory is empty");
+  for (const file of diskTests) errors.push(...scanForbiddenJestCalls(file, fs.readFileSync(path.join(repoRoot, file), "utf8")));
+  const before = sourceIdentity();
+  let resultsPath = options["--results"];
+  let outputDirectory;
+  if (resultsPath) outputDirectory = path.dirname(resultsPath);
+  else {
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    outputDirectory = options["--output-dir"] || path.join(repoRoot, "monitor-data", "test-integrity", `${stamp}-${process.pid}`);
+    checkOutputDirectory(outputDirectory);
+    fs.mkdirSync(path.dirname(outputDirectory), { recursive: true });
+    fs.mkdirSync(outputDirectory);
+    resultsPath = path.join(outputDirectory, "results.json");
+  }
+  console.log(`JEST_TEST_INTEGRITY_ARTIFACTS=${outputDirectory}`);
+  let counts;
+  if (errors.length === 0 && !options["--results"]) {
+    const discoveryRun = runJest(listArgs, outputDirectory, "discovery");
+    const discoveryText = fs.readFileSync(path.join(outputDirectory, "discovery.stdout.log"), "utf8");
+    fs.writeFileSync(path.join(outputDirectory, "discovered-tests.json"), discoveryText);
+    try {
+      const listed = JSON.parse(discoveryText);
+      if (!Array.isArray(listed) || listed.some(file => typeof file !== "string")) throw new Error("Expected a path array");
+      errors.push(...compareFileSets("tracked vs Jest discovery", trackedTests, listed.map(file => normalizeTestPath(file))));
+    } catch (error) {
+      errors.push(`Cannot parse Jest discovery: ${error.message}`);
+    }
+    if (discoveryRun.status !== 0 || discoveryRun.signal || discoveryRun.error) errors.push("Jest discovery did not exit successfully; see discovery.stderr.log");
+    if (errors.length === 0) {
+      const runArgs = ["--config", "jest.config.cjs", "--runInBand", "--json", `--outputFile=${resultsPath}`];
+      const testRun = runJest(runArgs, outputDirectory, "jest");
+      writeJson(path.join(outputDirectory, "execution.json"), {
+        schema, repoRoot, resultsPath, nodeVersion: process.version,
+        sourceBefore: before, sourceAfter: sourceIdentity(),
+        listArgs, runArgs, discoveryRun, testRun,
+        discoverySha256: digest(discoveryText),
+        resultsSha256: fs.existsSync(resultsPath) ? digest(fs.readFileSync(resultsPath)) : null,
+      });
+      if (!fs.existsSync(resultsPath)) errors.push("Jest did not write results.json; see jest.stderr.log");
+    }
+  }
+  if (errors.length === 0) {
+    const currentTests = git(["ls-files", "-z"]).split("\0").filter(isTestFile).sort();
+    counts = verifyArtifacts(resultsPath, sourceIdentity(), currentTests, discoverDiskTests());
+  }
+  const report = {
+    status: errors.length ? "JEST_TEST_INTEGRITY=FAILED" : "JEST_TEST_INTEGRITY=PASSED",
+    mode: options["--results"] ? "verify-existing" : "run-full",
+    source: before, resultsPath, ...counts, errors,
+  };
+  writeJson(path.join(outputDirectory, options["--results"] ? "reverification.json" : "verification.json"), report);
+  console.log(JSON.stringify(report));
+  if (errors.length) process.exitCode = 1;
 }
-let listedTests = [];
+
 try {
-  listedTests = sorted(JSON.parse(listRun.stdout || "[]").map(normalizeRelative));
+  main();
 } catch (error) {
-  errors.push(`unable to parse jest --listTests JSON: ${error instanceof Error ? error.message : String(error)}`);
-}
-compareFileSets("jest discovery vs manifest", manifestFiles, listedTests, errors);
-
-const temporaryDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "screeps-jest-budget-"));
-const resultsPath = path.join(temporaryDirectory, "results.json");
-let testRun;
-let results;
-try {
-  testRun = runJest(["--runInBand", "--json", `--outputFile=${resultsPath}`], {
-    stdio: ["ignore", "inherit", "inherit"]
-  });
-  if (!fs.existsSync(resultsPath)) {
-    errors.push(`Jest did not write ${resultsPath}`);
-  } else {
-    results = JSON.parse(fs.readFileSync(resultsPath, "utf8"));
-  }
-} finally {
-  fs.rmSync(temporaryDirectory, { recursive: true, force: true });
-}
-
-if (testRun?.status !== 0) {
-  errors.push(`full Jest exited ${String(testRun?.status)}`);
-}
-
-if (results) {
-  const summaryChecks = [
-    ["numTotalTestSuites", requiredTarget.suites],
-    ["numPassedTestSuites", requiredTarget.suites],
-    ["numFailedTestSuites", 0],
-    ["numPendingTestSuites", 0],
-    ["numRuntimeErrorTestSuites", 0],
-    ["numTotalTests", requiredTarget.tests],
-    ["numPassedTests", requiredTarget.passed],
-    ["numFailedTests", requiredTarget.failed],
-    ["numPendingTests", requiredTarget.pending],
-    ["numTodoTests", requiredTarget.todo]
-  ];
-  for (const [field, expected] of summaryChecks) {
-    if (results[field] !== expected) {
-      errors.push(`${field} ${String(results[field])} != ${String(expected)}`);
-    }
-  }
-
-  const resultFiles = sorted(results.testResults.map(result => normalizeRelative(result.name)));
-  compareFileSets("Jest results vs manifest", manifestFiles, resultFiles, errors);
-
-  for (const result of results.testResults) {
-    const file = normalizeRelative(result.name);
-    const budget = manifest.files[file]?.budget;
-    const assertions = result.assertionResults || [];
-    if (assertions.length !== budget) {
-      errors.push(`${file}: actual ${assertions.length} != budget ${String(budget)}`);
-    }
-    const nonPassed = assertions.filter(assertion => assertion.status !== "passed");
-    if (nonPassed.length > 0) {
-      errors.push(`${file}: ${nonPassed.length} assertions were not passed`);
-    }
-  }
-}
-
-if (errors.length > 0) {
-  console.error("JEST_TEST_BUDGET=FAILED");
-  for (const error of errors) {
-    console.error(`- ${error}`);
-  }
+  console.error(`JEST_TEST_INTEGRITY=FAILED: ${error.stack || error}`);
   process.exitCode = 1;
-} else {
-  console.log(JSON.stringify({
-    status: "JEST_TEST_BUDGET=PASSED",
-    suites: requiredTarget.suites,
-    tests: requiredTarget.tests,
-    manifest: normalizeRelative(manifestPath)
-  }));
 }

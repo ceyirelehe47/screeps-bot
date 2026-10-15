@@ -58,15 +58,18 @@ function calls(order: "attacker-first" | "healer-first"): void {
 }
 /** 原生意图仅入队；角色执行期间 Game.pos 始终是帧初状态。 */
 function commitFrame(): void {
-  // 按已读取 Engine 4.3 movement.add + creeps/tick 重现；不调用被测 receipt 几何。
+  // 原生 creeps/move 先整步拒绝越界，creeps/tick 再从最终原房坐标处理出口；
+  // 独立计算，不调用被测 receipt 几何。
   const offsets: Record<DirectionConstant, readonly [number, number]> = {
     [TOP]: [0, -1], [TOP_RIGHT]: [1, -1], [RIGHT]: [1, 0], [BOTTOM_RIGHT]: [1, 1],
     [BOTTOM]: [0, 1], [BOTTOM_LEFT]: [-1, 1], [LEFT]: [-1, 0], [TOP_LEFT]: [-1, -1],
   };
   const destinations = Object.values(Game.creeps).map((creep) => {
     const delta = pending.has(creep) ? offsets[pending.get(creep)!] : [0, 0];
-    let x = Math.max(0, Math.min(49, creep.pos.x + delta[0]));
-    let y = Math.max(0, Math.min(49, creep.pos.y + delta[1]));
+    const proposedX = creep.pos.x + delta[0], proposedY = creep.pos.y + delta[1];
+    const rejected = proposedX < 0 || proposedX > 49 || proposedY < 0 || proposedY > 49;
+    let x = rejected ? creep.pos.x : proposedX;
+    let y = rejected ? creep.pos.y : proposedY;
     let roomName = creep.pos.roomName;
     const exit = x === 0 ? LEFT : y === 0 ? TOP : x === 49 ? RIGHT : y === 49 ? BOTTOM : undefined;
     if (exit !== undefined) {
@@ -137,6 +140,16 @@ beforeEach(() => {
 });
 
 describe("PowerBank same-frame pair movement", () => {
+  it("越界斜步不保留任一位移分量，receipt 与原生原边界迁房坐标一致", () => {
+    place(attacker, 0, 25, TARGET); place(healer, 0, 26, TARGET);
+    expect(issueMove(attacker, TOP_LEFT)).toBe(OK);
+    const receipt = getMoveIntentReceipt(attacker)!;
+    expect(receipt.attempted).toEqual({ x: 0, y: 25, roomName: TARGET });
+    expect(receipt.to).toEqual({ x: 49, y: 25, roomName: SOURCE });
+    commitFrame();
+    expect(position(attacker)).toEqual(receipt.to);
+    expect(position(healer)).toEqual({ x: 49, y: 26, roomName: SOURCE });
+  });
   it("同tick斜向出口候选共享格查询，source/target重复调用保持相同一组移动", () => {
     place(attacker, 48, 17); place(healer, 48, 18);
     walls.add(`${SOURCE}:49:19`); walls.add(`${TARGET}:0:19`); routeDirection = BOTTOM_RIGHT;

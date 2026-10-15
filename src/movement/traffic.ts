@@ -120,7 +120,7 @@ export interface MoveIntentReceipt {
   readonly actorId: string;
   readonly direction: DirectionConstant;
   readonly from: Readonly<{ x: number; y: number; roomName: string }>;
-  /** Engine movement.add clamp 后的原房目的格。 */
+  /** 引擎原房坐标估计；任一轴越界时整步忽略，保留原坐标。 */
   readonly attempted: Readonly<{ x: number; y: number; roomName: string }> | null;
   /** 可达出口迁房后的预期格；仅证明提交，实际碰撞/accessibleRooms 仍以下 tick 为准。 */
   readonly to: Readonly<{ x: number; y: number; roomName: string }> | null;
@@ -169,11 +169,12 @@ export function getMoveIntentAttemptedPosition(
 ): Readonly<{ x: number; y: number; roomName: string }> | null {
   const offset = MOVE_RECEIPT_OFFSETS[direction];
   if (!offset) return null;
-  // Engine 4.3 movement.add 对越界坐标 clamp；creeps/tick 在 movement.execute
-  // 后立即处理边缘。因此 48→49 本帧已迁房，入口 0→同列也可能退回原房。
+  const x = pos.x + offset[0], y = pos.y + offset[1];
+  // 普通/PowerCreep 共用 creeps/move：任一轴越界就忽略整步，不能保留另一轴位移。
+  const rejected = x < 0 || x > 49 || y < 0 || y > 49;
   return Object.freeze({
-    x: Math.max(0, Math.min(49, pos.x + offset[0])),
-    y: Math.max(0, Math.min(49, pos.y + offset[1])),
+    x: rejected ? pos.x : x,
+    y: rejected ? pos.y : y,
     roomName: pos.roomName,
   });
 }
@@ -182,6 +183,7 @@ export function getMoveIntentDestination(
   pos: Pick<RoomPosition, "x" | "y" | "roomName">,
   direction: DirectionConstant,
 ): Readonly<{ x: number; y: number; roomName: string }> | null {
+  // tick 在移动后独立处理边缘；被忽略的越界 move 仍可能从原坐标迁房。
   const attempted = getMoveIntentAttemptedPosition(pos, direction);
   if (!attempted) return null;
   const { x, y, roomName } = attempted;

@@ -1,6 +1,6 @@
 {
   "name": "screeps",
-  "version": "2026.10.15-3",
+  "version": "2026.10.15-4",
   "description": "Screeps local development workspace",
   "main": "dist/main.js",
   "scripts": {
@@ -15,7 +15,9 @@
     "monitor:once": "node scripts/monitor-service.mjs --once",
     "test": "jest --config jest.config.cjs",
     "test:budget": "node scripts/verify-jest-budget.mjs",
-    "test-c": "jest --config jest.config.cjs --coverage"
+    "test:verify": "node scripts/verify-jest-budget.mjs",
+    "test-c": "jest --config jest.config.cjs --coverage",
+    "monitor:inspect": "node scripts/monitor-inspect.mjs"
   },
   "keywords": [],
   "author": "",
