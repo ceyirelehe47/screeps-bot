@@ -1,0 +1,392 @@
+{
+  "schema": "screeps-cpu-patrol-release-evidence/v1",
+  "generatedAt": "2026-10-15T10:11:56.921Z",
+  "release": {
+    "version": "2026.10.15-3",
+    "commit": "a5aa8e772a83a47cc70ac2d4b05300e055c0ee34",
+    "tree": "45e47a55e3fe2442d3ce65649a3d9a72e8f97f11",
+    "tag": "2026.10.15-3+a5aa8e7@2026-10-15T09:36:52.191Z",
+    "mainBytes": 3687343,
+    "mainSha256": "e7d1de05566abfcd12b73ddce51b47cde7355e0df28ef9a3821306d183813e63",
+    "payloadSha256": "2cf591a6e0aaf43d2d64fa8b950695c176271376bdd1980a3a0a740f59ff655b",
+    "readbackAt": "2026-10-15T09:41:39.922Z",
+    "readbackMatched": true
+  },
+  "validation": {
+    "executionHost": "dsh",
+    "stages": [
+      {
+        "stage": "movement-focused",
+        "exitCode": 0,
+        "durationMs": 17639.544217,
+        "counts": {
+          "suites": 5,
+          "passedSuites": 5,
+          "failedSuites": 0,
+          "tests": 152,
+          "passed": 152,
+          "failed": 0,
+          "pending": 0,
+          "todo": 0
+        }
+      },
+      {
+        "stage": "typecheck",
+        "exitCode": 0,
+        "durationMs": 50160.526332
+      },
+      {
+        "stage": "list-tests",
+        "exitCode": 0,
+        "durationMs": 1058.488652
+      },
+      {
+        "stage": "discovery-audit",
+        "exitCode": 0,
+        "durationMs": 2108.786243
+      },
+      {
+        "stage": "full-jest",
+        "exitCode": 0,
+        "durationMs": 543266.480763,
+        "counts": {
+          "suites": 254,
+          "passedSuites": 254,
+          "failedSuites": 0,
+          "tests": 1897,
+          "passed": 1897,
+          "failed": 0,
+          "pending": 0,
+          "todo": 0
+        }
+      },
+      {
+        "stage": "full-jest-evidence",
+        "exitCode": 0,
+        "durationMs": 2082.986099
+      },
+      {
+        "stage": "build",
+        "exitCode": 0,
+        "durationMs": 55138.700141
+      }
+    ],
+    "staleLegacyBudgetPassed": false
+  },
+  "cpu": {
+    "detailedSamples": [
+      {
+        "tick": 74347994,
+        "bucket": 136,
+        "mainCpu": 113.41836560000002,
+        "managerCpu": 0.4677153000002363,
+        "worldProofCpu": null,
+        "nativePathFinderCpu": null
+      },
+      {
+        "tick": 74348001,
+        "bucket": 221,
+        "mainCpu": 73.38655640000025,
+        "managerCpu": 0.27815450000070996,
+        "worldProofCpu": null,
+        "nativePathFinderCpu": null
+      },
+      {
+        "tick": 74348008,
+        "bucket": 315,
+        "mainCpu": 82.73838039999919,
+        "managerCpu": 0.2603198000001612,
+        "worldProofCpu": null,
+        "nativePathFinderCpu": null
+      },
+      {
+        "tick": 74348015,
+        "bucket": 462,
+        "mainCpu": 88.49011120000068,
+        "managerCpu": 0.2565693000005922,
+        "worldProofCpu": null,
+        "nativePathFinderCpu": null
+      },
+      {
+        "tick": 74348022,
+        "bucket": 490,
+        "mainCpu": 121.00261249999949,
+        "managerCpu": 0.3109171000005517,
+        "worldProofCpu": null,
+        "nativePathFinderCpu": null
+      },
+      {
+        "tick": 74348029,
+        "bucket": 454,
+        "mainCpu": 110.62932700000056,
+        "managerCpu": 0.3094598000006954,
+        "worldProofCpu": null,
+        "nativePathFinderCpu": null
+      },
+      {
+        "tick": 74348043,
+        "bucket": 852,
+        "mainCpu": 108.82224940000015,
+        "managerCpu": 0.2905448000001343,
+        "worldProofCpu": null,
+        "nativePathFinderCpu": null
+      },
+      {
+        "tick": 74348050,
+        "bucket": 891,
+        "mainCpu": 136.80522870000095,
+        "managerCpu": 0.3013295999971888,
+        "worldProofCpu": null,
+        "nativePathFinderCpu": null
+      },
+      {
+        "tick": 74348106,
+        "bucket": 1828,
+        "mainCpu": 125.31813619999957,
+        "managerCpu": 0.3244890999994823,
+        "worldProofCpu": null,
+        "nativePathFinderCpu": null
+      },
+      {
+        "tick": 74348113,
+        "bucket": 1894,
+        "mainCpu": 81.9611958999958,
+        "managerCpu": 0.39879060000021127,
+        "worldProofCpu": null,
+        "nativePathFinderCpu": null
+      },
+      {
+        "tick": 74348120,
+        "bucket": 2002,
+        "mainCpu": 109.82057859999986,
+        "managerCpu": 11.531544699999358,
+        "worldProofCpu": 0.2671161999969627,
+        "nativePathFinderCpu": 7.3302762000021175
+      },
+      {
+        "tick": 74348127,
+        "bucket": 2023,
+        "mainCpu": 114.5953929999996,
+        "managerCpu": 11.1808527999965,
+        "worldProofCpu": 0.15940080000291346,
+        "nativePathFinderCpu": 8.373985099999118
+      },
+      {
+        "tick": 74348134,
+        "bucket": 1937,
+        "mainCpu": 94.50180129999717,
+        "managerCpu": 0.2943291000010504,
+        "worldProofCpu": null,
+        "nativePathFinderCpu": null
+      },
+      {
+        "tick": 74348141,
+        "bucket": 2029,
+        "mainCpu": 99.27239719999852,
+        "managerCpu": 9.769568899995647,
+        "worldProofCpu": 0.19895850000102655,
+        "nativePathFinderCpu": 6.671822300002532
+      },
+      {
+        "tick": 74348148,
+        "bucket": 2056,
+        "mainCpu": 77.12190370000098,
+        "managerCpu": 9.403717699999106,
+        "worldProofCpu": 0.1770950999998604,
+        "nativePathFinderCpu": 7.04010709999784
+      },
+      {
+        "tick": 74348155,
+        "bucket": 2156,
+        "mainCpu": 89.19877450000422,
+        "managerCpu": 10.054231199999776,
+        "worldProofCpu": 0.21423480000157724,
+        "nativePathFinderCpu": 6.503351399998792
+      },
+      {
+        "tick": 74348253,
+        "bucket": 2895,
+        "mainCpu": 127.1668073999972,
+        "managerCpu": 23.59690579999733,
+        "worldProofCpu": 0.2699592999997549,
+        "nativePathFinderCpu": 20.155748599994695
+      },
+      {
+        "tick": 74348260,
+        "bucket": 2817,
+        "mainCpu": 78.20273630000156,
+        "managerCpu": 7.558140200009802,
+        "worldProofCpu": 0.1791282999984105,
+        "nativePathFinderCpu": 5.377739899995504
+      }
+    ],
+    "measuredSamples": 7,
+    "gatedSamples": 11,
+    "lastBucket": 2817,
+    "rolling": {
+      "samples": 40,
+      "mainCpu": 99.14626817500053,
+      "outerPhases": {
+        "creepWork": 39.435360942500694,
+        "marketSalePreflight": 13.029610034999507,
+        "powerBankObserver": 7.854404264999857,
+        "powerBankHarvest": 6.923764900000319,
+        "externalTelemetryExport": 3.6935661099999777,
+        "remoteMining": 3.288291012500281,
+        "marketSaleAutomation": 2.245265782500411
+      },
+      "note": "仅已flush样本，main不含startup与收尾。顶层阶段已包含子span，不能重复相加。nativePathFinderCpu为PathFinder.search调用含roomCallback。"
+    },
+    "initialErrors": {
+      "window": {
+        "firstEventAt": "2026-10-15T09:41:41.991Z",
+        "lastEventAt": "2026-10-15T09:49:49.230Z"
+      },
+      "classes": {
+        "cpuBucketEmpty": {
+          "events": 2,
+          "messages": 2,
+          "times": [
+            "2026-10-15T09:41:45.305Z",
+            "2026-10-15T09:41:51.810Z"
+          ]
+        },
+        "cpuTimeLimit": {
+          "events": 1,
+          "messages": 1,
+          "times": [
+            "2026-10-15T09:41:41.992Z"
+          ]
+        },
+        "jsExceptions": {
+          "events": 0,
+          "messages": 0,
+          "times": []
+        },
+        "otherRuntimeErrors": {
+          "events": 0,
+          "messages": 0,
+          "times": []
+        }
+      }
+    },
+    "steady": {
+      "window": {
+        "firstEventAt": "2026-10-15T09:42:33.708Z",
+        "lastEventAt": "2026-10-15T10:02:26.470Z"
+      },
+      "consoleEvents": 283,
+      "cpuEvents": 284,
+      "errors": {
+        "cpuBucketEmpty": {
+          "events": 0,
+          "messages": 0,
+          "times": []
+        },
+        "cpuTimeLimit": {
+          "events": 0,
+          "messages": 0,
+          "times": []
+        },
+        "jsExceptions": {
+          "events": 0,
+          "messages": 0,
+          "times": []
+        },
+        "otherRuntimeErrors": {
+          "events": 0,
+          "messages": 0,
+          "times": []
+        }
+      }
+    },
+    "operatorConfigurationChangedKeys": []
+  },
+  "patrol": {
+    "room": "E2N54",
+    "firstTick": 74348021,
+    "lastTick": 74348279,
+    "frames": 259,
+    "gaps": 0,
+    "separationViolations": 0,
+    "synchronousMovementFrames": 111,
+    "attacks": {
+      "frames": 89,
+      "enemyRampart": 65,
+      "enemyCreep": 24,
+      "neutralWall": 0,
+      "unknown": 0
+    },
+    "immediateTickABA": {
+      "red": 0,
+      "green": 0
+    },
+    "compressedMovementABA": {
+      "red": 0,
+      "green": 2
+    },
+    "roomClearCompleted": false,
+    "note": "保留两次治疗兵局部回访及战斗、转向、疲劳上下文。末帧仍剩一名敌carrier。"
+  },
+  "limitations": [
+    "自定义集成适配器不是官方游戏引擎。",
+    "部署初期首次中断的精确CPU耗时来源仍未证实。",
+    "账号socket未提供shard时，不将CPU数值归属为shard1专属。",
+    "不同线上版本工作量不同，本记录不是受控性能基准。"
+  ],
+  "evidenceInputs": [
+    {
+      "localPath": "/Users/forst/code/screeps/monitor-data/20261015-cpu-fix/release-manifest.json",
+      "sha256": "86f47363a490998cd76e2a8c077a19b1ea690524f2b82824cd3172c002b5aa08"
+    },
+    {
+      "localPath": "/Users/forst/code/screeps/monitor-data/20261015-cpu-fix/upload-verification.json",
+      "sha256": "6d143c10a3d2b52698e64542129e9f4dc561a4f1ee0a66f980671beb79820b76"
+    },
+    {
+      "localPath": "/Users/forst/code/screeps/monitor-data/20261015-cpu-fix/frozen/final-a5aa8e77/validation-summary.json",
+      "sha256": "fb53fd0949d636cc2a30eed53a43a4bf6ea0f448ca22f1c184a0a66108badc31"
+    },
+    {
+      "localPath": "/Users/forst/code/screeps/monitor-data/20261015-cpu-fix/postdeploy-console-cpu.jsonl",
+      "sha256": "4b1f0a6148fae93885124b75c5bee8b10be4f58fa20c13cdc99a899c7b04fa26"
+    },
+    {
+      "localPath": "/Users/forst/code/screeps/monitor-data/20261015-cpu-fix/postdeploy-follow-console-cpu.jsonl",
+      "sha256": "4ea4734ddef3b7fb314121985cb56f9aefb9aef127923fd38d985cbb1d97f6e9"
+    },
+    {
+      "localPath": "/Users/forst/code/screeps/monitor-data/20261015-cpu-fix/startup-timeout-attribution.json",
+      "sha256": "d1a3ecc78608b77f0478e4dd5df89961b8c14a002e10b95f8a5b414664798aab"
+    },
+    {
+      "localPath": "/Users/forst/code/screeps/monitor-data/20261015-cpu-fix/attribution-verification-final.json",
+      "sha256": "126c77ca704abbe80acfe5dec82a88673aac1e5e9d225b40b61e0a6a8c661d89"
+    },
+    {
+      "localPath": "/Users/forst/code/screeps/monitor-data/20261015-patrol/independent-validation.json",
+      "sha256": "2dde74e1fd372923235e77ac4a3f19e0a69319ed4f291378fa4b62764a47ceb6"
+    },
+    {
+      "localPath": "/Users/forst/code/screeps/monitor-data/20261015-patrol/formation-after.jsonl",
+      "sha256": "4ea4734ddef3b7fb314121985cb56f9aefb9aef127923fd38d985cbb1d97f6e9"
+    },
+    {
+      "localPath": "/Users/forst/code/screeps/monitor-data/20261015-patrol/patrol-online-verification.json",
+      "sha256": "239bc786a6f2e9ecea9d6ab8ed75c9800502bf75f3e308235654cb043f960c60"
+    },
+    {
+      "localPath": "/Users/forst/code/screeps/monitor-data/20261015-cpu-fix/independent-postdeploy-verification.json",
+      "sha256": "49d71f4a7fe1e2787fa7067201af303ed64e1341490ef2161facde05520a2da4"
+    },
+    {
+      "localPath": "/Users/forst/code/screeps/monitor-data/20261015-cpu-fix/independent-postdeploy-verification.md",
+      "sha256": "26db353b67f365968737354cf0af8ca86765d00b86b09609ba09f8bdb699e1ae"
+    },
+    {
+      "localPath": "/Users/forst/code/screeps/monitor-data/20261015-patrol/patrol-online-verification.md",
+      "sha256": "e7a1ae052da70625b2f8b040edc21c2e8ab7a7825a2b8465b961d623f8334176"
+    }
+  ],
+  "independentPostdeployVerificationPassed": true
+}
