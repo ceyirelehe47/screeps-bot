@@ -229,11 +229,16 @@ export interface CpuMonitorRollingSummary {
   fixedActionSums: Record<string, number>;
 }
 
+interface CpuMonitorRollingState extends CpuMonitorRollingSummary {
+  phaseSampleCounts: Record<string, number>;
+  fixedActionSampleCounts: Record<string, number>;
+}
+
 interface CpuMonitorGlobalStore {
   history: CpuMonitorSnapshotV2[];
   emaTotalUsed: number;
   seeded: boolean;
-  rolling: CpuMonitorRollingSummary;
+  rolling: CpuMonitorRollingState;
 }
 
 type GlobalWithCpuMonitor = typeof global & {
@@ -242,7 +247,7 @@ type GlobalWithCpuMonitor = typeof global & {
 
 const cpuMonitorGlobal: GlobalWithCpuMonitor = global;
 
-function createEmptyRollingSummary(): CpuMonitorRollingSummary {
+function createEmptyRollingSummary(): CpuMonitorRollingState {
   return {
     ticks: 0,
     sumTotalUsed: 0,
@@ -250,11 +255,32 @@ function createEmptyRollingSummary(): CpuMonitorRollingSummary {
     sumUntracked: 0,
     phaseSums: {},
     fixedActionSums: {},
+    phaseSampleCounts: {},
+    fixedActionSampleCounts: {},
   };
 }
 
+function applyRollingMap(
+  sums: Record<string, number>,
+  sampleCounts: Record<string, number>,
+  values: Record<string, number>,
+  direction: 1 | -1,
+): void {
+  for (const [key, value] of Object.entries(values)) {
+    const nextCount = (sampleCounts[key] || 0) + direction;
+    if (nextCount <= 0) {
+      // 最后一份样本离开窗口时直接删除，避免浮点减法残差保留幽灵键。
+      delete sampleCounts[key];
+      delete sums[key];
+    } else {
+      sampleCounts[key] = nextCount;
+      sums[key] = (sums[key] || 0) + direction * safeFinite(value, 0);
+    }
+  }
+}
+
 function applySnapshotToRollingSummary(
-  rolling: CpuMonitorRollingSummary,
+  rolling: CpuMonitorRollingState,
   snapshot: CpuMonitorSnapshotV2,
   direction: 1 | -1,
 ): void {
@@ -262,14 +288,8 @@ function applySnapshotToRollingSummary(
   rolling.sumTotalUsed += direction * safeFinite(snapshot.totalUsed, 0);
   rolling.sumBucket += direction * safeFinite(snapshot.bucket, 0);
   rolling.sumUntracked += direction * safeFinite(snapshot.untracked, 0);
-  const phaseSums = rolling.phaseSums;
-  for (const [phase, used] of Object.entries(snapshot.phases)) {
-    phaseSums[phase] = (phaseSums[phase] || 0) + direction * safeFinite(used, 0);
-  }
-  const fixedActionSums = rolling.fixedActionSums;
-  for (const [action, count] of Object.entries(snapshot.fixedActionCounts)) {
-    fixedActionSums[action] = (fixedActionSums[action] || 0) + direction * safeFinite(count, 0);
-  }
+  applyRollingMap(rolling.phaseSums, rolling.phaseSampleCounts, snapshot.phases, direction);
+  applyRollingMap(rolling.fixedActionSums, rolling.fixedActionSampleCounts, snapshot.fixedActionCounts, direction);
 }
 
 function ensureCpuMonitorStore(): CpuMonitorGlobalStore {
@@ -281,7 +301,15 @@ function ensureCpuMonitorStore(): CpuMonitorGlobalStore {
       rolling: createEmptyRollingSummary(),
     };
   }
-  return cpuMonitorGlobal.__cpuMonitor;
+  const store = cpuMonitorGlobal.__cpuMonitor;
+  // 兼容旧 global store：保留 history/EMA，仅为首次读取补齐新的内部计数。
+  if (!store.rolling?.phaseSampleCounts || !store.rolling?.fixedActionSampleCounts) {
+    store.rolling = createEmptyRollingSummary();
+    for (const snapshot of store.history) {
+      applySnapshotToRollingSummary(store.rolling, snapshot, 1);
+    }
+  }
+  return store;
 }
 
 export function getCpuMonitorHistory(): CpuMonitorSnapshotV2[] {
@@ -413,7 +441,7 @@ export function computeCpuMonitorSummary(history: CpuMonitorSnapshotV2[], emaTot
  */
 function buildRollingCpuMonitorSummary(
   history: CpuMonitorSnapshotV2[],
-  rolling: CpuMonitorRollingSummary,
+  rolling: CpuMonitorRollingState,
   emaTotalUsed: number,
 ): CpuMonitorSummaryV2 | null {
   if (rolling.ticks <= 0 || history.length === 0) {
@@ -434,16 +462,12 @@ function buildRollingCpuMonitorSummary(
   const ticks = rolling.ticks;
   const avgPhases: Record<string, number> = {};
   for (const [phase, sum] of Object.entries(rolling.phaseSums)) {
-    // 贡献值非负：sum 为 0 说明该 phase 的样本已被全部淘汰，与批量版的键集保持一致。
-    if (sum !== 0) {
-      avgPhases[phase] = sum / ticks;
-    }
+    // 键生命周期由样本计数维护；窗口内合法的零值仍需出现在 summary 中。
+    avgPhases[phase] = sum / ticks;
   }
   const avgFixedActionCounts: Record<string, number> = {};
   for (const [action, sum] of Object.entries(rolling.fixedActionSums)) {
-    if (sum !== 0) {
-      avgFixedActionCounts[action] = sum / ticks;
-    }
+    avgFixedActionCounts[action] = sum / ticks;
   }
 
   return {

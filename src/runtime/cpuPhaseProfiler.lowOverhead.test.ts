@@ -57,7 +57,11 @@ function makeCreep(name: string): Creep {
   } as unknown as Creep;
 }
 
-function makeSnapshot(tick: number, phases: Record<string, number>): CpuMonitorSnapshotV2 {
+function makeSnapshot(
+  tick: number,
+  phases: Record<string, number>,
+  fixedActionCounts: Record<string, number> = {},
+): CpuMonitorSnapshotV2 {
   return {
     tick,
     shard: "shard0",
@@ -66,7 +70,7 @@ function makeSnapshot(tick: number, phases: Record<string, number>): CpuMonitorS
     limit: 500,
     tickLimit: 500,
     phases,
-    fixedActionCounts: {},
+    fixedActionCounts,
     untracked: 0,
     emaTotalUsed: 0,
     rooms: {},
@@ -251,7 +255,7 @@ describe("cpu monitor rolling summary", () => {
     const snapshots: CpuMonitorSnapshotV2[] = [
       makeSnapshot(1, { creepWork: 10, towerControl: 4 }),
       makeSnapshot(2, { creepWork: 20 }),
-      makeSnapshot(3, { creepWork: 30, spawnWork: 2 }),
+      makeSnapshot(3, { creepWork: 30, spawnWork: 2, zeroPhase: 0 }, { idleAction: 0 }),
       makeSnapshot(4, { creepWork: 40 }),
       makeSnapshot(5, { creepWork: 50, linkControl: 1 }),
     ];
@@ -276,25 +280,70 @@ describe("cpu monitor rolling summary", () => {
     for (const [phase, avg] of Object.entries(rolling?.avgPhases ?? {})) {
       expect(avg).toBeCloseTo(baseline?.avgPhases[phase] ?? NaN, 8);
     }
+    // 窗口内显式记录的 0 仍是有效键，不能与已经完全淘汰的键混淆。
+    expect(rolling?.avgPhases.zeroPhase).toBe(0);
+    expect(rolling?.avgFixedActionCounts).toEqual(baseline?.avgFixedActionCounts);
+    expect(rolling?.avgFixedActionCounts.idleAction).toBe(0);
   });
 
   it("phase 动态增加与淘汰后 rolling 与批量一致", () => {
-    persistCpuMonitorSample(makeSnapshot(1, { a: 5 }), config);
-    persistCpuMonitorSample(makeSnapshot(2, { a: 5, b: 7 }), config);
-    persistCpuMonitorSample(makeSnapshot(3, { b: 7 }), config);
+    persistCpuMonitorSample(makeSnapshot(1, { a: 0.1 }, { oldAction: 1 }), config);
+    persistCpuMonitorSample(makeSnapshot(2, { a: 0.2, b: 7 }, { oldAction: 2 }), config);
+    persistCpuMonitorSample(makeSnapshot(3, { b: 7 }, { currentAction: 3 }), config);
     // historyLimit=3：以上三条都在窗口内，a 仍有贡献。
-    persistCpuMonitorSample(makeSnapshot(4, { b: 7 }), config);
+    persistCpuMonitorSample(makeSnapshot(4, { b: 7 }, { currentAction: 4 }), config);
     let rolling = Memory.analytics?.cpuMonitor?.summary;
     let baseline = computeCpuMonitorSummary(getCpuMonitorHistory(), 0);
     expect(Object.keys(rolling?.avgPhases ?? {}).sort()).toEqual(["a", "b"]);
     expect(rolling?.avgPhases.a).toBeCloseTo(baseline?.avgPhases.a ?? NaN, 8);
 
-    // 第五条推送淘汰 tick 2：phase a 的贡献完全清零，从键集中消失。
-    persistCpuMonitorSample(makeSnapshot(5, { b: 7 }), config);
+    // 0.1 + 0.2 - 0.1 - 0.2 存在浮点残差，最后一份样本淘汰后仍须删除键。
+    persistCpuMonitorSample(makeSnapshot(5, { b: 7 }, { currentAction: 5 }), config);
     rolling = Memory.analytics?.cpuMonitor?.summary;
     baseline = computeCpuMonitorSummary(getCpuMonitorHistory(), 0);
     expect(Object.keys(rolling?.avgPhases ?? {})).toEqual(["b"]);
     expect(rolling?.avgPhases.b).toBeCloseTo(baseline?.avgPhases.b ?? NaN, 8);
+    expect(rolling?.avgFixedActionCounts).toEqual(baseline?.avgFixedActionCounts);
+    expect(rolling?.avgFixedActionCounts).not.toHaveProperty("oldAction");
     expect(getCpuMonitorHistory().map((entry) => entry.tick)).toEqual([3, 4, 5]);
+
+    // 完全淘汰后以零值重新出现，不能携带上一个生命周期的残差。
+    persistCpuMonitorSample(makeSnapshot(6, { a: 0 }, { oldAction: 0 }), config);
+    expect(Memory.analytics?.cpuMonitor?.summary?.avgPhases.a).toBe(0);
+    expect(Memory.analytics?.cpuMonitor?.summary?.avgFixedActionCounts.oldAction).toBe(0);
+
+    // 缩小窗口会一次淘汰多条记录，零值键与计数也要同步更新。
+    persistCpuMonitorSample(makeSnapshot(7, { b: 0 }, { currentAction: 0 }), { ...config, historyLimit: 1 });
+    expect(getCpuMonitorHistory().map((entry) => entry.tick)).toEqual([7]);
+    expect(Memory.analytics?.cpuMonitor?.summary?.avgPhases).toEqual({ b: 0 });
+    expect(Memory.analytics?.cpuMonitor?.summary?.avgFixedActionCounts).toEqual({ currentAction: 0 });
+
+    // 旧 global store 可能完全没有 rolling，或仅含旧版 sums；均从 history 补齐。
+    const legacyGlobals = global as typeof global & {
+      __cpuMonitor?: {
+        history: CpuMonitorSnapshotV2[];
+        emaTotalUsed: number;
+        seeded: boolean;
+        rolling?: unknown;
+      };
+    };
+    const previousHistory = getCpuMonitorHistory().slice();
+    for (const oldRolling of [undefined, {
+      ticks: 1, sumTotalUsed: 0, sumBucket: 9_007, sumUntracked: 0,
+      phaseSums: { b: 0, obsoletePhase: 1e-16 }, fixedActionSums: { currentAction: 0 },
+    }]) {
+      legacyGlobals.__cpuMonitor = {
+        history: previousHistory.slice(), emaTotalUsed: 12, seeded: true, rolling: oldRolling,
+      };
+      persistCpuMonitorSample(makeSnapshot(8, { newPhase: 2 }, { newAction: 1 }), config);
+      rolling = Memory.analytics?.cpuMonitor?.summary;
+      baseline = computeCpuMonitorSummary(getCpuMonitorHistory(), 0);
+      expect(rolling?.ticks).toBe(2);
+      expect(rolling?.avgPhases).toEqual(baseline?.avgPhases);
+      expect(rolling?.avgFixedActionCounts).toEqual(baseline?.avgFixedActionCounts);
+      expect(rolling?.avgTotalUsed).toBe(baseline?.avgTotalUsed);
+      expect(rolling?.avgBucket).toBe(baseline?.avgBucket);
+      expect(rolling?.emaTotalUsed).toBeCloseTo(11);
+    }
   });
 });

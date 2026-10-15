@@ -4,6 +4,7 @@
  */
 import {
   getRoomBaseCostMatrixBuildCountForTest,
+  getRoomStaticMatrix,
   moveToTarget,
 } from "@/movement/pathing";
 import { clearRoomBaseCostMatrixCacheForTest } from "@/movement/pathing";
@@ -51,6 +52,8 @@ interface Harness {
   structures: Array<{ structureType: string; pos: { x: number; y: number } }>;
   sites: Array<{ structureType: string; my: boolean; pos: { x: number; y: number } }>;
   creeps: Creep[];
+  hostileCreeps: Creep[];
+  hostilePowerCreeps: PowerCreep[];
   findPathTo: jest.Mock;
   capturedMatrices: CostMatrix[];
 }
@@ -94,6 +97,8 @@ function buildHarness(): Harness {
   const structures: Array<{ structureType: string; pos: { x: number; y: number } }> = [];
   const sites: Array<{ structureType: string; my: boolean; pos: { x: number; y: number } }> = [];
   const creeps: Creep[] = [];
+  const hostileCreeps: Creep[] = [];
+  const hostilePowerCreeps: PowerCreep[] = [];
   const room = createRoom("W1N1", creeps);
   const creep = createCreep("mover", "worker", 10, 10, room);
   creeps.push(creep);
@@ -106,6 +111,10 @@ function buildHarness(): Harness {
         return structures;
       case FIND_MY_CREEPS:
         return creeps;
+      case FIND_HOSTILE_CREEPS:
+        return hostileCreeps;
+      case FIND_HOSTILE_POWER_CREEPS:
+        return hostilePowerCreeps;
       case FIND_CONSTRUCTION_SITES:
         return sites;
       default:
@@ -114,7 +123,10 @@ function buildHarness(): Harness {
   }) as unknown as Room["find"];
 
   const capturedMatrices: CostMatrix[] = [];
-  const harness: Harness = { room, creep, structures, sites, creeps, findPathTo: jest.fn(), capturedMatrices };
+  const harness: Harness = {
+    room, creep, structures, sites, creeps, hostileCreeps, hostilePowerCreeps,
+    findPathTo: jest.fn(), capturedMatrices,
+  };
   harness.findPathTo = wireFindPathTo(creep, harness);
   return harness;
 }
@@ -165,16 +177,33 @@ describe("pathing cross-tick caching", () => {
     expect(getMovementAnalyticsForTest().totals.pathCacheHits).toBeGreaterThanOrEqual(1);
   });
 
-  it("同一房间相同静态布局跨 tick 复用基础矩阵", () => {
+  it("同一房间不同地形成本在同 tick 与跨 tick 复用基础矩阵", () => {
     const harness = buildHarness();
-    moveToTarget(harness.creep, addTarget(), 0);
+    const firstCosts = { plainCost: 2, swampCost: 8 };
+    moveToTarget(harness.creep, addTarget(), 0, firstCosts);
+    expect(harness.findPathTo.mock.calls[0][1]).toEqual(expect.objectContaining(firstCosts));
     expect(getRoomBaseCostMatrixBuildCountForTest()).toBe(1);
+    harness.capturedMatrices[0].set(5, 5, 0xff);
+    expect(getRoomStaticMatrix(harness.room.name).get(5, 5)).toBe(0);
 
-    // 第二个 creep 走不同目标，强制重新经过 costCallback 访问矩阵缓存。
-    const second = addSecondCreep(harness);
+    // 同 tick 使用不同成本重新经过 callback，静态矩阵复用但 clone 独立。
+    const sameTick = addSecondCreep(harness, "same-tick");
+    const sameTickCosts = { plainCost: 1, swampCost: 5 };
+    moveToTarget(sameTick.creep, addTarget(14), 0, sameTickCosts);
+    expect(sameTick.findPathTo).toHaveBeenCalledTimes(1);
+    expect(sameTick.findPathTo.mock.calls[0][1]).toEqual(expect.objectContaining(sameTickCosts));
+    expect(harness.capturedMatrices[1].get(5, 5)).toBe(0);
+    expect(getRoomBaseCostMatrixBuildCountForTest()).toBe(1);
+    harness.capturedMatrices[1].set(6, 6, 0xff);
+
+    const nextTick = addSecondCreep(harness, "next-tick");
+    const nextTickCosts = { plainCost: 3, swampCost: 12 };
     advanceTick();
-    moveToTarget(second.creep, addTarget(14), 0);
-    expect(second.findPathTo).toHaveBeenCalledTimes(1);
+    moveToTarget(nextTick.creep, addTarget(13), 0, nextTickCosts);
+    expect(nextTick.findPathTo).toHaveBeenCalledTimes(1);
+    expect(nextTick.findPathTo.mock.calls[0][1]).toEqual(expect.objectContaining(nextTickCosts));
+    expect(harness.capturedMatrices[2].get(5, 5)).toBe(0);
+    expect(harness.capturedMatrices[2].get(6, 6)).toBe(0);
     expect(getRoomBaseCostMatrixBuildCountForTest()).toBe(1);
   });
 
@@ -327,7 +356,7 @@ describe("pathing cross-tick caching", () => {
     expect(harness.findPathTo).toHaveBeenCalledTimes(1);
   });
 
-  it("连续阻塞达到阈值后强制绕开 creep 重新寻路", () => {
+  it("连续阻塞后重新寻路叠加动态障碍且不污染静态缓存", () => {
     const harness = buildHarness();
     const blocker = createCreep("blocker", "worker", 11, 10, harness.room);
     const target = addTarget();
@@ -335,6 +364,22 @@ describe("pathing cross-tick caching", () => {
     moveToTarget(harness.creep, target, 0);
     harness.creeps.push(blocker);
     Game.creeps[blocker.name] = blocker;
+    harness.hostileCreeps.push({
+      name: "hostile-creep",
+      pos: new MockRoomPosition(12, 11, harness.room.name),
+    } as unknown as Creep);
+    harness.hostilePowerCreeps.push({
+      name: "hostile-power",
+      pos: new MockRoomPosition(13, 11, harness.room.name),
+    } as unknown as PowerCreep);
+    Game.powerCreeps = {
+      "my-power": {
+        name: "my-power",
+        pos: new MockRoomPosition(14, 11, harness.room.name),
+        ticksToLive: 1_000,
+        room: harness.room,
+      } as unknown as PowerCreep,
+    };
     wallAllExcept(11, 10);
 
     // tick 2/3：ERR_BUSY，无位置进展，stuckTicks 1/2。
@@ -350,6 +395,36 @@ describe("pathing cross-tick caching", () => {
     expect(harness.findPathTo).toHaveBeenCalledTimes(2);
     expect((harness.findPathTo.mock.calls[1][1] as { ignoreCreeps?: boolean }).ignoreCreeps).toBe(false);
     expect(getMovementAnalyticsForTest().totals.pathRepaths).toBe(2);
+    // 检查实际 callback 矩阵，不能只检查 findPathTo 收到的 ignoreCreeps。
+    const recoveryMatrix = harness.capturedMatrices[1];
+    expect(recoveryMatrix.get(11, 10)).toBe(0xfe);
+    expect(recoveryMatrix.get(12, 11)).toBe(0xfe);
+    expect(recoveryMatrix.get(13, 11)).toBe(0xfe);
+    expect(recoveryMatrix.get(14, 11)).toBe(0xfe);
+    expect(recoveryMatrix.get(10, 10)).toBe(0);
+    const staticMatrix = getRoomStaticMatrix(harness.room.name);
+    expect(staticMatrix.get(11, 10)).toBe(0);
+    expect(staticMatrix.get(12, 11)).toBe(0);
+    expect(staticMatrix.get(13, 11)).toBe(0);
+    expect(staticMatrix.get(14, 11)).toBe(0);
+    expect(getRoomBaseCostMatrixBuildCountForTest()).toBe(1);
+
+    // 动态对象消失后换目标触发 callback，仍复用静态矩阵且原格恢复可走。
+    harness.creeps.splice(1);
+    delete Game.creeps[blocker.name];
+    harness.hostileCreeps.length = 0;
+    harness.hostilePowerCreeps.length = 0;
+    Game.powerCreeps = {};
+    restorePlains();
+    advanceTick();
+    moveToTarget(harness.creep, addTarget(14), 0, { ignoreCreeps: false });
+    expect(harness.findPathTo).toHaveBeenCalledTimes(3);
+    const clearedMatrix = harness.capturedMatrices[2];
+    expect(clearedMatrix.get(11, 10)).toBe(0);
+    expect(clearedMatrix.get(12, 11)).toBe(0);
+    expect(clearedMatrix.get(13, 11)).toBe(0);
+    expect(clearedMatrix.get(14, 11)).toBe(0);
+    expect(getRoomBaseCostMatrixBuildCountForTest()).toBe(1);
   });
 
   it("global reset 后状态丢失但仍能重新寻路并正常移动", () => {

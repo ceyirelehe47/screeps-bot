@@ -4,6 +4,7 @@
  */
 import { clearRoomTopologyRevisionCacheForTest, getRoomTopologyRevision } from "@/movement/roomTopologyRevision";
 import { clearMovementAnalyticsForTest, getMovementAnalyticsForTest } from "@/movement/metrics";
+import { getTickContextService } from "@/runtime/runtimeServices";
 import { createRoom, resetRuntimeServices } from "@mock/movement";
 
 interface StructureLike {
@@ -123,25 +124,29 @@ describe("getRoomTopologyRevision", () => {
       return [];
     }) as unknown as Room["find"];
 
+    const tickContext = getTickContextService();
+    tickContext.getRoomContext(room)!.getDeposits();
     const withoutDeposit = getRoomTopologyRevision("W1N1");
+    const depositScans = () => (room.find as unknown as jest.Mock).mock.calls.filter((call) => call[0] === FIND_DEPOSITS);
+    expect(depositScans()).toHaveLength(1);
 
     Game.time += 1;
-    clearRoomTopologyRevisionCacheForTest();
     deposits = [{ pos: { x: 10, y: 10 } }];
     expect(getRoomTopologyRevision("W1N1")).not.toBe(withoutDeposit);
+    expect(tickContext.getRoomContext(room)!.getDeposits()).toBe(deposits);
+    expect(depositScans()).toHaveLength(2);
 
     Game.time += 1;
-    clearRoomTopologyRevisionCacheForTest();
     deposits = [{ pos: { x: 12, y: 12 } }];
     const moved = getRoomTopologyRevision("W1N1");
     expect(moved).not.toBe(withoutDeposit);
 
     Game.time += 1;
-    clearRoomTopologyRevisionCacheForTest();
     deposits = [];
     const disappeared = getRoomTopologyRevision("W1N1");
     expect(disappeared).not.toBe(moved);
     // 折叠是确定性的：无 Deposit 状态恢复与最初一致的指纹。
     expect(disappeared).toBe(withoutDeposit);
+    expect(depositScans()).toHaveLength(4);
   });
 });

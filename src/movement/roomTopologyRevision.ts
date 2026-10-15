@@ -112,7 +112,8 @@ export function getRoomTopologyRevision(roomName: string): string {
     // 指纹必须覆盖其存在与位置。Source/Mineral/Controller 位置在房间生成
     // 后恒定，首次可见构建后不会变化，无需进入指纹。Portal 是 Structure，
     // 已随结构折叠覆盖出现/消失。
-    for (const deposit of room.find(FIND_DEPOSITS)) {
+    const deposits = roomContext?.getDeposits() ?? room.find(FIND_DEPOSITS);
+    for (const deposit of deposits) {
       depositFold = foldTopologyObject(
         depositFold,
         getStructureTypeCode("deposit") * 2 + 1,
