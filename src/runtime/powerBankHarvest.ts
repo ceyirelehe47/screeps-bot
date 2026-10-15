@@ -1,5 +1,5 @@
 import { predictPowerBankRecovery, predictPowerBankFinishTicks, powerBankAttackSustainable } from "@/runtime/powerBankCapability";
-import { POWER_BANK_STATUS, POWER_BANK_BODY_TIERS, POWER_BANK_BOOST_REQUIREMENTS, getPowerBankConfigName, isPowerBankSearchRoom } from "@/runtime/powerBankConstants";
+import { POWER_BANK_STATUS, POWER_BANK_BODY_TIERS, POWER_BANK_BOOST_REQUIREMENTS, POWER_BANK_MAX_ROUTE_ROOMS, getPowerBankConfigName, isPowerBankSearchRoom } from "@/runtime/powerBankConstants";
 import {
   ATTACK_POWER,
   POWER_BANK_ROOM_TRAVEL_TICKS,
@@ -49,6 +49,11 @@ import { hasPlanningCpuHeadroom } from "@/runtime/planningCpuBudget";
 const PATROL_SCOUT_CONFIG_NAME = "powerbank:patrol:scout:0";
 
 const MAX_POWER_BANK_HAULER_PAIRS = 25;
+const UNSUPPORTED_ROUTE_RETRY_TICKS = 100;
+const UNSUPPORTED_ROUTE_CACHE_LIMIT = 128;
+// 仅保存当前走廊超出证明能力的否定结论，不授权移动或准入；global reset 即丢弃。
+const unsupportedRouteRetries = new Map<string, number>();
+let unsupportedRouteLastTick = -1;
 const POWER_BANK_HAULER_ARRIVAL_BUFFER = 25;
 const HAULING_EMPTY_CONFIRM_TICKS = 100;
 const REINFORCEMENT_INDEX = 1;
@@ -421,6 +426,29 @@ interface AdmissionDangerContext {
   sortedAvoidRooms: readonly string[];
 }
 
+function getUnsupportedRouteRetryAt(key: string): number | undefined {
+  if (Game.time < unsupportedRouteLastTick) unsupportedRouteRetries.clear();
+  unsupportedRouteLastTick = Game.time;
+  const retryAt = unsupportedRouteRetries.get(key);
+  if (retryAt !== undefined && Game.time < retryAt) {
+    unsupportedRouteRetries.delete(key);
+    unsupportedRouteRetries.set(key, retryAt);
+    return retryAt;
+  }
+  unsupportedRouteRetries.delete(key);
+  return undefined;
+}
+
+function rememberUnsupportedRoute(key: string): number {
+  const retryAt = Game.time + UNSUPPORTED_ROUTE_RETRY_TICKS;
+  unsupportedRouteRetries.delete(key);
+  while (unsupportedRouteRetries.size >= UNSUPPORTED_ROUTE_CACHE_LIMIT) {
+    unsupportedRouteRetries.delete(unsupportedRouteRetries.keys().next().value!);
+  }
+  unsupportedRouteRetries.set(key, retryAt);
+  return retryAt;
+}
+
 /** 正路线有界跨 tick 复用；本次准入的危险集合与当前地图事实共同核验。 */
 function getAdmissionSafeRoute(fromRoom: string, toRoom: string, danger: AdmissionDangerContext): string[] | null {
   if (danger.ownedRooms.includes(toRoom)) return null;
@@ -582,6 +610,7 @@ function evaluateSourceCandidatesImpl(task: PowerBankHarvestTask): {
   // 同步评估内没有危险记录 writer；各来源/Spawn 共用一次读取。惰性创建，
   // 无合格来源时不扫描 intel；下一次入口即使同 tick 也重新读取可变 Memory。
   let dangerContext: AdmissionDangerContext | undefined;
+  let unsupportedRouteScope: string | undefined;
   const getDangerContext = (): AdmissionDangerContext => {
     if (!dangerContext) {
       const ownedRooms = getPowerBankOwnedAvoidRooms();
@@ -589,6 +618,14 @@ function evaluateSourceCandidatesImpl(task: PowerBankHarvestTask): {
       dangerContext = { ownedRooms, avoidRooms, sortedAvoidRooms: [...avoidRooms].sort() };
     }
     return dangerContext;
+  };
+  const getUnsupportedRouteKey = (sourceRoom: string, danger: AdmissionDangerContext): string => {
+    if (unsupportedRouteScope === undefined) {
+      const observedWorldSize = typeof Game.map.getWorldSize === "function" ? Game.map.getWorldSize() : undefined;
+      const worldSize = Number.isSafeInteger(observedWorldSize) && observedWorldSize! > 0 ? observedWorldSize : null;
+      unsupportedRouteScope = JSON.stringify([Game.shard?.name ?? "unknown", worldSize, task.targetRoom, danger.sortedAvoidRooms]);
+    }
+    return JSON.stringify([sourceRoom, unsupportedRouteScope]);
   };
 
   // 只做房间级安全路线与来源基本资格预评估。先尝试短走廊，防止每 tick
@@ -604,9 +641,21 @@ function evaluateSourceCandidatesImpl(task: PowerBankHarvestTask): {
         break;
       }
       const danger = getDangerContext();
+      const unsupportedKey = getUnsupportedRouteKey(room.name, danger);
+      const heldUntil = getUnsupportedRouteRetryAt(unsupportedKey);
+      if (heldUntil !== undefined) {
+        rejectionReasons.push(`${room.name}:unsupported_route_length`);
+        pendingRetryAt = Math.min(pendingRetryAt ?? Infinity, heldUntil);
+        continue;
+      }
       const routeRooms = getAdmissionSafeRoute(room.name, task.targetRoom, danger);
       if (!routeRooms) {
         rejectionReasons.push(`${room.name}:no_safe_route`);
+        continue;
+      }
+      if (routeRooms.length > POWER_BANK_MAX_ROUTE_ROOMS) {
+        rejectionReasons.push(`${room.name}:unsupported_route_length`);
+        pendingRetryAt = Math.min(pendingRetryAt ?? Infinity, rememberUnsupportedRoute(unsupportedKey));
         continue;
       }
       sourceRoutes.push({ room, routeRooms, avoidRooms: danger.avoidRooms });
@@ -701,6 +750,10 @@ function evaluateSourceCandidatesImpl(task: PowerBankHarvestTask): {
       if (measurement.status === "pending") {
         sourcePending = true;
         pendingRetryAt = Math.min(pendingRetryAt ?? Infinity, measurement.retryAt);
+        if (measurement.reason === "invalid_input") {
+          rejectionReasons.push(`${room.name}:invalid_measurement_input`);
+          break;
+        }
       } else {
         measurements.push(measurement);
       }

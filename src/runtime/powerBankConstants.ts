@@ -52,6 +52,9 @@ export const POWER_BANK_BODY_TIERS: Record<number, PowerBankBodyTier> = {
   8: POWER_BANK_BODY_RCL8,
 };
 
+/** 静态完整路径证明支持的最大走廊房间数，包含起点与终点。 */
+export const POWER_BANK_MAX_ROUTE_ROOMS = 16;
+
 // ---------------------------------------------------------------------------
 // PowerBank 搜索房间：按房名识别高速公路，不维护固定巡逻白名单。
 // ---------------------------------------------------------------------------

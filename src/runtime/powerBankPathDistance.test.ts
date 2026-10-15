@@ -142,7 +142,7 @@ describe("Power Bank 静态完整路径测量", () => {
     Game.time = 1_001;
     search.mockReturnValue({ path: [], incomplete: true, ops: 6_000, cost: 0 });
     const deferred = measure(second);
-    expect(deferred).toEqual({ status: "pending", reason: "path_incomplete", retryAt: 1_006 });
+    expect(deferred).toEqual({ status: "pending", reason: "path_incomplete", retryAt: 1_101 });
     expect(measure(second)).toBe(deferred);
     Game.time = 1_002;
     expect(measure(second)).toBe(deferred);
@@ -187,7 +187,7 @@ describe("Power Bank 静态完整路径测量", () => {
     Game.time += 1;
     const searchesBeforeWait = search.mock.calls.length;
     jest.mocked(Game.cpu.getUsed).mockReturnValueOnce(80).mockReturnValueOnce(200);
-    expect(measure({ ...input(), bankPos: pos(18) })).toMatchObject({ status: "pending", reason: "path_incomplete" });
+    expect(measure({ ...input(), bankPos: pos(18) })).toEqual({ status: "pending", reason: "path_incomplete", retryAt: Game.time + 5 });
     expect(search).toHaveBeenCalledTimes(searchesBeforeWait);
     const data = Memory.analytics!.powerBankPathDiagnostics!;
     expect(data).toBeDefined();
@@ -252,7 +252,7 @@ describe("Power Bank 静态完整路径测量", () => {
     expect(search).toHaveBeenCalledTimes(6);
     Game.time = 1_004;
     search.mockReturnValue({ path: [], incomplete: true, get ops() { throw new Error("ops diagnostic only"); }, cost: 0 });
-    expect(measure({ ...input(), bankPos: pos(14) })).toEqual({ status: "pending", reason: "path_incomplete", retryAt: 1_009 });
+    expect(measure({ ...input(), bankPos: pos(14) })).toEqual({ status: "pending", reason: "path_incomplete", retryAt: 1_104 });
     expect(Memory.analytics!.powerBankPathDiagnostics!.totals).toMatchObject({ engineIncomplete: 1, pathIncomplete: 1 });
     const analytics = Memory.analytics;
     Object.defineProperty(Memory, "analytics", { configurable: true, get: () => { throw new Error("diagnostic write denied"); } });
@@ -357,7 +357,7 @@ describe("Power Bank 静态完整路径测量", () => {
   });
 
   it.each([
-    ["incomplete partial", { path: [pos(11), pos(12)], incomplete: true, ops: 6_000, cost: 2 }],
+    ["malformed path", { path: null, incomplete: false, ops: 1, cost: 0 }],
     ["jump", { path: [pos(12)], incomplete: false, ops: 1, cost: 1 }],
     ["invalid coordinate", { path: [pos(50)], incomplete: false, ops: 1, cost: 1 }],
     ["fractional coordinate", { path: [pos(11.5)], incomplete: false, ops: 1, cost: 1 }],
@@ -384,7 +384,7 @@ describe("Power Bank 静态完整路径测量", () => {
     expect(search).toHaveBeenCalledTimes(3);
   });
 
-  it("pending 退避跨中转房视野变化仍复用，让另一来源获得完整测量预算", () => {
+  it("engineIncomplete hold 在中转房视野变化后重新测量，未变化时把预算留给另一来源", () => {
     const origin = "W1N0", transit = "W0N0", target = "E0N0";
     Game.rooms = { W1N1: visibleRoom("W1N1"), [origin]: visibleRoom(origin), [target]: visibleRoom(target) };
     const candidate = {
@@ -395,7 +395,7 @@ describe("Power Bank 静态完整路径测量", () => {
       ? { path: [pos(0, 10, transit)], incomplete: true, ops: 6_000, cost: 1 }
       : straightSameRoom(source, goal));
     const deferred = measure(candidate);
-    expect(deferred).toEqual({ status: "pending", reason: "path_incomplete", retryAt: 1_005 });
+    expect(deferred).toEqual({ status: "pending", reason: "path_incomplete", retryAt: 1_100 });
     expect(canMeasure()).toBe(false);
 
     Game.time += 1;
@@ -403,27 +403,31 @@ describe("Power Bank 静态完整路径测量", () => {
     topology.mockReturnValue("transit-now-visible");
     topology.mockClear();
     (Game.map.getRoomStatus as jest.Mock).mockClear();
-    expect(measure(candidate)).toBe(deferred);
-    expect(topology).not.toHaveBeenCalled();
-    expect(Game.map.getRoomStatus).not.toHaveBeenCalled();
+    const visibleDeferred = measure(candidate);
+    expect(visibleDeferred).toEqual({ status: "pending", reason: "path_incomplete", retryAt: 1_101 });
+    expect(topology).toHaveBeenCalledTimes(3);
+    expect(Game.map.getRoomStatus).toHaveBeenCalledTimes(3);
+    expect(canMeasure()).toBe(false);
+    expect(measure(input())).toEqual({ status: "pending", reason: "budget", retryAt: 1_002 });
+    expect(search).toHaveBeenCalledTimes(2);
+
+    Game.time += 1;
+    expect(measure(candidate)).toBe(visibleDeferred);
     expect(canMeasure()).toBe(true);
     expect(measure(input()).status).toBe("ready");
-    expect(search).toHaveBeenCalledTimes(4);
+    expect(search).toHaveBeenCalledTimes(5);
 
     Game.time += 1;
     delete Game.rooms[transit];
     topology.mockReturnValue("transit-lost-again");
-    expect(measure(candidate)).toBe(deferred);
-    expect(canMeasure()).toBe(true);
-    expect(search).toHaveBeenCalledTimes(4);
-    Game.time = 1_005;
-    expect(measure(candidate)).toEqual({ status: "pending", reason: "path_incomplete", retryAt: 1_010 });
-    expect(search).toHaveBeenCalledTimes(5);
+    expect(measure(candidate)).toEqual({ status: "pending", reason: "path_incomplete", retryAt: 1_103 });
+    expect(canMeasure()).toBe(false);
+    expect(search).toHaveBeenCalledTimes(6);
   });
 
   it("pending 退避只复用完整输入 key，Bank 位置改变仍需新测量", () => {
     search.mockReturnValue({ path: [], incomplete: true, ops: 6_000, cost: 0 });
-    expect(measure(input())).toMatchObject({ status: "pending", retryAt: 1_005 });
+    expect(measure(input())).toMatchObject({ status: "pending", retryAt: 1_100 });
     Game.time += 1;
     search.mockImplementation(straightSameRoom);
     expect(measure({ ...input(), bankPos: pos(14) }).status).toBe("ready");
@@ -443,6 +447,118 @@ describe("Power Bank 静态完整路径测量", () => {
     expect(measure(candidate)).toBe(deferred);
     expect(search).toHaveBeenCalledTimes(1);
     expect(canMeasure()).toBe(true);
+  });
+
+  it("engineIncomplete hold 在 +5 tick 不重跑 6000 ops，100 tick 到期才重新测量", () => {
+    search.mockReturnValue({ path: [pos(11)], incomplete: true, ops: 6_000, cost: 2 });
+    const candidate = input();
+    const first = measure(candidate);
+    expect(first).toMatchObject({ status: "pending", reason: "path_incomplete" });
+    expect(search.mock.calls[0][2].maxOps).toBe(6_000);
+    Game.time += 5;
+    const held = measure(candidate);
+    // 先核原生调用数，让旧版在真正重复测量处失败，而非只比新 retryAt 常量。
+    expect(search).toHaveBeenCalledTimes(1);
+    expect(held).toBe(first);
+    expect(held).toEqual({ status: "pending", reason: "path_incomplete", retryAt: 1_100 });
+    expect(canMeasure()).toBe(true);
+    Game.time = 1_099;
+    expect(measure(candidate)).toBe(first);
+    expect(search).toHaveBeenCalledTimes(1);
+    Game.time = 1_100;
+    expect(measure(candidate)).toEqual({ status: "pending", reason: "path_incomplete", retryAt: 1_200 });
+    expect(search).toHaveBeenCalledTimes(2);
+  });
+
+  it("engineIncomplete hold 拓扑改变在 100 tick 前失效并重新取得三段合法路径", () => {
+    search.mockReturnValue({ path: [], incomplete: true, ops: 6_000, cost: 0 });
+    const candidate = input();
+    expect(measure(candidate)).toMatchObject({ status: "pending", reason: "path_incomplete" });
+    Game.time++;
+    topology.mockReturnValue("obstacle-removed");
+    search.mockImplementation(straightSameRoom);
+    // 生成相邻连续、到同房 range 1 的路径，由真实 measure 做三段校验。
+    expect(measure(candidate)).toEqual({ status: "ready", pathDistance: 2, combatTravelTicks: 2,
+      haulerOutboundTravelTicks: 2, haulerReturnTravelTicks: 2 });
+    expect(search).toHaveBeenCalledTimes(4);
+    expect(canMeasure()).toBe(false);
+  });
+
+  it("engineIncomplete hold 让三个任务各三座 Spawn 的工作集完成首轮而非五 tick 重测前缀", () => {
+    search.mockReturnValue({ path: [], incomplete: true, ops: 6_000, cost: 0 });
+    const tasks = [13, 14, 15].map(bankX => [8, 9, 10].map(spawnX => ({
+      ...input(), bankPos: pos(bankX), sourceSpawnPos: pos(spawnX),
+    })));
+    const candidates = tasks.flat();
+    const measuredPairs = () => new Set(search.mock.calls.map(([source, goal]) => `${source.x}:${goal.pos.x}`));
+    for (let tick = 0; tick < candidates.length; tick++) {
+      Game.time = 1_000 + tick;
+      // 直接 API 的任务轮转夹具；不替代 Harvest 的任务调度回归。
+      for (const candidate of tasks[tick % tasks.length]) expect(measure(candidate).status).toBe("pending");
+      expect(measuredPairs().size).toBe(tick + 1);
+    }
+    expect(search).toHaveBeenCalledTimes(9);
+    expect(measuredPairs()).toEqual(new Set(candidates.map(candidate => `${candidate.sourceSpawnPos.x}:${candidate.bankPos.x}`)));
+    Game.time++;
+    for (const candidate of candidates) expect(measure(candidate)).toMatchObject({ status: "pending", reason: "path_incomplete" });
+    expect(search).toHaveBeenCalledTimes(9);
+    expect(canMeasure()).toBe(true);
+  });
+
+  it("engineIncomplete hold 命中仍新查状态，闭房或读取异常不沿用长等待结果", () => {
+    search.mockReturnValue({ path: [], incomplete: true, ops: 6_000, cost: 0 });
+    expect(measure(input())).toMatchObject({ status: "pending", reason: "path_incomplete" });
+    Game.time++;
+    (Game.map.getRoomStatus as jest.Mock).mockReturnValue({ status: "closed", timestamp: null });
+    expect(measure(input())).toEqual({ status: "pending", reason: "unsafe_route", retryAt: 1_006 });
+    expect(canMeasure()).toBe(true);
+    Game.time++;
+    (Game.map.getRoomStatus as jest.Mock).mockImplementation(() => { throw new Error("status unavailable"); });
+    expect(measure(input())).toEqual({ status: "pending", reason: "route_observation_failed", retryAt: 1_007 });
+    expect(search).toHaveBeenCalledTimes(1);
+    expect(canMeasure()).toBe(true);
+  });
+
+  it("engineIncomplete hold 拓扑失效在预算用完时移除旧项，下一 tick 按原门顺序重测", () => {
+    search.mockReturnValue({ path: [], incomplete: true, ops: 6_000, cost: 0 });
+    const candidate = input();
+    expect(measure(candidate).status).toBe("pending");
+    Game.time++;
+    search.mockImplementation(straightSameRoom);
+    expect(measure({ ...candidate, bankPos: pos(14) }).status).toBe("ready");
+    topology.mockReturnValue("changed-after-budget");
+    expect(measure(candidate)).toEqual({ status: "pending", reason: "budget", retryAt: 1_002 });
+    expect(search).toHaveBeenCalledTimes(4);
+    Game.time++;
+    topology.mockReturnValue("stable");
+    expect(measure(candidate).status).toBe("ready");
+    expect(search).toHaveBeenCalledTimes(7);
+  });
+
+  it("PF 异常仍为五 tick 短退避，不能扩成 engineIncomplete hold", () => {
+    search.mockImplementation(() => { throw new Error("search unavailable"); });
+    const first = measure(input());
+    expect(first).toEqual({ status: "pending", reason: "path_search_failed", retryAt: 1_005 });
+    Game.time += 4;
+    topology.mockReturnValue("changed-but-short-backoff");
+    expect(measure(input())).toBe(first);
+    expect(canMeasure()).toBe(true);
+    Game.time++;
+    search.mockImplementation(straightSameRoom);
+    expect(measure(input()).status).toBe("ready");
+    expect(search).toHaveBeenCalledTimes(4);
+  });
+
+  it("invalidRouteTooLong 仅区分确证的超长 route，不把其它 invalidInput 归为长度", () => {
+    Memory.cfg!.cpuProfiler = { enabled: true, sampleInterval: 1 };
+    const routeRooms = Array.from({ length: 17 }, (_, index) => `W${index + 1}N1`);
+    expect(measure({ ...input(), routeRooms, bankPos: pos(13, 10, routeRooms[16]) }))
+      .toEqual({ status: "pending", reason: "invalid_input", retryAt: 1_005 });
+    expect(measure({ ...input(), bankPos: pos(50) })).toMatchObject({ status: "pending", reason: "invalid_input" });
+    expect(Memory.analytics!.powerBankPathDiagnostics!.totals).toMatchObject({ requests: 2, invalidInput: 2, invalidRouteTooLong: 1 });
+    expect(Game.map.getRoomStatus).not.toHaveBeenCalled();
+    expect(topology).not.toHaveBeenCalled();
+    expect(search).not.toHaveBeenCalled();
   });
 
   it("合法 range 1 内的零路径成立，并从实际 origin 做返程", () => {

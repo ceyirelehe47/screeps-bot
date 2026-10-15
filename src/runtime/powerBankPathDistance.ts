@@ -6,11 +6,12 @@ import { hasPlanningCpuHeadroom } from "@/runtime/planningCpuBudget";
 import { measureSampledCpuPhase } from "@/runtime/cpuPhaseProfiler";
 import { getPowerBankRoomStatus } from "@/runtime/powerBankMapFacts";
 import { normalizeCpuMonitorConfig } from "@/runtime/cpuMonitor";
+import { POWER_BANK_MAX_ROUTE_ROOMS } from "@/runtime/powerBankConstants";
 
 const CACHE_LIMIT = 64;
 const CACHE_TTL = 100;
 const RETRY_TICKS = 5;
-const MAX_ROUTE_ROOMS = 16;
+const ENGINE_INCOMPLETE_HOLD_TICKS = 100;
 const MAX_MEASUREMENTS_PER_TICK = 1;
 const MAX_SEARCHES_PER_TICK = 3;
 const SEARCH_MAX_OPS = 6_000;
@@ -30,6 +31,8 @@ export interface PowerBankPathDiagnosticCounts {
   ready?: number;
   budgetWait?: number;
   invalidInput?: number;
+  /** 仅 invalid_input 且 route 数组长度确实超过支持范围，不代表其它无效输入。 */
+  invalidRouteTooLong?: number;
   endpointNotVisible?: number;
   unsafeRoute?: number;
   routeObservationFailed?: number;
@@ -192,6 +195,8 @@ interface CacheEntry {
   expiresAt: number;
   worldKey: string;
   result: PowerBankTravelMeasurementResult;
+  /** 原生 incomplete 的保守静态等待；不是不可达证明，也不授权任何投入。 */
+  conservativeEngineIncompleteHold?: true;
 }
 
 interface MovementBody {
@@ -254,7 +259,8 @@ function pending(reason: string, retryTicks = RETRY_TICKS): PowerBankTravelMeasu
   return Object.freeze({ status: "pending", reason, retryAt: Game.time + retryTicks });
 }
 
-function remember(key: string, worldKey: string, result: PowerBankTravelMeasurementResult, call?: DiagnosticCall): PowerBankTravelMeasurementResult {
+function remember(key: string, worldKey: string, result: PowerBankTravelMeasurementResult, call?: DiagnosticCall,
+  conservativeEngineIncompleteHold?: true): PowerBankTravelMeasurementResult {
   measurements.delete(key);
   while (measurements.size >= CACHE_LIMIT) {
     const oldest = measurements.keys().next().value as string | undefined;
@@ -266,6 +272,7 @@ function remember(key: string, worldKey: string, result: PowerBankTravelMeasurem
     expiresAt: result.status === "ready" ? Game.time + CACHE_TTL : result.retryAt,
     worldKey,
     result,
+    conservativeEngineIncompleteHold,
   });
   return result;
 }
@@ -294,12 +301,13 @@ function measurePowerBankTravelImpl(input: PowerBankTravelMeasurementInput, call
   if (measureSampledCpuPhase("inputValidation", () => !validPosition(input.sourceSpawnPos) || !validPosition(input.bankPos) || !validPosition(input.returnTargetPos) ||
     input.returnTargetPos.roomName !== input.sourceSpawnPos.roomName || !attacker || !healer ||
     !Number.isSafeInteger(input.haulerCarryParts) || input.haulerCarryParts < 1 || input.haulerCarryParts > 25 ||
-    !Array.isArray(input.routeRooms) || input.routeRooms.length === 0 || input.routeRooms.length > MAX_ROUTE_ROOMS ||
+    !Array.isArray(input.routeRooms) || input.routeRooms.length === 0 || input.routeRooms.length > POWER_BANK_MAX_ROUTE_ROOMS ||
     input.routeRooms[0] !== input.sourceSpawnPos.roomName ||
     input.routeRooms[input.routeRooms.length - 1] !== input.bankPos.roomName ||
     new Set(input.routeRooms).size !== input.routeRooms.length || !Array.isArray(input.avoidRooms) ||
     input.routeRooms.some((room) => typeof room !== "string" || !roomCoordinates(room)) ||
     input.avoidRooms.some((room) => typeof room !== "string" || !roomCoordinates(room)))) {
+    if (Array.isArray(input.routeRooms) && input.routeRooms.length > POWER_BANK_MAX_ROUTE_ROOMS) diagnostic(call, "invalidRouteTooLong");
     return pending("invalid_input");
   }
   if (!Game.rooms[input.sourceSpawnPos.roomName] || !Game.rooms[input.bankPos.roomName]) {
@@ -337,7 +345,7 @@ function measurePowerBankTravelImpl(input: PowerBankTravelMeasurementInput, call
     } else if (!cached) diagnostic(call, "unknownMiss");
     return cached;
   });
-  if (cached?.result.status === "pending") {
+  if (cached?.result.status === "pending" && !cached.conservativeEngineIncompleteHold) {
     diagnostic(call, "pendingHit");
     // 退避只表示尚无完整路径证据，不授权投入；中转房失去视野不应让
     // 同一失败输入反复抢走唯一测量名额。输入、端点和 avoid 门已校验。
@@ -346,8 +354,8 @@ function measurePowerBankTravelImpl(input: PowerBankTravelMeasurementInput, call
     return cached.result;
   }
   const availableBudget = canMeasurePowerBankTravelThisTick();
-  // 无既有证据且配额已用完时，不扫描其它候选的状态或拓扑。已知 ready 仍
-  // 需要当次状态和几何校验；预算耗尽不能让 stale ready 绕过这些门。
+  // 无既有证据且配额已用完时，不扫描其它候选的状态或拓扑。ready 与长期
+  // incomplete 等待仍需当次状态/几何校验，不能跨过 world 变化沿用旧项。
   if (!cached && !availableBudget) return pending("budget", 1);
 
   const roomSafety = new Map<string, boolean>();
@@ -374,7 +382,7 @@ function measurePowerBankTravelImpl(input: PowerBankTravelMeasurementInput, call
     return pending("route_observation_failed");
   }
   if (cached && cached.worldKey === worldKey) {
-    diagnostic(call, "readyHit");
+    diagnostic(call, cached.result.status === "ready" ? "readyHit" : "pendingHit");
     measurements.delete(key);
     measurements.set(key, cached);
     return cached.result;
@@ -433,6 +441,7 @@ function measurePowerBankTravelImpl(input: PowerBankTravelMeasurementInput, call
       Math.abs(previousY - (goalRoom.y * 50 + goal.y)),
     ) <= 1;
   });
+  let engineIncomplete = false;
   const search = (origin: RoomPosition, goal: RoomPosition, plainCost: number, swampCost: number, stage: SearchStage): RoomPosition[] | undefined => {
     if (searchesThisTick >= MAX_SEARCHES_PER_TICK || !hasPlanningCpuHeadroom()) {
       diagnostic(call, searchesThisTick >= MAX_SEARCHES_PER_TICK ? "searchBudgetWait" : "searchHeadroomWait");
@@ -455,7 +464,10 @@ function measurePowerBankTravelImpl(input: PowerBankTravelMeasurementInput, call
     }
     const incomplete = result.incomplete;
     recordSearchResult(call, stage, result, incomplete);
-    if (incomplete) return undefined;
+    if (incomplete) {
+      engineIncomplete = incomplete === true;
+      return undefined;
+    }
     if (!Array.isArray(result.path)) { diagnostic(call, "malformedPath"); return undefined; }
     if (!validPath(result.path, origin, goal)) { diagnostic(call, "invalidPath"); return undefined; }
     return result.path;
@@ -494,14 +506,17 @@ function measurePowerBankTravelImpl(input: PowerBankTravelMeasurementInput, call
   const travelTicks = (path: readonly RoomPosition[], body: MovementBody): number => measureSampledCpuPhase("travelEstimation", () => path.reduce(
     (total, pos) => total + Math.max(1, Math.ceil(body.weight * terrainFatigue(pos) / (body.moves * 2))), 0,
   ));
+  const incompleteResult = (): PowerBankTravelMeasurementResult => remember(key, worldKey,
+    pending("path_incomplete", engineIncomplete ? ENGINE_INCOMPLETE_HOLD_TICKS : RETRY_TICKS), call,
+    engineIncomplete ? true : undefined);
   try {
     const combat = search(input.sourceSpawnPos, input.bankPos, 2, 8, "combat");
-    if (!combat) return remember(key, worldKey, pending("path_incomplete"), call);
+    if (!combat) return incompleteResult();
     const outbound = search(input.sourceSpawnPos, input.bankPos, 1, 1, "outbound");
-    if (!outbound) return remember(key, worldKey, pending("path_incomplete"), call);
+    if (!outbound) return incompleteResult();
     const returnOrigin = outbound[outbound.length - 1] ?? input.sourceSpawnPos;
     const loadedReturn = search(returnOrigin, input.returnTargetPos, 1, 5, "return");
-    if (!loadedReturn) return remember(key, worldKey, pending("path_incomplete"), call);
+    if (!loadedReturn) return incompleteResult();
     const result: PowerBankTravelMeasurementResult = Object.freeze({
       status: "ready",
       pathDistance: outbound.length,

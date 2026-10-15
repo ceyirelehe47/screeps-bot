@@ -184,6 +184,29 @@ function setupGameMap(): void {
   Game.map.findRoute = jest.fn(() => [{ room: "corridor", exit: FIND_EXIT_RIGHT }]);
 }
 
+type AdmissionRouteStep = { room: string; exit: ExitConstant };
+
+/** 真实逐房四向走廊，供准入策略测试；不代表已经完成逐格 PF 证明。 */
+function setupAdmissionMap(corridors: Record<string, AdmissionRouteStep[]>): jest.Mock {
+  const exits = new Map<string, Partial<Record<ExitConstant, string>>>();
+  for (const [source, steps] of Object.entries(corridors)) {
+    let previous = source;
+    for (const step of steps) {
+      const outgoing = exits.get(previous) ?? {};
+      outgoing[step.exit] = step.room;
+      exits.set(previous, outgoing);
+      previous = step.room;
+    }
+  }
+  Game.map.getWorldSize = jest.fn(() => 202);
+  Game.map.getRoomStatus = jest.fn(() => ({ status: "normal", timestamp: null }));
+  Game.map.describeExits = jest.fn((name: string) => exits.get(name) ?? {}) as typeof Game.map.describeExits;
+  const find = jest.fn((from: string) => corridors[from] ?? ERR_NO_PATH);
+  Game.map.findRoute = find as typeof Game.map.findRoute;
+  Game.cpu = { ...Game.cpu, limit: 120, tickLimit: 500, bucket: 10000, getUsed: jest.fn(() => 0) };
+  return find;
+}
+
 function setupStore(): Record<string, PowerBankHarvestTask> {
   if (!Memory.data) Memory.data = {};
   Memory.data.powerBankHarvest = {};
@@ -486,6 +509,153 @@ describe("powerBankHarvest", () => {
     const measuredTravel = { ...task, status: POWER_BANK_STATUS.TRAVELLING, combatTravelTicks: 700, routeDistance: 1 };
     expect(getPowerBankStageTimeout(measuredTravel)).toBe(950);
     expect(getPowerBankStageTimeout({ ...measuredTravel, combatTravelTicks: undefined })).toBe(300);
+  });
+
+  it("17 房走廊保留发现任务且在 100 tick 内不反复扫描资源与三个 Spawn", () => {
+    const sourceName = "E0N44";
+    const source = setupOwnedRoom(sourceName, { spawnCount: 3, energyCapacity: 12_900 });
+    const steps: AdmissionRouteStep[] = Array.from({ length: 16 }, (_, index) => ({
+      room: `E0N${45 + index}`, exit: FIND_EXIT_TOP,
+    }));
+    const find = setupAdmissionMap({ [sourceName]: steps });
+    expect([sourceName, ...steps.map(step => step.room)]).toHaveLength(17);
+    const stock = jest.spyOn(source.storage!.store, "getUsedCapacity");
+    const reservedLabs = jest.spyOn(require("@/runtime/powerBankBoostMemory"), "getActivePowerBankBoostLabIds");
+    jest.spyOn(powerBankObserver, "hasPowerBankObserverCoverage").mockReturnValue(true);
+    jest.mocked(powerBankPathDistance.measurePowerBankTravel).mockReturnValue({
+      status: "pending", reason: "invalid_input", retryAt: Game.time + 5,
+    });
+    const task = makeTask({ id: "pb-unsupported-route", bankId: "pb-unsupported-route", hits: 100_000, power: 1000,
+      ticksToDecay: 150, discoveredTick: Game.time, lastSeenTick: Game.time, bankExpiresAt: Game.time + 150 });
+    setupDiscoveredBank(task);
+    const bank = Game.rooms[TARGET_ROOM].find(FIND_STRUCTURES)[0] as StructurePowerBank;
+    mockObjects(bank);
+    addTask(task);
+    const expiresAt = task.bankExpiresAt!;
+    const frame = (tick: number): void => {
+      Game.time = tick;
+      (bank as { ticksToDecay: number }).ticksToDecay = expiresAt - tick;
+      powerBankObserver.runPowerBankObserver();
+      runPowerBankHarvest();
+    };
+
+    frame(100);
+    expect(stock).not.toHaveBeenCalled();
+    expect(reservedLabs).not.toHaveBeenCalled();
+    expect(powerBankPathDistance.measurePowerBankTravel).not.toHaveBeenCalled();
+    expect(task).toMatchObject({ status: "discovered", blocker: "path_measurement_pending", nextAttemptAt: 200 });
+    for (const tick of [101, 105, 199]) {
+      frame(tick);
+      expect(getTask(task.id)).toBe(task);
+      expect(Object.keys(Memory.data!.powerBankHarvest!)).toEqual([task.id]);
+      expect(task.bankExpiresAt).toBe(expiresAt);
+    }
+    expect(find).toHaveBeenCalledTimes(1);
+    expect(stock).not.toHaveBeenCalled();
+    expect(powerBankPathDistance.measurePowerBankTravel).not.toHaveBeenCalled();
+    frame(200);
+    expect(find).toHaveBeenCalledTimes(2);
+    expect(task.nextAttemptAt).toBe(300);
+    expect(getTask(task.id)).toBe(task);
+
+    Game.time = expiresAt;
+    Game.rooms[TARGET_ROOM] = { name: TARGET_ROOM, find: jest.fn(() => []) } as unknown as Room;
+    mockObjects();
+    powerBankObserver.runPowerBankObserver();
+    runPowerBankHarvest();
+    expect(getTask(task.id)).toBeUndefined();
+    expect(Memory.data!.powerBankHarvestHistory).toContainEqual(expect.objectContaining({
+      taskId: task.id, failReason: "bank_expired", terminalTick: expiresAt,
+    }));
+    expect(find).toHaveBeenCalledTimes(2);
+  });
+
+  it("长走廊 hold 不阻止其它来源准入，due 入口的危险与世界变化重新取路线", () => {
+    const longSource = setupOwnedRoom(SOURCE_ROOM, { spawnCount: 3, energyCapacity: 12_900 });
+    const supportedSource = "E0N59";
+    setupOwnedRoom(supportedSource, { spawnCount: 2, energyCapacity: 12_900 });
+    const longSteps: AdmissionRouteStep[] = [
+      ...Array.from({ length: 3 }, (_, index) => ({ room: `E${6 + index}N55`, exit: FIND_EXIT_RIGHT })),
+      ...Array.from({ length: 5 }, (_, index) => ({ room: `E8N${56 + index}`, exit: FIND_EXIT_TOP })),
+      ...Array.from({ length: 8 }, (_, index) => ({ room: `E${7 - index}N60`, exit: FIND_EXIT_LEFT })),
+    ];
+    const find = setupAdmissionMap({ [SOURCE_ROOM]: longSteps,
+      [supportedSource]: [{ room: TARGET_ROOM, exit: FIND_EXIT_TOP }] });
+    expect([SOURCE_ROOM, ...longSteps.map(step => step.room)]).toHaveLength(17);
+    const stock = jest.spyOn(longSource.storage!.store, "getUsedCapacity");
+    jest.spyOn(powerBankObserver, "hasPowerBankObserverCoverage").mockReturnValue(true);
+    const task = makeTask({ id: "pb-long-and-supported", hits: 100_000, power: 1000,
+      discoveredTick: Game.time, lastSeenTick: Game.time, bankExpiresAt: Game.time + 5000 });
+    setupDiscoveredBank(task); addTask(task);
+    const bank = Game.rooms[TARGET_ROOM].find(FIND_STRUCTURES)[0] as StructurePowerBank;
+    const expiresAt = task.bankExpiresAt!;
+    const advance = (tick: number): void => {
+      Game.time = tick;
+      (bank as { ticksToDecay: number }).ticksToDecay = expiresAt - tick;
+    };
+    jest.mocked(powerBankPathDistance.measurePowerBankTravel).mockImplementation(value => ({
+      status: "pending", reason: value.routeRooms.length > 16 ? "invalid_input" : "budget",
+      retryAt: Game.time + (value.routeRooms.length > 16 ? 5 : 1),
+    }));
+    runPowerBankHarvest();
+    expect(stock).not.toHaveBeenCalled();
+    expect(jest.mocked(powerBankPathDistance.measurePowerBankTravel).mock.calls
+      .every(([value]) => value.sourceSpawnPos.roomName === supportedSource)).toBe(true);
+    expect(task.nextAttemptAt).toBe(101);
+    advance(101); runPowerBankHarvest();
+    expect(find.mock.calls.filter(([from]) => from === SOURCE_ROOM)).toHaveLength(1);
+    advance(102);
+    Memory.runtime!.transitDangerRooms = { W0N0: 200 };
+    runPowerBankHarvest();
+    expect(find.mock.calls.filter(([from]) => from === SOURCE_ROOM)).toHaveLength(2);
+    advance(103);
+    jest.mocked(Game.map.getWorldSize).mockReturnValue(204);
+    runPowerBankHarvest();
+    expect(find.mock.calls.filter(([from]) => from === SOURCE_ROOM)).toHaveLength(3);
+    advance(104);
+    jest.mocked(powerBankPathDistance.measurePowerBankTravel).mockClear().mockReturnValue({
+      status: "ready", pathDistance: 100, combatTravelTicks: 100,
+      haulerOutboundTravelTicks: 100, haulerReturnTravelTicks: 100,
+    });
+    runPowerBankHarvest();
+    expect(powerBankPathDistance.measurePowerBankTravel).toHaveBeenCalledTimes(2);
+    expect(task).toMatchObject({ status: "preparing_boosts", sourceRoom: supportedSource });
+    expect(stock).not.toHaveBeenCalled();
+  });
+
+  it("无效测量输入只问同源首个 Spawn，仍按五 tick 重试并要求全部 Spawn 恢复", () => {
+    const sourceName = "E0N58";
+    setupOwnedRoom(sourceName, { spawnCount: 3, energyCapacity: 12_900 });
+    setupAdmissionMap({ [sourceName]: [
+      { room: "E0N59", exit: FIND_EXIT_TOP }, { room: TARGET_ROOM, exit: FIND_EXIT_TOP },
+    ] });
+    jest.spyOn(powerBankObserver, "hasPowerBankObserverCoverage").mockReturnValue(true);
+    const task = makeTask({ id: "pb-invalid-measurement", hits: 100_000, power: 1000,
+      discoveredTick: Game.time, lastSeenTick: Game.time, bankExpiresAt: Game.time + 5000 });
+    setupDiscoveredBank(task); addTask(task);
+    const bank = Game.rooms[TARGET_ROOM].find(FIND_STRUCTURES)[0] as StructurePowerBank;
+    const expiresAt = task.bankExpiresAt!;
+    // 这里只验证既有 measurement 返回合同，不将 mock ready 当作实际移动证明。
+    jest.mocked(powerBankPathDistance.measurePowerBankTravel).mockReturnValue({
+      status: "pending", reason: "invalid_input", retryAt: Game.time + 5,
+    });
+    runPowerBankHarvest();
+    expect(powerBankPathDistance.measurePowerBankTravel).toHaveBeenCalledTimes(1);
+    expect(task).toMatchObject({ status: "discovered", blocker: "path_measurement_pending", nextAttemptAt: 105 });
+    expect(task.admissionLastMeasuredAt).toBeUndefined();
+    Game.time = 104;
+    (bank as { ticksToDecay: number }).ticksToDecay = expiresAt - Game.time;
+    runPowerBankHarvest();
+    expect(powerBankPathDistance.measurePowerBankTravel).toHaveBeenCalledTimes(1);
+    Game.time = 105;
+    (bank as { ticksToDecay: number }).ticksToDecay = expiresAt - Game.time;
+    jest.mocked(powerBankPathDistance.measurePowerBankTravel).mockClear().mockReturnValue({
+      status: "ready", pathDistance: 100, combatTravelTicks: 100,
+      haulerOutboundTravelTicks: 100, haulerReturnTravelTicks: 100,
+    });
+    runPowerBankHarvest();
+    expect(powerBankPathDistance.measurePowerBankTravel).toHaveBeenCalledTimes(3);
+    expect(task).toMatchObject({ status: "preparing_boosts", sourceRoom: sourceName });
   });
 
   it("预算用尽仍先校验当前视野、Bank与威胁，但不扫描来源", () => {
