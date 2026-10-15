@@ -15,7 +15,7 @@ jest.mock("@/movement/traffic", () => ({ ...jest.requireActual("@/movement/traff
 
 import { meleeAttackerRole, findWarObjectiveTarget } from "@/roles/meleeAttacker";
 import * as towerDrainPair from "@/roles/towerDrainPair";
-import { createMockPowerBankCreep } from "@mock/powerBank";
+import { createMockPowerBankCreep, MockPos } from "@mock/powerBank";
 
 const { moveToTarget, moveToTargetRoom } = jest.requireMock("@/roles/shared") as {
   moveToTarget: jest.Mock;
@@ -31,7 +31,7 @@ function hostileCreep(name: string, hits: number, parts: Partial<Record<BodyPart
     name,
     owner: { username: "TooAngel" },
     hits,
-    pos: { x: 26, y: 25, roomName: "E2N57", getRangeTo: jest.fn(() => 1) } as unknown as RoomPosition,
+    pos: new MockPos(26, 25, TARGET_ROOM) as unknown as RoomPosition,
     getActiveBodyparts: jest.fn((part: BodyPartConstant) => parts[part] ?? 0),
   } as unknown as Creep;
 }
@@ -44,6 +44,20 @@ function hostileStructure(type: StructureConstant, id: string, x: number, y: num
     hitsMax: hits,
     pos: { x, y, roomName: TARGET_ROOM, getRangeTo: jest.fn(() => 1) } as unknown as RoomPosition,
   } as Structure;
+}
+
+// 目标策略用例仍使用模拟搜索；路径逐步相邻且确实抵达目标攻击范围。
+function combatPathThrough(...waypoints: Array<readonly [number, number]>): RoomPosition[] {
+  const path: RoomPosition[] = [];
+  let [x, y] = waypoints[0];
+  for (const [targetX, targetY] of waypoints.slice(1)) {
+    while (x !== targetX || y !== targetY) {
+      x += Math.sign(targetX - x);
+      y += Math.sign(targetY - y);
+      path.push({ x, y, roomName: TARGET_ROOM } as RoomPosition);
+    }
+  }
+  return path;
 }
 
 
@@ -88,6 +102,119 @@ describe("meleeAttackerRole war duo staging", () => {
     attacker.memory.configName = "another-source:war:E3N57:meleeAttacker:0";
     structures.splice(1);
     expect(findWarObjectiveTarget(attacker)).toBe(old);
+  });
+
+  it.each([STRUCTURE_RAMPART, STRUCTURE_EXTENSION] as const)("共享巡逻有开放目标%s时，不被更弱的中性墙抢占", (type) => {
+    const wall = hostileStructure(STRUCTURE_WALL, "unnecessary-neutral-wall", 47, 11, 165_551);
+    const target = hostileStructure(type, "patrol-objective", 25, 25, 9001);
+    const attacker = createMockPowerBankCreep("meleeAttacker", { name: "red", roomName: TARGET_ROOM, x: 20, y: 20,
+      memory: { configName: ATTACKER_CONFIG } });
+    const healer = createMockPowerBankCreep("healer", { name: "green", roomName: TARGET_ROOM, x: 19, y: 20,
+      memory: { configName: HEALER_CONFIG } });
+    attacker.room.find = jest.fn((kind) => kind === FIND_STRUCTURES ? [wall, target] : kind === FIND_HOSTILE_STRUCTURES ? [target] : []) as Room["find"];
+    attacker.pos.findInRange = jest.fn(() => []) as RoomPosition["findInRange"];
+    attacker.attack = jest.fn(() => ERR_NOT_IN_RANGE);
+    Game.creeps = { red: attacker, green: healer };
+    Memory.data = { war: { [TARGET_ROOM]: { targetRoom: TARGET_ROOM, sourceRoom: "E1N57", status: "clearing", reason: "manual",
+      attempts: 1, createdAt: 1, updatedAt: Game.time, sharedSquadWatchId: "patrol-watch" } } };
+    (PathFinder.search as jest.Mock).mockReturnValue({ path: combatPathThrough([20, 20], [24, 24]), incomplete: false, ops: 10 });
+    const drainGate = jest.spyOn(towerDrainPair, "runTowerDrainPair").mockReturnValue(false);
+    const safePath = jest.spyOn(towerDrainPair, "constrainTowerDrainBreachPath").mockImplementation((_creep, _roomName, matrix) => matrix);
+    try {
+      expect(findWarObjectiveTarget(attacker, true)).toBe(target);
+      meleeAttackerRole(TARGET_ROOM, "", "", "", HEALER_CONFIG, "towerDrainDuo").target(attacker);
+      expect(attacker.attack).toHaveBeenCalledWith(target);
+      expect(attacker.attack).not.toHaveBeenCalledWith(wall);
+      expect(moveToTarget).toHaveBeenCalledWith(attacker, target, 1, expect.objectContaining({ costCallback: expect.any(Function) }));
+      if (type === STRUCTURE_EXTENSION) expect(safePath).toHaveBeenCalledWith(attacker, TARGET_ROOM, expect.any(Object));
+    } finally {
+      safePath.mockRestore();
+      drainGate.mockRestore();
+    }
+  });
+
+  it("共享巡逻仍可突破实际目标路径上的中性墙，并保留耗塔安全矩阵", () => {
+    const wall = hostileStructure(STRUCTURE_WALL, "necessary-neutral-wall", 22, 20, 500_000);
+    const incidental = hostileStructure(STRUCTURE_WALL, "weak-unnecessary-neutral-wall", 20, 19, 100);
+    const core = hostileStructure(STRUCTURE_INVADER_CORE, "sealed-patrol-objective", 25, 25, 5000);
+    const attacker = createMockPowerBankCreep("meleeAttacker", { name: "red", roomName: TARGET_ROOM, x: 20, y: 20,
+      memory: { configName: ATTACKER_CONFIG } });
+    const healer = createMockPowerBankCreep("healer", { name: "green", roomName: TARGET_ROOM, x: 19, y: 20,
+      memory: { configName: HEALER_CONFIG } });
+    attacker.room.find = jest.fn((kind) => kind === FIND_STRUCTURES ? [incidental, wall, core] : kind === FIND_HOSTILE_STRUCTURES ? [core] : []) as Room["find"];
+    attacker.pos.findInRange = jest.fn(() => []) as RoomPosition["findInRange"];
+    attacker.attack = jest.fn(() => ERR_NOT_IN_RANGE);
+    Game.creeps = { red: attacker, green: healer };
+    Memory.data = { war: { [TARGET_ROOM]: { targetRoom: TARGET_ROOM, sourceRoom: "E1N57", status: "clearing", reason: "manual",
+      attempts: 1, createdAt: 1, updatedAt: Game.time, sharedSquadWatchId: "patrol-watch" } } };
+    (PathFinder.search as jest.Mock)
+      .mockReturnValueOnce({ path: [], incomplete: true, ops: 100 })
+      .mockReturnValueOnce({ path: combatPathThrough([20, 20], [22, 20], [24, 22], [24, 24]), incomplete: false, ops: 100 });
+    const drainGate = jest.spyOn(towerDrainPair, "runTowerDrainPair").mockReturnValue(false);
+    const safePath = jest.spyOn(towerDrainPair, "constrainTowerDrainBreachPath").mockImplementation((_creep, _roomName, matrix) => matrix);
+    try {
+      meleeAttackerRole(TARGET_ROOM, "", "", "", HEALER_CONFIG, "towerDrainDuo").target(attacker);
+      expect(attacker.attack).toHaveBeenCalledWith(wall);
+      expect(attacker.attack).not.toHaveBeenCalledWith(incidental);
+      expect(attacker.memory._warBreachTargetId).toBe(wall.id);
+      expect(moveToTarget).toHaveBeenCalledWith(attacker, wall, 1, expect.objectContaining({ costCallback: expect.any(Function) }));
+      expect(safePath).toHaveBeenCalledWith(attacker, TARGET_ROOM, expect.any(Object));
+      expect(PathFinder.search).toHaveBeenCalledTimes(2);
+    } finally {
+      safePath.mockRestore();
+      drainGate.mockRestore();
+    }
+  });
+
+  it("中性墙独立目标许可只约束本任务共享巡逻，普通耗塔清墙与其它身份保持原行为", () => {
+    const wall = hostileStructure(STRUCTURE_WALL, "neutral-cleanup-wall", 24, 25, 100);
+    const attacker = createMockPowerBankCreep("meleeAttacker", { roomName: TARGET_ROOM, memory: { configName: ATTACKER_CONFIG } });
+    attacker.room.find = jest.fn((kind) => kind === FIND_STRUCTURES ? [wall] : []) as Room["find"];
+    Memory.data = { war: { [TARGET_ROOM]: { targetRoom: TARGET_ROOM, sourceRoom: "E1N57", status: "clearing", reason: "manual",
+      attempts: 1, createdAt: 1, updatedAt: Game.time, sharedSquadWatchId: "patrol-watch" } } };
+    expect(findWarObjectiveTarget(attacker, true)).toBeNull();
+    attacker.memory.configName = "another-source:war:E3N57:meleeAttacker:0";
+    expect(findWarObjectiveTarget(attacker, true)).toBe(wall);
+    attacker.memory.configName = ATTACKER_CONFIG;
+    delete Memory.data.war![TARGET_ROOM].sharedSquadWatchId;
+    expect(findWarObjectiveTarget(attacker, true)).toBe(wall);
+    expect(findWarObjectiveTarget(attacker)).toBeNull();
+  });
+
+  it.each(["worker", "defender"] as const)("共享巡逻设施清除后追击远处%s，敌人消失后恢复无目标", (kind) => {
+    const enemy = hostileCreep(`remaining-${kind}`, 800, kind === "defender" ? { [RANGED_ATTACK]: 1, [HEAL]: 1 } : {});
+    enemy.pos = new MockPos(40, 40, TARGET_ROOM) as unknown as RoomPosition;
+    const keeper = hostileCreep("ignored-keeper", 5000, { [ATTACK]: 10 });
+    Object.assign(keeper.owner, { username: "Source Keeper" });
+    const hostiles = [enemy, keeper];
+    const attacker = createMockPowerBankCreep("meleeAttacker", { name: "red", roomName: TARGET_ROOM, x: 25, y: 25,
+      memory: { configName: ATTACKER_CONFIG } });
+    const healer = createMockPowerBankCreep("healer", { name: "green", roomName: TARGET_ROOM, x: 24, y: 25,
+      memory: { configName: HEALER_CONFIG } });
+    attacker.room.find = jest.fn((type: FindConstant, options?: { filter?: (hostile: Creep) => boolean }) =>
+      type === FIND_HOSTILE_CREEPS ? hostiles.filter(options?.filter ?? (() => true)) : [],
+    ) as Room["find"];
+    attacker.pos.findInRange = jest.fn(() => []) as RoomPosition["findInRange"];
+    attacker.attack = jest.fn(() => ERR_NOT_IN_RANGE);
+    Game.creeps = { red: attacker, green: healer };
+    Memory.data = { war: { [TARGET_ROOM]: { targetRoom: TARGET_ROOM, sourceRoom: "E1N57", status: "clearing", reason: "manual",
+      attempts: 1, createdAt: 1, updatedAt: Game.time, sharedSquadWatchId: "patrol-watch" } } };
+    (PathFinder.search as jest.Mock).mockReturnValue({ path: combatPathThrough([25, 25], [39, 39]), incomplete: false, ops: 100 });
+    const drainGate = jest.spyOn(towerDrainPair, "runTowerDrainPair").mockReturnValue(false);
+    const safePath = jest.spyOn(towerDrainPair, "constrainTowerDrainBreachPath").mockImplementation((_creep, _roomName, matrix) => matrix);
+    try {
+      expect(findWarObjectiveTarget(attacker, true)).toBe(enemy);
+      meleeAttackerRole(TARGET_ROOM, "", "", "", HEALER_CONFIG, "towerDrainDuo").target(attacker);
+      expect(attacker.attack).toHaveBeenCalledWith(enemy);
+      expect(moveToTarget).toHaveBeenCalledWith(attacker, enemy, 1, expect.objectContaining({ costCallback: expect.any(Function) }));
+      expect(safePath).toHaveBeenCalledWith(attacker, TARGET_ROOM, expect.any(Object));
+      expect(PathFinder.search).toHaveBeenCalledTimes(1);
+      hostiles.splice(0, 1);
+      expect(findWarObjectiveTarget(attacker, true)).toBeNull();
+    } finally {
+      safePath.mockRestore();
+      drainGate.mockRestore();
+    }
   });
 
   it("does not wait for an implicit same-index healer when the producer declares no partner", () => {
@@ -174,7 +301,7 @@ describe("meleeAttackerRole war duo staging", () => {
     attacker.attack = jest.fn((target) => target === spawn ? ERR_NOT_IN_RANGE : OK) as Creep["attack"];
     Game.creeps = { red: attacker, green: healer };
     Game.getObjectById = jest.fn(() => wall) as typeof Game.getObjectById;
-    (PathFinder.search as jest.Mock).mockReturnValue({ path: [road.pos], incomplete: false, ops: 1500 });
+    (PathFinder.search as jest.Mock).mockReturnValue({ path: combatPathThrough([1, 28], [1, 31], [2, 32], [9, 25], [24, 25]), incomplete: false, ops: 1500 });
     moveToTarget.mockReturnValue(moveResult);
     meleeAttackerRole(TARGET_ROOM, "", "", "", HEALER_CONFIG).target(attacker);
     expect(attacker.attack).toHaveBeenCalledWith(spawn);
@@ -202,8 +329,8 @@ describe("meleeAttackerRole war duo staging", () => {
     Game.creeps = { red: attacker, green: healer };
     (PathFinder.search as jest.Mock)
       .mockReturnValueOnce({ path: [], incomplete: true })
-      .mockReturnValueOnce({ path: [wall.pos], incomplete: false })
-      .mockReturnValueOnce({ path: [road.pos], incomplete: false });
+      .mockReturnValueOnce({ path: combatPathThrough([1, 28], [4, 28]), incomplete: false })
+      .mockReturnValueOnce({ path: combatPathThrough([1, 28], [1, 31], [2, 32], [9, 25], [24, 25]), incomplete: false });
     // 此用例单独检查耗塔门放行后的目标选择；门本身由 towerDrainPair.test 验证。
     const drainGate = jest.spyOn(towerDrainPair, "runTowerDrainPair").mockReturnValue(false);
     try {

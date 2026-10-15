@@ -9,3 +9,10 @@ export function getCreepRebuildIgnoredStructures(creep: Creep): readonly string[
   return task && creep.memory.configName?.startsWith(`${task.sourceRoom}:war:${task.targetRoom}:`)
     ? task.rebuildIgnoreStructureIds : undefined;
 }
+
+/** 共享巡逻与清场判据一致：中性墙只可作为实际目标的必要破障。 */
+export function canUseNeutralWallsAsWarObjectives(creep: Creep): boolean {
+  const task = Memory.data?.war?.[creep.room.name];
+  return !task?.sharedSquadWatchId
+    || !creep.memory.configName?.startsWith(`${task.sourceRoom}:war:${task.targetRoom}:`);
+}

@@ -1,11 +1,12 @@
 import { clearMovementState, moveToTarget, moveToTargetRoom } from "@/roles/shared";
-import { isWalkableStructure, parseEncodedRouteRooms } from "@/movement/common";
-import { moveOffExit } from "@/movement/traffic";
+import { isWalkableConstructionSite, isWalkableStructure, parseEncodedRouteRooms } from "@/movement/common";
+import { cancelMoveIntent, getMoveIntentReceipt, hasMoveDestinationConflict, issueMove, moveOffExit } from "@/movement/traffic";
+import { getCreepMovementState } from "@/movement/creepState";
 import { prepareCombatBoost } from "@/roles/combatBoosts";
 import { constrainTowerDrainBreachPath, moveTowerDrainBorderAttack, runTowerDrainPair } from "@/roles/towerDrainPair";
 import { measureCreepDecision, measureCreepIntent } from "@/runtime/cpuPhaseProfiler";
 import type { RoleFactory } from "@/types/system";
-import { getCreepRebuildIgnoredStructures, isRebuildStructureRelevant } from "@/runtime/warRebuildScope";
+import { canUseNeutralWallsAsWarObjectives, getCreepRebuildIgnoredStructures, isRebuildStructureRelevant } from "@/runtime/warRebuildScope";
 
 const TRAVEL_OPTIONS = { plainCost: 2, swampCost: 8, routePurpose: "combat" } as const;
 const TARGET_ROOM_MOVE_OPTIONS = {
@@ -29,10 +30,20 @@ function moveWarAttackerToTarget(
 ): ScreepsReturnCode {
   const targetPos = "pos" in target ? target.pos : target;
   const wasOutOfRange = creep.pos.getRangeTo(targetPos) > range;
+  const previousIntent = getMoveIntentReceipt(creep);
   const drainMove = towerDrain ? moveTowerDrainBorderAttack(creep, targetPos, range) : undefined;
   const code = drainMove === undefined ? moveToTarget(creep, target, range, options) : drainMove;
   if (code === OK && wasOutOfRange) {
     creep.memory._warMoveIntentAt = Game.time;
+    const intent = getMoveIntentReceipt(creep);
+    const healer = findPairedWarHealer(creep);
+    // OK 也可能是既有让位或原地等待；只协调本次新提交的移动。
+    if (intent && intent !== previousIntent && healer && !followMovingWarAttacker(healer, creep)) {
+      if (cancelMoveIntent(creep, intent)) {
+        delete creep.memory._warMoveIntentAt;
+        return ERR_BUSY;
+      }
+    }
   }
   return code;
 }
@@ -49,7 +60,7 @@ function getHostileStructures(room: Room, includeNeutralWalls = false, creep?: C
       structure.structureType !== STRUCTURE_CONTROLLER && structure.structureType !== STRUCTURE_KEEPER_LAIR,
   });
   const ignored = creep ? getCreepRebuildIgnoredStructures(creep) : undefined;
-  if (!includeNeutralWalls) return hostile.filter(s => isRebuildStructureRelevant(s, ignored));
+  if (!includeNeutralWalls || (creep && !canUseNeutralWallsAsWarObjectives(creep))) return hostile.filter(s => isRebuildStructureRelevant(s, ignored));
   const ids = new Set(hostile.map((structure) => structure.id));
   return [...hostile, ...room.find(FIND_STRUCTURES).filter((structure) => structure.structureType === STRUCTURE_WALL && !ids.has(structure.id))]
     .filter(s => isRebuildStructureRelevant(s, ignored));
@@ -153,7 +164,9 @@ export function findWarObjectiveTarget(creep: Creep, includeNeutralWalls = false
       if (left.hits !== right.hits) return left.hits - right.hits;
       return creep.pos.getRangeTo(left.pos) - creep.pos.getRangeTo(right.pos);
     });
-  return residualBarriers[0] ?? null;
+  if (residualBarriers.length > 0) return residualBarriers[0];
+  // 设施和屏障清完后继续清理敌兵，避免战争任务仍在 clearing 而小队只驻守中心。
+  return closest(hostileCreeps.filter(isDangerousHostile)) ?? closest(hostileCreeps);
 }
 
 function isBreachTarget(structure: Structure): structure is StructureRampart | StructureWall {
@@ -681,6 +694,55 @@ function findPairedWarHealer(creep: Creep): Creep | null {
   }
 
   return null;
+}
+
+function isWarFollowTileOpen(attacker: Creep, tile: Readonly<{ x: number; y: number; roomName: string }>): boolean {
+  const room = attacker.room;
+  if (typeof room.lookAt === "function") {
+    return room.lookAt(tile.x, tile.y).every((look) =>
+      look.terrain !== "wall" && !look.source && !look.mineral && !look.deposit
+      && (!look.structure || look.structure.structureType !== STRUCTURE_PORTAL && isWalkableStructure(look.structure))
+      && (!look.constructionSite || !look.constructionSite.my || isWalkableConstructionSite(look.constructionSite))
+      && (!look.creep || look.creep === attacker) && !look.powerCreep,
+    );
+  }
+  // 保留无 lookAt 的房间适配器；生产原生房间只查询上面的两个格子。
+  const at = (object: { pos: RoomPosition }): boolean => object.pos.x === tile.x && object.pos.y === tile.y;
+  return Game.map.getRoomTerrain(room.name).get(tile.x, tile.y) !== TERRAIN_MASK_WALL
+    && !room.find(FIND_STRUCTURES).some(s => at(s) && (s.structureType === STRUCTURE_PORTAL || !isWalkableStructure(s)))
+    && !room.find(FIND_CONSTRUCTION_SITES).some(s => at(s) && s.my && !isWalkableConstructionSite(s))
+    && ![...room.find(FIND_SOURCES), ...room.find(FIND_MINERALS), ...room.find(FIND_DEPOSITS)].some(at)
+    && !(room.controller && at(room.controller))
+    && ![...Object.values(Game.creeps), ...room.find(FIND_HOSTILE_CREEPS), ...room.find(FIND_HOSTILE_POWER_CREEPS), ...Object.values(Game.powerCreeps || {})]
+      .some(unit => unit !== attacker && unit.room?.name === room.name && at(unit));
+}
+
+/** 红绿任一执行序都可补齐同帧跟随；不覆盖已提交的安全移动或出口专用协调。 */
+export function followMovingWarAttacker(healer: Creep, attacker: Creep): boolean {
+  if (attacker.memory._warMoveIntentAt !== Game.time) return true;
+  if (attacker.memory._warDetached || healer.memory._warDetached || attacker.memory._warRetireToRoom || healer.memory._warRetireToRoom
+    || attacker.memory._recycleToRoom || healer.memory._recycleToRoom || attacker.spawning || healer.spawning
+    || attacker.memory._warPartnerConfigName !== healer.memory.configName || healer.memory._warPartnerConfigName !== attacker.memory.configName) return true;
+  const intent = getMoveIntentReceipt(attacker);
+  const interior = (pos: Readonly<{ x: number; y: number }>): boolean => pos.x > 0 && pos.x < 49 && pos.y > 0 && pos.y < 49;
+  if (!intent?.to || intent.to.roomName !== healer.room.name || attacker.room.name !== healer.room.name
+    || !interior(intent.from) || !interior(intent.to) || !interior(healer.pos) || !healer.pos.isNearTo(attacker.pos)) return true;
+  if (Math.max(Math.abs(intent.to.x - healer.pos.x), Math.abs(intent.to.y - healer.pos.y)) <= 1) return true;
+  if (healer.fatigue > 0 || healer.getActiveBodyparts(MOVE) <= 0
+    || hasMoveDestinationConflict(intent.to, [attacker, healer]) || !isWarFollowTileOpen(attacker, intent.to)) return false;
+  const healerIntent = getMoveIntentReceipt(healer);
+  if (healerIntent) {
+    return !!healerIntent.to && healerIntent.to.roomName === intent.to.roomName
+      && (healerIntent.to.x !== intent.to.x || healerIntent.to.y !== intent.to.y)
+      && Math.max(Math.abs(intent.to.x - healerIntent.to.x), Math.abs(intent.to.y - healerIntent.to.y)) <= 1
+      && !hasMoveDestinationConflict(healerIntent.to, [attacker, healer]) && isWarFollowTileOpen(attacker, healerIntent.to);
+  }
+  if (getCreepMovementState(healer)?.movementPushedAt === Game.time || hasMoveDestinationConflict(intent.from, [attacker, healer])
+    || !isWarFollowTileOpen(attacker, intent.from)) return false;
+  const direction = healer.pos.getDirectionTo(attacker.pos);
+  if (!direction) return false;
+  clearMovementState(healer);
+  return issueMove(healer, direction) === OK;
 }
 
 function getTargetRoomMoveOptions(creep: Creep, towerDrain = false) {
