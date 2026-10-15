@@ -1,5 +1,5 @@
 import { isPowerBankSearchRoom } from "@/runtime/powerBankConstants";
-import { getPowerBankSearchRooms } from "@/runtime/powerBankSearch";
+import { getPowerBankSearchCandidates, getPowerBankSearchRooms } from "@/runtime/powerBankSearch";
 import * as constants from "@/runtime/powerBankConstants";
 import { getPowerBankRoomStatus } from "@/runtime/powerBankMapFacts";
 
@@ -152,5 +152,44 @@ describe("PowerBank 动态搜房", () => {
     Game.time++;
     expect(getPowerBankSearchRooms("W67S67")).toEqual(original);
     expect(classify.mock.calls.length).toBeGreaterThan(calls);
+  });
+
+  it("117 房纯几何目录不读开放状态，完整 fresh API 仍逐帧反映关闭与重开", () => {
+    const origins = ["E1N57", "E3N54", "E3N59", "E4N57", "E4N58", "E5N59", "E6N59", "E7N57", "E7N58", "W1N57"];
+    Game.rooms = Object.fromEntries(origins.map(name => [name, { name, controller: { my: true, level: 6 } } as unknown as Room]));
+    Game.map.getWorldSize = jest.fn(() => 122);
+    const closed = new Set(["E0N44"]);
+    const status = jest.fn((name: string) => ({ status: closed.has(name) ? "closed" as const : "normal" as const, timestamp: null }));
+    Game.map.getRoomStatus = status;
+    const first = getPowerBankSearchCandidates();
+    expect(first).toHaveLength(117);
+    expect(first).toContain("E0N44");
+    expect(first).not.toContain("E0N61");
+    expect(status).not.toHaveBeenCalled();
+    first.splice(0, first.length, "caller-only");
+    expect(getPowerBankSearchCandidates()).toHaveLength(117);
+    expect(getPowerBankSearchRooms()).not.toContain("E0N44");
+    expect(status).toHaveBeenCalledTimes(117);
+    Game.time++;
+    closed.clear();
+    expect(getPowerBankSearchCandidates()).toHaveLength(117);
+    expect(status).toHaveBeenCalledTimes(117);
+    expect(getPowerBankSearchRooms()).toContain("E0N44");
+    expect(status).toHaveBeenCalledTimes(234);
+  });
+
+  it("纯几何候选同 tick 响应来源 RCL、归属和世界边界变化而不调用状态 API", () => {
+    const controller = { my: true, level: 5 };
+    const room = { name: "E43S43", controller } as unknown as Room;
+    Game.rooms = { [room.name]: room };
+    expect(getPowerBankSearchCandidates()).toEqual([]);
+    controller.level = 6;
+    expect(getPowerBankSearchCandidates()).toContain("E40S40");
+    controller.my = false;
+    expect(getPowerBankSearchCandidates()).toEqual([]);
+    controller.my = true;
+    Game.map.getWorldSize = jest.fn(() => 20);
+    expect(getPowerBankSearchCandidates()).toEqual([]);
+    expect(Game.map.getRoomStatus).not.toHaveBeenCalled();
   });
 });

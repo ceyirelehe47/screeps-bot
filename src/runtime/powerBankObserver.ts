@@ -1,7 +1,8 @@
 import { isPowerBankSearchRoom } from "@/runtime/powerBankConstants";
 import { recordPowerBankDiscovery } from "@/runtime/powerBankDiscovery";
 import { recordDepositDiscovery } from "@/runtime/depositDiscovery";
-import { getPowerBankSearchRooms, POWER_BANK_SEARCH_RADIUS } from "@/runtime/powerBankSearch";
+import { getPowerBankSearchCandidates, POWER_BANK_SEARCH_RADIUS } from "@/runtime/powerBankSearch";
+import { getPowerBankRoomStatus } from "@/runtime/powerBankMapFacts";
 import { getPowerBankRoomThreat } from "@/runtime/powerBankThreat";
 import { getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
 import { measureSampledCpuPhase } from "@/runtime/cpuPhaseProfiler";
@@ -25,6 +26,7 @@ interface PowerBankObserverRuntime {
   patrolIndex: number;
   updatedAt: number;
   lastObservedRooms: string[];
+  /** 当前来源候选中几何可观察的房间；包含可能关闭的房间，仅供诊断。 */
   coveredRooms: string[];
   /** 普通搜索每房的下一次扫描时刻；显式任务复看不受此间隔限制。 */
   patrolNextScanAt?: Record<string, number>;
@@ -80,7 +82,6 @@ let coverageSnapshot: {
   observers: readonly StructureObserver[];
   candidates: readonly string[];
   coveredRooms: readonly string[];
-  complete: boolean;
 } | undefined;
 
 function getRuntimeState(): PowerBankObserverRuntime {
@@ -239,8 +240,7 @@ function getCoverageSnapshot(observers: readonly StructureObserver[], candidates
       coverageSnapshot.observers === observers && coverageSnapshot.candidates.length === candidates.length &&
       coverageSnapshot.candidates.every((name, index) => name === candidates[index])) return coverageSnapshot;
   const coveredRooms = Object.freeze(getCoveredRooms(observers, candidates));
-  coverageSnapshot = { game: Game, tick: Game.time, context, observers, candidates: Object.freeze([...candidates]),
-    coveredRooms, complete: candidates.length > 0 && observers.length > 0 && coveredRooms.length === candidates.length };
+  coverageSnapshot = { game: Game, tick: Game.time, context, observers, candidates: Object.freeze([...candidates]), coveredRooms };
   return coverageSnapshot;
 }
 
@@ -254,9 +254,31 @@ function getPriorityRequests(state: PowerBankObserverRuntime, kind: RequestKind,
 
 export function hasPowerBankObserverCoverage(): boolean {
   // 集合由来源房位置独立生成，不能把 Observer 自己能看的集合当作覆盖证明。
-  const candidates = getPowerBankSearchRooms();
+  const candidates = getPowerBankSearchCandidates();
   const observers = getActiveObservers();
-  return getCoverageSnapshot(observers, candidates).complete;
+  if (candidates.length === 0 || observers.length === 0) return false;
+  const covered = new Set(getCoverageSnapshot(observers, candidates).coveredRooms);
+  return measureSampledCpuPhase("coverageStatus", () => {
+    // 已有几何覆盖的房间无论开闭都不会形成盲区；仅盲区必须逐房核验。
+    for (const roomName of candidates) {
+      if (!covered.has(roomName) && isOpenRoom(roomName)) return false;
+    }
+    // 保留旧合同：全目录均关闭时不能自证具备完整搜索覆盖。
+    for (const roomName of covered) {
+      if (isOpenRoom(roomName)) return true;
+    }
+    return false;
+  });
+}
+
+function isOpenRoom(roomName: string): boolean {
+  if (typeof Game.map.getRoomStatus !== "function") return true;
+  try {
+    const status = getPowerBankRoomStatus(roomName);
+    return status !== null && status.status !== "closed";
+  } catch {
+    return false;
+  }
 }
 
 export function runPowerBankObserver(): void {
@@ -267,7 +289,7 @@ function runPowerBankObserverImpl(): void {
   measureSampledCpuPhase("scanVisible", scanVisibleSearchRooms);
   const observers = measureSampledCpuPhase("getActiveObservers", getActiveObservers);
   const state = getRuntimeState();
-  const candidates = measureSampledCpuPhase("searchRooms", getPowerBankSearchRooms);
+  const candidates = measureSampledCpuPhase("searchRooms", getPowerBankSearchCandidates);
   const searchRooms = new Set(candidates);
   if (!state.patrolNextScanAt || typeof state.patrolNextScanAt !== "object" || Array.isArray(state.patrolNextScanAt)) {
     state.patrolNextScanAt = {};
@@ -302,15 +324,14 @@ function runPowerBankObserverImpl(): void {
       const index = (cursor + offset) % candidates.length;
       const roomName = candidates[index];
       if (assigned.has(roomName) || Game.time < (patrolNextScanAt[roomName] ?? 0)) continue;
+      if (!reachable(observer, roomName) || !isOpenRoom(roomName)) continue;
       // 本 tick 的真实视野已由前面的发现扫描处理，复用它并延后普通观察。
       if (Game.rooms[roomName]) {
         patrolNextScanAt[roomName] = Game.time + POWER_BANK_PATROL_INTERVAL;
         continue;
       }
-      if (reachable(observer, roomName)) {
-        cursor = (index + 1) % candidates.length;
-        return roomName;
-      }
+      cursor = (index + 1) % candidates.length;
+      return roomName;
     }
     return undefined;
   });
@@ -319,7 +340,7 @@ function runPowerBankObserverImpl(): void {
       (kind === "remote" && scheduled!.remoteSlots >= 1));
   const eligible = (kind: RequestKind, observer: StructureObserver): string | undefined => {
     if (!hasRequestSlot(kind)) return undefined;
-    return requests[kind].find((roomName) => !assigned.has(roomName) && reachable(observer, roomName));
+    return requests[kind].find((roomName) => !assigned.has(roomName) && reachable(observer, roomName) && isOpenRoom(roomName));
   };
   const rotateRequest = (observer: StructureObserver, kinds: readonly RequestKind[]): { roomName: string; kind: RequestKind } | undefined => {
     for (let offset = 0; offset < REQUEST_KINDS.length; offset += 1) {
@@ -339,23 +360,23 @@ function runPowerBankObserverImpl(): void {
   const uniqueRequest = (observer: StructureObserver, later: readonly StructureObserver[]): { roomName: string; kind: RequestKind } | undefined => {
     // 最后一格没有后续覆盖可丢，继续原类别预留；积压 combat 不能抢走 remote 的末格。
     if (later.length === 0) return undefined;
-    let choice: { roomName: string; kind: RequestKind } | undefined;
-    let earliest = Infinity;
+    const choices: { roomName: string; kind: RequestKind; requestedAt: number }[] = [];
     for (let offset = 0; offset < REQUEST_KINDS.length; offset += 1) {
       const kind = REQUEST_KINDS[(priorityCursor + offset) % REQUEST_KINDS.length];
       if (!hasRequestSlot(kind)) continue;
       for (const roomName of requests[kind]) {
         if (assigned.has(roomName) || !reachable(observer, roomName) ||
           later.some((candidate) => reachable(candidate, roomName))) continue;
-        const requestedAt = requestsFor(state, kind)[roomName];
-        if (requestedAt < earliest) { earliest = requestedAt; choice = { roomName, kind }; }
+        choices.push({ roomName, kind, requestedAt: requestsFor(state, kind)[roomName] });
       }
     }
+    // 稳定排序保留同时间请求的原类别轮转顺序，只核验真正候选的开放状态。
+    const choice = choices.sort((left, right) => left.requestedAt - right.requestedAt).find(candidate => isOpenRoom(candidate.roomName));
     if (choice) priorityCursor = (REQUEST_KINDS.indexOf(choice.kind) + 1) % REQUEST_KINDS.length;
     return choice;
   };
   const submit = (observer: StructureObserver, roomName: string, kind?: RequestKind): void => measureSampledCpuPhase("submit", () => {
-    if (scheduled!.observerIds.has(observer.id)) return;
+    if (scheduled!.observerIds.has(observer.id) || !isOpenRoom(roomName)) return;
     // 即使观察失败也推进普通轮巡游标；失败的优先请求移到队尾，避免饥饿。
     assigned.add(roomName);
     scheduled!.observerIds.add(observer.id);

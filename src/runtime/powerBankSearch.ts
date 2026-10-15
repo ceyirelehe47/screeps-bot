@@ -70,18 +70,10 @@ function getGeometryRooms(key: string, origins: readonly string[], worldSize: nu
   return result;
 }
 
-/**
- * 由当前来源房位置生成候选高速房。Observer 的覆盖判定和 Scout 的补盲
- * 使用同一集合，但此集合不作为已接受任务的生命周期许可。
- */
-export function getPowerBankSearchRooms(originRoomName?: string): string[] {
-  return measureSampledCpuPhase("searchCatalog", () => getPowerBankSearchRoomsImpl(originRoomName));
-}
-
-function getPowerBankSearchRoomsImpl(originRoomName?: string): string[] {
+function getSearchInputs(originRoomName?: string) {
   // 这里只读少量来源；不能沿用仅按 tick 缓存的来源列表，否则同 tick 的
   // Game 身份或来源成员变化会让完整输入 key 仍指向旧集合。
-  const { origins, worldSize, statusReader } = measureSampledCpuPhase("sourceInputs", () => {
+  return measureSampledCpuPhase("sourceInputs", () => {
     const origins = [...new Set(originRoomName ? [originRoomName] : Object.values(Game.rooms)
       .filter((room) => room.controller?.my && (room.controller.level ?? 0) >= 6)
       .map((room) => room.name))].sort();
@@ -91,6 +83,24 @@ function getPowerBankSearchRoomsImpl(originRoomName?: string): string[] {
     const statusReader = typeof Game.map.getRoomStatus === "function" ? Game.map.getRoomStatus : undefined;
     return { origins, worldSize, statusReader };
   });
+}
+
+/** 纯几何高速房候选；调用方在选择实际目标时另行检查本帧开放状态。 */
+export function getPowerBankSearchCandidates(originRoomName?: string): string[] {
+  return measureSampledCpuPhase("searchCandidates", () => {
+    const { origins, worldSize } = getSearchInputs(originRoomName);
+    const key = JSON.stringify([POWER_BANK_SEARCH_RADIUS, origins, worldSize ?? null]);
+    return [...measureSampledCpuPhase("geometry", () => getGeometryRooms(key, origins, worldSize))];
+  });
+}
+
+/** 完整的本帧开放房间目录；保留准入与其它完整目录消费者的 fresh 语义。 */
+export function getPowerBankSearchRooms(originRoomName?: string): string[] {
+  return measureSampledCpuPhase("searchCatalog", () => getPowerBankSearchRoomsImpl(originRoomName));
+}
+
+function getPowerBankSearchRoomsImpl(originRoomName?: string): string[] {
+  const { origins, worldSize, statusReader } = getSearchInputs(originRoomName);
   if (searchMemoGame !== Game || searchMemoTick !== Game.time ||
       searchMemoMap !== Game.map || searchMemoStatusReader !== statusReader) {
     searchMemo.clear();

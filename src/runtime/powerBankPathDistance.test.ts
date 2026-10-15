@@ -79,6 +79,8 @@ describe("Power Bank 静态完整路径测量", () => {
 
   beforeEach(() => {
     jest.resetModules();
+    Memory.cfg = {};
+    Memory.analytics = {};
     Game.time = 1_000;
     Game.cpu = { ...Game.cpu, limit: 120, tickLimit: 500, bucket: 10000, getUsed: jest.fn(() => 0) };
     Game.rooms = { W1N1: visibleRoom("W1N1") };
@@ -97,6 +99,169 @@ describe("Power Bank 静态完整路径测量", () => {
     const module = require("@/runtime/powerBankPathDistance") as typeof import("@/runtime/powerBankPathDistance");
     measure = module.measurePowerBankTravel;
     canMeasure = module.canMeasurePowerBankTravelThisTick;
+  });
+
+  it("采样诊断关闭或未到采样 tick 时零写入且不额外读取 CPU", () => {
+    delete Memory.analytics;
+    Memory.cfg!.cpuProfiler = { enabled: false, sampleInterval: 1 };
+    expect(measure(input()).status).toBe("ready");
+    expect(Memory.analytics).toBeUndefined();
+    expect(Game.cpu.getUsed).toHaveBeenCalledTimes(4);
+
+    Game.time = 1_001;
+    Memory.cfg!.cpuProfiler = { enabled: true, sampleInterval: 2, roomRoleAggregation: false };
+    jest.mocked(Game.cpu.getUsed).mockClear();
+    expect(measure({ ...input(), bankPos: pos(14) }).status).toBe("ready");
+    expect(Memory.analytics).toBeUndefined();
+    expect(Game.cpu.getUsed).toHaveBeenCalledTimes(4);
+
+    Game.time = 1_002;
+    jest.mocked(Game.cpu.getUsed).mockClear();
+    expect(measure({ ...input(), bankPos: pos(15) }).status).toBe("ready");
+    expect(Memory.analytics?.powerBankPathDiagnostics).toMatchObject({ sampleInterval: 2, sampledTicksWithRequests: 1,
+      totals: { requests: 1, unknownMiss: 1, measurementStarted: 1, ready: 1 } });
+    expect(Game.cpu.getUsed).toHaveBeenCalledTimes(4);
+    expect(search).toHaveBeenCalledTimes(9);
+    expect(measure({ ...input(), bankPos: pos(50) })).toMatchObject({ status: "pending", reason: "invalid_input" });
+    const room = Game.rooms.W1N1;
+    delete Game.rooms.W1N1;
+    expect(measure(input())).toMatchObject({ status: "pending", reason: "endpoint_not_visible" });
+    Game.rooms.W1N1 = room;
+    expect(Memory.analytics!.powerBankPathDiagnostics!.totals).toMatchObject({ requests: 3, unknownMiss: 1,
+      measurementStarted: 1, invalidInput: 1, endpointNotVisible: 1 });
+    expect(Game.cpu.getUsed).toHaveBeenCalledTimes(4);
+  });
+
+  it("采样诊断只计确证的命中、过期和世界变化，不把未知 miss 冒称 cold", () => {
+    Memory.cfg!.cpuProfiler = { enabled: true, sampleInterval: 1 };
+    const first = input(), second = { ...input(), bankPos: pos(14) };
+    const ready = measure(first);
+    expect(measure(first)).toBe(ready);
+    expect(measure(second)).toEqual({ status: "pending", reason: "budget", retryAt: 1_001 });
+    expect(canMeasure()).toBe(false);
+    Game.time = 1_001;
+    search.mockReturnValue({ path: [], incomplete: true, ops: 6_000, cost: 0 });
+    const deferred = measure(second);
+    expect(deferred).toEqual({ status: "pending", reason: "path_incomplete", retryAt: 1_006 });
+    expect(measure(second)).toBe(deferred);
+    Game.time = 1_002;
+    expect(measure(second)).toBe(deferred);
+    expect(canMeasure()).toBe(true);
+    topology.mockReturnValue("changed");
+    search.mockImplementation(straightSameRoom);
+    expect(measure(first).status).toBe("ready");
+    Game.time = 1_102;
+    expect(measure(first).status).toBe("ready");
+    expect(search).toHaveBeenCalledTimes(10);
+    const data = Memory.analytics!.powerBankPathDiagnostics!;
+    expect(data).toMatchObject({ sampledTicksWithRequests: 4, rowsDropped: 0, totals: {
+      requests: 8, unknownMiss: 3, expired: 1, worldInvalidated: 1, readyHit: 1, pendingHit: 2,
+      measurementStarted: 4, budgetWait: 1, ready: 4, pathIncomplete: 3,
+      searchCombat: 4, searchOutbound: 3, searchReturn: 3,
+      engineIncomplete: 1, incompleteCombat: 1, incompleteOps: 6_000, opsTotal: 6_900, maxOpsReachedCount: 1,
+    } });
+    expect(data.rows).toHaveLength(1);
+    expect(data.rows[0]).toMatchObject({ targetRoom: "W1N1", sourceRoom: "W1N1", counts: data.totals });
+    expect(data.totals).not.toHaveProperty("cold");
+    expect(data.totals).not.toHaveProperty("evictedMiss");
+    expect(JSON.stringify(data)).not.toContain("power-bank-static-travel-v1");
+  });
+
+  it("采样诊断区分实际 PF 不完整、坏路径、调用异常和搜索前余量等待", () => {
+    Memory.cfg!.cpuProfiler = { enabled: true, sampleInterval: 1 };
+    search.mockImplementationOnce(straightSameRoom).mockReturnValueOnce({ path: [], incomplete: true, ops: 6_000, cost: 0 });
+    expect(measure(input())).toMatchObject({ status: "pending", reason: "path_incomplete" });
+    Game.time += 1;
+    search.mockImplementationOnce(straightSameRoom).mockImplementationOnce(straightSameRoom)
+      .mockReturnValueOnce({ path: [], incomplete: true, ops: Infinity, cost: 0 });
+    expect(measure({ ...input(), bankPos: pos(14) })).toMatchObject({ status: "pending", reason: "path_incomplete" });
+    Game.time += 1;
+    search.mockReturnValue({ path: null, incomplete: false, ops: 23, cost: 0 });
+    expect(measure({ ...input(), bankPos: pos(15) })).toMatchObject({ status: "pending", reason: "path_incomplete" });
+    Game.time += 1;
+    search.mockReturnValue({ path: [pos(12)], incomplete: false, ops: 7, cost: 0 });
+    expect(measure({ ...input(), bankPos: pos(16) })).toMatchObject({ status: "pending", reason: "path_incomplete" });
+    Game.time += 1;
+    search.mockImplementation(() => { throw new Error("not-persisted-search-error"); });
+    expect(measure({ ...input(), bankPos: pos(17) })).toMatchObject({ status: "pending", reason: "path_search_failed" });
+    Game.time += 1;
+    const searchesBeforeWait = search.mock.calls.length;
+    jest.mocked(Game.cpu.getUsed).mockReturnValueOnce(80).mockReturnValueOnce(200);
+    expect(measure({ ...input(), bankPos: pos(18) })).toMatchObject({ status: "pending", reason: "path_incomplete" });
+    expect(search).toHaveBeenCalledTimes(searchesBeforeWait);
+    const data = Memory.analytics!.powerBankPathDiagnostics!;
+    expect(data).toBeDefined();
+    expect(data.totals).toMatchObject({ requests: 6, measurementStarted: 6,
+      searchCombat: 5, searchOutbound: 2, searchReturn: 1,
+      engineIncomplete: 2, incompleteOutbound: 1, incompleteReturn: 1, incompleteOps: 6_000,
+      maxOpsReachedCount: 1, malformedPath: 1, invalidPath: 1, searchCallThrow: 1,
+      searchHeadroomWait: 1, pathIncomplete: 5, pathSearchFailed: 1,
+    });
+    expect(JSON.stringify(data)).not.toContain("not-persisted-search-error");
+    expect(Object.values(data.totals).every(Number.isFinite)).toBe(true);
+  });
+
+  it("采样诊断最多 32 行 LRU，实际缓存淘汰后缺失仍只记 unknown", () => {
+    Memory.cfg!.cpuProfiler = { enabled: true, sampleInterval: 1 };
+    const candidate = (index: number): PowerBankTravelMeasurementInput => {
+      const name = `W${index}N1`;
+      Game.rooms[name] = visibleRoom(name);
+      return { ...input(), sourceSpawnPos: pos(10, 10, name), bankPos: pos(13, 10, name),
+        returnTargetPos: pos(9, 10, name), routeRooms: [name] };
+    };
+    for (let index = 0; index < 65; index += 1) {
+      Game.time = 1_000 + index;
+      expect(measure(candidate(index)).status).toBe("ready");
+    }
+    const data = Memory.analytics!.powerBankPathDiagnostics!;
+    expect(data).toBeDefined();
+    expect(data.rows).toHaveLength(32);
+    expect(data.rowsDropped).toBe(33);
+    expect(data.totals).toMatchObject({ requests: 65, unknownMiss: 65, measurementStarted: 65, evictionsCaused: 1 });
+    expect(data.rows[0].sourceRoom).toBe("W33N1");
+    Game.time += 1;
+    expect(measure(candidate(0)).status).toBe("ready");
+    expect(data.totals).toMatchObject({ unknownMiss: 66, evictionsCaused: 2 });
+    expect(data.rowsDropped).toBe(34);
+    expect(measure(candidate(64)).status).toBe("ready");
+    Game.time += 1;
+    expect(measure(candidate(65)).status).toBe("ready");
+    expect(data.rows).toHaveLength(32);
+    expect(data.rows.some(row => row.sourceRoom === "W64N1")).toBe(true);
+    expect(data.rows.some(row => row.sourceRoom === "W34N1")).toBe(false);
+    expect(Object.keys(data.rows[0]).sort()).toEqual(["counts", "firstTick", "lastTick", "sourceRoom", "targetRoom"]);
+  });
+
+  it("采样诊断按模块与间隔重开 epoch，写入或 ops 诊断异常不改变原业务", () => {
+    Memory.cfg!.cpuProfiler = { enabled: true, sampleInterval: 1 };
+    expect(measure(input()).status).toBe("ready");
+    expect(Memory.analytics?.powerBankPathDiagnostics).toMatchObject({ epoch: 1 });
+    Game.time = 1_002;
+    Memory.cfg!.cpuProfiler.sampleInterval = 2;
+    expect(measure(input()).status).toBe("ready");
+    expect(Memory.analytics!.powerBankPathDiagnostics).toMatchObject({ epoch: 2, sampledTicksWithRequests: 1,
+      totals: { requests: 1, readyHit: 1 } });
+    expect(search).toHaveBeenCalledTimes(3);
+    jest.resetModules();
+    (jest.requireMock("@/movement/routing") as { getCachedStaticTravelMatrix: jest.Mock })
+      .getCachedStaticTravelMatrix.mockReturnValue(staticMatrix);
+    measure = (require("@/runtime/powerBankPathDistance") as typeof import("@/runtime/powerBankPathDistance")).measurePowerBankTravel;
+    expect(measure(input()).status).toBe("ready");
+    expect(Memory.analytics!.powerBankPathDiagnostics).toMatchObject({ epoch: 3, sampledTicksWithRequests: 1,
+      totals: { requests: 1, measurementStarted: 1 } });
+    expect(search).toHaveBeenCalledTimes(6);
+    Game.time = 1_004;
+    search.mockReturnValue({ path: [], incomplete: true, get ops() { throw new Error("ops diagnostic only"); }, cost: 0 });
+    expect(measure({ ...input(), bankPos: pos(14) })).toEqual({ status: "pending", reason: "path_incomplete", retryAt: 1_009 });
+    expect(Memory.analytics!.powerBankPathDiagnostics!.totals).toMatchObject({ engineIncomplete: 1, pathIncomplete: 1 });
+    const analytics = Memory.analytics;
+    Object.defineProperty(Memory, "analytics", { configurable: true, get: () => { throw new Error("diagnostic write denied"); } });
+    try {
+      expect(measure(input()).status).toBe("ready");
+      expect(() => measure(undefined as unknown as PowerBankTravelMeasurementInput)).toThrow(TypeError);
+    } finally {
+      Object.defineProperty(Memory, "analytics", { configurable: true, enumerable: true, writable: true, value: analytics });
+    }
   });
 
   it("CPU 忙时不搜索、不消费名额，恢复后同 tick 能完成测路", () => {

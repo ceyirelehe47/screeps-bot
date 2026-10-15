@@ -5,6 +5,7 @@ import type { PowerBankTierProfile } from "@/runtime/powerBankViability";
 import { hasPlanningCpuHeadroom } from "@/runtime/planningCpuBudget";
 import { measureSampledCpuPhase } from "@/runtime/cpuPhaseProfiler";
 import { getPowerBankRoomStatus } from "@/runtime/powerBankMapFacts";
+import { normalizeCpuMonitorConfig } from "@/runtime/cpuMonitor";
 
 const CACHE_LIMIT = 64;
 const CACHE_TTL = 100;
@@ -14,6 +15,158 @@ const MAX_MEASUREMENTS_PER_TICK = 1;
 const MAX_SEARCHES_PER_TICK = 3;
 const SEARCH_MAX_OPS = 6_000;
 const ALGORITHM_REVISION = "power-bank-static-travel-v1";
+const DIAGNOSTIC_ROW_LIMIT = 32;
+
+export interface PowerBankPathDiagnosticCounts {
+  requests?: number;
+  readyHit?: number;
+  pendingHit?: number;
+  unknownMiss?: number;
+  expired?: number;
+  worldInvalidated?: number;
+  /** 本请求导致测量 LRU 逐出；不代表本 pair 被逐出，也不归因后续 miss。 */
+  evictionsCaused?: number;
+  measurementStarted?: number;
+  ready?: number;
+  budgetWait?: number;
+  invalidInput?: number;
+  endpointNotVisible?: number;
+  unsafeRoute?: number;
+  routeObservationFailed?: number;
+  pathIncomplete?: number;
+  pathSearchFailed?: number;
+  pendingOther?: number;
+  callThrow?: number;
+  searchCombat?: number;
+  searchOutbound?: number;
+  searchReturn?: number;
+  incompleteCombat?: number;
+  incompleteOutbound?: number;
+  incompleteReturn?: number;
+  engineIncomplete?: number;
+  opsTotal?: number;
+  incompleteOps?: number;
+  /** 原生 incomplete 且 ops 有限、达到 SEARCH_MAX_OPS 的返回次数。 */
+  maxOpsReachedCount?: number;
+  malformedPath?: number;
+  invalidPath?: number;
+  searchBudgetWait?: number;
+  searchHeadroomWait?: number;
+  searchCallThrow?: number;
+}
+
+export interface PowerBankPathDiagnostics {
+  version: 1;
+  /** 当前模块实例首次采样时递增；采样间隔变化也开启新窗口。 */
+  epoch: number;
+  startedAt: number;
+  updatedAt: number;
+  sampleInterval: number;
+  sampledTicksWithRequests: number;
+  rowsDropped: number;
+  totals: PowerBankPathDiagnosticCounts;
+  rows: Array<{
+    targetRoom: string;
+    sourceRoom: string;
+    firstTick: number;
+    lastTick: number;
+    counts: PowerBankPathDiagnosticCounts;
+  }>;
+}
+
+type DiagnosticCounter = keyof PowerBankPathDiagnosticCounts;
+const DIAGNOSTIC_PENDING_COUNTERS: Record<string, DiagnosticCounter> = Object.assign(Object.create(null), {
+  budget: "budgetWait", invalid_input: "invalidInput", endpoint_not_visible: "endpointNotVisible",
+  unsafe_route: "unsafeRoute", route_observation_failed: "routeObservationFailed",
+  path_incomplete: "pathIncomplete", path_search_failed: "pathSearchFailed",
+});
+type SearchStage = "combat" | "outbound" | "return";
+interface DiagnosticCall {
+  tick: number;
+  sampleInterval: number;
+  targetRoom: string;
+  sourceRoom: string;
+  counts: PowerBankPathDiagnosticCounts;
+}
+
+let diagnosticFrame: { game: Game; tick: number; sampled: boolean; sampleInterval: number } | undefined;
+let diagnosticWindow: PowerBankPathDiagnostics | undefined;
+
+function beginDiagnostic(input: PowerBankTravelMeasurementInput): DiagnosticCall | undefined {
+  try {
+    if (diagnosticFrame?.game !== Game || diagnosticFrame.tick !== Game.time) {
+      const config = normalizeCpuMonitorConfig(Memory.cfg?.cpuProfiler);
+      diagnosticFrame = { game: Game, tick: Game.time, sampleInterval: config.sampleInterval,
+        sampled: config.enabled && Game.time % config.sampleInterval === 0 };
+    }
+    if (!diagnosticFrame.sampled) return undefined;
+    const name = (value: unknown): string => typeof value === "string" && /^[EW]\d{1,6}[NS]\d{1,6}$/.test(value) ? value : "unknown";
+    return { tick: Game.time, sampleInterval: diagnosticFrame.sampleInterval,
+      targetRoom: name(input?.bankPos?.roomName), sourceRoom: name(input?.sourceSpawnPos?.roomName), counts: { requests: 1 } };
+  } catch {
+    return undefined;
+  }
+}
+
+function addDiagnostic(counts: PowerBankPathDiagnosticCounts, counter: DiagnosticCounter, amount = 1): void {
+  counts[counter] = Math.min(Number.MAX_SAFE_INTEGER, (counts[counter] ?? 0) + amount);
+}
+
+function diagnostic(call: DiagnosticCall | undefined, counter: DiagnosticCounter, amount = 1): void {
+  if (call) addDiagnostic(call.counts, counter, amount);
+}
+
+function finishDiagnostic(call: DiagnosticCall | undefined, result: PowerBankTravelMeasurementResult | undefined): void {
+  if (!call) return;
+  try {
+    diagnostic(call, !result ? "callThrow" : result.status === "ready" ? "ready" : DIAGNOSTIC_PENDING_COUNTERS[result.reason] ?? "pendingOther");
+    if (!diagnosticWindow || diagnosticWindow.sampleInterval !== call.sampleInterval) {
+      const previous = Memory.analytics?.powerBankPathDiagnostics?.epoch;
+      diagnosticWindow = {
+        version: 1, epoch: Number.isSafeInteger(previous) && previous! >= 0 && previous! < Number.MAX_SAFE_INTEGER ? previous! + 1 : 1,
+        startedAt: call.tick, updatedAt: call.tick, sampleInterval: call.sampleInterval,
+        sampledTicksWithRequests: 0, rowsDropped: 0, totals: {}, rows: [],
+      };
+    }
+    const window = diagnosticWindow;
+    if (window.sampledTicksWithRequests === 0 || window.updatedAt !== call.tick) window.sampledTicksWithRequests += 1;
+    window.updatedAt = call.tick;
+    const index = window.rows.findIndex(row => row.targetRoom === call.targetRoom && row.sourceRoom === call.sourceRoom);
+    const row = index >= 0 ? window.rows.splice(index, 1)[0] : {
+      targetRoom: call.targetRoom, sourceRoom: call.sourceRoom, firstTick: call.tick, lastTick: call.tick, counts: {},
+    };
+    if (window.rows.length >= DIAGNOSTIC_ROW_LIMIT) { window.rows.shift(); window.rowsDropped += 1; }
+    row.lastTick = call.tick;
+    for (const counter of Object.keys(call.counts) as DiagnosticCounter[]) {
+      addDiagnostic(window.totals, counter, call.counts[counter]);
+      addDiagnostic(row.counts, counter, call.counts[counter]);
+    }
+    window.rows.push(row);
+    Memory.analytics ??= {};
+    Memory.analytics.powerBankPathDiagnostics = window;
+  } catch {
+    // 诊断不能替换测量结果、吞业务异常或使原本成功的准入抛错。
+  }
+}
+
+function recordSearchResult(call: DiagnosticCall | undefined, stage: SearchStage, result: PathFinderPath, incomplete: boolean): void {
+  if (!call) return;
+  try {
+    if (incomplete) {
+      diagnostic(call, "engineIncomplete");
+      diagnostic(call, stage === "combat" ? "incompleteCombat" : stage === "outbound" ? "incompleteOutbound" : "incompleteReturn");
+    }
+    const ops = result.ops;
+    const finiteOps = Number.isFinite(ops) && ops >= 0;
+    if (finiteOps) diagnostic(call, "opsTotal", ops);
+    if (incomplete) {
+      if (finiteOps) diagnostic(call, "incompleteOps", ops);
+      if (Number.isFinite(ops) && ops >= SEARCH_MAX_OPS) diagnostic(call, "maxOpsReachedCount");
+    }
+  } catch {
+    // 只读原生结果的诊断字段也不得影响业务校验。
+  }
+}
 
 export interface PowerBankTravelMeasurementInput {
   sourceSpawnPos: RoomPosition;
@@ -101,12 +254,13 @@ function pending(reason: string, retryTicks = RETRY_TICKS): PowerBankTravelMeasu
   return Object.freeze({ status: "pending", reason, retryAt: Game.time + retryTicks });
 }
 
-function remember(key: string, worldKey: string, result: PowerBankTravelMeasurementResult): PowerBankTravelMeasurementResult {
+function remember(key: string, worldKey: string, result: PowerBankTravelMeasurementResult, call?: DiagnosticCall): PowerBankTravelMeasurementResult {
   measurements.delete(key);
   while (measurements.size >= CACHE_LIMIT) {
     const oldest = measurements.keys().next().value as string | undefined;
     if (oldest === undefined) break;
     measurements.delete(oldest);
+    diagnostic(call, "evictionsCaused");
   }
   measurements.set(key, {
     expiresAt: result.status === "ready" ? Game.time + CACHE_TTL : result.retryAt,
@@ -117,15 +271,24 @@ function remember(key: string, worldKey: string, result: PowerBankTravelMeasurem
 }
 
 /**
- * 只测量静态地形/结构上的完整路径，不提交移动或改写 Memory。
+ * 只测量静态地形/结构上的完整路径，不提交移动；采样时仅附加 analytics 诊断。
  * 不可见中转房沿用 movement 的 terrain-only 矩阵；交通、编队等待及
  * pickup/transfer 的动作时间由调用者的既有 buffer 承接。
  */
 export function measurePowerBankTravel(input: PowerBankTravelMeasurementInput): PowerBankTravelMeasurementResult {
-  return measureSampledCpuPhase("measureTravel.total", () => measurePowerBankTravelImpl(input));
+  return measureSampledCpuPhase("measureTravel.total", () => {
+    const call = beginDiagnostic(input);
+    let result: PowerBankTravelMeasurementResult | undefined;
+    try {
+      result = measurePowerBankTravelImpl(input, call);
+      return result;
+    } finally {
+      finishDiagnostic(call, result);
+    }
+  });
 }
 
-function measurePowerBankTravelImpl(input: PowerBankTravelMeasurementInput): PowerBankTravelMeasurementResult {
+function measurePowerBankTravelImpl(input: PowerBankTravelMeasurementInput, call?: DiagnosticCall): PowerBankTravelMeasurementResult {
   const attacker = movementBody(input.profile?.attacker?.body);
   const healer = movementBody(input.profile?.healer?.body);
   if (measureSampledCpuPhase("inputValidation", () => !validPosition(input.sourceSpawnPos) || !validPosition(input.bankPos) || !validPosition(input.returnTargetPos) ||
@@ -168,12 +331,14 @@ function measurePowerBankTravelImpl(input: PowerBankTravelMeasurementInput): Pow
   let cached = measureSampledCpuPhase("cacheLookup", () => {
     let cached = measurements.get(key);
     if (cached && Game.time >= cached.expiresAt) {
+      diagnostic(call, "expired");
       measurements.delete(key);
       cached = undefined;
-    }
+    } else if (!cached) diagnostic(call, "unknownMiss");
     return cached;
   });
   if (cached?.result.status === "pending") {
+    diagnostic(call, "pendingHit");
     // 退避只表示尚无完整路径证据，不授权投入；中转房失去视野不应让
     // 同一失败输入反复抢走唯一测量名额。输入、端点和 avoid 门已校验。
     measurements.delete(key);
@@ -209,10 +374,12 @@ function measurePowerBankTravelImpl(input: PowerBankTravelMeasurementInput): Pow
     return pending("route_observation_failed");
   }
   if (cached && cached.worldKey === worldKey) {
+    diagnostic(call, "readyHit");
     measurements.delete(key);
     measurements.set(key, cached);
     return cached.result;
   }
+  if (cached) diagnostic(call, "worldInvalidated");
   measurements.delete(key);
   if (!availableBudget || !hasPlanningCpuHeadroom()) {
     // 未测量的候选不能占 LRU：大量 source/spawn 在预算用尽后排队时，
@@ -220,6 +387,7 @@ function measurePowerBankTravelImpl(input: PowerBankTravelMeasurementInput): Pow
     return pending("budget", 1);
   }
   measurementsThisTick += 1;
+  diagnostic(call, "measurementStarted");
 
   // 房名到世界坐标是纯几何转换；同一次测量的三段路径共用已验证的
   // route 输入，逐格只校验本地坐标和相邻步，不反复解析相同房名。
@@ -265,17 +433,31 @@ function measurePowerBankTravelImpl(input: PowerBankTravelMeasurementInput): Pow
       Math.abs(previousY - (goalRoom.y * 50 + goal.y)),
     ) <= 1;
   });
-  const search = (origin: RoomPosition, goal: RoomPosition, plainCost: number, swampCost: number): RoomPosition[] | undefined => {
-    if (searchesThisTick >= MAX_SEARCHES_PER_TICK || !hasPlanningCpuHeadroom()) return undefined;
+  const search = (origin: RoomPosition, goal: RoomPosition, plainCost: number, swampCost: number, stage: SearchStage): RoomPosition[] | undefined => {
+    if (searchesThisTick >= MAX_SEARCHES_PER_TICK || !hasPlanningCpuHeadroom()) {
+      diagnostic(call, searchesThisTick >= MAX_SEARCHES_PER_TICK ? "searchBudgetWait" : "searchHeadroomWait");
+      return undefined;
+    }
     searchesThisTick += 1;
-    const result = measureSampledCpuPhase("search.native", () => PathFinder.search(origin, { pos: goal, range: 1 }, {
-      plainCost,
-      swampCost,
-      maxOps: SEARCH_MAX_OPS,
-      maxRooms: input.routeRooms.length,
-      roomCallback,
-    }));
-    if (result.incomplete || !Array.isArray(result.path) || !validPath(result.path, origin, goal)) return undefined;
+    diagnostic(call, stage === "combat" ? "searchCombat" : stage === "outbound" ? "searchOutbound" : "searchReturn");
+    let result: PathFinderPath;
+    try {
+      result = measureSampledCpuPhase("search.native", () => PathFinder.search(origin, { pos: goal, range: 1 }, {
+        plainCost,
+        swampCost,
+        maxOps: SEARCH_MAX_OPS,
+        maxRooms: input.routeRooms.length,
+        roomCallback,
+      }));
+    } catch (error) {
+      diagnostic(call, "searchCallThrow");
+      throw error;
+    }
+    const incomplete = result.incomplete;
+    recordSearchResult(call, stage, result, incomplete);
+    if (incomplete) return undefined;
+    if (!Array.isArray(result.path)) { diagnostic(call, "malformedPath"); return undefined; }
+    if (!validPath(result.path, origin, goal)) { diagnostic(call, "invalidPath"); return undefined; }
     return result.path;
   };
   const terrainFatigue = (pos: RoomPosition): number => {
@@ -313,13 +495,13 @@ function measurePowerBankTravelImpl(input: PowerBankTravelMeasurementInput): Pow
     (total, pos) => total + Math.max(1, Math.ceil(body.weight * terrainFatigue(pos) / (body.moves * 2))), 0,
   ));
   try {
-    const combat = search(input.sourceSpawnPos, input.bankPos, 2, 8);
-    if (!combat) return remember(key, worldKey, pending("path_incomplete"));
-    const outbound = search(input.sourceSpawnPos, input.bankPos, 1, 1);
-    if (!outbound) return remember(key, worldKey, pending("path_incomplete"));
+    const combat = search(input.sourceSpawnPos, input.bankPos, 2, 8, "combat");
+    if (!combat) return remember(key, worldKey, pending("path_incomplete"), call);
+    const outbound = search(input.sourceSpawnPos, input.bankPos, 1, 1, "outbound");
+    if (!outbound) return remember(key, worldKey, pending("path_incomplete"), call);
     const returnOrigin = outbound[outbound.length - 1] ?? input.sourceSpawnPos;
-    const loadedReturn = search(returnOrigin, input.returnTargetPos, 1, 5);
-    if (!loadedReturn) return remember(key, worldKey, pending("path_incomplete"));
+    const loadedReturn = search(returnOrigin, input.returnTargetPos, 1, 5, "return");
+    if (!loadedReturn) return remember(key, worldKey, pending("path_incomplete"), call);
     const result: PowerBankTravelMeasurementResult = Object.freeze({
       status: "ready",
       pathDistance: outbound.length,
@@ -327,8 +509,8 @@ function measurePowerBankTravelImpl(input: PowerBankTravelMeasurementInput): Pow
       haulerOutboundTravelTicks: outbound.length,
       haulerReturnTravelTicks: travelTicks(loadedReturn, { weight: input.haulerCarryParts, moves: input.haulerCarryParts }),
     });
-    return remember(key, worldKey, result);
+    return remember(key, worldKey, result, call);
   } catch {
-    return remember(key, worldKey, pending("path_search_failed"));
+    return remember(key, worldKey, pending("path_search_failed"), call);
   }
 }

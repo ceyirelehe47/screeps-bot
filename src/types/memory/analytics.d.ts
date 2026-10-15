@@ -1,6 +1,7 @@
 import type { CpuMonitorMemoryV2 } from "@/runtime/cpuMonitor";
 import type { HubProgressSnapshot } from "@/runtime/hubProgress";
 import type { WarStatusTaskSnapshot } from "@/runtime/warControl";
+import type { PowerBankPathDiagnostics } from "@/runtime/powerBankPathDistance";
 
 declare global {
   interface ScreepsMemoryAnalytics {
@@ -53,6 +54,8 @@ declare global {
     };
     /** CPU Monitor v2 (canonical). Legacy moduleCpu kept during migration. */
     cpuMonitor?: CpuMonitorMemoryV2;
+    /** 仅 CPU profiler 采样 tick 更新；每个 global/采样间隔窗口至多 32 个房间对。 */
+    powerBankPathDiagnostics?: PowerBankPathDiagnostics;
     hub?: HubProgressSnapshot;
   }
 }
