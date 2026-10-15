@@ -716,7 +716,19 @@ describe("towerDrainDuo 公共战术门", () => {
   });
 
   it("绿球新模式不等待旧counterstrike准备，直接跟随已经安全移动的红球", () => {
-    const { attacker, healer } = pair(false, []);
+    const { attacker, healer, target } = pair(false, []);
+    // 原生 Controller 必有位置；跟随安全检查按原生 lookAt 读取真实格子内容。
+    Object.assign(target.controller!, { structureType: STRUCTURE_CONTROLLER, pos: new MockPos(40, 40, TARGET) });
+    target.lookAt = jest.fn((x: number, y: number) => {
+      const terrain = Game.map.getRoomTerrain(TARGET).get(x, y);
+      const at = (object: { pos: RoomPosition }): boolean => object.pos.x === x && object.pos.y === y;
+      return [
+        { type: LOOK_TERRAIN, terrain: terrain === TERRAIN_MASK_WALL ? "wall" : terrain === TERRAIN_MASK_SWAMP ? "swamp" : "plain" },
+        ...[target.controller!, ...target.find(FIND_STRUCTURES)].filter(at).map(structure => ({ type: LOOK_STRUCTURES, structure })),
+        ...[...Object.values(Game.creeps).filter(creep => creep.room.name === TARGET), ...target.find(FIND_HOSTILE_CREEPS)]
+          .filter(at).map(creep => ({ type: LOOK_CREEPS, creep })),
+      ];
+    }) as unknown as Room["lookAt"];
     attacker.pos = new MockPos(2, 25, TARGET) as unknown as RoomPosition;
     healer.pos = new MockPos(1, 26, TARGET) as unknown as RoomPosition;
     attacker.memory._warMoveIntentAt = Game.time;
