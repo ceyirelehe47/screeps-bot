@@ -14,6 +14,7 @@ jest.mock("@/movement/traffic", () => ({ ...jest.requireActual("@/movement/traff
 }));
 
 import { meleeAttackerRole, findWarObjectiveTarget } from "@/roles/meleeAttacker";
+import * as towerDrainPair from "@/roles/towerDrainPair";
 import { createMockPowerBankCreep } from "@mock/powerBank";
 
 const { moveToTarget, moveToTargetRoom } = jest.requireMock("@/roles/shared") as {
@@ -161,7 +162,7 @@ describe("meleeAttackerRole war duo staging", () => {
     expect(attacker.memory._warBreachTargetId).toBe(wall.id);
   });
 
-  it.each([OK, ERR_NO_PATH])("开放路线存在时撤销旧墙目标，移动结果%s也不把安全/交通拒绝当成拆墙许可", (moveResult) => {
+  it.each([OK, ERR_NO_PATH])("同目标存在开放绕行路线时撤销旧墙目标，移动结果%s也不授予拆墙许可", (moveResult) => {
     const wall = hostileStructure(STRUCTURE_WALL, "old-wall", 2, 28, 500000);
     const road = hostileStructure(STRUCTURE_ROAD, "open-road", 2, 32);
     const spawn = hostileStructure(STRUCTURE_SPAWN, "open-spawn", 25, 25, 5000);
@@ -173,7 +174,7 @@ describe("meleeAttackerRole war duo staging", () => {
     attacker.attack = jest.fn((target) => target === spawn ? ERR_NOT_IN_RANGE : OK) as Creep["attack"];
     Game.creeps = { red: attacker, green: healer };
     Game.getObjectById = jest.fn(() => wall) as typeof Game.getObjectById;
-    (PathFinder.search as jest.Mock).mockReturnValue({ path: [road.pos], incomplete: false });
+    (PathFinder.search as jest.Mock).mockReturnValue({ path: [road.pos], incomplete: false, ops: 1500 });
     moveToTarget.mockReturnValue(moveResult);
     meleeAttackerRole(TARGET_ROOM, "", "", "", HEALER_CONFIG).target(attacker);
     expect(attacker.attack).toHaveBeenCalledWith(spawn);
@@ -181,19 +182,21 @@ describe("meleeAttackerRole war duo staging", () => {
     expect(attacker.memory._warBreachTargetId).toBeUndefined();
     expect(PathFinder.search).toHaveBeenCalledTimes(1);
     const options = (PathFinder.search as jest.Mock).mock.calls[0][2];
+    expect(options).toMatchObject({ maxRooms: 1, maxOps: 2000 });
     expect(options.roomCallback(TARGET_ROOM).get(2, 28)).toBe(255);
     expect(moveToTarget).toHaveBeenCalledWith(attacker, spawn, 1, expect.any(Object));
   });
 
-  it("最近核心目标封闭时先走另一个开放核心目标，不锁在旧墙前", () => {
+  it("耗塔队最近核心封闭时先走另一开放核心，相邻wall/rampart不能抢占目标", () => {
     const wall = hostileStructure(STRUCTURE_WALL, "sealed-wall", 2, 28, 500000);
+    const rampart = hostileStructure(STRUCTURE_RAMPART, "adjacent-rampart", 2, 27, 1000);
     const closed = hostileStructure(STRUCTURE_SPAWN, "closed-spawn", 5, 28, 5000);
     const open = hostileStructure(STRUCTURE_SPAWN, "open-spawn", 25, 25, 5000);
     const road = hostileStructure(STRUCTURE_ROAD, "open-road", 2, 32);
     const attacker = createMockPowerBankCreep("meleeAttacker", { name: "red", roomName: TARGET_ROOM, x: 1, y: 28,
       memory: { configName: ATTACKER_CONFIG, _warBreachTargetId: wall.id as Id<StructureWall> } });
     const healer = createMockPowerBankCreep("healer", { name: "green", roomName: TARGET_ROOM, x: 1, y: 29, memory: { configName: HEALER_CONFIG } });
-    attacker.room.find = jest.fn((kind) => kind === FIND_STRUCTURES ? [wall, road, closed, open] : kind === FIND_HOSTILE_STRUCTURES ? [closed, open] : []) as Room["find"];
+    attacker.room.find = jest.fn((kind) => kind === FIND_STRUCTURES ? [wall, rampart, road, closed, open] : kind === FIND_HOSTILE_STRUCTURES ? [rampart, closed, open] : []) as Room["find"];
     attacker.pos.findInRange = jest.fn(() => []) as RoomPosition["findInRange"];
     attacker.attack = jest.fn(() => ERR_NOT_IN_RANGE);
     Game.creeps = { red: attacker, green: healer };
@@ -201,26 +204,105 @@ describe("meleeAttackerRole war duo staging", () => {
       .mockReturnValueOnce({ path: [], incomplete: true })
       .mockReturnValueOnce({ path: [wall.pos], incomplete: false })
       .mockReturnValueOnce({ path: [road.pos], incomplete: false });
-    meleeAttackerRole(TARGET_ROOM, "", "", "", HEALER_CONFIG).target(attacker);
+    // 此用例单独检查耗塔门放行后的目标选择；门本身由 towerDrainPair.test 验证。
+    const drainGate = jest.spyOn(towerDrainPair, "runTowerDrainPair").mockReturnValue(false);
+    try {
+      meleeAttackerRole(TARGET_ROOM, "", "", "", HEALER_CONFIG, "towerDrainDuo").target(attacker);
+    } finally {
+      drainGate.mockRestore();
+    }
     expect(attacker.attack).toHaveBeenCalledWith(open);
     expect(attacker.attack).not.toHaveBeenCalledWith(wall);
+    expect(attacker.attack).not.toHaveBeenCalledWith(rampart);
     expect(attacker.memory._warBreachTargetId).toBeUndefined();
     expect(moveToTarget).toHaveBeenCalledWith(attacker, open, 1, expect.any(Object));
   });
 
-  it("开放路线确实不完整时才规划路径上的墙，保留必要突破", () => {
+  it("InvaderCore确需突破时只攻击已证明路径上的墙，忽略旁边更弱的墙", () => {
     const wall = hostileStructure(STRUCTURE_WALL, "sealed-wall", 2, 28, 500000);
-    const spawn = hostileStructure(STRUCTURE_SPAWN, "sealed-spawn", 25, 25, 5000);
+    const incidental = hostileStructure(STRUCTURE_WALL, "incidental-wall", 2, 27, 100);
+    const core = hostileStructure(STRUCTURE_INVADER_CORE, "sealed-core", 25, 25, 5000);
     const attacker = createMockPowerBankCreep("meleeAttacker", { name: "red", roomName: TARGET_ROOM, x: 1, y: 28, memory: { configName: ATTACKER_CONFIG } });
     const healer = createMockPowerBankCreep("healer", { name: "green", roomName: TARGET_ROOM, x: 1, y: 29, memory: { configName: HEALER_CONFIG } });
-    attacker.room.find = jest.fn((kind) => kind === FIND_STRUCTURES ? [wall, spawn] : kind === FIND_HOSTILE_STRUCTURES ? [spawn] : []) as Room["find"];
+    attacker.room.find = jest.fn((kind) => kind === FIND_STRUCTURES ? [incidental, wall, core] : kind === FIND_HOSTILE_STRUCTURES ? [core] : []) as Room["find"];
     attacker.pos.findInRange = jest.fn(() => []) as RoomPosition["findInRange"];
     Game.creeps = { red: attacker, green: healer };
-    (PathFinder.search as jest.Mock).mockReturnValueOnce({ path: [], incomplete: true }).mockReturnValueOnce({ path: [wall.pos], incomplete: false });
+    (PathFinder.search as jest.Mock).mockReturnValueOnce({ path: [], incomplete: true, ops: 100 }).mockReturnValueOnce({ path: [wall.pos], incomplete: false, ops: 100 });
     meleeAttackerRole(TARGET_ROOM, "", "", "", HEALER_CONFIG).target(attacker);
     expect(attacker.attack).toHaveBeenCalledWith(wall);
+    expect(attacker.attack).not.toHaveBeenCalledWith(incidental);
     expect(attacker.memory._warBreachTargetId).toBe(wall.id);
     expect(PathFinder.search).toHaveBeenCalledTimes(2);
+  });
+
+  it("耗塔队保留覆盖敌塔的rampart目标，不被相邻中立墙抢占", () => {
+    const wall = hostileStructure(STRUCTURE_WALL, "incidental-wall", 2, 28, 1_800_000);
+    const tower = hostileStructure(STRUCTURE_TOWER, "covered-tower", 25, 25, 3000);
+    const covering = hostileStructure(STRUCTURE_RAMPART, "covering-rampart", 25, 25, 10_201);
+    const attacker = createMockPowerBankCreep("meleeAttacker", { name: "red", roomName: TARGET_ROOM, x: 1, y: 28,
+      memory: { configName: ATTACKER_CONFIG } });
+    const healer = createMockPowerBankCreep("healer", { name: "green", roomName: TARGET_ROOM, x: 1, y: 29, memory: { configName: HEALER_CONFIG } });
+    attacker.room.find = jest.fn((kind) => kind === FIND_STRUCTURES ? [wall, tower, covering] : kind === FIND_HOSTILE_STRUCTURES ? [tower, covering] : []) as Room["find"];
+    attacker.pos.findInRange = jest.fn((kind: FindConstant) => kind === FIND_STRUCTURES ? [wall] : []) as unknown as RoomPosition["findInRange"];
+    attacker.attack = jest.fn(() => ERR_NOT_IN_RANGE);
+    Game.creeps = { red: attacker, green: healer };
+    const drainGate = jest.spyOn(towerDrainPair, "runTowerDrainPair").mockReturnValue(false);
+    try {
+      meleeAttackerRole(TARGET_ROOM, "", "", "", HEALER_CONFIG, "towerDrainDuo").target(attacker);
+    } finally {
+      drainGate.mockRestore();
+    }
+
+    expect(attacker.attack).toHaveBeenCalledWith(covering);
+    expect(attacker.attack).not.toHaveBeenCalledWith(wall);
+    expect(attacker.memory._warBreachTargetId).toBe(covering.id);
+    expect(moveToTarget).toHaveBeenCalledWith(attacker, covering, 1, expect.objectContaining({ costCallback: expect.any(Function) }));
+    expect(PathFinder.search).not.toHaveBeenCalled();
+  });
+
+  it.each([100, 2000])("路径搜索未提供可走或可突破证明时保持位置，不攻击邻墙（ops=%s）", (ops) => {
+    const wall = hostileStructure(STRUCTURE_WALL, "unproven-wall", 2, 28, 100);
+    const spawn = hostileStructure(STRUCTURE_SPAWN, "unreachable-spawn", 25, 25, 5000);
+    const attacker = createMockPowerBankCreep("meleeAttacker", { name: "red", roomName: TARGET_ROOM, x: 1, y: 28,
+      memory: { configName: ATTACKER_CONFIG, _warBreachTargetId: wall.id as Id<StructureWall> } });
+    const healer = createMockPowerBankCreep("healer", { name: "green", roomName: TARGET_ROOM, x: 1, y: 29, memory: { configName: HEALER_CONFIG } });
+    attacker.room.find = jest.fn((kind) => kind === FIND_STRUCTURES ? [wall, spawn] : kind === FIND_HOSTILE_STRUCTURES ? [spawn] : []) as Room["find"];
+    attacker.pos.findInRange = jest.fn((kind: FindConstant) => kind === FIND_STRUCTURES ? [wall] : []) as unknown as RoomPosition["findInRange"];
+    Game.creeps = { red: attacker, green: healer };
+    (PathFinder.search as jest.Mock)
+      .mockReturnValueOnce({ path: [], incomplete: true, ops })
+      // 开放搜索用尽预算时，即使放宽墙后能找到路径也不能据此允许拆墙。
+      .mockReturnValue({ path: [wall.pos], incomplete: ops < 2000, ops: 100 });
+
+    meleeAttackerRole(TARGET_ROOM, "", "", "", HEALER_CONFIG).target(attacker);
+
+    expect(attacker.attack).not.toHaveBeenCalled();
+    expect(moveToTarget).not.toHaveBeenCalled();
+    expect(attacker.move).not.toHaveBeenCalled();
+    expect(attacker.memory._warBreachTargetId).toBeUndefined();
+    expect(PathFinder.search).toHaveBeenCalledTimes(ops < 2000 ? 2 : 1);
+  });
+
+  it.each([undefined, TARGET_ROOM])("目标失效时战争角色等待重选，普通角色保留原回退（targetRoom=%s）", (targetRoom) => {
+    const rampart = hostileStructure(STRUCTURE_RAMPART, "nearest-rampart", 24, 25, 1000);
+    const spawn = hostileStructure(STRUCTURE_SPAWN, "invalid-spawn", 26, 25, 5000);
+    const attacker = createMockPowerBankCreep("meleeAttacker", { roomName: TARGET_ROOM, x: 25, y: 25,
+      memory: { configName: ATTACKER_CONFIG } });
+    attacker.room.find = jest.fn((kind) => kind === FIND_STRUCTURES || kind === FIND_HOSTILE_STRUCTURES ? [rampart, spawn] : []) as Room["find"];
+    attacker.pos.findInRange = jest.fn(() => []) as RoomPosition["findInRange"];
+    attacker.attack = jest.fn((target) => target === spawn ? ERR_INVALID_TARGET : OK);
+    Game.creeps = { [attacker.name]: attacker };
+
+    meleeAttackerRole(targetRoom).target(attacker);
+
+    expect(attacker.attack).toHaveBeenCalledWith(spawn);
+    if (targetRoom) {
+      expect(attacker.attack).toHaveBeenCalledTimes(1);
+      expect(attacker.attack).not.toHaveBeenCalledWith(rampart);
+    } else {
+      expect(attacker.attack).toHaveBeenCalledWith(rampart);
+    }
+    expect(moveToTarget).not.toHaveBeenCalled();
   });
 
   it("focuses hostile spawn before non-adjacent creeps and towers for war objectives", () => {

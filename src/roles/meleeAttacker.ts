@@ -16,6 +16,7 @@ const TARGET_ROOM_MOVE_OPTIONS = {
   ignoreCreeps: false,
 } as const;
 const ROUTE_BREACH_RESUME_TICKS = 5;
+const COMBAT_APPROACH_MAX_OPS = 2000;
 const COUNTERSTRIKE_RANGE = 2;
 const COUNTERSTRIKE_SWAP_GRACE_TICKS = 1;
 
@@ -189,11 +190,13 @@ function findCombatApproach(creep: Creep, target: Creep | Structure, towerDrain 
   for (const natural of [...creep.room.find(FIND_SOURCES), ...creep.room.find(FIND_MINERALS), ...creep.room.find(FIND_DEPOSITS)]) matrix.set(natural.pos.x, natural.pos.y, 0xff);
   if (towerDrain) constrainTowerDrainBreachPath(creep, creep.room.name, matrix);
   const search = () => PathFinder.search(creep.pos, { pos: target.pos, range: 1 }, {
-    plainCost: 2, swampCost: 8, maxRooms: 1,
+    plainCost: 2, swampCost: 8, maxRooms: 1, maxOps: COMBAT_APPROACH_MAX_OPS,
     roomCallback: (roomName) => roomName === creep.room.name ? matrix : false,
   });
   const openPath = search();
   if (!openPath.incomplete && openPath.path.every((step) => matrix.get(step.x, step.y) < 0xff)) return { open: true, breach: null };
+  // 搜索预算耗尽只说明尚未找到绕路，不能作为允许破墙的无路证明。
+  if (openPath.incomplete && openPath.ops >= COMBAT_APPROACH_MAX_OPS) return { open: false, breach: null };
   const breachByPosition = new Map<string, StructureRampart | StructureWall>();
   const hostileCreeps = getHostileCreeps(creep.room);
   for (const barrier of barriers) {
@@ -217,7 +220,8 @@ function chooseWarApproach(creep: Creep, includeNeutralWalls: boolean): { target
   if (first.open) return { target: preferred, approach: first };
   // 最近的目标被封住时，先处理同类或其它核心可达目标，不能把全队锁在一面墙前。
   const order: StructureConstant[] = [STRUCTURE_SPAWN, STRUCTURE_TOWER, STRUCTURE_STORAGE, STRUCTURE_TERMINAL, STRUCTURE_INVADER_CORE];
-  const structures = getHostileStructures(creep.room, includeNeutralWalls, creep).filter((structure) => structure.id !== preferred.id);
+  const structures = getHostileStructures(creep.room, includeNeutralWalls, creep)
+    .filter((structure) => structure.id !== preferred.id && !isBreachTarget(structure));
   for (const target of structures.filter((structure) => creep.pos.getRangeTo(structure.pos) <= 1)) {
     const approach = findCombatApproach(creep, target, includeNeutralWalls);
     if (approach.open) return { target, approach };
@@ -887,7 +891,7 @@ export const meleeAttackerRole: RoleFactory = (
       }
       delete creep.memory._warBreachTargetId;
       if (approach && !approach.open) {
-        attackAdjacentBreachTarget(creep, target);
+        // 搜索未证明可走或可突破的路径时，邻墙不构成攻击许可。
         return false;
       }
     }
@@ -901,7 +905,8 @@ export const meleeAttackerRole: RoleFactory = (
       return false;
     }
 
-    if (code === ERR_INVALID_TARGET && (target as Creep | Structure).id) {
+    // 战争目标失效后下一 tick 重新证明 approach，不能直接改打最近的屏障。
+    if (code === ERR_INVALID_TARGET && !targetRoom && (target as Creep | Structure).id) {
       const fallback = creep.pos.findClosestByRange(getHostileStructures(creep.room, (tactic === "towerDrainDuo" || tactic === "t3TowerDrainDuo"), creep));
       if (fallback) {
         const fallbackCode = measureCreepIntent(() => creep.attack(fallback));
