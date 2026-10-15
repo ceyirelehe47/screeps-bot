@@ -242,7 +242,7 @@ export const powerBankScoutRole: RoleFactory = () => ({
 
     let target = patrol.targetRoomName;
     let scope = patrol.targetScope ?? "sources";
-    let rooms = scope === "sources" ? sourceRooms : originRooms;
+    let rooms: readonly string[] = scope === "sources" ? sourceRooms : originRooms;
     // 原点回退只在本轮来源不变时延续；真实来源或世界边界变化后重新优先检查来源并集。
     if (scope === "origin" && catalogChanged) target = undefined;
     const targetIndex = target === undefined ? -1 : rooms.indexOf(target);
