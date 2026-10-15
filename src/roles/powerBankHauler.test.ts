@@ -5,6 +5,7 @@ jest.mock("@/roles/shared", () => ({
 }));
 
 jest.mock("@/runtime/cpuPhaseProfiler", () => ({
+  measureSampledCpuPhase: (_label: string, fn: () => unknown) => fn(),
   measureCreepIntent: (fn: () => any) => fn(),
   measureCreepDecision: (fn: () => any) => fn(),
   isPerCreepPhaseTimingEnabled: () => false,

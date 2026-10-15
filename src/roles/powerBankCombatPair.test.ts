@@ -3,7 +3,10 @@ jest.mock("@/roles/shared", () => ({
 }));
 jest.mock("@/movement/routing", () => ({ getCachedStaticTravelMatrix: jest.fn(), getNextTravelRoom: jest.fn() }));
 jest.mock("@/runtime/runtimeServices", () => ({ getTickContextService: jest.fn() }));
-jest.mock("@/runtime/cpuPhaseProfiler", () => ({ measureCreepIntent: (fn: () => unknown) => fn() }));
+jest.mock("@/runtime/cpuPhaseProfiler", () => ({
+  measureCreepIntent: (fn: () => unknown) => fn(),
+  measureSampledCpuPhase: (_label: string, fn: () => unknown) => fn(),
+}));
 jest.mock("@/runtime/powerBankObserver", () => ({ requestCombatObservation: jest.fn(() => true) }));
 
 import { coordinatePowerBankPairMovement, resolvePowerBankPair } from "@/roles/powerBankCombatPair";
