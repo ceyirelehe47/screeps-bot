@@ -1,4 +1,6 @@
 import { isPowerBankSearchRoom } from "@/runtime/powerBankConstants";
+import { getPowerBankRoomStatus } from "@/runtime/powerBankMapFacts";
+import { measureSampledCpuPhase } from "@/runtime/cpuPhaseProfiler";
 
 /** 普通 Observer 的原生范围；这是搜索半径，不是固定房间名单。 */
 export const POWER_BANK_SEARCH_RADIUS = 10;
@@ -33,7 +35,7 @@ function worldRoomName(x: number, y: number): string {
 function isOpenWorldRoom(roomName: string): boolean {
   if (typeof Game.map.getRoomStatus !== "function") return true;
   try {
-    const status = Game.map.getRoomStatus(roomName);
+    const status = getPowerBankRoomStatus(roomName);
     return status !== null && status.status !== "closed";
   } catch {
     return false;
@@ -73,15 +75,22 @@ function getGeometryRooms(key: string, origins: readonly string[], worldSize: nu
  * 使用同一集合，但此集合不作为已接受任务的生命周期许可。
  */
 export function getPowerBankSearchRooms(originRoomName?: string): string[] {
+  return measureSampledCpuPhase("searchCatalog", () => getPowerBankSearchRoomsImpl(originRoomName));
+}
+
+function getPowerBankSearchRoomsImpl(originRoomName?: string): string[] {
   // 这里只读少量来源；不能沿用仅按 tick 缓存的来源列表，否则同 tick 的
   // Game 身份或来源成员变化会让完整输入 key 仍指向旧集合。
-  const origins = [...new Set(originRoomName ? [originRoomName] : Object.values(Game.rooms)
-    .filter((room) => room.controller?.my && (room.controller.level ?? 0) >= 6)
-    .map((room) => room.name))].sort();
-  const observedWorldSize = typeof Game.map.getWorldSize === "function" ? Game.map.getWorldSize() : undefined;
-  const worldSize = observedWorldSize !== undefined && Number.isSafeInteger(observedWorldSize) && observedWorldSize > 0
-    ? observedWorldSize : undefined;
-  const statusReader = typeof Game.map.getRoomStatus === "function" ? Game.map.getRoomStatus : undefined;
+  const { origins, worldSize, statusReader } = measureSampledCpuPhase("sourceInputs", () => {
+    const origins = [...new Set(originRoomName ? [originRoomName] : Object.values(Game.rooms)
+      .filter((room) => room.controller?.my && (room.controller.level ?? 0) >= 6)
+      .map((room) => room.name))].sort();
+    const observedWorldSize = typeof Game.map.getWorldSize === "function" ? Game.map.getWorldSize() : undefined;
+    const worldSize = observedWorldSize !== undefined && Number.isSafeInteger(observedWorldSize) && observedWorldSize > 0
+      ? observedWorldSize : undefined;
+    const statusReader = typeof Game.map.getRoomStatus === "function" ? Game.map.getRoomStatus : undefined;
+    return { origins, worldSize, statusReader };
+  });
   if (searchMemoGame !== Game || searchMemoTick !== Game.time ||
       searchMemoMap !== Game.map || searchMemoStatusReader !== statusReader) {
     searchMemo.clear();
@@ -93,7 +102,8 @@ export function getPowerBankSearchRooms(originRoomName?: string): string[] {
   const key = JSON.stringify([POWER_BANK_SEARCH_RADIUS, origins, worldSize ?? null]);
   const cached = searchMemo.get(key);
   if (cached) return [...cached];
-  const result = getGeometryRooms(key, origins, worldSize).filter(isOpenWorldRoom);
+  const geometry = measureSampledCpuPhase("geometry", () => getGeometryRooms(key, origins, worldSize));
+  const result = measureSampledCpuPhase("openStatus", () => geometry.filter(isOpenWorldRoom));
   searchMemo.set(key, result);
   return [...result];
 }

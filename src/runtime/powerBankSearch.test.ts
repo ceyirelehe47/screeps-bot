@@ -1,6 +1,7 @@
 import { isPowerBankSearchRoom } from "@/runtime/powerBankConstants";
 import { getPowerBankSearchRooms } from "@/runtime/powerBankSearch";
 import * as constants from "@/runtime/powerBankConstants";
+import { getPowerBankRoomStatus } from "@/runtime/powerBankMapFacts";
 
 describe("PowerBank 动态搜房", () => {
   afterEach(() => jest.restoreAllMocks());
@@ -43,10 +44,12 @@ describe("PowerBank 动态搜房", () => {
     expect(getPowerBankSearchRooms("sim")).toEqual([]);
   });
 
-  it("同 tick 重复读取不重扫房间状态，返回数组修改不污染 memo", () => {
+  it("同 tick 与共享原始事实复用读取，重复搜房和数组修改不污染 memo", () => {
+    const status = Game.map.getRoomStatus as jest.Mock;
+    expect(getPowerBankRoomStatus("E0S0")?.status).toBe("normal");
+    expect(status).toHaveBeenCalledTimes(1);
     const first = getPowerBankSearchRooms("E0S0");
     const expected = [...first];
-    const status = Game.map.getRoomStatus as jest.Mock;
     const coldReads = status.mock.calls.length;
     expect(coldReads).toBe(expected.length);
     expect(coldReads).toBeGreaterThan(0);
@@ -58,6 +61,7 @@ describe("PowerBank 动态搜房", () => {
     for (let index = 0; index < 10; index += 1) {
       expect(getPowerBankSearchRooms("E0S0")).toEqual(expected);
     }
+    expect(getPowerBankRoomStatus("E0S0")?.status).toBe("normal");
     expect(status).toHaveBeenCalledTimes(coldReads);
   });
 
@@ -67,6 +71,7 @@ describe("PowerBank 动态搜房", () => {
     const firstReads = status.mock.calls.length;
     expect(getPowerBankSearchRooms("E20S20")).toContain("E20S20");
     expect(status.mock.calls.length).toBeGreaterThan(firstReads);
+    expect(status.mock.calls.filter(([roomName]) => roomName === "E10S10")).toHaveLength(1);
 
     (Game.map.getWorldSize as jest.Mock).mockReturnValue(20);
     const clipped = getPowerBankSearchRooms("E0S0");
@@ -115,7 +120,10 @@ describe("PowerBank 动态搜房", () => {
     status.mockImplementation((name: string) => ({ status: name === "E0S0" ? "closed" : "normal", timestamp: null }));
     Game.time += 1;
 
+    // 另一消费者先读到新tick的closed，目录必须共用该新事实而非上tick开放值。
+    expect(getPowerBankRoomStatus("E0S0")?.status).toBe("closed");
     expect(getPowerBankSearchRooms("E0S0")).not.toContain("E0S0");
+    expect(getPowerBankRoomStatus("E0S0")?.status).toBe("closed");
     expect(status).toHaveBeenCalledTimes(coldReads * 2);
   });
 

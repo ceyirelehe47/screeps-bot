@@ -4,6 +4,7 @@ import { getTickContextService } from "@/runtime/runtimeServices";
 import type { PowerBankTierProfile } from "@/runtime/powerBankViability";
 import { hasPlanningCpuHeadroom } from "@/runtime/planningCpuBudget";
 import { measureSampledCpuPhase } from "@/runtime/cpuPhaseProfiler";
+import { getPowerBankRoomStatus } from "@/runtime/powerBankMapFacts";
 
 const CACHE_LIMIT = 64;
 const CACHE_TTL = 100;
@@ -191,7 +192,7 @@ function measurePowerBankTravelImpl(input: PowerBankTravelMeasurementInput): Pow
     if (!allowedRooms.has(roomName) || (!endpointRooms.has(roomName) && avoidedRooms.has(roomName))) return false;
     const cachedSafety = roomSafety.get(roomName);
     if (cachedSafety !== undefined) return cachedSafety;
-    const status = Game.map.getRoomStatus(roomName);
+    const status = getPowerBankRoomStatus(roomName);
     // novice/respawn 并不等于闭房；能否跨边界继续由安全 route 与 PF 地形
     // 屏障证明，不能仅因区域标签而拒绝同区域内可达路径。
     const safe = status != null && status.status !== "closed";
@@ -200,8 +201,10 @@ function measurePowerBankTravelImpl(input: PowerBankTravelMeasurementInput): Pow
   };
   let worldKey: string;
   try {
-    if (measureSampledCpuPhase("worldProof", () => input.routeRooms.some((room) => !safeRoom(room)))) return pending("unsafe_route");
-    worldKey = measureSampledCpuPhase("worldProof", () => JSON.stringify(input.routeRooms.map((room) => [room, Boolean(Game.rooms[room]), getRoomTopologyRevision(room)])));
+    if (measureSampledCpuPhase("worldProof", () => measureSampledCpuPhase("status", () =>
+      input.routeRooms.some((room) => !safeRoom(room))))) return pending("unsafe_route");
+    worldKey = measureSampledCpuPhase("worldProof", () => measureSampledCpuPhase("topology", () =>
+      JSON.stringify(input.routeRooms.map((room) => [room, Boolean(Game.rooms[room]), getRoomTopologyRevision(room)]))));
   } catch {
     return pending("route_observation_failed");
   }

@@ -152,7 +152,7 @@ describe("Power Bank 静态完整路径测量", () => {
     expect(measure(input())).toMatchObject({ combatTravelTicks: 6, haulerReturnTravelTicks: 6 });
   });
 
-  it("单次测量复用房间状态、地形与每格疲劳，三段和两种战斗身体仍完整计时", () => {
+  it("多个模块与 Spawn 共用原生房间状态，地形疲劳与三段完整计时保持独立", () => {
     const terrain = { get: jest.fn((x: number) => x === 11 ? TERRAIN_MASK_SWAMP : 0) };
     (Game.map.getRoomTerrain as jest.Mock).mockReturnValue(terrain);
     const candidate = input();
@@ -164,16 +164,31 @@ describe("Power Bank 静态完整路径测量", () => {
       expect(options.roomCallback?.(origin.roomName)).not.toBe(false);
       return straightSameRoom(origin, goal);
     });
+    Game.map.getWorldSize = () => 202;
+    Game.map.describeExits = jest.fn(() => ({ [RIGHT]: "W1N2" })) as GameMap["describeExits"];
+    const { getPowerBankAdmissionRoute } = require("@/runtime/powerBankRouteCache") as typeof import("@/runtime/powerBankRouteCache");
+    const corridor = ["W1N1", "W1N2"];
+    const readRoute = () => getPowerBankAdmissionRoute(corridor[0], corridor[1], [], () => [...corridor]);
+    expect(readRoute()).toEqual(corridor);
 
     expect(measure(candidate)).toEqual({
       status: "ready", pathDistance: 2, combatTravelTicks: 18,
       haulerOutboundTravelTicks: 2, haulerReturnTravelTicks: 6,
     });
     expect(search).toHaveBeenCalledTimes(3);
-    expect(Game.map.getRoomStatus).toHaveBeenCalledTimes(1);
+    expect(Game.map.getRoomStatus).toHaveBeenCalledTimes(2);
     expect(Game.map.getRoomTerrain).toHaveBeenCalledTimes(1);
     expect(Game.rooms.W1N1.find).toHaveBeenCalledTimes(1);
     expect(terrain.get.mock.calls).toEqual([[11, 10], [12, 10], [10, 10]]);
+
+    // 新 tick 只重读每房一次；旧 ready 不消费名额，另一 Spawn 继续独立测量。
+    Game.time += 1;
+    (Game.map.getRoomStatus as jest.Mock).mockClear();
+    expect(readRoute()).toEqual(corridor);
+    expect(measure(candidate).status).toBe("ready");
+    expect(measure({ ...candidate, sourceSpawnPos: pos(9) }).status).toBe("ready");
+    expect(Game.map.getRoomStatus).toHaveBeenCalledTimes(2);
+    expect(search).toHaveBeenCalledTimes(6);
   });
 
   it.each([
@@ -309,6 +324,15 @@ describe("Power Bank 静态完整路径测量", () => {
       haulerOutboundTravelTicks: 102, haulerReturnTravelTicks: 102,
     });
     expect(search).toHaveBeenCalledTimes(3);
+    // 原生地图事实复用不能让同 tick 新危险或所有权借旧 ready 放行。
+    candidate.avoidRooms = [rooms[1]];
+    expect(measure(candidate)).toMatchObject({ status: "pending", reason: "unsafe_route" });
+    candidate.avoidRooms = [];
+    Game.rooms[rooms[1]].controller = { my: false, owner: { username: "enemy" } } as StructureController;
+    expect(measure(candidate)).toMatchObject({ status: "pending", reason: "unsafe_route" });
+    delete Game.rooms[rooms[1]].controller;
+    expect(measure(candidate).status).toBe("ready");
+    expect(search).toHaveBeenCalledTimes(3);
     // 相同路线/端点仍不能把非相邻步当成完整证明。
     Game.time += 101;
     search.mockReturnValue({ path: [pos(12, 10, rooms[0])], incomplete: false, ops: 1, cost: 1 });
@@ -373,7 +397,8 @@ describe("Power Bank 静态完整路径测量", () => {
 
     expect(measure(candidate)).toEqual({ status: "pending", reason: "budget", retryAt: 1_001 });
     expect(topology).toHaveBeenCalledTimes(1);
-    expect(Game.map.getRoomStatus).toHaveBeenCalledTimes(1);
+    // 同帧原始地图事实已取得，拓扑仍按调用方原合同重新核验。
+    expect(Game.map.getRoomStatus).not.toHaveBeenCalled();
     expect(search).toHaveBeenCalledTimes(3);
     Game.time += 1;
     expect(measure(candidate).status).toBe("ready");
@@ -395,7 +420,7 @@ describe("Power Bank 静态完整路径测量", () => {
     expect(Game.map.getRoomTerrain).not.toHaveBeenCalled();
     expect(measure(ready).status).toBe("ready");
     expect(topology).toHaveBeenCalledTimes(1);
-    expect(Game.map.getRoomStatus).toHaveBeenCalledTimes(1);
+    expect(Game.map.getRoomStatus).not.toHaveBeenCalled();
     expect(search).toHaveBeenCalledTimes(3);
   });
 
@@ -450,7 +475,8 @@ describe("Power Bank 静态完整路径测量", () => {
     expect(copied).not.toBe(staticMatrix);
     copied.set(20, 20, 255);
     expect(staticMatrix.get(20, 20)).toBe(0);
-    (Game.map.getRoomStatus as jest.Mock).mockReturnValue({ status: "closed", timestamp: null });
+    // 同 tick 替换原生 reader 代表新输入，不能沿用已读 normal 事实。
+    Game.map.getRoomStatus = jest.fn(() => ({ status: "closed", timestamp: null }));
     expect(measure(candidate)).toMatchObject({ status: "pending", reason: "unsafe_route" });
     expect(search).toHaveBeenCalledTimes(3);
   });
@@ -459,6 +485,7 @@ describe("Power Bank 静态完整路径测量", () => {
     (Game.map.getRoomStatus as jest.Mock).mockReturnValue({ status, timestamp: 10_000 });
     expect(measure(input()).status).toBe("ready");
     expect(search).toHaveBeenCalledTimes(3);
+    Game.time += 1;
     (Game.map.getRoomStatus as jest.Mock).mockReturnValue(null);
     expect(measure(input())).toMatchObject({ status: "pending", reason: "unsafe_route" });
     expect(search).toHaveBeenCalledTimes(3);

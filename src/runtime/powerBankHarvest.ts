@@ -44,6 +44,7 @@ import { getPowerBankOwnedAvoidRooms } from "@/runtime/powerBankTransit";
 import { isSpawnActive } from "@/runtime/tickContext";
 import { getPowerBankAdmissionRoute } from "@/runtime/powerBankRouteCache";
 import { measureSampledCpuPhase } from "@/runtime/cpuPhaseProfiler";
+import { hasPlanningCpuHeadroom } from "@/runtime/planningCpuBudget";
 
 const PATROL_SCOUT_CONFIG_NAME = "powerbank:patrol:scout:0";
 
@@ -414,13 +415,17 @@ function findSafeRoute(fromRoom: string, toRoom: string, dangerRooms?: readonly 
   return rooms;
 }
 
-/** 正路线有界跨 tick 复用；所有权、危险集合、闭房与连通性均重新核验。 */
-function getAdmissionSafeRoute(fromRoom: string, toRoom: string): string[] | null {
-  const ownedRooms = getPowerBankOwnedAvoidRooms();
-  if (ownedRooms.includes(toRoom)) return null;
-  const dangerRooms = getActiveDangerRooms(toRoom, ownedRooms).sort();
-  return getPowerBankAdmissionRoute(fromRoom, toRoom, dangerRooms,
-    () => findSafeRoute(fromRoom, toRoom, dangerRooms));
+interface AdmissionDangerContext {
+  ownedRooms: readonly string[];
+  avoidRooms: readonly string[];
+  sortedAvoidRooms: readonly string[];
+}
+
+/** 正路线有界跨 tick 复用；本次准入的危险集合与当前地图事实共同核验。 */
+function getAdmissionSafeRoute(fromRoom: string, toRoom: string, danger: AdmissionDangerContext): string[] | null {
+  if (danger.ownedRooms.includes(toRoom)) return null;
+  return getPowerBankAdmissionRoute(fromRoom, toRoom, danger.sortedAvoidRooms,
+    () => findSafeRoute(fromRoom, toRoom, danger.sortedAvoidRooms));
 }
 
 function getRouteDistance(fromRoom: string, toRoom: string): number {
@@ -574,28 +579,44 @@ function evaluateSourceCandidatesImpl(task: PowerBankHarvestTask): {
   const candidates: PowerBankSourceCandidate[] = [];
   const rejectionReasons: string[] = [];
   let pendingRetryAt: number | undefined;
+  // 同步评估内没有危险记录 writer；各来源/Spawn 共用一次读取。惰性创建，
+  // 无合格来源时不扫描 intel；下一次入口即使同 tick 也重新读取可变 Memory。
+  let dangerContext: AdmissionDangerContext | undefined;
+  const getDangerContext = (): AdmissionDangerContext => {
+    if (!dangerContext) {
+      const ownedRooms = getPowerBankOwnedAvoidRooms();
+      const avoidRooms = getActiveDangerRooms(task.targetRoom, ownedRooms);
+      dangerContext = { ownedRooms, avoidRooms, sortedAvoidRooms: [...avoidRooms].sort() };
+    }
+    return dangerContext;
+  };
 
   // 只做房间级安全路线与来源基本资格预评估。先尝试短走廊，防止每 tick
   // 重测靠前的远来源，把有限 PF 配额耗尽后永远到不了已可行的近来源。
-  const sourceRoutes: Array<{ room: Room; routeRooms: string[] }> = [];
+  const sourceRoutes: Array<{ room: Room; routeRooms: string[]; avoidRooms: readonly string[] }> = [];
   measureSampledCpuPhase("source.routes", () => {
     for (const room of measureSampledCpuPhase("context.myRooms", () => getTickContextService().getMyRooms())) {
       if (!room.controller || room.controller.level < 6 || isDefenseMode(room.name)) continue;
       if (!measureSampledCpuPhase("context.spawns", () => getTickContextService().getSpawnsByRoom(room.name))
         .some(isSpawnActive)) continue;
-      const routeRooms = getAdmissionSafeRoute(room.name, task.targetRoom);
+      if (!hasPlanningCpuHeadroom()) {
+        pendingRetryAt = Game.time + 1;
+        break;
+      }
+      const danger = getDangerContext();
+      const routeRooms = getAdmissionSafeRoute(room.name, task.targetRoom, danger);
       if (!routeRooms) {
         rejectionReasons.push(`${room.name}:no_safe_route`);
         continue;
       }
-      sourceRoutes.push({ room, routeRooms });
+      sourceRoutes.push({ room, routeRooms, avoidRooms: danger.avoidRooms });
     }
     sourceRoutes.sort((left, right) => left.routeRooms.length - right.routeRooms.length ||
       left.room.name.localeCompare(right.room.name));
   });
 
-  for (const { room, routeRooms } of sourceRoutes) {
-    if (!canMeasurePowerBankTravelThisTick()) {
+  for (const { room, routeRooms, avoidRooms } of sourceRoutes) {
+    if (!canMeasurePowerBankTravelThisTick() || !hasPlanningCpuHeadroom()) {
       pendingRetryAt = Math.min(pendingRetryAt ?? Infinity, Game.time + 1);
       break;
     }
@@ -658,7 +679,7 @@ function evaluateSourceCandidatesImpl(task: PowerBankHarvestTask): {
     const measurements: Array<Extract<ReturnType<typeof measurePowerBankTravel>, { status: "ready" }>> = [];
     let sourcePending = false;
     for (const spawn of spawns) {
-      if (!canMeasurePowerBankTravelThisTick()) {
+      if (!canMeasurePowerBankTravelThisTick() || !hasPlanningCpuHeadroom()) {
         sourcePending = true;
         pendingRetryAt = Math.min(pendingRetryAt ?? Infinity, Game.time + 1);
         break;
@@ -673,7 +694,7 @@ function evaluateSourceCandidatesImpl(task: PowerBankHarvestTask): {
         bankPos: new RoomPosition(task.bankPos.x, task.bankPos.y, task.targetRoom),
         returnTargetPos: returnTarget.pos,
         routeRooms,
-        avoidRooms: getActiveDangerRooms(task.targetRoom),
+        avoidRooms: [...avoidRooms],
         profile,
         haulerCarryParts: Math.ceil(haulerCapacity / CARRY_CAPACITY),
       }));
@@ -739,7 +760,7 @@ function evaluateSourceCandidatesImpl(task: PowerBankHarvestTask): {
       distance,
       ...travel,
       routeRooms,
-      avoidRooms: getActiveDangerRooms(task.targetRoom),
+      avoidRooms: [...avoidRooms],
       spawnReadyIn,
       receivingHeadroom,
       viability,
@@ -945,10 +966,11 @@ function processDiscoveredImpl(task: PowerBankHarvestTask): void {
   }
   updatePowerBankObservation(task, bank);
   task.bankPos = { x: bank.pos.x, y: bank.pos.y };
-  // 预算只允许一次新几何测量。等待阶段不能在每个 discovered 任务上
-  // 重做来源评估；有预算后再评估，只有本来源所有 Spawn 的完整证据
-  // 与新鲜资源门通过时才允许它进入已证明候选。
-  if (!canMeasurePowerBankTravelThisTick()) {
+  // discovered 准入可顺延，战斗/运输/生命周期仍由其它分支照常处理。
+  // CPU 不足时底层测量不消费配额，单看次数会让所有任务反复扫描来源；
+  // 因此在昂贵评估前检查余量，已有 cached-ready 的新准入也等余量恢复。
+  // 当前视野、Bank、威胁与观测更新已经完成，等待不冒充失败或取得名额。
+  if (!canMeasurePowerBankTravelThisTick() || !hasPlanningCpuHeadroom()) {
     requestPowerBankObservation(task.targetRoom);
     setPowerBankBlocker(task, "path_measurement_pending", 1);
     return;

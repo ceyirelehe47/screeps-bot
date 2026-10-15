@@ -16,6 +16,8 @@ import {
 import { clearCreepMovementStateForTest } from "@/movement/creepState";
 import * as powerBankPathDistance from "@/runtime/powerBankPathDistance";
 import * as powerBankObserver from "@/runtime/powerBankObserver";
+import * as powerBankTransit from "@/runtime/powerBankTransit";
+import * as powerBankRouteCache from "@/runtime/powerBankRouteCache";
 import { getPowerBankLifecycleFailure, getPowerBankStageTimeout } from "@/runtime/powerBankTaskState";
 import { recordPowerBankDiscovery } from "@/runtime/powerBankDiscovery";
 import { powerBankAttackerRole } from "@/roles/powerBankAttacker";
@@ -375,6 +377,8 @@ describe("powerBankHarvest", () => {
 
   it("旧计划日期已过也不提前生运输者；开打后按剩余血量倒推真实窗口", () => {
     setupSourceRoom(); setupTargetRoom();
+    // discovered 顺延不能拦截已经开打的任务或到点的运输补员。
+    Game.cpu = { ...Game.cpu, limit: 120, tickLimit: 154, bucket: 34, getUsed: () => 70 };
     const taskId = "pb-live-hauler-window";
     const pair = setupOwnedCombatPair({ taskId, ticksToLive: 1450 });
     const dps = pair.attacker.body.filter(p => p.type === ATTACK).length * ATTACK_POWER * 4;
@@ -486,9 +490,11 @@ describe("powerBankHarvest", () => {
 
   it("预算用尽仍先校验当前视野、Bank与威胁，但不扫描来源", () => {
     const source = setupOwnedRoom(SOURCE_ROOM);
+    const stockReads = jest.spyOn(source.storage!.store, "getUsedCapacity");
+    const ownership = jest.spyOn(powerBankTransit, "getPowerBankOwnedAvoidRooms");
     jest.spyOn(powerBankObserver, "hasPowerBankObserverCoverage").mockReturnValue(true);
     jest.mocked(powerBankPathDistance.canMeasurePowerBankTravelThisTick).mockReturnValue(false);
-    const task = makeTask({ bankExpiresAt: Game.time + 5000 });
+    const task = makeTask({ hits: 100_000, power: 1000, bankExpiresAt: Game.time + 5000 });
     addTask(task);
 
     runPowerBankHarvest();
@@ -515,6 +521,24 @@ describe("powerBankHarvest", () => {
     expect(Game.map.findRoute).not.toHaveBeenCalled();
     expect(source.find).not.toHaveBeenCalled();
     expect(Memory.data?.powerBankHarvestHistory).toEqual([]);
+
+    // 名额未恢复时连续多个 tick 只复核当前目标，不重建来源、库存或测距请求。
+    for (let waiting = 0; waiting < 3; waiting += 1) {
+      Game.time += 1;
+      runPowerBankHarvest();
+      expect(task.lastSeenTick).toBe(Game.time);
+      expect(task.admissionLastMeasuredAt).toBeUndefined();
+      expect(powerBankPathDistance.measurePowerBankTravel).not.toHaveBeenCalled();
+      expect(Game.map.findRoute).not.toHaveBeenCalled();
+      expect(ownership).not.toHaveBeenCalled();
+      expect(stockReads).not.toHaveBeenCalled();
+      expect(source.find).not.toHaveBeenCalled();
+    }
+    jest.mocked(powerBankPathDistance.canMeasurePowerBankTravelThisTick).mockReturnValue(true);
+    Game.time += 1;
+    runPowerBankHarvest();
+    expect(task.status).toBe("preparing_boosts");
+    expect(powerBankPathDistance.measurePowerBankTravel).toHaveBeenCalledTimes(1);
   });
 
   it("新测量耗尽预算即停止后续Lab物流评估，本来源未完整时继续等待", () => {
@@ -541,6 +565,159 @@ describe("powerBankHarvest", () => {
     expect(task.pathDistance).toBeUndefined();
 
     expect(Memory.data?.powerBankHarvestHistory).toEqual([]);
+  });
+
+  it("CPU 余量不足时全部 discovered 只更新当前观测，恢复后按原公平顺序重新准入", () => {
+    const sources = [setupOwnedRoom(SOURCE_ROOM, { spawnCount: 2 }), setupOwnedRoom(SECONDARY_SOURCE_ROOM)];
+    const stockReads = sources.map(source => jest.spyOn(source.storage!.store, "getUsedCapacity"));
+    jest.spyOn(powerBankObserver, "hasPowerBankObserverCoverage").mockReturnValue(true);
+    const ownership = jest.spyOn(powerBankTransit, "getPowerBankOwnedAvoidRooms");
+    Game.cpu = { ...Game.cpu, limit: 120, tickLimit: 500, bucket: 1999, getUsed: jest.fn(() => 10) };
+    const tasks = [0, 1, 2].map(index => {
+      const task = makeTask({ id: `busy-${index}`, bankId: `busy-bank-${index}`, bankPos: { x: 25 + index, y: 25 }, hits: 100_000, power: 1000,
+        bankExpiresAt: Game.time + 5000 });
+      task.admissionLastMeasuredAt = 90 - index;
+      addTask(task);
+      return task;
+    });
+    const banks = tasks.map(task => createMockPowerBank({ id: task.bankId, roomName: TARGET_ROOM, x: task.bankPos.x, y: task.bankPos.y,
+      hits: task.hits, power: task.power, ticksToDecay: 5000 }));
+    Game.rooms[TARGET_ROOM] = { name: TARGET_ROOM,
+      find: jest.fn((type: FindConstant) => type === FIND_STRUCTURES ? banks : []),
+    } as unknown as Room;
+    const expired = makeTask({ id: "busy-expired", bankExpiresAt: Game.time });
+    addTask(expired);
+
+    runPowerBankHarvest();
+
+    tasks.forEach((task, index) => {
+      expect(task).toMatchObject({ status: "discovered", sourceRoom: "", blocker: "path_measurement_pending",
+        nextAttemptAt: Game.time + 1, lastSeenTick: Game.time, admissionLastMeasuredAt: 90 - index });
+    });
+    expect(powerBankObserver.getPowerBankRoomThreat).toHaveBeenCalledTimes(3);
+    expect(powerBankPathDistance.measurePowerBankTravel).not.toHaveBeenCalled();
+    expect(Game.map.findRoute).not.toHaveBeenCalled();
+    expect(ownership).not.toHaveBeenCalled();
+    sources.forEach(source => expect(source.find).not.toHaveBeenCalled());
+    // 生命周期与终态清理不受准入门影响，过期任务照常回收。
+    expect(getTask(expired.id)).toBeUndefined();
+    expect(Memory.data!.powerBankHarvestHistory).toContainEqual(expect.objectContaining({
+      taskId: expired.id, failReason: "bank_expired",
+    }));
+
+    for (let waiting = 0; waiting < 3; waiting += 1) {
+      Game.time += 1;
+      runPowerBankHarvest();
+      tasks.forEach((task, index) => {
+        expect(task).toMatchObject({ status: "discovered", blocker: "path_measurement_pending",
+          lastSeenTick: Game.time, nextAttemptAt: Game.time + 1, admissionLastMeasuredAt: 90 - index });
+      });
+      expect(powerBankPathDistance.measurePowerBankTravel).not.toHaveBeenCalled();
+      expect(Game.map.findRoute).not.toHaveBeenCalled();
+      expect(ownership).not.toHaveBeenCalled();
+      stockReads.forEach(read => expect(read).not.toHaveBeenCalled());
+      sources.forEach(source => expect(source.find).not.toHaveBeenCalled());
+    }
+    Game.cpu.bucket = 10000;
+    runPowerBankHarvest();
+    expect(powerBankPathDistance.measurePowerBankTravel).not.toHaveBeenCalled();
+    // nextAttemptAt 的一 tick 退避到点即恢复 fresh 评估；mock ready 也不能在忙时越过准入门。
+    Game.time += 1;
+    runPowerBankHarvest();
+    tasks.forEach(task => expect(task.status).toBe("preparing_boosts"));
+    const measuredTaskOrder = jest.mocked(powerBankPathDistance.measurePowerBankTravel).mock.calls
+      .filter(([input]) => input.sourceSpawnPos.roomName === SOURCE_ROOM && input.sourceSpawnPos.x === 11)
+      .map(([input]) => input.bankPos.x);
+    expect(measuredTaskOrder).toEqual([27, 26, 25]);
+    expect(ownership).toHaveBeenCalledTimes(3);
+    expect(powerBankObserver.getPowerBankRoomThreat).toHaveBeenCalledTimes(15);
+    tasks.forEach((task, index) => expect(task.admissionLastMeasuredAt).toBe(90 - index));
+  });
+
+  it("来源路线预评估中耗尽 CPU 后不继续 Lab 与测距扫描，也不把未评估来源判为失败", () => {
+    const sources = [setupOwnedRoom(SOURCE_ROOM), setupOwnedRoom(SECONDARY_SOURCE_ROOM)];
+    jest.spyOn(powerBankObserver, "hasPowerBankObserverCoverage").mockReturnValue(true);
+    let used = 10;
+    Game.cpu = { ...Game.cpu, limit: 120, tickLimit: 500, bucket: 10000, getUsed: () => used };
+    Game.map.findRoute = jest.fn(() => {
+      used = 200;
+      return [{ room: TARGET_ROOM, exit: FIND_EXIT_RIGHT }];
+    }) as typeof Game.map.findRoute;
+    const task = makeTask({ hits: 100_000, power: 1000, bankExpiresAt: Game.time + 5000 });
+    setupDiscoveredBank(task);
+    addTask(task);
+
+    runPowerBankHarvest();
+
+    expect(Game.map.findRoute).toHaveBeenCalledTimes(1);
+    sources.forEach(source => expect(source.find).not.toHaveBeenCalled());
+    expect(powerBankPathDistance.measurePowerBankTravel).not.toHaveBeenCalled();
+    expect(task).toMatchObject({ status: "discovered", sourceRoom: "", blocker: "path_measurement_pending",
+      nextAttemptAt: Game.time + 1 });
+    expect(task.admissionLastMeasuredAt).toBeUndefined();
+    expect(Memory.data?.powerBankHarvestHistory).toEqual([]);
+
+    Game.time += 1;
+    used = 10;
+    Game.map.findRoute = jest.fn(() => [{ room: TARGET_ROOM, exit: FIND_EXIT_RIGHT }]) as typeof Game.map.findRoute;
+    runPowerBankHarvest();
+    expect(Game.map.findRoute).toHaveBeenCalledTimes(2);
+    expect(powerBankPathDistance.measurePowerBankTravel).toHaveBeenCalledTimes(2);
+    expect(task.status).toBe("preparing_boosts");
+  });
+
+  it("一次准入共享危险读取但各消费边界独立，同 tick 下一入口重新读取危险和所有权 intel", () => {
+    setupOwnedRoom(SOURCE_ROOM, { spawnCount: 2 });
+    setupOwnedRoom(SECONDARY_SOURCE_ROOM);
+    jest.spyOn(powerBankObserver, "hasPowerBankObserverCoverage").mockReturnValue(true);
+    const ownership = jest.spyOn(powerBankTransit, "getPowerBankOwnedAvoidRooms");
+    const routes = jest.spyOn(powerBankRouteCache, "getPowerBankAdmissionRoute");
+    Memory.runtime = {
+      transitDangerRooms: { E7N56: Game.time + 10, E6N56: Game.time - 1, [TARGET_ROOM]: Game.time + 10 },
+      // 保留旧 Harvest 的 Object.keys 语义：历史 malformed false 仍作为危险键。
+      powerBankPermanentDangerRooms: { E4N56: false as unknown as true, E3N56: true },
+      powerBankOwnedRoomIntel: {
+        E9N56: { owner: "enemy", lastSeenAt: Game.time - 1 },
+        E8N56: { owner: "enemy", lastSeenAt: Game.time - 1 },
+      },
+    };
+    const task = makeTask({ hits: 100_000, power: 1000, bankExpiresAt: Game.time + 5000 });
+    setupDiscoveredBank(task);
+    addTask(task);
+    const observedAvoid: string[][] = [];
+    jest.mocked(powerBankPathDistance.measurePowerBankTravel).mockImplementation(input => {
+      observedAvoid.push([...input.avoidRooms]);
+      // 仿真调用方改写其输入；不能污染其它 Spawn 或最终候选。
+      (input.avoidRooms as string[]).push("E2N56");
+      return { status: "ready", pathDistance: 100, combatTravelTicks: 100,
+        haulerOutboundTravelTicks: 100, haulerReturnTravelTicks: 100 };
+    });
+
+    runPowerBankHarvest();
+
+    const first = ["E7N56", "E4N56", "E3N56", "E9N56", "E8N56"];
+    expect(ownership).toHaveBeenCalledTimes(1);
+    expect(observedAvoid).toEqual([first, first, first]);
+    expect(routes.mock.calls.map(call => call[2])).toEqual([[...first].sort(), [...first].sort()]);
+    expect(task.avoidRooms).toEqual(first);
+    expect(task.avoidRooms).not.toBe(jest.mocked(powerBankPathDistance.measurePowerBankTravel).mock.calls[0][0].avoidRooms);
+
+    Memory.runtime.transitDangerRooms!.E7N56 = Game.time;
+    Memory.runtime.transitDangerRooms!.E2N56 = Game.time + 10;
+    delete Memory.runtime.powerBankPermanentDangerRooms!.E3N56;
+    Memory.runtime.powerBankOwnedRoomIntel!.E1N56 = { owner: "new-enemy", lastSeenAt: Game.time };
+    // 在同 tick 重入准入路径，验证缓存边界是同步调用而非 tick 或 store identity。
+    task.status = POWER_BANK_STATUS.DISCOVERED;
+    task.sourceRoom = "";
+    delete task.nextAttemptAt;
+    ownership.mockClear(); routes.mockClear(); observedAvoid.length = 0;
+    runPowerBankHarvest();
+
+    const second = ["E2N56", "E4N56", "E9N56", "E8N56", "E1N56"];
+    expect(ownership).toHaveBeenCalledTimes(1);
+    expect(observedAvoid).toEqual([second, second, second]);
+    expect(routes.mock.calls.map(call => call[2])).toEqual([[...second].sort(), [...second].sort()]);
+    expect(task).toMatchObject({ status: "preparing_boosts", avoidRooms: second });
   });
 
   it("writes task ownership when a boosted pair transitions to travelling", () => {
