@@ -1,0 +1,666 @@
+{
+  "schema": "screeps-cache-patrol-release/v1",
+  "release": {
+    "commit": "a4cca805b3d20b55f4284e51cfafdcd5092de3e2",
+    "tree": "2666aed8d7874673f7032ee89b20c9c1469caa6e",
+    "tag": "2026.10.15-1+a4cca80@2026-10-15T07:47:44.733Z",
+    "version": "2026.10.15-1",
+    "bytes": 3678062,
+    "sha256": "2212c05cfd5cb364894ba5c513fc4d5dcd3f644399eb1816843912bd18112050",
+    "embeddedBundleHash": "30a78f8aeea77828db92a61b813b4b28b473f3a4a43de13baf7514b7f833f48d"
+  },
+  "target": {
+    "username": "forster",
+    "branch": "default",
+    "shard": "shard1"
+  },
+  "offline": {
+    "summarySha256": "3e1237387b3e0d5412175917ede0c47c15d60c82bcef14d26f659565fc629b27",
+    "status": "REGRESSION_AND_BUILD_PASSED_WITH_PREEXISTING_STALE_BUDGET",
+    "repository": {
+      "path": "/root/codex-jobs/20261015-screeps-live-cache-01a13e43/repo",
+      "liveBaseCommit": "642e25996fa2aa7418a8c4a190ecaff6381c2ec3",
+      "parentCommit": "07eecd029c540a07881b60c8241ebded084622f6",
+      "commit": "a4cca805b3d20b55f4284e51cfafdcd5092de3e2",
+      "tree": "2666aed8d7874673f7032ee89b20c9c1469caa6e",
+      "dirty": false,
+      "detached": true,
+      "testBranch": "codex/patrol-wall-target-20261015",
+      "buildCheckout": "detached",
+      "version": "2026.10.15-1"
+    },
+    "sourceFiles": [
+      {
+        "path": "package-lock.json",
+        "sha256": "1b1901b082a66c55399fa4c5a6cd21215516c68febffb2d61c80732b137e0764",
+        "expectedSha256": "1b1901b082a66c55399fa4c5a6cd21215516c68febffb2d61c80732b137e0764",
+        "matchesCandidate": true
+      },
+      {
+        "path": "package.json",
+        "sha256": "8cde6781821c2f9328524300bc2c868d22edcaecf762d1098fa34dbd3245b57d",
+        "expectedSha256": "8cde6781821c2f9328524300bc2c868d22edcaecf762d1098fa34dbd3245b57d",
+        "matchesCandidate": true
+      },
+      {
+        "path": "src/movement/pathing.crossTickCache.test.ts",
+        "sha256": "8d05f77647a72d3ef9b063b41736150653ab834d6af7719fce7db34631504797",
+        "expectedSha256": "8d05f77647a72d3ef9b063b41736150653ab834d6af7719fce7db34631504797",
+        "matchesCandidate": true
+      },
+      {
+        "path": "src/movement/roomTopologyRevision.test.ts",
+        "sha256": "498f3ae173e0841352a803505cf493d2fb328c557e61fe466fbb73117986651a",
+        "expectedSha256": "498f3ae173e0841352a803505cf493d2fb328c557e61fe466fbb73117986651a",
+        "matchesCandidate": true
+      },
+      {
+        "path": "src/movement/roomTopologyRevision.ts",
+        "sha256": "934981de6a5c7125d1ce004cdde818d7a406d7259f37b029638f07fddefec5ad",
+        "expectedSha256": "934981de6a5c7125d1ce004cdde818d7a406d7259f37b029638f07fddefec5ad",
+        "matchesCandidate": true
+      },
+      {
+        "path": "src/roles/meleeAttacker.test.ts",
+        "sha256": "91b366c8fbfbc73166dae0e2589123bb6114519e5770a7382b3aea3b2fff84e0",
+        "expectedSha256": "91b366c8fbfbc73166dae0e2589123bb6114519e5770a7382b3aea3b2fff84e0",
+        "matchesCandidate": true
+      },
+      {
+        "path": "src/roles/meleeAttacker.ts",
+        "sha256": "fb059dddd0a049957921d60c84a2db2f7bb6200824946eb2f19149e99e8bb1b8",
+        "expectedSha256": "fb059dddd0a049957921d60c84a2db2f7bb6200824946eb2f19149e99e8bb1b8",
+        "matchesCandidate": true
+      },
+      {
+        "path": "src/runtime/cpuMonitor.ts",
+        "sha256": "2992773881a581df6a0d71a4071fc0193417afac2092c4756ed5015fcf2a16f0",
+        "expectedSha256": "2992773881a581df6a0d71a4071fc0193417afac2092c4756ed5015fcf2a16f0",
+        "matchesCandidate": true
+      },
+      {
+        "path": "src/runtime/cpuPhaseProfiler.lowOverhead.test.ts",
+        "sha256": "5885215c807bd49c71ffe4bccaa56d06caee8aa6a5e97ce828e299137b6bbe68",
+        "expectedSha256": "5885215c807bd49c71ffe4bccaa56d06caee8aa6a5e97ce828e299137b6bbe68",
+        "matchesCandidate": true
+      }
+    ],
+    "completeRegression": {
+      "status": "PASSED",
+      "counts": {
+        "suites": 253,
+        "passedSuites": 253,
+        "failedSuites": 0,
+        "pendingSuites": 0,
+        "runtimeErrorSuites": 0,
+        "tests": 1870,
+        "passed": 1870,
+        "failed": 0,
+        "pending": 0,
+        "todo": 0
+      },
+      "trackedCount": 253,
+      "discoveredCount": 253,
+      "resultFileCount": 253,
+      "trackedEqualsDiscoveryEqualsResults": true,
+      "assertionCountAudit": {
+        "priorTests": 1865,
+        "priorMeleeTests": 10,
+        "finalMeleeTests": 15,
+        "expectedTotal": 1870,
+        "actualTotal": 1870,
+        "countChanges": [
+          {
+            "file": "src/roles/meleeAttacker.test.ts",
+            "previous": 10,
+            "current": 15
+          }
+        ]
+      },
+      "dirty": false,
+      "errors": [],
+      "perFileEvidencePath": "/root/codex-jobs/20261015-screeps-live-cache-01a13e43/logs/final-patrol/complete-regression-check.json",
+      "resultsPath": "/root/codex-jobs/20261015-screeps-live-cache-01a13e43/logs/final-patrol/full-jest.results.json"
+    },
+    "stages": [
+      {
+        "stage": "patrol-red",
+        "exitCode": 1,
+        "durationMs": 9181.188225,
+        "classification": "EXPECTED_RED_REPRODUCTION"
+      },
+      {
+        "stage": "patrol-green",
+        "exitCode": 0,
+        "durationMs": 9475.685724,
+        "classification": "PASSED"
+      },
+      {
+        "stage": "related-domain",
+        "exitCode": 0,
+        "durationMs": 19951.62516,
+        "classification": "PASSED"
+      },
+      {
+        "stage": "typecheck",
+        "exitCode": 0,
+        "durationMs": 50897.199188,
+        "classification": "PASSED"
+      },
+      {
+        "stage": "test-discovery",
+        "exitCode": 0,
+        "durationMs": 1051.460844,
+        "classification": "PASSED"
+      },
+      {
+        "stage": "full-jest",
+        "exitCode": 0,
+        "durationMs": 482990.456815,
+        "classification": "PASSED"
+      },
+      {
+        "stage": "full-jest-evidence",
+        "exitCode": 0,
+        "durationMs": 220.476139,
+        "classification": "PASSED"
+      },
+      {
+        "stage": "build",
+        "exitCode": 0,
+        "durationMs": 26695.547498,
+        "classification": "PASSED"
+      }
+    ],
+    "testBudget": {
+      "status": "PREEXISTING_STALE_FAILED",
+      "exitCode": 1,
+      "diagnosticsPath": "/root/codex-jobs/20261015-screeps-live-cache-01a13e43/frozen/07eecd02/logs/budget-diagnostics.json",
+      "scriptChanged": false,
+      "manifestChanged": false,
+      "testsRestoredFromObsoleteBaseline": false,
+      "reRunForFinalCandidate": false,
+      "sourceSummaryPath": "/root/codex-jobs/20261015-screeps-live-cache-01a13e43/frozen/07eecd02/logs/validation-summary.json",
+      "sourceSummarySha256": "6782a8070521cdcce63f0a8cae7bc8c13d9cd0816daa96a2ece0c35586c2a0c9"
+    },
+    "buildIdentity": {
+      "version": "2026.10.15-1",
+      "gitHash": "a4cca80",
+      "buildTime": "2026-10-15T07:47:44.733Z",
+      "tag": "2026.10.15-1+a4cca80@2026-10-15T07:47:44.733Z",
+      "commit": "a4cca805b3d20b55f4284e51cfafdcd5092de3e2",
+      "tree": "2666aed8d7874673f7032ee89b20c9c1469caa6e",
+      "buildBranch": "detached",
+      "dirty": "false",
+      "deployBranch": "default",
+      "embeddedBundleHash": "30a78f8aeea77828db92a61b813b4b28b473f3a4a43de13baf7514b7f833f48d",
+      "computedPayloadHash": "30a78f8aeea77828db92a61b813b4b28b473f3a4a43de13baf7514b7f833f48d",
+      "matchesExpected": true
+    },
+    "rawFullJestSha256": "9c7c115cff3c5cba762b3babf448d9cd35fbd896ef484a0d4df6481f105df8df"
+  },
+  "upload": {
+    "at": "2026-10-15T07:50:26.397Z",
+    "commit": "a4cca805b3d20b55f4284e51cfafdcd5092de3e2",
+    "tag": "2026.10.15-1+a4cca80@2026-10-15T07:47:44.733Z",
+    "uploadAccepted": true,
+    "match": true,
+    "localHash": "725cb7fbc8b608ee021081a62e25c6dab2a11553c53101fe7d18c8eee588f2df",
+    "remoteHash": "725cb7fbc8b608ee021081a62e25c6dab2a11553c53101fe7d18c8eee588f2df",
+    "missing": [],
+    "extra": [],
+    "changed": []
+  },
+  "postdeploy": {
+    "schema": "screeps-postdeploy-summary/v1",
+    "generatedAt": "2026-10-15T07:53:44.375Z",
+    "boundary": {
+      "uploadedAt": "2026-10-15T07:50:26.397Z",
+      "rule": "事件时间严格晚于上传读回 at；仅归纳已采集证据"
+    },
+    "expected": {
+      "version": "2026.10.15-1",
+      "tag": "2026.10.15-1+a4cca80@2026-10-15T07:47:44.733Z",
+      "commit": "a4cca805b3d20b55f4284e51cfafdcd5092de3e2",
+      "tree": "2666aed8d7874673f7032ee89b20c9c1469caa6e",
+      "sha256": "2212c05cfd5cb364894ba5c513fc4d5dcd3f644399eb1816843912bd18112050",
+      "embeddedBundleHash": "30a78f8aeea77828db92a61b813b4b28b473f3a4a43de13baf7514b7f833f48d"
+    },
+    "upload": {
+      "readbackVerified": true,
+      "uploadAccepted": true,
+      "localModulesHash": "725cb7fbc8b608ee021081a62e25c6dab2a11553c53101fe7d18c8eee588f2df",
+      "remoteModulesHash": "725cb7fbc8b608ee021081a62e25c6dab2a11553c53101fe7d18c8eee588f2df"
+    },
+    "observation": {
+      "firstEventAt": "2026-10-15T07:50:29.551Z",
+      "lastEventAt": "2026-10-15T07:53:32.617Z"
+    },
+    "console": {
+      "events": 48,
+      "logLines": 1,
+      "deployTags": [
+        "2026.10.15-1+a4cca80@2026-10-15T07:47:44.733Z"
+      ],
+      "errors": {
+        "cpuBucketEmpty": {
+          "events": 7,
+          "messages": 7,
+          "samples": [
+            {
+              "at": "2026-10-15T07:50:32.496Z",
+              "errorClass": null,
+              "sha256": "9e07678b59ce9de7ad0c906f36fb4ab55c9aae483781762f7008d8c7510bf02c"
+            },
+            {
+              "at": "2026-10-15T07:50:38.918Z",
+              "errorClass": null,
+              "sha256": "9e07678b59ce9de7ad0c906f36fb4ab55c9aae483781762f7008d8c7510bf02c"
+            },
+            {
+              "at": "2026-10-15T07:50:49.001Z",
+              "errorClass": null,
+              "sha256": "9e07678b59ce9de7ad0c906f36fb4ab55c9aae483781762f7008d8c7510bf02c"
+            },
+            {
+              "at": "2026-10-15T07:51:01.346Z",
+              "errorClass": null,
+              "sha256": "9e07678b59ce9de7ad0c906f36fb4ab55c9aae483781762f7008d8c7510bf02c"
+            },
+            {
+              "at": "2026-10-15T07:51:21.667Z",
+              "errorClass": null,
+              "sha256": "9e07678b59ce9de7ad0c906f36fb4ab55c9aae483781762f7008d8c7510bf02c"
+            }
+          ],
+          "knownPreexistingSignature": "Script execution has been terminated: CPU bucket is empty"
+        },
+        "cpuTimeLimit": {
+          "events": 2,
+          "messages": 2,
+          "samples": [
+            {
+              "at": "2026-10-15T07:50:29.552Z",
+              "errorClass": null,
+              "sha256": "9f36d7ce6bed500d53a75825c55f8e2ca6af0231a9c8cb315d74b3eceba1a811"
+            },
+            {
+              "at": "2026-10-15T07:50:45.882Z",
+              "errorClass": null,
+              "sha256": "62b1e3fe59d1d72c6956d001d173daea8d11d78e3936069bc9652e3eb1a7aad9"
+            }
+          ]
+        },
+        "jsExceptions": {
+          "events": 0,
+          "messages": 0,
+          "samples": []
+        },
+        "otherRuntimeErrors": {
+          "events": 0,
+          "messages": 0,
+          "samples": []
+        }
+      }
+    },
+    "cpu": {
+      "scope": "账号 socket；payload 未提供 shard 时不推断所属 shard",
+      "events": 39,
+      "used": {
+        "count": 37,
+        "min": 73,
+        "max": 217,
+        "latest": 166,
+        "avg": 133.27027027027026
+      },
+      "memoryBytes": {
+        "count": 39,
+        "min": 1586890,
+        "max": 1594925,
+        "latest": 1594824,
+        "avg": 1592233.3076923077
+      },
+      "bucket": {
+        "count": 0,
+        "min": null,
+        "max": null,
+        "latest": null,
+        "avg": null
+      }
+    },
+    "completedHealthTicks": {
+      "range": {
+        "min": 74346407,
+        "max": 74346437,
+        "observations": 3
+      },
+      "continuousCompletionProven": false,
+      "note": "仅记录匹配本次部署的已观察完成 checkpoint；范围不等于每 tick 均完成"
+    },
+    "cfg": {
+      "operatorChangedKeys": [],
+      "snapshotsMissingOperatorComparison": []
+    },
+    "inputIssues": {
+      "malformedJsonLines": 0,
+      "invalidTimestampRecords": 0,
+      "socketErrors": 0
+    },
+    "snapshots": [
+      {
+        "file": "post-01.json",
+        "capturedAt": "2026-10-15T07:50:34.631Z",
+        "releaseMatches": true,
+        "deploy": {
+          "tag": "2026.10.15-1+a4cca80@2026-10-15T07:47:44.733Z",
+          "commit": "a4cca805b3d20b55f4284e51cfafdcd5092de3e2",
+          "tree": "2666aed8d7874673f7032ee89b20c9c1469caa6e",
+          "bundleHash": "30a78f8aeea77828db92a61b813b4b28b473f3a4a43de13baf7514b7f833f48d",
+          "atTick": 74346393
+        },
+        "cpu": {
+          "tick": 74346391,
+          "bucket": 82,
+          "totalUsed": 151.31373299937695,
+          "tickUsedAtFlush": 157.55676849931479,
+          "sampleBelongsToRelease": false
+        },
+        "health": {
+          "globalStarts": 5,
+          "lastGlobalStartAt": 74312453,
+          "lastCompletedAt": 74346392,
+          "completedBelongsToRelease": false,
+          "lastGap": {
+            "afterTick": 74312450,
+            "resumedAt": 74312453,
+            "skippedTicks": 2,
+            "afterDeployment": false
+          },
+          "lastIncomplete": {
+            "tick": 74346337,
+            "phase": "creepWork",
+            "afterDeployment": false
+          }
+        },
+        "cfg": {
+          "changedKeys": [
+            "synthesisControl"
+          ],
+          "operatorComparisonAvailable": true,
+          "operatorChangedKeys": []
+        }
+      },
+      {
+        "file": "post-02.json",
+        "capturedAt": "2026-10-15T07:51:29.320Z",
+        "releaseMatches": true,
+        "deploy": {
+          "tag": "2026.10.15-1+a4cca80@2026-10-15T07:47:44.733Z",
+          "commit": "a4cca805b3d20b55f4284e51cfafdcd5092de3e2",
+          "tree": "2666aed8d7874673f7032ee89b20c9c1469caa6e",
+          "bundleHash": "30a78f8aeea77828db92a61b813b4b28b473f3a4a43de13baf7514b7f833f48d",
+          "atTick": 74346393
+        },
+        "cpu": {
+          "tick": 74346405,
+          "bucket": 11,
+          "totalUsed": 176.69078660000014,
+          "tickUsedAtFlush": 184.70805690000043,
+          "sampleBelongsToRelease": true
+        },
+        "health": {
+          "globalStarts": 6,
+          "lastGlobalStartAt": 74346393,
+          "lastCompletedAt": 74346407,
+          "completedBelongsToRelease": true,
+          "lastGap": {
+            "afterTick": 74312450,
+            "resumedAt": 74312453,
+            "skippedTicks": 2,
+            "afterDeployment": false
+          },
+          "lastIncomplete": {
+            "tick": 74346397,
+            "phase": "creepWork",
+            "afterDeployment": true
+          }
+        },
+        "cfg": {
+          "changedKeys": [
+            "synthesisControl"
+          ],
+          "operatorComparisonAvailable": true,
+          "operatorChangedKeys": []
+        }
+      },
+      {
+        "file": "post-03.json",
+        "capturedAt": "2026-10-15T07:52:44.375Z",
+        "releaseMatches": true,
+        "deploy": {
+          "tag": "2026.10.15-1+a4cca80@2026-10-15T07:47:44.733Z",
+          "commit": "a4cca805b3d20b55f4284e51cfafdcd5092de3e2",
+          "tree": "2666aed8d7874673f7032ee89b20c9c1469caa6e",
+          "bundleHash": "30a78f8aeea77828db92a61b813b4b28b473f3a4a43de13baf7514b7f833f48d",
+          "atTick": 74346393
+        },
+        "cpu": {
+          "tick": 74346419,
+          "bucket": 88,
+          "totalUsed": 112.43779629999972,
+          "tickUsedAtFlush": 118.7259196999994,
+          "sampleBelongsToRelease": true
+        },
+        "health": {
+          "globalStarts": 6,
+          "lastGlobalStartAt": 74346393,
+          "lastCompletedAt": 74346425,
+          "completedBelongsToRelease": true,
+          "lastGap": {
+            "afterTick": 74312450,
+            "resumedAt": 74312453,
+            "skippedTicks": 2,
+            "afterDeployment": false
+          },
+          "lastIncomplete": {
+            "tick": 74346397,
+            "phase": "creepWork",
+            "afterDeployment": true
+          }
+        },
+        "cfg": {
+          "changedKeys": [
+            "synthesisControl"
+          ],
+          "operatorComparisonAvailable": true,
+          "operatorChangedKeys": []
+        }
+      },
+      {
+        "file": "post-04.json",
+        "capturedAt": "2026-10-15T07:53:33.991Z",
+        "releaseMatches": true,
+        "deploy": {
+          "tag": "2026.10.15-1+a4cca80@2026-10-15T07:47:44.733Z",
+          "commit": "a4cca805b3d20b55f4284e51cfafdcd5092de3e2",
+          "tree": "2666aed8d7874673f7032ee89b20c9c1469caa6e",
+          "bundleHash": "30a78f8aeea77828db92a61b813b4b28b473f3a4a43de13baf7514b7f833f48d",
+          "atTick": 74346393
+        },
+        "cpu": {
+          "tick": 74346433,
+          "bucket": 23,
+          "totalUsed": 95.94898590000048,
+          "tickUsedAtFlush": 102.15794579999965,
+          "sampleBelongsToRelease": true
+        },
+        "health": {
+          "globalStarts": 6,
+          "lastGlobalStartAt": 74346393,
+          "lastCompletedAt": 74346437,
+          "completedBelongsToRelease": true,
+          "lastGap": {
+            "afterTick": 74312450,
+            "resumedAt": 74312453,
+            "skippedTicks": 2,
+            "afterDeployment": false
+          },
+          "lastIncomplete": {
+            "tick": 74346397,
+            "phase": "creepWork",
+            "afterDeployment": true
+          }
+        },
+        "cfg": {
+          "changedKeys": [
+            "synthesisControl"
+          ],
+          "operatorComparisonAvailable": true,
+          "operatorChangedKeys": []
+        }
+      }
+    ]
+  },
+  "baselineErrors": {
+    "cpuBucketEmpty": 18,
+    "cpuTimeLimit": 1,
+    "jsExceptions": 0,
+    "windowStart": "2026-10-15T07:13:04.492Z",
+    "windowEnd": "2026-10-15T07:22:59.364Z"
+  },
+  "patrol": {
+    "snapshots": [
+      {
+        "capturedAt": "2026-10-15T07:50:52.070Z",
+        "telemetryTick": 74346397,
+        "generation": 58,
+        "units": [
+          {
+            "name": "healer-74344803",
+            "roomObject": {
+              "roomName": "E2N54",
+              "x": 48,
+              "y": 5,
+              "hits": 5000,
+              "hitsMax": 5000,
+              "fatigue": 0,
+              "ageTime": 74346452
+            },
+            "telemetryPosition": {
+              "roomName": "E2N54",
+              "x": 48,
+              "y": 5,
+              "hits": 5000,
+              "hitsMax": 5000,
+              "spawning": false
+            },
+            "attack": null,
+            "breachTargetId": null,
+            "lastWarMoveIntentAt": null,
+            "phase": "breaching",
+            "blocker": null
+          },
+          {
+            "name": "meleeAttacker-74344803",
+            "roomObject": {
+              "roomName": "E2N54",
+              "x": 48,
+              "y": 6,
+              "hits": 5000,
+              "hitsMax": 5000,
+              "fatigue": 0,
+              "ageTime": 74346452
+            },
+            "telemetryPosition": {
+              "roomName": "E2N54",
+              "x": 48,
+              "y": 6,
+              "hits": 5000,
+              "hitsMax": 5000,
+              "spawning": false
+            },
+            "attack": null,
+            "breachTargetId": "6ad030295162b1ca37106074",
+            "lastWarMoveIntentAt": 74346396,
+            "phase": "breaching",
+            "blocker": null
+          }
+        ]
+      },
+      {
+        "capturedAt": "2026-10-15T07:52:03.585Z",
+        "telemetryTick": 74346415,
+        "generation": 58,
+        "units": [
+          {
+            "name": "meleeAttacker-74344803",
+            "roomObject": {
+              "roomName": "E2N54",
+              "x": 47,
+              "y": 10,
+              "hits": 5000,
+              "hitsMax": 5000,
+              "fatigue": 0,
+              "ageTime": 74346452
+            },
+            "telemetryPosition": {
+              "roomName": "E2N54",
+              "x": 47,
+              "y": 10,
+              "hits": 5000,
+              "hitsMax": 5000,
+              "spawning": false
+            },
+            "attack": null,
+            "breachTargetId": "6ad030295162b1ca37106074",
+            "lastWarMoveIntentAt": 74346407,
+            "phase": "retreating",
+            "blocker": "healing_or_body"
+          },
+          {
+            "name": "healer-74344803",
+            "roomObject": {
+              "roomName": null,
+              "x": null,
+              "y": null,
+              "hits": null,
+              "hitsMax": null,
+              "fatigue": null,
+              "ageTime": null
+            },
+            "telemetryPosition": {
+              "roomName": "E3N54",
+              "x": 1,
+              "y": 5,
+              "hits": 5000,
+              "hitsMax": 5000,
+              "spawning": false
+            },
+            "attack": null,
+            "breachTargetId": null,
+            "lastWarMoveIntentAt": null,
+            "phase": "retreating",
+            "blocker": "healing_or_body"
+          }
+        ]
+      }
+    ],
+    "oldWall": {
+      "x": 47,
+      "y": 6,
+      "hitsAtBothPostSnapshots": 1551011
+    },
+    "comparisonSha256": "78b66bea4b47593cb745ca4f63e14fb39e8140d9f0906960605095225cf01d01",
+    "limitations": [
+      "各API读数非同tick原子快照",
+      "同期塔能量下降且敌兵离开堵口，不把全部推进归因于补丁",
+      "后续进入retreating，尚未完成持续安全通行或攻塔验收"
+    ]
+  },
+  "paths": {
+    "serverTaskRoot": "/root/codex-jobs/20261015-screeps-live-cache-01a13e43",
+    "localRawEvidence": "/Users/forst/code/screeps/monitor-data/20261015-deploy",
+    "localPatrolEvidence": "/Users/forst/code/screeps/monitor-data/20261015-patrol",
+    "codeWorktree": "/Users/forst/.codex/worktrees/patrol-wall-target-20261015/screeps"
+  }
+}
