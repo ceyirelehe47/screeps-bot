@@ -9,6 +9,7 @@ import {
   measureCreepDecision,
   measureCreepIntent,
   measureCreepPathing,
+  measureSampledCpuPhase,
   resetPerCreepPhaseTimingCacheForTest,
   setActiveTickCpuProfiler,
 } from "@/runtime/cpuPhaseProfiler";
@@ -93,34 +94,55 @@ describe("cpu profiler low-overhead guarantees", () => {
     const { getUsed } = setupCpuMock();
     const profiler = createTickCpuProfiler();
     setActiveTickCpuProfiler(profiler);
+    const measure = jest.spyOn(profiler, "measure");
 
     profiler.measure("phase", () => 1);
+    const result = { value: "disabled" };
+    expect(measureSampledCpuPhase("outer", () => measureSampledCpuPhase("inner", () => result))).toBe(result);
+    const failure = new Error("disabled fixture");
+    expect(() => measureSampledCpuPhase("throw", () => { throw failure; })).toThrow(failure);
     profiler.measureCreep(makeCreep("c1"), () => undefined);
     profiler.measureRoomPhase("spawnWork", "W1N1", () => 1);
     profiler.recordFixedAction("creepWork");
     profiler.flush();
 
     expect(getUsed).not.toHaveBeenCalled();
+    // 非采样 helper 不代理 measure，避免改写 health 阶段。
+    expect(measure).toHaveBeenCalledTimes(1);
   });
 
   it("启动边界单独报告，inclusive 子阶段不掩盖业务阶段外的 CPU", () => {
-    profilerConfig({ sampleInterval: 1 });
+    profilerConfig({ sampleInterval: 1, roomRoleAggregation: false });
     let used = 7;
     Game.cpu.getUsed = jest.fn(() => used);
     const profiler = createTickCpuProfiler();
+    setActiveTickCpuProfiler(profiler);
+    const result = { value: "sampled" };
     profiler.measure("parent", () => {
       used += 2;
-      profiler.measure("child", () => { used += 3; });
-      used += 1;
+      expect(measureSampledCpuPhase("pb.manager", () => {
+        measureSampledCpuPhase("routes", () => measureSampledCpuPhase("owned", () => { used += 3; }));
+        return measureSampledCpuPhase("measureRequest", () => measureSampledCpuPhase("owned", () => {
+          used += 1;
+          return result;
+        }));
+      })).toBe(result);
     });
     used += 4;
     profiler.flush();
     expect(Memory.analytics!.cpuMonitor!.latest).toMatchObject({
       totalUsed: 10, startupUsed: 7, tickUsedAtFlush: 17, topLevelUsed: 6,
-      untracked: 4, phases: { parent: 6, child: 3 },
+      untracked: 4, phases: {
+        parent: 6,
+        "pb.manager": 4,
+        "pb.manager/routes": 3,
+        "pb.manager/routes/owned": 3,
+        "pb.manager/measureRequest": 1,
+        "pb.manager/measureRequest/owned": 1,
+      },
     });
-    // 沿用原有边界计时数量，未为了 startup 或 top-level 再调用时钟。
-    expect(Game.cpu.getUsed).toHaveBeenCalledTimes(6);
+    // 6 个 span 各一对时钟，另加 loopStart / flush；没有额外 total 计时。
+    expect(Game.cpu.getUsed).toHaveBeenCalledTimes(14);
   });
 
   it("子阶段异常被父阶段处理后，后续顶层统计仍各记一次", () => {
@@ -128,27 +150,59 @@ describe("cpu profiler low-overhead guarantees", () => {
     let used = 0;
     Game.cpu.getUsed = () => used;
     const profiler = createTickCpuProfiler();
-    profiler.measure("parent", () => {
-      try { profiler.measure("child", () => { used += 3; throw new Error("fixture"); }); } catch { used += 1; }
+    setActiveTickCpuProfiler(profiler);
+    const failure = new Error("fixture");
+    measureSampledCpuPhase("parent", () => {
+      try {
+        measureSampledCpuPhase("child", () => { used += 3; throw failure; });
+      } catch (error) {
+        expect(error).toBe(failure);
+        used += 1;
+      }
+      expect(measureSampledCpuPhase("recovered", () => "ok")).toBe("ok");
     });
-    profiler.measure("next", () => { used += 2; });
+    expect(() => measureSampledCpuPhase("escape", () => { throw failure; })).toThrow(failure);
+    measureSampledCpuPhase("next", () => { used += 2; });
     used += 1;
     profiler.flush();
-    expect(Memory.analytics!.cpuMonitor!.latest).toMatchObject({ topLevelUsed: 6, untracked: 1 });
+    expect(Memory.analytics!.cpuMonitor!.latest).toMatchObject({
+      topLevelUsed: 6, untracked: 1,
+      phases: { parent: 4, "parent/child": 3, "parent/recovered": 0, escape: 0, next: 2 },
+    });
+    expect(Object.keys(Memory.analytics!.cpuMonitor!.latest.phases)).toHaveLength(5);
   });
 
-  it("非 sample tick 不调用 Game.cpu.getUsed", () => {
+  it("非 sample tick 不调用 Game.cpu.getUsed，同 tick 替换 Game 后重算采样开关", () => {
     profilerConfig({ sampleInterval: 10 });
     Game.time = 101; // 101 % 10 !== 0
     const profiler = createTickCpuProfiler();
     setActiveTickCpuProfiler(profiler);
+    const measure = jest.spyOn(profiler, "measure");
 
     profiler.measure("phase", () => 1);
+    expect(measureSampledCpuPhase("outer", () => measureSampledCpuPhase("inner", () => "ok"))).toBe("ok");
+    const failure = new Error("non-sample fixture");
+    expect(() => measureSampledCpuPhase("throw", () => { throw failure; })).toThrow(failure);
     profiler.measureCreep(makeCreep("c1"), () => undefined);
     profiler.flush();
 
     const gameCpu = (Game as unknown as { cpu: { getUsed: jest.Mock } }).cpu;
     expect(gameCpu.getUsed).not.toHaveBeenCalled();
+    expect(measure).toHaveBeenCalledTimes(1);
+
+    const previousGame = Game;
+    try {
+      Object.assign(global, { Game: { ...previousGame } });
+      profilerConfig({ sampleInterval: 1, roomRoleAggregation: false });
+      const freshProfiler = createTickCpuProfiler();
+      setActiveTickCpuProfiler(freshProfiler);
+      expect(measureSampledCpuPhase("fresh", () => "fresh game")).toBe("fresh game");
+      freshProfiler.flush();
+      expect(gameCpu.getUsed).toHaveBeenCalledTimes(4);
+      expect(Memory.analytics?.cpuMonitor?.latest.phases).toEqual({ fresh: 0 });
+    } finally {
+      Object.assign(global, { Game: previousGame });
+    }
   });
 
   it("roomRoleAggregation=false 时不逐 creep 成对计时且 fn 正常执行", () => {

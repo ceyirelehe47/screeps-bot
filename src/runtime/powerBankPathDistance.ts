@@ -3,6 +3,7 @@ import { getRoomTopologyRevision } from "@/movement/roomTopologyRevision";
 import { getTickContextService } from "@/runtime/runtimeServices";
 import type { PowerBankTierProfile } from "@/runtime/powerBankViability";
 import { hasPlanningCpuHeadroom } from "@/runtime/planningCpuBudget";
+import { measureSampledCpuPhase } from "@/runtime/cpuPhaseProfiler";
 
 const CACHE_LIMIT = 64;
 const CACHE_TTL = 100;
@@ -120,9 +121,13 @@ function remember(key: string, worldKey: string, result: PowerBankTravelMeasurem
  * pickup/transfer 的动作时间由调用者的既有 buffer 承接。
  */
 export function measurePowerBankTravel(input: PowerBankTravelMeasurementInput): PowerBankTravelMeasurementResult {
+  return measureSampledCpuPhase("measureTravel.total", () => measurePowerBankTravelImpl(input));
+}
+
+function measurePowerBankTravelImpl(input: PowerBankTravelMeasurementInput): PowerBankTravelMeasurementResult {
   const attacker = movementBody(input.profile?.attacker?.body);
   const healer = movementBody(input.profile?.healer?.body);
-  if (!validPosition(input.sourceSpawnPos) || !validPosition(input.bankPos) || !validPosition(input.returnTargetPos) ||
+  if (measureSampledCpuPhase("inputValidation", () => !validPosition(input.sourceSpawnPos) || !validPosition(input.bankPos) || !validPosition(input.returnTargetPos) ||
     input.returnTargetPos.roomName !== input.sourceSpawnPos.roomName || !attacker || !healer ||
     !Number.isSafeInteger(input.haulerCarryParts) || input.haulerCarryParts < 1 || input.haulerCarryParts > 25 ||
     !Array.isArray(input.routeRooms) || input.routeRooms.length === 0 || input.routeRooms.length > MAX_ROUTE_ROOMS ||
@@ -130,7 +135,7 @@ export function measurePowerBankTravel(input: PowerBankTravelMeasurementInput): 
     input.routeRooms[input.routeRooms.length - 1] !== input.bankPos.roomName ||
     new Set(input.routeRooms).size !== input.routeRooms.length || !Array.isArray(input.avoidRooms) ||
     input.routeRooms.some((room) => typeof room !== "string" || !roomCoordinates(room)) ||
-    input.avoidRooms.some((room) => typeof room !== "string" || !roomCoordinates(room))) {
+    input.avoidRooms.some((room) => typeof room !== "string" || !roomCoordinates(room)))) {
     return pending("invalid_input");
   }
   if (!Game.rooms[input.sourceSpawnPos.roomName] || !Game.rooms[input.bankPos.roomName]) {
@@ -144,7 +149,7 @@ export function measurePowerBankTravel(input: PowerBankTravelMeasurementInput): 
   }
   let key: string;
   try {
-    key = JSON.stringify([
+    key = measureSampledCpuPhase("inputKey", () => JSON.stringify([
       ALGORITHM_REVISION,
       [input.sourceSpawnPos.roomName, input.sourceSpawnPos.x, input.sourceSpawnPos.y],
       [input.bankPos.roomName, input.bankPos.x, input.bankPos.y],
@@ -155,15 +160,18 @@ export function measurePowerBankTravel(input: PowerBankTravelMeasurementInput): 
       input.profile.attacker.body,
       input.profile.healer.body,
       input.haulerCarryParts,
-    ]);
+    ]));
   } catch {
     return pending("route_observation_failed");
   }
-  let cached = measurements.get(key);
-  if (cached && Game.time >= cached.expiresAt) {
-    measurements.delete(key);
-    cached = undefined;
-  }
+  let cached = measureSampledCpuPhase("cacheLookup", () => {
+    let cached = measurements.get(key);
+    if (cached && Game.time >= cached.expiresAt) {
+      measurements.delete(key);
+      cached = undefined;
+    }
+    return cached;
+  });
   if (cached?.result.status === "pending") {
     // 退避只表示尚无完整路径证据，不授权投入；中转房失去视野不应让
     // 同一失败输入反复抢走唯一测量名额。输入、端点和 avoid 门已校验。
@@ -192,8 +200,8 @@ export function measurePowerBankTravel(input: PowerBankTravelMeasurementInput): 
   };
   let worldKey: string;
   try {
-    if (input.routeRooms.some((room) => !safeRoom(room))) return pending("unsafe_route");
-    worldKey = JSON.stringify(input.routeRooms.map((room) => [room, Boolean(Game.rooms[room]), getRoomTopologyRevision(room)]));
+    if (measureSampledCpuPhase("worldProof", () => input.routeRooms.some((room) => !safeRoom(room)))) return pending("unsafe_route");
+    worldKey = measureSampledCpuPhase("worldProof", () => JSON.stringify(input.routeRooms.map((room) => [room, Boolean(Game.rooms[room]), getRoomTopologyRevision(room)])));
   } catch {
     return pending("route_observation_failed");
   }
@@ -225,10 +233,10 @@ export function measurePowerBankTravel(input: PowerBankTravelMeasurementInput): 
     }
     return matrix;
   };
-  const roomCallback = (roomName: string): CostMatrix | false => safeRoom(roomName)
+  const roomCallback = (roomName: string): CostMatrix | false => measureSampledCpuPhase("search.roomCallback", () => safeRoom(roomName)
     ? matrixFor(roomName).clone()
-    : false;
-  const validPath = (path: readonly RoomPosition[], origin: RoomPosition, goal: RoomPosition): boolean => {
+    : false);
+  const validPath = (path: readonly RoomPosition[], origin: RoomPosition, goal: RoomPosition): boolean => measureSampledCpuPhase("path.validate", () => {
     const sourceRoom = routeCoordinates.get(origin.roomName)!;
     let previousX = sourceRoom.x * 50 + origin.x;
     let previousY = sourceRoom.y * 50 + origin.y;
@@ -253,17 +261,17 @@ export function measurePowerBankTravel(input: PowerBankTravelMeasurementInput): 
       Math.abs(previousX - (goalRoom.x * 50 + goal.x)),
       Math.abs(previousY - (goalRoom.y * 50 + goal.y)),
     ) <= 1;
-  };
+  });
   const search = (origin: RoomPosition, goal: RoomPosition, plainCost: number, swampCost: number): RoomPosition[] | undefined => {
     if (searchesThisTick >= MAX_SEARCHES_PER_TICK || !hasPlanningCpuHeadroom()) return undefined;
     searchesThisTick += 1;
-    const result = PathFinder.search(origin, { pos: goal, range: 1 }, {
+    const result = measureSampledCpuPhase("search.native", () => PathFinder.search(origin, { pos: goal, range: 1 }, {
       plainCost,
       swampCost,
       maxOps: SEARCH_MAX_OPS,
       maxRooms: input.routeRooms.length,
       roomCallback,
-    });
+    }));
     if (result.incomplete || !Array.isArray(result.path) || !validPath(result.path, origin, goal)) return undefined;
     return result.path;
   };
@@ -298,9 +306,9 @@ export function measurePowerBankTravel(input: PowerBankTravelMeasurementInput): 
     fatigue.set(cellIndex, value);
     return value;
   };
-  const travelTicks = (path: readonly RoomPosition[], body: MovementBody): number => path.reduce(
+  const travelTicks = (path: readonly RoomPosition[], body: MovementBody): number => measureSampledCpuPhase("travelEstimation", () => path.reduce(
     (total, pos) => total + Math.max(1, Math.ceil(body.weight * terrainFatigue(pos) / (body.moves * 2))), 0,
-  );
+  ));
   try {
     const combat = search(input.sourceSpawnPos, input.bankPos, 2, 8);
     if (!combat) return remember(key, worldKey, pending("path_incomplete"));

@@ -43,6 +43,7 @@ import { spawnProfiles } from "@/config/spawnProfiles";
 import { getPowerBankOwnedAvoidRooms } from "@/runtime/powerBankTransit";
 import { isSpawnActive } from "@/runtime/tickContext";
 import { getPowerBankAdmissionRoute } from "@/runtime/powerBankRouteCache";
+import { measureSampledCpuPhase } from "@/runtime/cpuPhaseProfiler";
 
 const PATROL_SCOUT_CONFIG_NAME = "powerbank:patrol:scout:0";
 
@@ -317,6 +318,10 @@ function cleanupInactiveCombatConfigs(task: PowerBankHarvestTask): void {
 }
 
 function cleanupOrphanPowerBankConfigs(tasks: PowerBankHarvestTask[]): void {
+  return measureSampledCpuPhase("orphanCleanup", () => cleanupOrphanPowerBankConfigsImpl(tasks));
+}
+
+function cleanupOrphanPowerBankConfigsImpl(tasks: PowerBankHarvestTask[]): void {
   const activeTasks = tasks.filter((task) => !isTerminalPowerBankStatus(task.status));
   const activeTaskIds = new Set(activeTasks.map((task) => task.id));
   const activePrefixes = new Set(activeTasks.map((task) => `${task.sourceRoom}:powerbank:${task.targetRoom}:`));
@@ -377,6 +382,10 @@ function transitionTask(task: PowerBankHarvestTask, status: PowerBankHarvestStat
 }
 
 function getActiveDangerRooms(targetRoom?: string, ownedRooms = getPowerBankOwnedAvoidRooms()): string[] {
+  return measureSampledCpuPhase("dangerMerge", () => getActiveDangerRoomsImpl(targetRoom, ownedRooms));
+}
+
+function getActiveDangerRoomsImpl(targetRoom: string | undefined, ownedRooms: string[]): string[] {
   const transient = Object.entries(Memory.runtime?.transitDangerRooms ?? {})
     .filter(([, expiresAt]) => expiresAt > Game.time)
     .map(([roomName]) => roomName);
@@ -392,9 +401,9 @@ function findSafeRoute(fromRoom: string, toRoom: string, dangerRooms?: readonly 
     dangerRooms = getActiveDangerRooms(toRoom, ownedRooms);
   }
   const avoidRooms = new Set(dangerRooms);
-  const route = Game.map.findRoute(fromRoom, toRoom, {
+  const route = measureSampledCpuPhase("route.findRaw", () => Game.map.findRoute(fromRoom, toRoom, {
     routeCallback: (roomName) => avoidRooms.has(roomName) ? Infinity : 1,
-  });
+  }));
   if (route === ERR_NO_PATH) return null;
 
   const rooms = [fromRoom];
@@ -424,17 +433,33 @@ function getLocalCompoundStock(
   resource: ResourceConstant,
   ownerId?: string,
 ): number {
+  return measureSampledCpuPhase("resources.localStock", () => getLocalCompoundStockImpl(room, resource, ownerId));
+}
+
+function getLocalCompoundStockImpl(
+  room: Room,
+  resource: ResourceConstant,
+  ownerId?: string,
+): number {
   let total = 0;
   if (room.storage) total += room.storage.store.getUsedCapacity(resource);
   if (room.terminal) total += room.terminal.store.getUsedCapacity(resource);
-  const reservedLabIds = getActivePowerBankBoostLabIds(room.name, ownerId);
-  for (const lab of getTickContextService().getRoomContext(room)!.getLabs()) {
+  const reservedLabIds = measureSampledCpuPhase("resources.reservedLabs", () => getActivePowerBankBoostLabIds(room.name, ownerId));
+  for (const lab of measureSampledCpuPhase("context.labs", () => getTickContextService().getRoomContext(room)!.getLabs())) {
     if (!reservedLabIds.has(lab.id)) total += lab.store.getUsedCapacity(resource);
   }
   return total;
 }
 
 function getTrustedIncomingCompound(
+  roomName: string,
+  resource: ResourceConstant,
+  ownerId: string,
+): number {
+  return measureSampledCpuPhase("resources.incoming", () => getTrustedIncomingCompoundImpl(roomName, resource, ownerId));
+}
+
+function getTrustedIncomingCompoundImpl(
   roomName: string,
   resource: ResourceConstant,
   ownerId: string,
@@ -462,11 +487,20 @@ function hasCompoundSupply(
   amount: number,
   ownerId: string,
 ): boolean {
+  return measureSampledCpuPhase("resources.supply", () => hasCompoundSupplyImpl(room, resource, amount, ownerId));
+}
+
+function hasCompoundSupplyImpl(
+  room: Room,
+  resource: ResourceConstant,
+  amount: number,
+  ownerId: string,
+): boolean {
   const available = getLocalCompoundStock(room, resource, ownerId) +
     getTrustedIncomingCompound(room.name, resource, ownerId);
   const deficit = Math.max(0, amount - available);
   if (deficit <= 0) return true;
-  return findBestDonorRoom(resource, deficit, [room.name]) !== null;
+  return measureSampledCpuPhase("resources.donor", () => findBestDonorRoom(resource, deficit, [room.name])) !== null;
 }
 
 function getStructurePowerHeadroom(structure: StructureStorage | StructureTerminal | null): number {
@@ -482,8 +516,12 @@ function getPowerReceivingHeadroom(room: Room): number {
 }
 
 function getSpawnReadyIn(roomName: string): number[] {
+  return measureSampledCpuPhase("source.spawnQueue", () => getSpawnReadyInImpl(roomName));
+}
+
+function getSpawnReadyInImpl(roomName: string): number[] {
   const configStore = getConfigStore();
-  return getTickContextService().getSpawnsByRoom(roomName)
+  return measureSampledCpuPhase("context.spawns", () => getTickContextService().getSpawnsByRoom(roomName))
     .filter(isSpawnActive)
     .map((spawn) => {
       let readyIn = spawn.spawning?.remainingTime ?? 0;
@@ -525,6 +563,14 @@ function evaluateSourceCandidates(task: PowerBankHarvestTask): {
   rejectionReasons: string[];
   pendingRetryAt?: number;
 } {
+  return measureSampledCpuPhase("candidates", () => evaluateSourceCandidatesImpl(task));
+}
+
+function evaluateSourceCandidatesImpl(task: PowerBankHarvestTask): {
+  candidates: PowerBankSourceCandidate[];
+  rejectionReasons: string[];
+  pendingRetryAt?: number;
+} {
   const candidates: PowerBankSourceCandidate[] = [];
   const rejectionReasons: string[] = [];
   let pendingRetryAt: number | undefined;
@@ -532,19 +578,21 @@ function evaluateSourceCandidates(task: PowerBankHarvestTask): {
   // 只做房间级安全路线与来源基本资格预评估。先尝试短走廊，防止每 tick
   // 重测靠前的远来源，把有限 PF 配额耗尽后永远到不了已可行的近来源。
   const sourceRoutes: Array<{ room: Room; routeRooms: string[] }> = [];
-  for (const room of getTickContextService().getMyRooms()) {
-    if (!room.controller || room.controller.level < 6 || isDefenseMode(room.name)) continue;
-    if (!getTickContextService().getSpawnsByRoom(room.name)
-      .some(isSpawnActive)) continue;
-    const routeRooms = getAdmissionSafeRoute(room.name, task.targetRoom);
-    if (!routeRooms) {
-      rejectionReasons.push(`${room.name}:no_safe_route`);
-      continue;
+  measureSampledCpuPhase("source.routes", () => {
+    for (const room of measureSampledCpuPhase("context.myRooms", () => getTickContextService().getMyRooms())) {
+      if (!room.controller || room.controller.level < 6 || isDefenseMode(room.name)) continue;
+      if (!measureSampledCpuPhase("context.spawns", () => getTickContextService().getSpawnsByRoom(room.name))
+        .some(isSpawnActive)) continue;
+      const routeRooms = getAdmissionSafeRoute(room.name, task.targetRoom);
+      if (!routeRooms) {
+        rejectionReasons.push(`${room.name}:no_safe_route`);
+        continue;
+      }
+      sourceRoutes.push({ room, routeRooms });
     }
-    sourceRoutes.push({ room, routeRooms });
-  }
-  sourceRoutes.sort((left, right) => left.routeRooms.length - right.routeRooms.length ||
-    left.room.name.localeCompare(right.room.name));
+    sourceRoutes.sort((left, right) => left.routeRooms.length - right.routeRooms.length ||
+      left.room.name.localeCompare(right.room.name));
+  });
 
   for (const { room, routeRooms } of sourceRoutes) {
     if (!canMeasurePowerBankTravelThisTick()) {
@@ -566,9 +614,9 @@ function evaluateSourceCandidates(task: PowerBankHarvestTask): {
     const profile = derivePowerBankTierProfile(tier);
     if (!profile) continue;
     const ownerId = `${task.id}:primary:g${task.activeGeneration ?? 0}`;
-    const reservedLabs = getActivePowerBankBoostLabIds(room.name, ownerId);
-    const availableLabCount = getTickContextService().getRoomContext(room)!.getLabs()
-      .filter(lab => !reservedLabs.has(lab.id)).length;
+    const reservedLabs = measureSampledCpuPhase("resources.reservedLabs", () => getActivePowerBankBoostLabIds(room.name, ownerId));
+    const availableLabCount = measureSampledCpuPhase("context.labs", () => getTickContextService().getRoomContext(room)!.getLabs()
+      .filter(lab => !reservedLabs.has(lab.id)).length);
 
     const compoundAvailability = new Map<ResourceConstant, boolean>();
     for (const [compound, amount] of profile.requiredCompounds) {
@@ -589,7 +637,7 @@ function evaluateSourceCandidates(task: PowerBankHarvestTask): {
     if (getLocalCompoundStock(room, RESOURCE_ENERGY, ownerId) < requiredLabEnergy) {
       resourceReasons.push("insufficient_lab_energy");
     }
-    if (receivingHeadroom <= 0 && !getTickContextService().getMyRooms()
+    if (receivingHeadroom <= 0 && !measureSampledCpuPhase("context.myRooms", () => getTickContextService().getMyRooms())
       .some((candidate) => getPowerReceivingHeadroom(candidate) > 0)) {
       resourceReasons.push("insufficient_power_headroom");
     }
@@ -605,7 +653,7 @@ function evaluateSourceCandidates(task: PowerBankHarvestTask): {
       : getStructurePowerHeadroom(room.storage) > 0
         ? room.storage
         : room.terminal ?? room.storage;
-    const spawns = getTickContextService().getSpawnsByRoom(room.name)
+    const spawns = measureSampledCpuPhase("context.spawns", () => getTickContextService().getSpawnsByRoom(room.name))
       .filter(isSpawnActive);
     const measurements: Array<Extract<ReturnType<typeof measurePowerBankTravel>, { status: "ready" }>> = [];
     let sourcePending = false;
@@ -620,7 +668,7 @@ function evaluateSourceCandidates(task: PowerBankHarvestTask): {
         pendingRetryAt = Math.min(pendingRetryAt ?? Infinity, Game.time + 5);
         continue;
       }
-      const measurement = measurePowerBankTravel({
+      const measurement = measureSampledCpuPhase("measureRequest", () => measurePowerBankTravel({
         sourceSpawnPos: spawn.pos,
         bankPos: new RoomPosition(task.bankPos.x, task.bankPos.y, task.targetRoom),
         returnTargetPos: returnTarget.pos,
@@ -628,7 +676,7 @@ function evaluateSourceCandidates(task: PowerBankHarvestTask): {
         avoidRooms: getActiveDangerRooms(task.targetRoom),
         profile,
         haulerCarryParts: Math.ceil(haulerCapacity / CARRY_CAPACITY),
-      });
+      }));
       if (measurement.status === "pending") {
         sourcePending = true;
         pendingRetryAt = Math.min(pendingRetryAt ?? Infinity, measurement.retryAt);
@@ -872,6 +920,10 @@ function getAssignableCreepByConfigName(configName: string, taskId: string): Cre
 }
 
 function processDiscovered(task: PowerBankHarvestTask): void {
+  return measureSampledCpuPhase("discovered", () => processDiscoveredImpl(task));
+}
+
+function processDiscoveredImpl(task: PowerBankHarvestTask): void {
   const targetRoom = Game.rooms[task.targetRoom];
   if (!targetRoom) {
     requestPowerBankObservation(task.targetRoom);
@@ -1924,6 +1976,10 @@ function processHauling(task: PowerBankHarvestTask): void {
 }
 
 function processTerminalCleanup(task: PowerBankHarvestTask): void {
+  return measureSampledCpuPhase("terminalCleanup", () => processTerminalCleanupImpl(task));
+}
+
+function processTerminalCleanupImpl(task: PowerBankHarvestTask): void {
   if (task.terminalCleanupDone) return;
   if (task.sourceRoom) {
     const primaryOwner = getPrimaryBoostOwner(task);
@@ -1977,6 +2033,10 @@ function ensureCreepTaskIds(task: PowerBankHarvestTask): void {
 }
 
 function processTask(task: PowerBankHarvestTask): void {
+  return measureSampledCpuPhase("task", () => processTaskImpl(task));
+}
+
+function processTaskImpl(task: PowerBankHarvestTask): void {
   initializePowerBankTaskRuntime(task);
   if (isTerminalPowerBankStatus(task.status)) return;
 
@@ -2069,6 +2129,10 @@ function processTask(task: PowerBankHarvestTask): void {
 }
 
 function maintainPatrolScout(): void {
+  return measureSampledCpuPhase("scout", maintainPatrolScoutImpl);
+}
+
+function maintainPatrolScoutImpl(): void {
   const configStore = getConfigStore();
   if (hasPowerBankObserverCoverage()) {
     if (configStore[PATROL_SCOUT_CONFIG_NAME]) {
@@ -2136,13 +2200,17 @@ function orderAdmissionTasks(tasks: PowerBankHarvestTask[]): PowerBankHarvestTas
 }
 
 export function runPowerBankHarvest(): void {
+  return measureSampledCpuPhase("pb.manager", runPowerBankHarvestImpl);
+}
+
+function runPowerBankHarvestImpl(): void {
   maintainPatrolScout();
-  cleanupStaleDiscoveries();
+  measureSampledCpuPhase("staleCleanup", cleanupStaleDiscoveries);
 
-  const store = getTaskStore();
-  const tasks = Object.values(store);
+  const store = measureSampledCpuPhase("setup", getTaskStore);
+  const tasks = measureSampledCpuPhase("setup", () => Object.values(store));
 
-  for (const task of orderAdmissionTasks(tasks)) {
+  for (const task of measureSampledCpuPhase("setup", () => orderAdmissionTasks(tasks))) {
     processTask(task);
   }
 

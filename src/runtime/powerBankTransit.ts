@@ -1,5 +1,6 @@
 import { requestCombatObservation } from "@/runtime/powerBankObserver";
 import type { MoveToRoomOptions } from "@/movement/types";
+import { measureSampledCpuPhase } from "@/runtime/cpuPhaseProfiler";
 
 interface VisibleRoomOwnership {
   roomName: string;
@@ -14,6 +15,10 @@ let ownershipSnapshot: {
 } | undefined;
 
 function getVisibleRoomOwnership(): readonly VisibleRoomOwnership[] {
+  return measureSampledCpuPhase("owned.snapshot", getVisibleRoomOwnershipImpl);
+}
+
+function getVisibleRoomOwnershipImpl(): readonly VisibleRoomOwnership[] {
   if (ownershipSnapshot?.game === Game && ownershipSnapshot.tick === Game.time &&
     ownershipSnapshot.rooms === Game.rooms) return ownershipSnapshot.observations;
 
@@ -39,6 +44,10 @@ export function isPowerBankTransitRoomAllowed(roomName: string): boolean {
 }
 
 export function getPowerBankOwnedAvoidRooms(): string[] {
+  return measureSampledCpuPhase("owned", getPowerBankOwnedAvoidRoomsImpl);
+}
+
+function getPowerBankOwnedAvoidRoomsImpl(): string[] {
   const runtime = Memory.runtime ??= {};
   const intel = runtime.powerBankOwnedRoomIntel ??= {};
   // 失去视野不能撤销已确认的敌方所有权。只有新的原生视野证明已无主

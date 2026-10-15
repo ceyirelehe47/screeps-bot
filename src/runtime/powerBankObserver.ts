@@ -4,6 +4,7 @@ import { recordDepositDiscovery } from "@/runtime/depositDiscovery";
 import { getPowerBankSearchRooms, POWER_BANK_SEARCH_RADIUS } from "@/runtime/powerBankSearch";
 import { getPowerBankRoomThreat } from "@/runtime/powerBankThreat";
 import { getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
+import { measureSampledCpuPhase } from "@/runtime/cpuPhaseProfiler";
 
 export { getPowerBankRoomThreat } from "@/runtime/powerBankThreat";
 
@@ -259,28 +260,36 @@ export function hasPowerBankObserverCoverage(): boolean {
 }
 
 export function runPowerBankObserver(): void {
-  scanVisibleSearchRooms();
-  const observers = getActiveObservers();
+  measureSampledCpuPhase("pb.observer", runPowerBankObserverImpl);
+}
+
+function runPowerBankObserverImpl(): void {
+  measureSampledCpuPhase("scanVisible", scanVisibleSearchRooms);
+  const observers = measureSampledCpuPhase("getActiveObservers", getActiveObservers);
   const state = getRuntimeState();
-  const candidates = getPowerBankSearchRooms();
+  const candidates = measureSampledCpuPhase("searchRooms", getPowerBankSearchRooms);
   const searchRooms = new Set(candidates);
   if (!state.patrolNextScanAt || typeof state.patrolNextScanAt !== "object" || Array.isArray(state.patrolNextScanAt)) {
     state.patrolNextScanAt = {};
   }
   const patrolNextScanAt = state.patrolNextScanAt;
-  for (const [name, nextAt] of Object.entries(patrolNextScanAt)) {
-    if (!searchRooms.has(name) || !Number.isFinite(nextAt) || nextAt < 0 || nextAt > Game.time + POWER_BANK_PATROL_INTERVAL) {
-      delete patrolNextScanAt[name];
+  measureSampledCpuPhase("patrolState", () => {
+    for (const [name, nextAt] of Object.entries(patrolNextScanAt)) {
+      if (!searchRooms.has(name) || !Number.isFinite(nextAt) || nextAt < 0 || nextAt > Game.time + POWER_BANK_PATROL_INTERVAL) {
+        delete patrolNextScanAt[name];
+      }
     }
-  }
+  });
   const reachable = canObserve;
   state.updatedAt = Game.time;
-  state.coveredRooms = [...getCoverageSnapshot(observers, candidates).coveredRooms];
+  state.coveredRooms = measureSampledCpuPhase("coverage", () => [...getCoverageSnapshot(observers, candidates).coveredRooms]);
   if (!scheduled || scheduled.game !== Game || scheduled.tick !== Game.time || scheduled.state !== state) {
     scheduled = { game: Game, tick: Game.time, state, observerIds: new Set(), roomNames: new Set(), combatSlots: 0, remoteSlots: 0 };
   }
   const worldSize = worldSizeLimit();
-  const requests = Object.fromEntries(REQUEST_KINDS.map((kind) => [kind, getPriorityRequests(state, kind, worldSize)])) as Record<RequestKind, string[]>;
+  const requests = measureSampledCpuPhase("priorityRequests", () => Object.fromEntries(
+    REQUEST_KINDS.map((kind) => [kind, getPriorityRequests(state, kind, worldSize)]),
+  )) as Record<RequestKind, string[]>;
   const assigned = scheduled.roomNames;
   const observed: string[] = [...state.lastObservedRooms];
   if (scheduled.observerIds.size === 0) observed.length = 0;
@@ -288,7 +297,7 @@ export function runPowerBankObserver(): void {
   const normalizeCursor = (value: number | undefined, length: number): number =>
     Number.isSafeInteger(value) && value! >= 0 ? value! % length : 0;
   let priorityCursor = normalizeCursor(state.priorityKindCursor, REQUEST_KINDS.length);
-  const patrol = (observer: StructureObserver): string | undefined => {
+  const patrol = (observer: StructureObserver): string | undefined => measureSampledCpuPhase("patrol", () => {
     for (let offset = 0; offset < candidates.length; offset += 1) {
       const index = (cursor + offset) % candidates.length;
       const roomName = candidates[index];
@@ -304,7 +313,7 @@ export function runPowerBankObserver(): void {
       }
     }
     return undefined;
-  };
+  });
   const hasRequestSlot = (kind: RequestKind): boolean =>
     !((kind === "combat" && scheduled!.combatSlots >= 3) ||
       (kind === "remote" && scheduled!.remoteSlots >= 1));
@@ -345,7 +354,7 @@ export function runPowerBankObserver(): void {
     if (choice) priorityCursor = (REQUEST_KINDS.indexOf(choice.kind) + 1) % REQUEST_KINDS.length;
     return choice;
   };
-  const submit = (observer: StructureObserver, roomName: string, kind?: RequestKind): void => {
+  const submit = (observer: StructureObserver, roomName: string, kind?: RequestKind): void => measureSampledCpuPhase("submit", () => {
     if (scheduled!.observerIds.has(observer.id)) return;
     // 即使观察失败也推进普通轮巡游标；失败的优先请求移到队尾，避免饥饿。
     assigned.add(roomName);
@@ -359,56 +368,61 @@ export function runPowerBankObserver(): void {
     } else if (kind) {
       requestsFor(state, kind)[roomName] = Game.time;
     }
-  };
-  const available = observers.filter((observer) => !scheduled!.observerIds.has(observer.id));
-  if (observers.length === 1 && available.length === 1) {
-    const observer = available[0];
-    const kinds = [...REQUEST_KINDS, "patrol"] as const;
-    const start = normalizeCursor(state.singleObserverKindCursor, kinds.length);
-    for (let offset = 0; offset < kinds.length; offset += 1) {
-      const index = (start + offset) % kinds.length;
-      const kind = kinds[index];
-      const roomName = kind === "patrol" ? patrol(observer) : eligible(kind, observer);
-      if (!roomName) continue;
-      state.singleObserverKindCursor = (index + 1) % kinds.length;
-      submit(observer, roomName, kind === "patrol" ? undefined : kind);
-      break;
-    }
-  } else if (observers.length >= 2) {
-    // 轮转保留普通巡逻的 Observer，避免固定保留者拥有独占覆盖范围时饿死请求。
-    const patrolObserver = observers[Game.time % observers.length];
-    const priorityObservers = available.filter((observer) => observer !== patrolObserver);
-    for (let index = 0; index < priorityObservers.length; index += 1) {
-      const observer = priorityObservers[index];
-      let choice = uniqueRequest(observer, priorityObservers.slice(index + 1));
-      if (!choice && observers.length >= REQUEST_KINDS.length + 1) {
-        const remaining = priorityObservers.slice(index);
-        const reserved = REQUEST_KINDS.filter((kind) => kind !== "combat" &&
-          remaining.some((candidate) => eligible(kind, candidate) !== undefined)).length;
-        const combatRoom = eligible("combat", observer);
-        if (combatRoom && remaining.length > reserved) {
-          choice = { roomName: combatRoom, kind: "combat" };
-          priorityCursor = 1;
-        } else {
-          choice = rotateRequest(observer, ["powerBank", "deposit", "remote"]);
-          if (!choice && combatRoom) choice = { roomName: combatRoom, kind: "combat" };
+  });
+  measureSampledCpuPhase("schedule", () => {
+    const available = observers.filter((observer) => !scheduled!.observerIds.has(observer.id));
+    if (observers.length === 1 && available.length === 1) {
+      const observer = available[0];
+      const kinds = [...REQUEST_KINDS, "patrol"] as const;
+      const start = normalizeCursor(state.singleObserverKindCursor, kinds.length);
+      for (let offset = 0; offset < kinds.length; offset += 1) {
+        const index = (start + offset) % kinds.length;
+        const kind = kinds[index];
+        const roomName = kind === "patrol" ? patrol(observer) : measureSampledCpuPhase("priority", () => eligible(kind, observer));
+        if (!roomName) continue;
+        state.singleObserverKindCursor = (index + 1) % kinds.length;
+        submit(observer, roomName, kind === "patrol" ? undefined : kind);
+        break;
+      }
+    } else if (observers.length >= 2) {
+      // 轮转保留普通巡逻的 Observer，避免固定保留者拥有独占覆盖范围时饿死请求。
+      const patrolObserver = observers[Game.time % observers.length];
+      const priorityObservers = available.filter((observer) => observer !== patrolObserver);
+      for (let index = 0; index < priorityObservers.length; index += 1) {
+        const observer = priorityObservers[index];
+        const choice = measureSampledCpuPhase("priority", () => {
+          let choice = uniqueRequest(observer, priorityObservers.slice(index + 1));
+          if (!choice && observers.length >= REQUEST_KINDS.length + 1) {
+            const remaining = priorityObservers.slice(index);
+            const reserved = REQUEST_KINDS.filter((kind) => kind !== "combat" &&
+              remaining.some((candidate) => eligible(kind, candidate) !== undefined)).length;
+            const combatRoom = eligible("combat", observer);
+            if (combatRoom && remaining.length > reserved) {
+              choice = { roomName: combatRoom, kind: "combat" };
+              priorityCursor = 1;
+            } else {
+              choice = rotateRequest(observer, ["powerBank", "deposit", "remote"]);
+              if (!choice && combatRoom) choice = { roomName: combatRoom, kind: "combat" };
+            }
+          } else if (!choice) {
+            choice = rotateRequest(observer, REQUEST_KINDS);
+          }
+          return choice;
+        });
+        const roomName = choice?.roomName ?? patrol(observer);
+        if (roomName) submit(observer, roomName, choice?.kind);
+      }
+      if (available.includes(patrolObserver)) {
+        const roomName = patrol(patrolObserver);
+        if (roomName) submit(patrolObserver, roomName);
+        else {
+          // 没有到期搜索房时，空闲的巡逻名额继续服务当前任务复看。
+          const choice = measureSampledCpuPhase("priority", () => rotateRequest(patrolObserver, REQUEST_KINDS));
+          if (choice) submit(patrolObserver, choice.roomName, choice.kind);
         }
-      } else if (!choice) {
-        choice = rotateRequest(observer, REQUEST_KINDS);
-      }
-      const roomName = choice?.roomName ?? patrol(observer);
-      if (roomName) submit(observer, roomName, choice?.kind);
-    }
-    if (available.includes(patrolObserver)) {
-      const roomName = patrol(patrolObserver);
-      if (roomName) submit(patrolObserver, roomName);
-      else {
-        // 没有到期搜索房时，空闲的巡逻名额继续服务当前任务复看。
-        const choice = rotateRequest(patrolObserver, REQUEST_KINDS);
-        if (choice) submit(patrolObserver, choice.roomName, choice.kind);
       }
     }
-  }
+  });
   state.priorityKindCursor = priorityCursor;
   state.patrolIndex = cursor;
   state.lastObservedRooms = observed;

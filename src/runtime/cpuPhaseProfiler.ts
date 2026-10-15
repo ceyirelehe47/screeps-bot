@@ -57,25 +57,52 @@ export function measureCpuPhase<T>(phase: string, fn: () => T): T {
   return activeTickCpuProfiler.measure(phase, fn);
 }
 
-// 逐 creep 细分计时开关（每 tick memo）：与 createTickCpuProfiler 的采样
-// 判定保持一致。关闭（roomRoleAggregation=false / 未启用 / 非采样 tick）时，
-// 三个 creep 细分 helper 直接执行回调，绝不调用 Game.cpu.getUsed。
-let perCreepTimingCache: { tick: number; enabled: boolean } | undefined;
+// 细分计时上下文只保留当前 Game / tick；采样条件与 createTickCpuProfiler 一致。
+// PB 诊断不依赖逐 creep 聚合开关，也不在非采样 tick 覆盖 health 的业务阶段。
+interface CpuPhaseTimingContext {
+  game: typeof Game;
+  tick: number;
+  sampled: boolean;
+  perCreep: boolean;
+  labels: string[];
+}
 
-export function isPerCreepPhaseTimingEnabled(): boolean {
-  if (!perCreepTimingCache || perCreepTimingCache.tick !== Game.time) {
+let phaseTimingContext: CpuPhaseTimingContext | undefined;
+
+function getCpuPhaseTimingContext(): CpuPhaseTimingContext {
+  if (!phaseTimingContext || phaseTimingContext.game !== Game || phaseTimingContext.tick !== Game.time) {
     const config = normalizeCpuMonitorConfig(Memory.cfg?.cpuProfiler);
-    perCreepTimingCache = {
+    const sampled = config.enabled && Game.time % config.sampleInterval === 0;
+    phaseTimingContext = {
+      game: Game,
       tick: Game.time,
-      enabled: config.enabled && config.roomRoleAggregation && Game.time % config.sampleInterval === 0,
+      sampled,
+      perCreep: sampled && config.roomRoleAggregation,
+      labels: [],
     };
   }
-  return perCreepTimingCache.enabled;
+  return phaseTimingContext;
+}
+
+/** 同步诊断 span：稳定标签按调用路径汇总 inclusive CPU，异常时也恢复路径。 */
+export function measureSampledCpuPhase<T>(label: string, fn: () => T): T {
+  const context = getCpuPhaseTimingContext();
+  if (!context.sampled) return fn();
+  context.labels.push(label);
+  try {
+    return measureCpuPhase(context.labels.join("/"), fn);
+  } finally {
+    context.labels.pop();
+  }
+}
+
+export function isPerCreepPhaseTimingEnabled(): boolean {
+  return getCpuPhaseTimingContext().perCreep;
 }
 
 /** 仅供测试：同一 tick 内切换 Memory.cfg 后强制重算开关。 */
 export function resetPerCreepPhaseTimingCacheForTest(): void {
-  perCreepTimingCache = undefined;
+  phaseTimingContext = undefined;
 }
 
 export function measureCreepDecision<T>(fn: () => T): T {

@@ -1,3 +1,5 @@
+import { measureSampledCpuPhase } from "@/runtime/cpuPhaseProfiler";
+
 /** 仅复用房间走廊；当前危险集合和真实地图连通性仍由每次调用证明。 */
 const ROUTE_CACHE_LIMIT = 64;
 const ROUTE_CACHE_TTL = 25;
@@ -35,6 +37,10 @@ function currentMapFacts(): NonNullable<typeof mapFacts> {
 }
 
 function routeStillConnected(route: readonly string[], avoidRooms: readonly string[]): boolean {
+  return measureSampledCpuPhase("route.validate", () => routeStillConnectedImpl(route, avoidRooms));
+}
+
+function routeStillConnectedImpl(route: readonly string[], avoidRooms: readonly string[]): boolean {
   if (route.length < 2 || route.length > ROUTE_ROOM_LIMIT || new Set(route).size !== route.length ||
       typeof Game.map.getRoomStatus !== "function" || typeof Game.map.describeExits !== "function") return false;
   const avoid = new Set(avoidRooms);
@@ -66,6 +72,15 @@ function routeStillConnected(route: readonly string[], avoidRooms: readonly stri
 }
 
 export function getPowerBankAdmissionRoute(
+  fromRoom: string,
+  toRoom: string,
+  avoidRooms: readonly string[],
+  findRoute: () => string[] | null,
+): string[] | null {
+  return measureSampledCpuPhase("route.cache", () => getPowerBankAdmissionRouteImpl(fromRoom, toRoom, avoidRooms, findRoute));
+}
+
+function getPowerBankAdmissionRouteImpl(
   fromRoom: string,
   toRoom: string,
   avoidRooms: readonly string[],
