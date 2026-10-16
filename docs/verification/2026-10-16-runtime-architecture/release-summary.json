@@ -1,0 +1,184 @@
+{
+  "release": {
+    "commit": "3beed2469d0ad73a8e51b3d0d365c2bde1b781aa",
+    "tree": "bf479c6193d643a0d5b91c67d3383a987c25ef33",
+    "version": "2026.10.16-2",
+    "validatedHead": "030477c4bad64ee19b4f29072e1dc81ad7a8e254",
+    "lockSha256": "732c5b93ca1c1d779e29a3c7aaf154a933a49aab4f04b56cf9576e560f86a9e3",
+    "tag": "2026.10.16-2+3beed24@2026-10-16T13:12:03.283Z",
+    "bundleHash": "21e7833dc91cb21652d67666120516df21ec45761f37d62408941da4e875d1cd",
+    "modules": {
+      "main": {
+        "bytes": 3430904,
+        "sha256": "25a6037f084d32f7ac5890f2043c8549c997d1c5bb0e753d0e7e3ec52e4453ec"
+      },
+      "main.js.map": {
+        "bytes": 1147176,
+        "sha256": "97c4fccf4a5b188822c1a4945de2f4f768bc6a8ad53b980411d6dcf3b41742fa"
+      }
+    },
+    "serverRoot": "/root/codex-jobs/20261016-architecture-release-3beed246",
+    "stages": [
+      {
+        "stage": "typecheck",
+        "command": [
+          "npm",
+          "run",
+          "typecheck"
+        ],
+        "exit": 0,
+        "seconds": 54.375
+      },
+      {
+        "stage": "build",
+        "command": [
+          "npm",
+          "run",
+          "build"
+        ],
+        "exit": 0,
+        "seconds": 82.003
+      },
+      {
+        "stage": "artifact",
+        "command": [
+          "node",
+          "/root/codex-jobs/20261016-architecture-release-3beed246/artifact-check.cjs"
+        ],
+        "exit": 0,
+        "seconds": 1.836
+      }
+    ]
+  },
+  "merge": {
+    "pullRequest": "https://github.com/ceyirelehe47/screeps-bot/pull/1",
+    "commit": "39570a54a71716a0b13f968ead662234f28fa0a9",
+    "mergedAt": "2026-10-16T13:09:05Z"
+  },
+  "source": {
+    "commit": "3beed2469d0ad73a8e51b3d0d365c2bde1b781aa",
+    "tree": "bf479c6193d643a0d5b91c67d3383a987c25ef33",
+    "clean": true,
+    "validatedHead": "030477c4bad64ee19b4f29072e1dc81ad7a8e254",
+    "unchangedValidatedFiles": 617,
+    "allowedDifferences": [
+      "package.json version",
+      "package-lock.json root versions"
+    ],
+    "allMatch": true
+  },
+  "regression": {
+    "suites": 262,
+    "tests": 1983,
+    "passed": true,
+    "source": "validation-summary.json",
+    "releaseChangesOnlyPackageVersions": true
+  },
+  "artifact": {
+    "mainBytes": 3430904,
+    "mapBytes": 1147176,
+    "totalBytes": 4578080,
+    "indexEntries": 364894,
+    "blocks": 357,
+    "oracleChecks": 64,
+    "mainSyntaxValid": true,
+    "firstMappingMilliseconds": 2.949202000000014,
+    "cachedMappingMilliseconds": 0.009218000000032589,
+    "mappedLog": "<text style=\"color:#ef9a9a\">[artifact] Error: artifact smoke\n    at phase (../src/main.ts:67:9)</text>"
+  },
+  "runtime": {
+    "deployTick": 74371727,
+    "queryTicks": [
+      74371737,
+      74371756,
+      74371776
+    ],
+    "warmCpuTick": 74371752,
+    "warmUsed": 94.77131920000011,
+    "bucketFirst": 9757,
+    "bucketWarm": 10000,
+    "healthBefore": {
+      "globalStarts": 12,
+      "lastGlobalStartAt": 74370717,
+      "lastCompletedAt": 74371642,
+      "lastGap": {
+        "afterTick": 74347005,
+        "resumedAt": 74347007,
+        "skippedTicks": 1
+      },
+      "lastIncomplete": {
+        "tick": 74347984,
+        "phase": "creepWork",
+        "creep": "healer-74347623"
+      }
+    },
+    "healthAfter": {
+      "globalStarts": 13,
+      "lastGlobalStartAt": 74371727,
+      "lastCompletedAt": 74371776,
+      "lastGap": {
+        "afterTick": 74347005,
+        "resumedAt": 74347007,
+        "skippedTicks": 1
+      },
+      "lastIncomplete": {
+        "tick": 74347984,
+        "phase": "creepWork",
+        "creep": "healer-74347623"
+      }
+    },
+    "requiredPhases": {
+      "towerControl": 4.147106800000074,
+      "scheduleSpawnTasks": 2.5164255999998204,
+      "spawnWork": 0.05931770000006509,
+      "creepWork": 45.75267910000002
+    },
+    "postDeployConsoleFrames": 37,
+    "postDeployErrors": [],
+    "uploadReadbackMatch": true,
+    "finalReadbackMatch": true
+  },
+  "socket": {
+    "startedAt": "2026-10-16T13:14:53.176Z",
+    "finishedAt": "2026-10-16T13:17:53.183Z",
+    "durationMs": 180000,
+    "normalCompletion": true,
+    "counts": {
+      "user:634fe406347a7b69b28aeccb/cpu": 44,
+      "user:634fe406347a7b69b28aeccb/console": 43
+    },
+    "userScopeCounts": {
+      "cpu": {
+        "shard1": 0,
+        "otherShardFiltered": 0,
+        "unscoped": 44
+      },
+      "console": {
+        "shard1": 43,
+        "otherShardFiltered": 0,
+        "unscoped": 0
+      }
+    },
+    "cpuAttribution": {
+      "cpuWithoutGameTick": 44,
+      "unscopedCpuFrames": 44,
+      "limitation": "账号级CPU频道：缺少shard或游戏tick的帧只作原始记录，不能归因为shard1每tick耗时；使用另行取得的shard1持久CPU证据。"
+    }
+  },
+  "configuration": {
+    "deploymentToolWroteConfiguration": false,
+    "snapshotHashesEqual": false,
+    "changedPaths": [
+      "cfg.synthesisControl.rooms.E3N59.plannerOwnership.revision",
+      "cfg.synthesisControl.rooms.E3N59.reactions",
+      "cfg.synthesisControl.rooms.E6N59.plannerOwnership.revision"
+    ],
+    "interpretation": "仅观察到 hubPlanner 管理的合成计划及 revision 更新，符合现有运行时代码维护路径。"
+  },
+  "rollback": {
+    "previousCommit": "45571702b76ea3d6022d1dbb0d092e744fbe05e2",
+    "previousTag": "2026.10.16-1+4557170@2026-10-16T12:00:15.288Z",
+    "localEvidenceDirectory": "monitor-data/20261016-architecture-release",
+    "secretsIncluded": false
+  }
+}
