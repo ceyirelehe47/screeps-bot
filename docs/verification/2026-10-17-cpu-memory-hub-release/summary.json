@@ -1,0 +1,92 @@
+{
+  "schema": "screeps-cpu-memory-hub-release/v1",
+  "target": {
+    "account": "forster",
+    "branch": "default",
+    "shard": "shard1"
+  },
+  "release": {
+    "version": "2026.10.17-1",
+    "gitHash": "fb6ef0b",
+    "buildTime": "2026-10-16T17:58:46.249Z",
+    "tag": "2026.10.17-1+fb6ef0b@2026-10-16T17:58:46.249Z",
+    "commit": "fb6ef0be17bde141bc52a0836c31bed1bb090bf2",
+    "tree": "908a67d5ce5de2ef1095271f8f6fc1afba7c85d5",
+    "branch": "detached",
+    "dirty": false,
+    "deployBranch": "default",
+    "bundleHash": "90305d57ac864d91a09525b36a90785e0b4e97548f554a34c7e668450f241b22",
+    "modulesHash": "031ad733bad97e6dba9aba631b2200ddf750e9dd4bc7dcc7e79ff9ce644d68d8",
+    "runtimeBytes": 4623200,
+    "modules": {
+      "main": {
+        "bytes": 3461053,
+        "sha256": "ddab0e7ff92a67673a6dd08eb3f0e5af1a008bf71a3cc34a3026984510f902ca"
+      },
+      "main.js.map": {
+        "bytes": 1162147,
+        "sha256": "cc852421004e6ba8d7e330212780928317668aa00758b49c603c98fce66b044a"
+      }
+    },
+    "mappingSamplesPassed": 64,
+    "syntaxPassed": true
+  },
+  "baseline": {
+    "tag": "2026.10.16-2+3beed24@2026-10-16T13:12:03.283Z",
+    "commit": "3beed2469d0ad73a8e51b3d0d365c2bde1b781aa",
+    "modulesHash": "47a152b9f86b4ed1c1f0de4df3d9108b5c0c72613feef3997a3fcb1f4c416bf4",
+    "tick": 74375825
+  },
+  "uploadAttempts": 1,
+  "uploadAccepted": true,
+  "readbackMatched": true,
+  "finalReadbackMatched": true,
+  "deployTick": 74375826,
+  "verifiedTicks": [
+    74375830,
+    74375844
+  ],
+  "lastCompletedAt": 74375844,
+  "globalStarts": {
+    "before": 13,
+    "after": 14
+  },
+  "newGap": false,
+  "newIncomplete": false,
+  "runtimeErrorsObserved": 0,
+  "bucket": {
+    "before": 10000,
+    "first": 9586,
+    "last": 9705
+  },
+  "consoleObservation": {
+    "startedAt": "2026-10-16T18:01:12.154Z",
+    "endedAt": "2026-10-16T18:02:45.650Z",
+    "seconds": 93.5,
+    "frames": 22,
+    "shard1Frames": 22
+  },
+  "configWritesByDeployTool": 0,
+  "features": {
+    "hubVisualsEnabled": false,
+    "permitSegmentsEnabled": false,
+    "permitChainInlinePresent": true,
+    "permitSegmentManifestPresent": false
+  },
+  "cpuImprovementClaimed": false,
+  "sourceMatchesFromFinalValidation": 629,
+  "versionOnlyFiles": [
+    "package.json",
+    "package-lock.json"
+  ],
+  "checks": {
+    "priorWholeRegressionSuites": 267,
+    "priorWholeRegressionCases": 2009,
+    "v3TargetedSuites": 5,
+    "v3TargetedCases": 30,
+    "v3DualTypechecksPassed": true,
+    "releaseBuildPassed": true,
+    "releaseMappingSamples": 64
+  },
+  "rollbackPerformed": false
+}
