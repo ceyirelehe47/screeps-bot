@@ -10,7 +10,7 @@ import {
   getResourceControlRoomStock,
   getResourceControlSampleInterval,
   type ResourceControlSnapshot,
-} from "@/runtime/resourceControl";
+} from "@/runtime/resourceControlReadModel";
 import { getMemoryService } from "@/runtime/runtimeServices";
 import { normalizeBoolean, normalizeNumber, normalizeRoomNameList } from "@/runtime/configNormalize";
 

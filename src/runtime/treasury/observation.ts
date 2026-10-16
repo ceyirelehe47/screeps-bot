@@ -49,7 +49,7 @@ export function readTreasuryWorldSequence(): number {
 /** 受控世界真实更新时递增（同步 adapter 写世界 / 测试宿主施加效果时调用）。 */
 export function bumpTreasuryWorldSequence(): void {
   if (!Memory.runtime) {
-    Memory.runtime = {} as typeof Memory.runtime;
+    Memory.runtime = {};
   }
   (Memory.runtime as { treasuryWorldSequence?: number }).treasuryWorldSequence = readTreasuryWorldSequence() + 1;
 }

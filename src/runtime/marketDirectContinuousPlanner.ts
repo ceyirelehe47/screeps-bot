@@ -1,3 +1,4 @@
+import { AUTHORITY_EXECUTOR_SHARD } from "@/config/deployment";
 import {
   priceToMilliDown,
   priceToMilliUp,
@@ -406,7 +407,7 @@ function policyIsValid(policy: MarketDirectContinuousPolicy): boolean {
     Array.isArray(policy.allowedRooms) &&
     policy.allowedRooms.length > 0 &&
     new Set(policy.allowedRooms).size === policy.allowedRooms.length &&
-    policy.allowedRooms.every((roomName) =>
+    policy.allowedRooms.every((roomName: string) =>
       typeof roomName === "string" && roomName.length > 0) &&
     floor !== undefined &&
     Number.isFinite(policy.minExecutableNotional) &&
@@ -841,7 +842,7 @@ function normalizeInput(
         lanes: [...entry.lanes]
           .sort((left, right) =>
             stableStringCompare(left.lane.roomName, right.lane.roomName))
-          .map((laneInput) => ({
+          .map((laneInput: MarketDirectContinuousLaneInput) => ({
             lane: { ...laneInput.lane },
             protection: { ...laneInput.protection },
             terminal: { ...laneInput.terminal },
@@ -924,7 +925,7 @@ function usableInvocationArtifacts(
     for (const entry of input.entries) {
       if (
         entry.policy.evaluatorVersion !== 3 ||
-        entry.lanes.some((laneInput) => laneInput.book !== undefined) ||
+        entry.lanes.some((laneInput: MarketDirectContinuousLaneInput) => laneInput.book !== undefined) ||
         !entry.book
       ) {
         return undefined;
@@ -991,7 +992,7 @@ function collectResourceBookReferences(
   for (const entry of stableEntries) {
     const book = entry.book ?? (
       Array.isArray(entry.lanes)
-        ? entry.lanes.find((laneInput) => laneInput.book !== undefined)?.book
+        ? entry.lanes.find((laneInput: MarketDirectContinuousLaneInput) => laneInput.book !== undefined)?.book
         : undefined
     );
     if (book) {
@@ -1251,7 +1252,7 @@ export function planMarketDirectContinuous(
     input.writeContext.permitId.length === 0 ||
     typeof input.writeContext.permitHead !== "string" ||
     input.writeContext.permitHead.length === 0 ||
-    input.writeContext.executorShard !== "shard1"
+    input.writeContext.executorShard !== AUTHORITY_EXECUTOR_SHARD
   ) {
     return blockedResult(input, { reason: "write_context_incomplete" });
   }
@@ -1330,10 +1331,10 @@ export function planMarketDirectContinuous(
       !Array.isArray(entry.lanes) ||
       entry.lanes.length === 0 ||
       entry.lanes.length !== policy.allowedRooms.length ||
-      new Set(entry.lanes.map((laneInput) => laneInput.lane.roomName)).size !==
+      new Set(entry.lanes.map((laneInput: MarketDirectContinuousLaneInput) => laneInput.lane.roomName)).size !==
         policy.allowedRooms.length ||
-      policy.allowedRooms.some((roomName) =>
-        !entry.lanes.some((laneInput) => laneInput.lane.roomName === roomName))
+      policy.allowedRooms.some((roomName: string) =>
+        !entry.lanes.some((laneInput: MarketDirectContinuousLaneInput) => laneInput.lane.roomName === roomName))
     ) {
       return blockedResult(input, {
         reason: "entry_scope_invalid",
@@ -1477,11 +1478,11 @@ export function planMarketDirectContinuous(
       : entry.book ?? entry.lanes[0]?.book;
     const usesOnlyV3ResourceBook =
       policy.evaluatorVersion === 3 &&
-      entry.lanes.every((laneInput) => laneInput.book === undefined);
+      entry.lanes.every((laneInput: MarketDirectContinuousLaneInput) => laneInput.book === undefined);
     let adapterBookConflict = !book;
     if (!usesOnlyV3ResourceBook) {
       const bookEvidence = canonicalBookEvidence(book);
-      adapterBookConflict ||= entry.lanes.some((laneInput) =>
+      adapterBookConflict ||= entry.lanes.some((laneInput: MarketDirectContinuousLaneInput) =>
         laneInput.book !== undefined &&
         canonicalBookEvidence(laneInput.book) !== bookEvidence);
     }
@@ -1491,7 +1492,7 @@ export function planMarketDirectContinuous(
       book.revision.length > 0 &&
       Array.isArray(book.orders) &&
       Array.isArray(book.ownOrderIds) &&
-      book.ownOrderIds.every((orderId) =>
+      book.ownOrderIds.every((orderId: unknown) =>
         typeof orderId === "string" && orderId.length > 0);
     if (!bookComplete) {
       if (writableLanes.length > 0) {

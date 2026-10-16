@@ -2043,7 +2043,7 @@ function readCandidateTraceRejectionCounts(
     ) {
       return null;
     }
-    counts[reason] = count;
+    counts[REJECTION_ORDER[reasonIndex]] = count;
     previousIndex = reasonIndex;
   }
   return counts;

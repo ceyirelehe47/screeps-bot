@@ -14,7 +14,11 @@ import { getPowerBankOwnedAvoidRooms } from "@/runtime/powerBankTransit";
 import { isDefenseMode } from "@/runtime/defenseMode";
 import { getInvaderSalvageHazards, isInvaderSalvageRoomClear, isInvaderSalvagePositionSafe,
   isInvaderSalvageTransitAllowed, invaderSalvageRouteCost, outsideInvaderSalvageHazards as outsideSalvageHazards } from "@/runtime/invaderSalvageSafety";
-export { isInvaderSalvageRoomClear, isInvaderSalvagePositionSafe, getInvaderSalvageKeepers } from "@/runtime/invaderSalvageSafety";
+export {
+  isInvaderSalvageRoomClear,
+  isInvaderSalvagePositionSafe,
+  getInvaderSalvageKeepers,
+} from "@/runtime/invaderSalvageSafety";
 
 type RemoteHaulTarget = AnyStoreStructure | Ruin | Tombstone | Resource;
 const SALVAGE_MODE = "invaderSalvage";
@@ -159,7 +163,7 @@ function getAvailableResourceAmount(
   resource: ResourceConstant,
 ): number {
   if (isDrop(target)) return target.resourceType === resource ? target.amount : 0;
-  const stored = target.store.getUsedCapacity(resource);
+  const stored = (target.store.getUsedCapacity(resource) ?? 0);
   if (!isTerminalTarget(target)) return stored;
   return Math.min(
     stored,
@@ -206,7 +210,7 @@ function isWithdrawTarget(structure: Structure<StructureConstant>): structure is
     return false;
   }
 
-  return (structure as AnyStoreStructure).store.getUsedCapacity() > 0;
+  return ((structure as AnyStoreStructure).store.getUsedCapacity() ?? 0) > 0;
 }
 
 function getRemoteHaulTargets(room: Room, salvage = false): RemoteHaulTarget[] {
@@ -422,11 +426,12 @@ export const remoteCarrierRole: RoleFactory = (targetRoom: string, targetX?: str
           roomName,
         ) || undefined;
         if (!exposureClaim) return ERR_NOT_ENOUGH_RESOURCES;
+        const claimedAmount = exposureClaim.amount;
         const terminalTarget = assignment.target;
         return executeTreasuryFencedTerminalCargo(terminalTarget, () => creep.withdraw(
           terminalTarget,
           assignment.resource,
-          exposureClaim.amount,
+          claimedAmount,
         ));
       });
     } catch (error) {

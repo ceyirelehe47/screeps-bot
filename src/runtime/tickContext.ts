@@ -87,7 +87,8 @@ interface TickContextSnapshot {
   roomContexts?: Map<string, RoomTickContext>;
 }
 
-const EMPTY_STRUCTURES: Structure<StructureConstant>[] = Object.freeze([]) as Structure<StructureConstant>[];
+const EMPTY_STRUCTURES: Structure<StructureConstant>[] = [];
+Object.freeze(EMPTY_STRUCTURES);
 
 function createRoomTickContext(room: Room): RoomTickContext {
   let structures: Structure<StructureConstant>[] | undefined;
@@ -111,7 +112,7 @@ function createRoomTickContext(room: Room): RoomTickContext {
   let energyTombstones: Tombstone[] | undefined;
   let energyRuins: Ruin[] | undefined;
 
-  function ensureStructuresByType(): Map<StructureConstant, Structure<StructureConstant>[]> {
+  function ensureStructuresByType(this: RoomTickContext): Map<StructureConstant, Structure<StructureConstant>[]> {
     if (!structuresByType) {
       structuresByType = new Map();
       for (const structure of this.getStructures()) {
@@ -126,7 +127,7 @@ function createRoomTickContext(room: Room): RoomTickContext {
     return structuresByType;
   }
 
-  function ensureMyStructuresByType(): Map<StructureConstant, Structure<StructureConstant>[]> {
+  function ensureMyStructuresByType(this: RoomTickContext): Map<StructureConstant, Structure<StructureConstant>[]> {
     if (!myStructuresByType) {
       myStructuresByType = new Map();
       for (const structure of this.getMyStructures()) {
@@ -354,11 +355,14 @@ export function createTickContextService(): TickContextService {
         }
       }
 
-      const byRole = creepsByRole.get(creep.memory.role);
-      if (byRole) {
-        byRole.push(creep);
-      } else {
-        creepsByRole.set(creep.memory.role, [creep]);
+      const role = creep.memory.role;
+      if (typeof role === "string") {
+        const byRole = creepsByRole.get(role);
+        if (byRole) {
+          byRole.push(creep);
+        } else {
+          creepsByRole.set(role, [creep]);
+        }
       }
 
       const byRoom = creepsByRoom.get(creep.room.name);

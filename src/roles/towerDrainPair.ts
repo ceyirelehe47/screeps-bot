@@ -1,4 +1,10 @@
-import { getHostileTowers as activeTowers, getHostileTowerThreats as towerThreats, getRefillableHostileTowers as refillableTowers, towerAttackPowerAt as towerPowerAt, type TowerThreat } from "@/runtime/combatTowerThreat";
+import {
+  getHostileTowers as activeTowers,
+  getHostileTowerThreats as towerThreats,
+  getRefillableHostileTowers as refillableTowers,
+  towerAttackPowerAt as towerPowerAt,
+  type TowerThreat,
+} from "@/runtime/combatTowerThreat";
 import { clearMovementState, moveToTarget } from "@/roles/shared";
 import { isWalkableConstructionSite, isWalkableStructure } from "@/movement/common";
 import { measureCreepIntent } from "@/runtime/cpuPhaseProfiler";
@@ -63,7 +69,7 @@ function directionToRoom(from: string, to: string): DirectionConstant | undefine
   if (!a || !b) return undefined;
   const candidate = a.x === b.x && a.y - 1 === b.y ? TOP : a.x + 1 === b.x && a.y === b.y ? RIGHT
     : a.x === b.x && a.y + 1 === b.y ? BOTTOM : a.x - 1 === b.x && a.y === b.y ? LEFT : undefined;
-  if (!candidate || Game.map.describeExits(from)?.[candidate] !== to || Game.map.describeExits(to)?.[opposite(candidate)] !== from) return undefined;
+  if (!candidate || Game.map.describeExits(from)?.[candidate] !== to || Game.map.describeExits(to)?.[opposite(candidate) as TOP | RIGHT | BOTTOM | LEFT] !== from) return undefined;
   return candidate;
 }
 

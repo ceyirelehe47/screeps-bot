@@ -3,7 +3,11 @@ import { buildStandardCarrierBody } from "@/runtime/carrierBodyPolicy";
 import { getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
 import type { CreepConfig } from "@/types/system";
 import { requestCombatObservation } from "@/runtime/powerBankObserver";
-import { isInvaderSalvageTarget, isInvaderSalvageRoomClear, isInvaderSalvagePositionSafe } from "@/runtime/invaderSalvageSafety";
+import {
+  isInvaderSalvageTarget,
+  isInvaderSalvageRoomClear,
+  isInvaderSalvagePositionSafe,
+} from "@/runtime/invaderSalvageSafety";
 import { clearMovementState } from "@/roles/shared";
 
 interface FlagHaulTask {
@@ -58,7 +62,7 @@ function isRemoteHaulStructure(structure: Structure<StructureConstant>): structu
     return false;
   }
 
-  return (structure as AnyStoreStructure).store.getUsedCapacity() > 0;
+  return ((structure as AnyStoreStructure).store.getUsedCapacity() ?? 0) > 0;
 }
 
 function getStoredResources(store: StoreDefinition): ResourceConstant[] {

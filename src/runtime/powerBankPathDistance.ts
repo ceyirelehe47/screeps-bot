@@ -310,6 +310,7 @@ function measurePowerBankTravelImpl(input: PowerBankTravelMeasurementInput, call
     if (Array.isArray(input.routeRooms) && input.routeRooms.length > POWER_BANK_MAX_ROUTE_ROOMS) diagnostic(call, "invalidRouteTooLong");
     return pending("invalid_input");
   }
+  if (!attacker || !healer) return pending("invalid_input");
   if (!Game.rooms[input.sourceSpawnPos.roomName] || !Game.rooms[input.bankPos.roomName]) {
     return pending("endpoint_not_visible");
   }

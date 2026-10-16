@@ -1,3 +1,4 @@
+import { AUTHORITY_ROOMS } from "@/config/deployment";
 import { TREASURY_T4_LANE, treasuryLaneWorkKey } from "@/runtime/treasuryTerminalLane";
 export const TREASURY_T4_RUN_ID = TREASURY_T4_LANE.runId;
 export const TREASURY_T4_ACTION_KIND = TREASURY_T4_LANE.actionKind;
@@ -28,7 +29,7 @@ export function encodeTreasuryT4DurableFacts(f: DurableT4Facts): string | null {
       ![f.taskCreatedAt,f.amount,f.tick,f.quote,f.sequence].every(integer) || f.sequence < 1 || f.sequence > 128 || f.amount < 1 || f.amount > 26 || f.quote > 100 ||
       !endpoint(f.source) || !endpoint(f.target) || f.source.id === f.target.id) return null;
   const e = (v: TreasuryT4EndpointFacts) => [v.id,v.resourceAmount,v.energy,v.used,v.free,v.capacity,v.cooldown];
-  const raw = ["t4", f.runId, "OH", "E4N58", "E1N57", "automatic", "synthesis:E1N57:UH2O",
+  const raw = ["t4", f.runId, "OH", AUTHORITY_ROOMS.reagentSource, AUTHORITY_ROOMS.synthesisHub, "automatic", AUTHORITY_ROOMS.synthesisReason,
     f.sequence,f.taskId,f.taskCreatedAt,f.amount,f.tick,f.quote,f.username,...e(f.source),...e(f.target)].join("|");
   return raw.length <= 512 ? raw : null;
 }
@@ -36,7 +37,7 @@ export function decodeTreasuryT4DurableFacts(raw: unknown): DurableT4Facts | nul
   if (typeof raw !== "string" || raw.length > 512) return null;
   const a = raw.split("|");
   if (a.length !== 28 || a[0] !== "t4" || a[1] !== TREASURY_T4_RUN_ID || a[2] !== "OH" ||
-      a[3] !== "E4N58" || a[4] !== "E1N57" || a[5] !== "automatic" || a[6] !== "synthesis:E1N57:UH2O") return null;
+      a[3] !== AUTHORITY_ROOMS.reagentSource || a[4] !== AUTHORITY_ROOMS.synthesisHub || a[5] !== "automatic" || a[6] !== AUTHORITY_ROOMS.synthesisReason) return null;
   const n = (i: number) => DECIMAL.test(a[i]) ? Number(a[i]) : NaN;
   const e = (i: number): TreasuryT4EndpointFacts => ({id:a[i],resourceAmount:n(i+1),energy:n(i+2),used:n(i+3),free:n(i+4),capacity:n(i+5),cooldown:n(i+6)});
   const f: DurableT4Facts = {schemaVersion:1,runId:a[1],sequence:n(7),taskId:a[8],taskCreatedAt:n(9),amount:n(10),tick:n(11),quote:n(12),username:a[13],source:e(14),target:e(21)};

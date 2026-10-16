@@ -60,7 +60,7 @@ export function snapshotMarketPerformanceCounters(): void {
   if (!Memory.runtime) Memory.runtime = {};
   const snapshot = { ...counters, committedAtTick: Game.time };
   (Memory.runtime as { marketPerf?: typeof snapshot }).marketPerf = snapshot;
-  const countersWithCommit = runtimeGlobal.__marketPerformanceCounters;
+  const countersWithCommit = counters;
   countersWithCommit.marketPerfSnapshotsCommitted =
     (countersWithCommit.marketPerfSnapshotsCommitted || 0) + 1;
 }

@@ -44,7 +44,7 @@ function findControllerEnergySource(creep: Creep, controller: StructureControlle
   if (candidates[0]) return candidates[0];
 
   const storage = controller.room.storage;
-  return storage?.store.getUsedCapacity(RESOURCE_ENERGY) > 0 ? storage : null;
+  return storage && storage.store.getUsedCapacity(RESOURCE_ENERGY) > 0 ? storage : null;
 }
 
 /** 普通维护与殖民支援共用取能、直接升级执行；控制器准入由调用者限定。 */

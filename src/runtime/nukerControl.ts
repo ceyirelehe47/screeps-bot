@@ -19,7 +19,7 @@ import {
   collectResourceControlSnapshots,
   getResourceControlDonorAvailable,
   type ResourceControlSnapshot,
-} from "@/runtime/resourceControl";
+} from "@/runtime/resourceControlReadModel";
 import {
   getReservedProductionAmountExcludingHolder,
   listProductionReservations,

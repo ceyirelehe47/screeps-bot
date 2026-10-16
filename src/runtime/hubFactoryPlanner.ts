@@ -136,9 +136,11 @@ export function planHubFactory(): void {
     state.lastActions = actions.slice(-16);
     return;
   }
+  const recipe = COMMODITIES[first.resource as keyof typeof COMMODITIES];
+  if (!recipe) return;
   const wanted = new Set<ResourceConstant>();
   // 在途计入覆盖量；每种原料至多为一批补料（小于 100 时合并到 100）。
-  for (const [name, needed] of Object.entries(COMMODITIES[first.resource].components)) {
+  for (const [name, needed] of Object.entries(recipe.components)) {
     const resource = name as ResourceConstant;
     const localMissing = Math.max(0, (typeof needed === "number" ? needed : 0) - localAvailable(resource));
     if (localMissing <= 0) continue;

@@ -1,3 +1,4 @@
+import { AUTHORITY_ROOMS } from "@/config/deployment";
 import { canonicalStableHashV1 } from "@/runtime/marketDirectContinuousPolicy";
 
 const RUN_ID = "market-base-egress-r2-2026-09-26";
@@ -198,8 +199,8 @@ export function trialLaneEligible(input: {
   policyCooldownTicks: number;
 }): boolean {
   return input.stage === "continuous" && input.policyCooldownTicks === 100 &&
-    ((input.roomName === "E4N58" && input.resource === "X") ||
-     (input.roomName === "E1N57" && input.resource === "L")) &&
+    ((input.roomName === AUTHORITY_ROOMS.reagentSource && input.resource === "X") ||
+     (input.roomName === AUTHORITY_ROOMS.synthesisHub && input.resource === "L")) &&
     (input.capacityState === "pressure" || input.capacityState === "emergency");
 }
 
@@ -274,8 +275,8 @@ export function closeExpiredMarketEgressTrialR2(tick: number): void {
   if (current.status !== "valid" || current.value.status !== "active") return;
   const state = current.value;
   const now = Date.now();
-  const bothNormal = readMarketEgressTrialCapacityState("E4N58", tick) === "normal" &&
-    readMarketEgressTrialCapacityState("E1N57", tick) === "normal";
+  const bothNormal = readMarketEgressTrialCapacityState(AUTHORITY_ROOMS.reagentSource, tick) === "normal" &&
+    readMarketEgressTrialCapacityState(AUTHORITY_ROOMS.synthesisHub, tick) === "normal";
   const reason = tick >= state.endTick ? "tick_deadline"
     : !safeInteger(now) || now >= state.endMs ? "wall_deadline"
       : now < state.startedAtMs || now >= state.controlUntilMs ? "control_lost"

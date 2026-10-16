@@ -46,7 +46,10 @@ import { hashTreasuryCanonicalString, isTreasuryRearmAttemptId } from "@/runtime
 import { bumpTreasuryWorldSequence } from "@/runtime/treasury/observation";
 import type { TreasuryService } from "@/runtime/treasury/facade";
 import { canonicalizeTreasuryAdapterRetryFacts } from "@/runtime/treasury/adapterRetrySemantics";
-import { canonicalizeTreasuryActionArgs, TREASURY_CANONICAL_ENCODING_VERSION } from "@/runtime/treasury/canonicalEncoding";
+import {
+  canonicalizeTreasuryActionArgs,
+  TREASURY_CANONICAL_ENCODING_VERSION,
+} from "@/runtime/treasury/canonicalEncoding";
 
 const ACTION_KIND_MAX = 128;
 const VALID_LOCATION_KINDS: ReadonlySet<string> = new Set<string>(["storage", "terminal"]);
@@ -893,6 +896,10 @@ function buildTreasuryActionContractInner(
         };
       }
       if (binding.bindingKind === "game_object") {
+        if (typeof binding.objectId !== "string" || binding.objectId.length === 0) {
+          actionContractEvents.rejected += 1;
+          return { status: "rejected", reason: "contract_invalid", detail: "game_object 缺少 objectId" };
+        }
         // game_object binding：对象必须存在且与期望类型/room 归属匹配。
         const object = (Game as unknown as { getObjectById<T extends object>(id: string): T | null }).getObjectById<{
           id: string;
@@ -1007,7 +1014,7 @@ function buildTreasuryActionContractInner(
     }
     adapterRetryFacts = canonicalized.text;
   }
-  const sortedPostings = [...derived].sort((a, b) => (postingKey(a) < postingKey(b) ? -1 : postingKey(a) > postingKey(b) ? 1 : 0));
+  const sortedPostings: TreasuryPosting[] = [...derived].map(p => ({ ...p, locationKind: p.locationKind as TreasuryPosting["locationKind"] })).sort((a, b) => (postingKey(a) < postingKey(b) ? -1 : postingKey(a) > postingKey(b) ? 1 : 0));
   // 【第十一轮 3.13.9】完整 descriptor 集（排序确定）：AC4 digest 输入与
   // intent/quarantine durable facts 的同源事实——同结构不同 role 各占一条。
   const sortedDescriptors = [...bindingList]

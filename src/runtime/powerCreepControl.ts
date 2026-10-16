@@ -469,7 +469,7 @@ function prepositionForTask(powerCreep: PowerCreep, task: PowerCreepTask): void 
 function syncPowerTaskWorkAnchor(powerCreep: PowerCreep, task: PowerCreepTask | undefined): void {
   const movementState = ensureCreepMovementState(powerCreep);
   const target = task ? getTaskTarget(task) : null;
-  if (!target) {
+  if (!task || !target) {
     delete movementState.workAnchor;
     return;
   }

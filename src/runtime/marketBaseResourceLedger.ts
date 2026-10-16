@@ -1,3 +1,4 @@
+import { AUTHORITY_ROOMS } from "@/config/deployment";
 /**
  * 基础矿物 Direct V3 的纯数据 WAL、receipt chain 与四层额度。
  *
@@ -4723,9 +4724,9 @@ function prepareMarketBaseResourceAttemptCore(
        input.trialCooldownNotBefore <
          state.checkpoint.confirmedCooldownNotBeforeHighWater ||
        input.executionPolicy !== "continuous" ||
-       !((input.historicalLane.sellerRoom === "E4N58" &&
+       !((input.historicalLane.sellerRoom === AUTHORITY_ROOMS.reagentSource &&
           input.historicalLane.resource === "X") ||
-         (input.historicalLane.sellerRoom === "E1N57" &&
+         (input.historicalLane.sellerRoom === AUTHORITY_ROOMS.synthesisHub &&
           input.historicalLane.resource === "L")) ||
        input.trialPermitId !== input.historicalPermit.permitId ||
        trialPolicy?.cooldownTicks !== 100 ||

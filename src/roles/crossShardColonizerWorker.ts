@@ -8,7 +8,7 @@ export const crossShardColonizerWorkerRole: RoleFactory = (
   portalRoom?: string,
   destinationRoom?: string,
 ) => {
-  const baseRole = colonizerWorkerRole(targetRoom);
+  const baseRole = colonizerWorkerRole(targetRoom ?? "");
 
   return {
     source: (creep): boolean => {

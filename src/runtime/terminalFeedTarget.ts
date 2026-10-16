@@ -24,7 +24,7 @@ export function readTerminalFeedTargetAmount(task: CarrierTask, step: CarrierTas
   let target = step.destinationTargetAmount;
   if (target !== undefined && (!Number.isSafeInteger(target) || target < 0)) return 0;
   if (step.boundResourceTransferTaskId) {
-    const live = Memory.data?.resourceControl?.tasks[step.boundResourceTransferTaskId];
+    const live = Memory.data?.resourceControl?.tasks?.[step.boundResourceTransferTaskId];
     if (!live || live.fromRoomName !== task.roomName || live.resource !== step.resource ||
         step.boundResourceTransferTaskIdentity !== undefined && step.boundResourceTransferTaskIdentity !== terminalFeedBoundTaskIdentity(live)) return 0;
     const demand = inspectAutomaticSynthesisTransferDemand(live);
@@ -48,7 +48,7 @@ export function revalidateTerminalFeedSnapshotTarget(
 ): number {
   if (!Number.isSafeInteger(targetAmount) || targetAmount < 0) return 0;
   if (!boundTaskId) return targetAmount;
-  const task = Memory.data?.resourceControl?.tasks[boundTaskId];
+  const task = Memory.data?.resourceControl?.tasks?.[boundTaskId];
   if (!task || task.fromRoomName !== target.room?.name || task.resource !== resource ||
       boundTaskIdentity !== undefined && boundTaskIdentity !== terminalFeedBoundTaskIdentity(task)) return 0;
   const demand = inspectAutomaticSynthesisTransferDemand(task);
@@ -77,7 +77,7 @@ export function getTerminalFeedRemainingTarget(
     const accepted = delivery?.targetId === target.id && delivery.resource === resource ? delivery.amount : 0;
     cargoByActor.set(actor, Math.max(cargoByActor.get(actor) || 0, Math.max(0, pickup.amount - accepted)));
   }
-  const stock = target.store.getUsedCapacity(resource);
+  const stock = (target.store.getUsedCapacity(resource) ?? 0);
   const deliveries = current.deliveries.get(resourceKey(target.id, resource));
   const unreflectedDelivery = deliveries ? Math.max(0, deliveries.beforeAmount + deliveries.amount - stock) : 0;
   return Math.max(0, targetAmount - stock - unreflectedDelivery - [...cargoByActor.values()].reduce((sum, amount) => sum + amount, 0));

@@ -1,3 +1,4 @@
+import { AUTHORITY_ROOMS } from "@/config/deployment";
 /**
  * Continuous Direct 的纯数据 WAL 与额度账本。
  *
@@ -299,8 +300,8 @@ export interface LegacyXReviewedOutcomeFixture {
   resolvedAt: 72_585_531;
   attemptAt: 72_585_530;
   transactionTime: 72_585_530;
-  sellerRoom: "E6N59";
-  orderRoom: "E21S49";
+  sellerRoom: typeof AUTHORITY_ROOMS.legacyXSeller;
+  orderRoom: typeof AUTHORITY_ROOMS.legacyXBuyer;
   resource: "X";
   observedOrderAmount: 28_920;
   actualAmount: 1_000;
@@ -1361,8 +1362,8 @@ function exactLegacySeed(
     outcome.resolvedAt !== 72_585_531 ||
     outcome.attemptAt !== 72_585_530 ||
     outcome.transactionTime !== 72_585_530 ||
-    outcome.sellerRoom !== "E6N59" ||
-    outcome.orderRoom !== "E21S49" ||
+    outcome.sellerRoom !== AUTHORITY_ROOMS.legacyXSeller ||
+    outcome.orderRoom !== AUTHORITY_ROOMS.legacyXBuyer ||
     outcome.resource !== "X" ||
     outcome.observedOrderAmount !== 28_920 ||
     outcome.actualAmount !== CONTINUOUS_PLANNED_AMOUNT ||
@@ -1464,10 +1465,10 @@ export function migrateLegacyXSeedLedger(
       entryId: "base-x-e6n59-v1",
       resourcePolicyFingerprint:
         outcome.directSafetyFingerprint,
-      sellerRoom: "E6N59",
+      sellerRoom: AUTHORITY_ROOMS.legacyXSeller,
       resource: "X",
       orderId: outcome.orderId,
-      orderRoom: "E21S49",
+      orderRoom: AUTHORITY_ROOMS.legacyXBuyer,
       attemptAt: 72_585_530,
       plannedAmount: CONTINUOUS_PLANNED_AMOUNT,
       resolvedAt: 72_585_531,

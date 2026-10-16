@@ -1195,7 +1195,7 @@ function attemptRegionalRawPurchase(
       availableCredits,
     );
 
-    if (!selection) {
+    if (!selection || !selection.order.roomName) {
       if (!state.lastError) {
         state.lastError = "purchase_no_safe_order";
       }

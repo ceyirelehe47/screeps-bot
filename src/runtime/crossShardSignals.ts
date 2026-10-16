@@ -16,7 +16,7 @@ export interface CrossShardRoomSummary {
   hasStorage: boolean;
 }
 
-function ensureCrossShardRuntimeStore(): NonNullable<Memory["runtime"]>["crossShard"] {
+function ensureCrossShardRuntimeStore(): NonNullable<NonNullable<Memory["runtime"]>["crossShard"]> {
   const runtime = getMemoryService().ensureRuntime();
   runtime.crossShard = runtime.crossShard || {};
   runtime.crossShard.remotes = runtime.crossShard.remotes || {};

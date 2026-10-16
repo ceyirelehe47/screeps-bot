@@ -2827,7 +2827,7 @@ export function updateMarketBaseBookEma(input: {
   readonly observedPrice: number;
   readonly tick: number;
   readonly timeConstantTicks?: number;
-}): { ema: number; observedAt: number } {
+}): { ema: number | null; observedAt: number } {
   const timeConstant =
     input.timeConstantTicks ?? MARKET_BASE_BOOK_EMA_TICK_TIME_CONSTANT;
   if (

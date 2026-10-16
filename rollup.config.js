@@ -182,6 +182,12 @@ const deployPlugin =
 
 export default {
   input: "src/main.ts",
+  onwarn(warning, warn) {
+    if (warning.code === "CIRCULAR_DEPENDENCY") {
+      throw new Error(`运行时模块存在循环依赖：${warning.message}`);
+    }
+    warn(warning);
+  },
   output: {
     file: "dist/main.js",
     format: "cjs",

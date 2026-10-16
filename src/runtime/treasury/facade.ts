@@ -558,7 +558,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         : undefined;
     const occupancy = kernelOccupancyNow({
       observation: state.observation,
-      excludeAttemptId: context.excludeAttemptId,
+      excludeAttemptId: context.excludeAttemptId ?? undefined,
     });
     const sources = buildAdmissionFactSources(state, occupancy, context);
     return evaluateTreasuryAdmissionFacts(sources, candidateLegs, {
@@ -601,7 +601,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         : undefined;
     const occupancy = kernelOccupancyNow({
       observation,
-      excludeAttemptId: context.excludeAttemptId,
+      excludeAttemptId: context.excludeAttemptId ?? undefined,
     });
     const sources = buildAdmissionFactSources(
       { tick: Game.time, observation, ended: false },
@@ -891,11 +891,11 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       }
       const stats = kernel.beginTick();
       current = null;
-      ensureTickState(false);
+      const begunState = ensureTickState(false);
       // C06/§4.4：同 tick endTick 之后重复 beginTick（或第二实例）不得重开
       // 已关闭的授权窗口——恢复/清理照常按预算继续，接纳/执行仍拒绝。
-      if (admissionWindowOpen().status === "closed" && current !== null) {
-        current.ended = true;
+      if (admissionWindowOpen().status === "closed") {
+        begunState.ended = true;
       }
       return stats;
     },

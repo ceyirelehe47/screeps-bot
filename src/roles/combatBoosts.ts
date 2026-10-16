@@ -42,7 +42,7 @@ export function prepareCombatBoost(
   const lab = Game.getObjectById(labId as Id<StructureLab>);
   if (!lab) return false;
 
-  if (lab.store.getUsedCapacity(nextCompound) < LAB_BOOST_MINERAL) return false;
+  if ((lab.store.getUsedCapacity(nextCompound) ?? 0) < LAB_BOOST_MINERAL) return false;
   if (lab.store.getUsedCapacity(RESOURCE_ENERGY) < LAB_BOOST_ENERGY) return false;
 
   if (!creep.pos.isNearTo(lab)) {

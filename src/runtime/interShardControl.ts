@@ -58,7 +58,7 @@ interface InterShardLocalPayload {
   rooms: InterShardRoomSummary[];
 }
 
-function ensureCrossShardRuntimeStore(): NonNullable<Memory["runtime"]>["crossShard"] {
+function ensureCrossShardRuntimeStore(): NonNullable<NonNullable<Memory["runtime"]>["crossShard"]> {
   const runtime = getMemoryService().ensureRuntime();
   runtime.crossShard = runtime.crossShard || {};
   runtime.crossShard.remotes = runtime.crossShard.remotes || {};
@@ -147,6 +147,7 @@ function writeLocalPayload(): void {
 
 function readRemotePayloads(): void {
   const runtime = ensureCrossShardRuntimeStore();
+  const remotes = runtime.remotes ??= {};
   const knownShards = getKnownShardNames();
   const now = Game.time;
 
@@ -161,7 +162,7 @@ function readRemotePayloads(): void {
       continue;
     }
 
-    runtime.remotes[shardName] = {
+    remotes[shardName] = {
       updatedAt: now,
       remoteUpdatedAt: remote.updatedAt,
       portalCount: remote.portals?.length ?? 0,
@@ -171,9 +172,9 @@ function readRemotePayloads(): void {
     };
   }
 
-  for (const [shardName, meta] of Object.entries(runtime.remotes)) {
+  for (const [shardName, meta] of Object.entries(remotes)) {
     if (now - meta.updatedAt > REMOTE_SHARD_STALE_TTL) {
-      delete runtime.remotes[shardName];
+      delete remotes[shardName];
     }
   }
 }

@@ -1,4 +1,4 @@
-import { inspectConfiguredSynthesisTransferDemand } from "@/runtime/synthesisControl";
+import { inspectConfiguredSynthesisTransferDemand } from "@/runtime/synthesisReadModel";
 import type { ResourceTransferTask } from "@/runtime/logistics/resourceTransferTasks";
 
 export type AutomaticSynthesisTransferDemand =
