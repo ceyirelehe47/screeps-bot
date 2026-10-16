@@ -65,6 +65,15 @@ declare global {
       enabled?: boolean;
       windowTicks?: number;
     };
+    /** 持久化优化默认关闭；已有冷 manifest 即使停用，也必须先恢复完整链。 */
+    memoryStorage?: {
+      permitChain?: {
+        enabled?: boolean;
+        banks?: [number[], number[]];
+        minBucket?: number;
+        minFreeCpu?: number;
+      };
+    };
     cpuProfiler?: {
       enabled?: boolean;
       sampleInterval?: number;

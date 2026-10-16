@@ -315,9 +315,14 @@ describe("主循环异常隔离", () => {
       flush,
     };
     const treasuryEnd = jest.fn();
+    const memoryBegin = jest.fn();
+    const memoryFinish = jest.fn();
     const dependencies: Record<string, unknown> = {
       errorMapper: (next: () => void) => next,
       reportRuntimeError,
+      isPermitChainStorageUnavailableError: () => false,
+      beginMemoryStorageTick: memoryBegin,
+      finishMemoryStorageTick: memoryFinish,
       createTickCpuProfiler: () => profiler,
       getTickContextService: () => ({
         getAllSpawns: () => spawnWorks.map((work, index) => ({ name: `spawn${index}`, room: { name: "E1N1" }, work })),
@@ -336,7 +341,7 @@ describe("主循环异常隔离", () => {
       exports,
       require: () => new Proxy({}, { get: (_target, name: string) => dependencies[name] ?? (() => undefined) }),
     });
-    return { loop: exports.loop!, phases, reportRuntimeError, creepWorks, spawnWorks, treasuryEnd, flush };
+    return { loop: exports.loop!, phases, reportRuntimeError, creepWorks, spawnWorks, treasuryEnd, flush, memoryBegin, memoryFinish };
   }
 
   it("每个 phase 抛错后仍执行后续 phase 和收尾", () => {
@@ -349,6 +354,8 @@ describe("主循环异常隔离", () => {
       expect(runtime.phases).toEqual(failPhase === "treasuryBeginTick"
         ? baseline.phases.filter((phase) => phase !== "treasuryEndTick") : baseline.phases);
       expect(runtime.flush).toHaveBeenCalledTimes(1);
+      expect(runtime.memoryBegin).toHaveBeenCalledTimes(1);
+      expect(runtime.memoryFinish).toHaveBeenCalledTimes(1);
       expect(runtime.reportRuntimeError).toHaveBeenCalledWith(`phase:${failPhase}`, expect.anything());
       if (failPhase !== "spawnWork") expect(runtime.spawnWorks[1]).toHaveBeenCalledTimes(1);
       if (failPhase !== "creepWork") expect(runtime.creepWorks[1]).toHaveBeenCalledTimes(1);
@@ -371,5 +378,6 @@ describe("主循环异常隔离", () => {
     expect(() => runtime.loop()).not.toThrow();
     expect(runtime.treasuryEnd).not.toHaveBeenCalled();
     expect(runtime.reportRuntimeError).toHaveBeenCalledWith("cpuProfiler.flush", expect.anything());
+    expect(runtime.memoryFinish).toHaveBeenCalledTimes(1);
   });
 });

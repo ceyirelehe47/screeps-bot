@@ -10,6 +10,7 @@ import {
   claimTerminalSendOutsideMarketSaleExposure,
 } from "@/runtime/marketSaleExposure";
 import { hasTreasuryTerminalFence } from "@/runtime/treasuryTaskCommitmentBridge";
+import { isPermitChainStorageReady } from "@/runtime/permitChainStorageGuard";
 import { treasuryTerminalNativeGrantAllows, treasuryTerminalSendGrantAllows } from "@/runtime/treasuryTerminalDispatchAuthority";
 
 export type TerminalActionKind = "market_deal" | "terminal_send";
@@ -338,6 +339,7 @@ export function declareMarketActionIntent(
   kind: MarketAccountActionKind = "market_deal",
   roomName?: string,
 ): boolean {
+  if (!isPermitChainStorageReady()) return false;
   syncClaimTick();
   const blocked = corruptPersistentMarketAccountClaim || !!marketAccountClaim;
   appendMarketActionJournal({
@@ -369,6 +371,7 @@ function isSameDirectClaim(
 export function claimPreparedDirectMarketClaims(
   request: PreparedDirectMarketClaimRequest,
 ): boolean {
+  if (!isPermitChainStorageReady()) return false;
   if (
     !isNonEmptyString(request.requestId) ||
     !isValidRoomName(request.roomName) ||
@@ -464,6 +467,7 @@ export function executeTerminalAction(
   kind: TerminalActionKind,
   action: () => ScreepsReturnCode,
 ): ScreepsReturnCode {
+  if (!isPermitChainStorageReady()) return ERR_BUSY;
   syncClaimTick();
   if (blockedByTreasuryT1(roomName, actor)) return ERR_BUSY;
   if (terminalClaims.has(roomName) || terminalActionsInFlight.has(roomName)) return ERR_BUSY;
@@ -487,6 +491,7 @@ export function executeMarketDeal(
   actor: string,
   exposureContext: MarketDealExposureContext,
 ): ScreepsReturnCode {
+  if (!isPermitChainStorageReady()) return ERR_BUSY;
   syncClaimTick();
   if (corruptPersistentMarketAccountClaim || marketAccountClaim) {
     appendMarketActionJournal({
@@ -718,6 +723,7 @@ export function executePreparedDirectMarketDeal(
 export function executeTerminalSend(
   request: TerminalSendRequest,
 ): ScreepsReturnCode {
+  if (!isPermitChainStorageReady()) return ERR_BUSY;
   if (request.actor.startsWith("treasury:") && !treasuryTerminalSendGrantAllows(request.terminal, request.resourceType, request.amount, request.transactionCost, request.destinationRoomName, request.actor)) return ERR_BUSY;
   if (blockedByTreasuryT1(request.terminal.room.name, request.actor, request.destinationRoomName)) {
     return ERR_BUSY;
@@ -767,6 +773,7 @@ function executeAccountMarketAction(
   action: () => ScreepsReturnCode,
   orderId?: string,
 ): ScreepsReturnCode {
+  if (!isPermitChainStorageReady()) return ERR_BUSY;
   syncClaimTick();
   if (corruptPersistentMarketAccountClaim || marketAccountClaim) {
     appendMarketActionJournal({

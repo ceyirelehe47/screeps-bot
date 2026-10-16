@@ -1,5 +1,6 @@
 /** 从 marketSaleOperators.ts 分离的独立职责模块；共享状态仅由此处持有。 */
 import { AUTHORITY_EXECUTOR_SHARD } from "@/config/deployment";
+import { assertPermitChainStorageReady } from "@/runtime/permitChainStorageGuard";
 import { bumpMarketPerformanceCounter } from "@/runtime/marketPerformanceCounters";
 import { normalizeDirectAutomationState, type DirectAutomationState } from "@/runtime/marketSaleDirectAutomation";
 import {
@@ -746,6 +747,7 @@ export let verifiedDataRootTick = -1;
 export let marketDataStateDeepRecoveries = 0;
 
 export function ensureDataState(): MarketSaleDataState {
+  assertPermitChainStorageReady();
   if (!Memory.data) Memory.data = {};
   const rawMarketSaleAutomation = Memory.data.marketSaleAutomation as unknown;
   if (
