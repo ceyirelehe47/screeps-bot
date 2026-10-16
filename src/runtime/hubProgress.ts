@@ -1,4 +1,5 @@
 import { getCreepConfigService, getMemoryService } from "@/runtime/runtimeServices";
+import { hasDiagnosticBudget } from "@/runtime/diagnosticBudget";
 import { HUB_RESERVE_PER_COMPOUND, HUB_RESERVE_PER_ROOM, isHubOnlyReserveCompound, getHubOnlyReserve } from "@/config/hub";
 import type { ResourceTransferTask } from "@/runtime/logistics/resourceTransferTasks";
 import { ensureResourceTransferTaskStore } from "@/runtime/logistics/resourceTransferTasks";
@@ -1440,8 +1441,11 @@ function buildSatelliteCandidates(snapshot: HubProgressSnapshot): ProductionRoom
 export function renderHubProgressOverlays(): HubOverlayRenderStats | null {
   if (typeof RoomVisual === "undefined") return null;
   if (!Memory.cfg?.hub?.enabled) return null;
-
-  if (Game.cpu.bucket < 100) return null;
+  const visuals = Memory.cfg.hub.visuals;
+  if (visuals?.enabled !== true) return null;
+  if (visuals.untilTick !== undefined &&
+    (!Number.isFinite(visuals.untilTick) || Game.time >= visuals.untilTick)) return null;
+  if (!hasDiagnosticBudget(visuals.minBucket)) return null;
 
   const visualState = getHubVisualState();
   const { snapshot, model } = visualState;

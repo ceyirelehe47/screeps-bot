@@ -1,0 +1,82 @@
+{
+  "baseCommit": "a9c1f81a225731a1ca247cfc33a3a2dfd0e7dba2",
+  "deployed": false,
+  "sourceFileCount": 623,
+  "sourceManifestSha256": "30325816398cfff1c21c9d5717013acf7bdf65db7804f8a376b7f943b0d263d3",
+  "allLocalHashesMatch": true,
+  "sourceUnchanged": true,
+  "commands": [
+    {
+      "name": "typecheck-clean",
+      "seconds": 54.108,
+      "exit": 0
+    },
+    {
+      "name": "full-clean",
+      "seconds": 480.374,
+      "exit": 0
+    },
+    {
+      "name": "build",
+      "seconds": 82.451,
+      "exit": 0
+    }
+  ],
+  "tests": {
+    "numTotalTestSuites": 264,
+    "numPassedTestSuites": 264,
+    "numFailedTestSuites": 0,
+    "numTotalTests": 1991,
+    "numPassedTests": 1991,
+    "numFailedTests": 0,
+    "numPendingTests": 0,
+    "numTodoTests": 0
+  },
+  "integrity": "JEST_TEST_INTEGRITY=PASSED",
+  "performance": {
+    "preflight-ab-strict-results.json": {
+      "groups": 7,
+      "framesPerRun": 24,
+      "baselineMedianMs": 3743.624487000023,
+      "candidateMedianMs": 3388.318016999998,
+      "medianReductionPct": 9.639969277004957,
+      "allOutputsEqual": true
+    },
+    "hash-ab-results.json": {
+      "groups": 7,
+      "framesPerRun": 6,
+      "baselineMedianMs": 4844.432686,
+      "candidateMedianMs": 89.28866299997753,
+      "medianReductionPct": 98.15688092316745,
+      "allOutputsEqual": true
+    }
+  },
+  "artifacts": {
+    "dist/main.js": {
+      "bytes": 3433509,
+      "sha256": "6d32b9929919a27c3749035f7416618e1c24acd00ec4b4d8fa225b55b9b44c05"
+    },
+    "dist/main.js.map": {
+      "bytes": 9443207,
+      "sha256": "55b26fba3edd75d77e1db1f86cb1d5c05cc7468979991ff85de2d7a3006e83c9"
+    },
+    "dist/main.js.map.js": {
+      "bytes": 1148536,
+      "sha256": "aff1e68be97858a707ecad243309940af86b18ab6d040d0df96e86995260a0fd"
+    }
+  },
+  "fflateOfficialVerification": {
+    "metadataUrl": "https://registry.npmjs.org/fflate/0.8.3",
+    "version": "0.8.3",
+    "tarball": "https://registry.npmjs.org/fflate/-/fflate-0.8.3.tgz",
+    "registryIntegrity": "sha512-tbZNuJrLwGUp3zshBtdy4W+ORxZuIh8a5ilyIEQDC5rY1f3U20JMry0Ll3WBzU58EZKsEuJFXhb5gwv8CsPvgA==",
+    "lockIntegrity": "sha512-tbZNuJrLwGUp3zshBtdy4W+ORxZuIh8a5ilyIEQDC5rY1f3U20JMry0Ll3WBzU58EZKsEuJFXhb5gwv8CsPvgA==",
+    "downloadedIntegrity": "sha512-tbZNuJrLwGUp3zshBtdy4W+ORxZuIh8a5ilyIEQDC5rY1f3U20JMry0Ll3WBzU58EZKsEuJFXhb5gwv8CsPvgA==",
+    "bytes": 173034,
+    "integrityMatches": true
+  },
+  "transferCleanup": {
+    "removedAppleDoubleFiles": 647,
+    "testFiltersChanged": false
+  }
+}

@@ -37,6 +37,7 @@ import {
   readEmpireInventoryCounters,
   clearEmpireInventoryForTest,
 } from "@/runtime/empireInventoryIndex";
+import { hasDiagnosticBudget } from "@/runtime/diagnosticBudget";
 
 export interface EmpireInventoryShadowMismatch {
   tick: number;
@@ -968,6 +969,7 @@ export function runEmpireInventoryShadowCheck(options?: {
   if (memoryForced) delete runtimeMemory!.inventoryShadowForce;
   const forced = options?.force === true || memoryForced;
   if (!forced) {
+    if (!hasDiagnosticBudget()) return false;
     if (Game.time === state.lastCheckTick) return false;
     if (
       Number.isFinite(state.lastCheckTick) &&

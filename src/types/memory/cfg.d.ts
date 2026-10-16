@@ -51,6 +51,8 @@ declare global {
       enabled?: boolean;
       sampleInterval?: number;
       segmentId?: number;
+      /** 默认 8000；定向诊断可显式设为 0。 */
+      minBucket?: number;
     };
     movementMetrics?: {
       /** 显式观测模式：off（不记录）/ totals（默认，仅累计 totals）/ rooms（含房间分桶，定向诊断用）。 */
@@ -220,6 +222,8 @@ declare global {
     };
     hub?: {
       enabled?: boolean;
+      /** 绘图默认关闭；untilTick 到期自动停止，minBucket 默认 8000。 */
+      visuals?: { enabled?: boolean; untilTick?: number; minBucket?: number };
       hubRoomName?: string;
       /** @deprecated Upgraders are now maintained automatically in every owned room. */
       upgraderRoomNames?: string[];

@@ -25,6 +25,23 @@ function fixture(seed: number, length: number, variant = 0) {
 }
 
 describe("canonical v1 长前缀复用", () => {
+  it("Memory 重解析后的等值大输入复用完整摘要，原地变更仍立即失效", () => {
+    const value = fixture(2, 70000);
+    expect(canonicalStableHashV1(value)).toBe(vectors[6][3]);
+    const reloaded = JSON.parse(JSON.stringify(value));
+    const imul = jest.spyOn(Math, "imul");
+    try {
+      expect(canonicalStableHashV1(reloaded)).toBe(vectors[6][3]);
+      expect(imul).not.toHaveBeenCalled();
+    } finally {
+      imul.mockRestore();
+    }
+    reloaded.payload = `${reloaded.payload.slice(0, -1)}改`;
+    expect(canonicalStableHashV1(reloaded)).not.toBe(vectors[6][3]);
+    reloaded.updatedAt = Infinity;
+    expect(() => canonicalStableHashV1(reloaded)).toThrow(TypeError);
+  });
+
   it.each(vectors)(
     "保持旧摘要：seed=%i length=%i variant=%i",
     (seed, length, variant, expected) => {

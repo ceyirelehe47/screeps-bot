@@ -218,6 +218,27 @@ describe("buildHubProgressSnapshot", () => {
 });
 
 describe("renderHubProgressOverlays", () => {
+  it("默认关闭、低 bucket 暂停、到期即停，均不扫描房间或创建绘图", () => {
+    Game.cpu = { bucket: 10000, limit: 120, tickLimit: 500, getUsed: () => 0 } as typeof Game.cpu;
+    const find = jest.fn(() => []);
+    Game.rooms = { W1N1: { name: "W1N1", controller: { my: true }, find } as any };
+    const hub = Memory.cfg!.hub!;
+    delete hub.visuals;
+    expect(renderHubProgressOverlays()).toBeNull();
+    hub.visuals = { enabled: true };
+    Game.cpu.bucket = 7999;
+    expect(renderHubProgressOverlays()).toBeNull();
+    Game.cpu.bucket = 8000;
+    hub.visuals.untilTick = Game.time;
+    expect(renderHubProgressOverlays()).toBeNull();
+    expect(find).not.toHaveBeenCalled();
+    expect((global as any).__roomVisualCalls).toHaveLength(0);
+    hub.visuals.untilTick = Game.time + 1;
+    expect(renderHubProgressOverlays()).not.toBeNull();
+    Game.time++;
+    expect(renderHubProgressOverlays()).toBeNull();
+  });
+
   beforeEach(() => {
     resetRuntimeServices();
     registerRuntimeServices();
@@ -228,6 +249,7 @@ describe("renderHubProgressOverlays", () => {
         enabled: true,
         hubRoomName: "W1N1",
         targetCompounds: ["XGH2O" as ResourceConstant],
+        visuals: { enabled: true, minBucket: 0 },
       },
     };
     Memory.runtime = {

@@ -3,7 +3,7 @@ import { roleRegistry } from "@/roles";
 import { clearMovementState, moveToTarget, moveToTargetRoom } from "@/roles/shared";
 import { decodeCrossShardTravelerName } from "@/runtime/crossShardNaming";
 import { isPerCreepPhaseTimingEnabled, measureCpuPhase } from "@/runtime/cpuPhaseProfiler";
-import { getCreepConfigService } from "@/runtime/runtimeServices";
+import { getCreepConfigService, getTickContextService } from "@/runtime/runtimeServices";
 import { powerBankTransitOptions } from "@/runtime/powerBankTransit";
 import { recordMovementGauge, recordMovementMetric } from "@/movement/metrics";
 import type { RoleFactory } from "@/types/system";
@@ -220,7 +220,7 @@ export function mountCreep(): void {
           ? powerBankTransitOptions(this, { routePurpose: "normal" })
           : { routePurpose: "combat" });
       } else {
-        const spawns = Object.values(Game.spawns).filter((spawn) => spawn.room.name === retireRoom && spawn.isActive());
+        const spawns = getTickContextService().getSpawnsByRoom(retireRoom).filter((spawn) => spawn.isActive());
         const spawn = this.pos.findClosestByRange(spawns);
         if (spawn) {
           if (this.pos.isNearTo(spawn)) spawn.recycleCreep(this);

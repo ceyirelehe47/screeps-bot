@@ -142,8 +142,24 @@ function installCreeps(
 }
 
 describe("empireInventoryShadow 影子等价验证", () => {
+  it("低 bucket 不执行自动检查，保留强制诊断旁路及恢复后的立即采样", () => {
+    installRooms([]);
+    Game.cpu.bucket = 7999;
+    expect(runEmpireInventoryShadowCheck()).toBe(false);
+    Game.cpu.bucket = 8000;
+    expect(runEmpireInventoryShadowCheck()).toBe(true);
+    Game.cpu.bucket = 0;
+    expect(runEmpireInventoryShadowCheck()).toBe(false);
+    expect(runEmpireInventoryShadowCheck({ force: true })).toBe(true);
+    const runtime = Memory.runtime as NonNullable<Memory["runtime"]> & { inventoryShadowForce?: boolean };
+    runtime.inventoryShadowForce = true;
+    expect(runEmpireInventoryShadowCheck()).toBe(true);
+    expect(runtime.inventoryShadowForce).toBeUndefined();
+  });
+
   beforeEach(() => {
     Game.time = 10_000;
+    Game.cpu = { bucket: 10000, limit: 120, tickLimit: 500, getUsed: () => 0 } as typeof Game.cpu;
     clearEmpireInventoryShadowForTest();
     clearRuntimeServicesForTest();
     Game.creeps = {};
