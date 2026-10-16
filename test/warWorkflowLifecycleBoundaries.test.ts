@@ -24,7 +24,7 @@ describe("War workflow lifecycle architecture boundaries", () => {
   it("keeps raw War owner deletion inside the War domain gateway", () => {
     const offenders: string[] = [];
     for (const file of listProductionTypeScript(path.join(ROOT, "src"))) {
-      if (file.endsWith(path.join("runtime", "warControl.ts"))) continue;
+      if (file.endsWith(path.join("runtime", "warControl.ts")) || file.startsWith(path.join(ROOT, "src/runtime/war") + path.sep)) continue;
       const source = fs.readFileSync(file, "utf8");
       if (/delete\s+Memory(?:\??\.)data(?:\??\.)war\s*\[/.test(source)) offenders.push(file);
       if (/delete\s+warStore\s*\[/.test(source)) offenders.push(file);
@@ -49,7 +49,7 @@ describe("War workflow lifecycle architecture boundaries", () => {
   });
 
   it("keeps the War writer independent from TaskSystem projection modules", () => {
-    const source = read("src/runtime/warControl.ts");
+    const source = [read("src/runtime/warControl.ts"), ...listProductionTypeScript(path.join(ROOT, "src/runtime/war")).map(file => fs.readFileSync(file, "utf8"))].join("\n");
     expect(source).not.toMatch(/from\s+["']@\/runtime\/taskSystem\//);
     expect(source).not.toMatch(/require\(["']@\/runtime\/taskSystem\//);
   });

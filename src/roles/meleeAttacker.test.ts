@@ -5,6 +5,7 @@ jest.mock("@/roles/shared", () => ({
 }));
 
 jest.mock("@/runtime/cpuPhaseProfiler", () => ({
+  ...jest.requireActual("@/runtime/cpuPhaseProfiler"),
   measureCreepDecision: (fn: () => unknown) => fn(),
   measureCreepIntent: (fn: () => unknown) => fn(),
 }));
@@ -15,6 +16,7 @@ jest.mock("@/movement/traffic", () => ({ ...jest.requireActual("@/movement/traff
 
 import { meleeAttackerRole, findWarObjectiveTarget } from "@/roles/meleeAttacker";
 import * as towerDrainPair from "@/roles/towerDrainPair";
+import { setDefaultMapMocks, RealCostMatrix } from "@mock/movement";
 import { createMockPowerBankCreep, MockPos } from "@mock/powerBank";
 
 const { moveToTarget, moveToTargetRoom } = jest.requireMock("@/roles/shared") as {
@@ -72,20 +74,10 @@ describe("meleeAttackerRole 目标策略与移动请求安全边界", () => {
     jest.clearAllMocks();
     moveToTarget.mockReturnValue(OK);
     moveToTargetRoom.mockReturnValue(OK);
-    Game.creeps = {};
+    Game.creeps = {}; setDefaultMapMocks();
     Object.assign(global, {
       PathFinder: {
-        CostMatrix: class {
-          private readonly values = new Map<string, number>();
-
-          public set(x: number, y: number, value: number): void {
-            this.values.set(`${x}:${y}`, value);
-          }
-
-          public get(x: number, y: number): number {
-            return this.values.get(`${x}:${y}`) ?? 0;
-          }
-        },
+        CostMatrix: RealCostMatrix,
         search: jest.fn(),
       },
     });
@@ -449,6 +441,40 @@ describe("meleeAttackerRole 目标策略与移动请求安全边界", () => {
       expect(attacker.attack).toHaveBeenCalledWith(rampart);
       expect(attacker.memory._warBreachTargetId).toBe(rampart.id);
     }
+  });
+
+  it("approach 在四 tick 内复用，几何分桶变化或 TTL 到期立即重算", () => {
+    const wall = hostileStructure(STRUCTURE_WALL, "cache-wall", 10, 10, 1000);
+    const spawn = hostileStructure(STRUCTURE_SPAWN, "cache-spawn", 25, 25, 5000);
+    const attacker = createMockPowerBankCreep("meleeAttacker", { name: "cache-red", roomName: TARGET_ROOM, x: 1, y: 1,
+      memory: { configName: ATTACKER_CONFIG } });
+    const structures = [wall, spawn];
+    attacker.room.find = jest.fn(kind => kind === FIND_STRUCTURES ? structures : kind === FIND_HOSTILE_STRUCTURES ? [spawn] : []) as Room["find"];
+    attacker.attack = jest.fn(() => ERR_NOT_IN_RANGE); Game.creeps = { [attacker.name]: attacker };
+    (PathFinder.search as jest.Mock).mockReturnValue({ path: combatPathThrough([1, 1], [1, 24], [24, 24]), incomplete: false, ops: 100 });
+    const role = meleeAttackerRole(TARGET_ROOM);
+    role.target(attacker); expect(PathFinder.search).toHaveBeenCalledTimes(1);
+    Game.time++; role.target(attacker); expect(PathFinder.search).toHaveBeenCalledTimes(1);
+    Game.time += 3; role.target(attacker); expect(PathFinder.search).toHaveBeenCalledTimes(2);
+    wall.hits = 50001; Game.time++; role.target(attacker); expect(PathFinder.search).toHaveBeenCalledTimes(3);
+  });
+
+  it("预算耗尽时每帧最多评估两个候选，后续帧轮转覆盖其它核心且不授权破墙", () => {
+    const wall = hostileStructure(STRUCTURE_WALL, "budget-wall", 10, 10, 1000);
+    const spawns = Array.from({ length: 5 }, (_, i) => hostileStructure(STRUCTURE_SPAWN, `budget-spawn-${i}`, 25 + i, 25, 5000));
+    const attacker = createMockPowerBankCreep("meleeAttacker", { name: "budget-red", roomName: TARGET_ROOM, x: 1, y: 1,
+      memory: { configName: ATTACKER_CONFIG } });
+    attacker.room.find = jest.fn(kind => kind === FIND_STRUCTURES ? [wall, ...spawns] : kind === FIND_HOSTILE_STRUCTURES ? spawns : []) as Room["find"];
+    Game.creeps = { [attacker.name]: attacker };
+    (PathFinder.search as jest.Mock).mockReturnValue({ path: [], incomplete: true, ops: 2000 });
+    const seen = new Set<string>(); const role = meleeAttackerRole(TARGET_ROOM);
+    for (let i = 0; i < 5; i++) {
+      (PathFinder.search as jest.Mock).mockClear(); role.target(attacker);
+      expect((PathFinder.search as jest.Mock).mock.calls.length).toBeLessThanOrEqual(2);
+      for (const [, goal] of (PathFinder.search as jest.Mock).mock.calls) seen.add(`${goal.pos.x}:${goal.pos.y}`);
+      expect(attacker.attack).not.toHaveBeenCalled(); Game.time++;
+    }
+    expect(seen.size).toBe(5); expect(moveToTarget).not.toHaveBeenCalled();
   });
 
   it("战争目标先选Spawn再选Tower，设施清完才选择远处敌兵", () => {

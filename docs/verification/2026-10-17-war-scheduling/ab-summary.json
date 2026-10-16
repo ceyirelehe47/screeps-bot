@@ -1,0 +1,81 @@
+{
+  "baselineCommit": "1e0b96dbc97db6797a0a022462e86e4a04e888a2",
+  "grid": {
+    "baselineFrames": 274,
+    "candidateFrames": 274,
+    "behaviorEqual": true,
+    "differences": [],
+    "baselineCounters": {
+      "searches": 518,
+      "pathFinderCalls": 218,
+      "findPathCalls": 288,
+      "matrices": 1036,
+      "terrainReads": 7273893
+    },
+    "candidateCounters": {
+      "searches": 384,
+      "pathFinderCalls": 84,
+      "findPathCalls": 288,
+      "matrices": 808,
+      "terrainReads": 151637
+    }
+  },
+  "scheduling": {
+    "baseline": [
+      {
+        "shared": false,
+        "ticks": 10,
+        "creeps": 150,
+        "memoryCreeps": 250,
+        "spawns": 3,
+        "tasks": 3,
+        "gameScans": 70,
+        "memoryScans": 20,
+        "taskWrites": 110,
+        "queueWrites": 270,
+        "telemetryWrites": 10
+      },
+      {
+        "shared": true,
+        "ticks": 10,
+        "creeps": 150,
+        "memoryCreeps": 250,
+        "spawns": 3,
+        "tasks": 3,
+        "gameScans": 90,
+        "memoryScans": 40,
+        "taskWrites": 130,
+        "queueWrites": 120,
+        "telemetryWrites": 10
+      }
+    ],
+    "candidate": [
+      {
+        "shared": false,
+        "ticks": 10,
+        "creeps": 150,
+        "memoryCreeps": 250,
+        "spawns": 3,
+        "tasks": 3,
+        "gameScans": 10,
+        "memoryScans": 0,
+        "taskWrites": 1,
+        "queueWrites": 0,
+        "telemetryWrites": 1
+      },
+      {
+        "shared": true,
+        "ticks": 10,
+        "creeps": 150,
+        "memoryCreeps": 250,
+        "spawns": 3,
+        "tasks": 3,
+        "gameScans": 10,
+        "memoryScans": 0,
+        "taskWrites": 1,
+        "queueWrites": 0,
+        "telemetryWrites": 1
+      }
+    ]
+  }
+}

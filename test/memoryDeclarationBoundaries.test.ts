@@ -89,7 +89,7 @@ const MEMORY_BRANCHES = {
     declaration: "src/types/memory/data.d.ts",
     interfaceName: "ScreepsMemoryData",
     // 新增显式T3耗塔战术；现有NPC与搬运生命周期保持原字段。
-    schemaFingerprint: "1b3cf3342050654c970258d17db74d96d4ca2f6ff908d3c16738d994cd614d56",
+    schemaFingerprint: "6fdcf9cdb611e214203713930fe91702349187ad05619eaf1453b7b2fd84259a",
     imports: [
       "@/runtime/depositHarvest:DepositHarvestTask",
       "@/runtime/permitChainSegments:PermitChainStorageMemory",

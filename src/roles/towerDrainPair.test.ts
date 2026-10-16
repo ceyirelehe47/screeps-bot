@@ -1,6 +1,7 @@
 jest.mock("@/roles/shared", () => ({ clearMovementState: jest.fn(), moveToTarget: jest.fn(() => OK), moveToTargetRoom: jest.fn(() => OK) }));
 jest.mock("@/runtime/powerBankObserver", () => ({ requestCombatObservation: jest.fn(() => true) }));
-jest.mock("@/runtime/cpuPhaseProfiler", () => ({ measureCreepIntent: (fn: () => unknown) => fn(), measureCreepDecision: (fn: () => unknown) => fn() }));
+jest.mock("@/runtime/cpuPhaseProfiler", () => ({
+  ...jest.requireActual("@/runtime/cpuPhaseProfiler"), measureCreepIntent: (fn: () => unknown) => fn(), measureCreepDecision: (fn: () => unknown) => fn() }));
 jest.mock("@/movement/traffic", () => ({ ...jest.requireActual("@/movement/traffic"), moveOffExit: jest.fn(() => OK) }));
 
 import { constrainTowerDrainBreachPath, runTowerDrainPair, towerDrainPairRange, type TowerDrainPairState } from "@/roles/towerDrainPair";

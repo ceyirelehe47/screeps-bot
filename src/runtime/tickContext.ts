@@ -68,6 +68,8 @@ export interface TickContextService {
   getPrimarySpawnByRoom(roomName: string): StructureSpawn | undefined;
   getSpawnsByRoom(roomName: string): StructureSpawn[];
   getCreepsByConfigName(configName: string): Creep[];
+  getSpawningByConfigName(configName: string): Spawning[];
+  reindexCreepConfig(creep: Creep, previousName: string): void;
   getCreepsByRole(role: string): Creep[];
   getCreepsByRoom(roomName: string): Creep[];
   getRoomContext(room: Room | string): RoomTickContext | null;
@@ -76,10 +78,13 @@ export interface TickContextService {
 interface TickContextSnapshot {
   tick: number;
   game?: typeof Game;
+  creepRoot?: typeof Game.creeps;
+  spawnRoot?: typeof Game.spawns;
   myRooms?: Room[];
   allSpawns?: StructureSpawn[];
   allCreeps?: Creep[];
   spawnsByRoom?: Map<string, StructureSpawn[]>;
+  spawningByConfig?: Map<string, Spawning[]>;
   primarySpawnByRoom?: Map<string, StructureSpawn>;
   creepsByConfigName?: Map<string, Creep[]>;
   creepsByRole?: Map<string, Creep[]>;
@@ -278,10 +283,11 @@ export function createTickContextService(): TickContextService {
   };
 
   function ensureCurrentTick(): TickContextSnapshot {
-    if (snapshot.tick !== Game.time || snapshot.game !== Game) {
+    if (snapshot.tick !== Game.time || snapshot.game !== Game || snapshot.creepRoot !== Game.creeps || snapshot.spawnRoot !== Game.spawns) {
       snapshot = {
         tick: Game.time,
         game: Game,
+        creepRoot: Game.creeps, spawnRoot: Game.spawns,
       };
     }
     return snapshot;
@@ -408,6 +414,32 @@ export function createTickContextService(): TickContextService {
       const current = ensureCurrentTick();
       ensureSpawnIndexes(current);
       return current.spawnsByRoom?.get(roomName) || [];
+    },
+
+    reindexCreepConfig(creep: Creep, previousName: string): void {
+      const current = ensureCurrentTick();
+      if (!current.creepsByConfigName) return;
+      current.creepsByConfigName.set(previousName, (current.creepsByConfigName.get(previousName) ?? []).filter(c => c !== creep));
+      const name = creep.memory.configName;
+      if (name) {
+        const members = current.creepsByConfigName.get(name) ?? [];
+        if (!members.includes(creep)) current.creepsByConfigName.set(name, [...members, creep]);
+      }
+    },
+
+    getSpawningByConfigName(configName: string): Spawning[] {
+      const current = ensureCurrentTick();
+      if (!current.spawningByConfig) {
+        current.spawningByConfig = new Map();
+        for (const spawn of ensureAllSpawns(current)) {
+          const spawning = spawn.spawning;
+          const name = spawning && Memory.creeps?.[spawning.name]?.configName;
+          if (!spawning || !name) continue;
+          const entries = current.spawningByConfig.get(name) ?? [];
+          entries.push(spawning); current.spawningByConfig.set(name, entries);
+        }
+      }
+      return current.spawningByConfig.get(configName) ?? [];
     },
 
     getCreepsByConfigName(configName: string): Creep[] {

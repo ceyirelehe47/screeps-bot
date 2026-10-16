@@ -1,3 +1,5 @@
+import { getRefillableHostileTowers } from "@/runtime/combatTowerThreat";
+import { warPartner } from "@/roles/warPartner";
 import { clearMovementState, moveToTarget, moveToTargetRoom } from "@/roles/shared";
 import { prepareCombatBoost } from "@/roles/combatBoosts";
 import { runTowerDrainPair } from "@/roles/towerDrainPair";
@@ -20,20 +22,7 @@ const TARGET_ROOM_MOVE_OPTIONS = {
   ignoreCreeps: false,
 } as const;
 
-function findPairedWarAttacker(creep: Creep): Creep | null {
-  const attackerConfigName = creep.memory._warPartnerConfigName;
-  if (!attackerConfigName) return null;
-
-  for (const name of Object.keys(Game.creeps)) {
-    const candidate = Game.creeps[name];
-    if (candidate === creep) continue;
-    if (candidate.memory.role !== "meleeAttacker") continue;
-    if (candidate.memory.configName !== attackerConfigName) continue;
-    return candidate;
-  }
-
-  return null;
-}
+function findPairedWarAttacker(creep: Creep): Creep | null { return warPartner(creep, "meleeAttacker") ?? null; }
 
 function expectsWarAttacker(creep: Creep): boolean {
   return creep.memory._warDetached !== true
@@ -186,7 +175,7 @@ function moveWithWarAttackerFormation(creep: Creep, targetRoom: string, encodedR
   }
 
   if (!creep.pos.isNearTo(attacker.pos)) {
-    moveToTarget(creep, attacker, 1, TARGET_ROOM_MOVE_OPTIONS);
+    moveToTarget(creep, attacker, 1, { ...TARGET_ROOM_MOVE_OPTIONS, reusePath: !towerDrain && getRefillableHostileTowers(creep.room).length === 0 ? 3 : 0 });
     return true;
   }
 

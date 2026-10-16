@@ -1,3 +1,4 @@
+import { setDefaultMapMocks } from "@mock/movement";
 jest.mock("@/roles/shared", () => ({
   clearMovementState: jest.fn(),
   moveToTarget: jest.fn(() => OK),
@@ -5,6 +6,7 @@ jest.mock("@/roles/shared", () => ({
 }));
 
 jest.mock("@/runtime/cpuPhaseProfiler", () => ({
+  ...jest.requireActual("@/runtime/cpuPhaseProfiler"),
   measureCreepDecision: (fn: () => unknown) => fn(),
   measureCreepIntent: (fn: () => unknown) => fn(),
 }));
@@ -111,6 +113,7 @@ function formationScenario(order: "leader-first" | "healer-first") {
 
 describe("healerRole war duo staging", () => {
   beforeEach(() => {
+    setDefaultMapMocks();
     jest.clearAllMocks();
     moveToTarget.mockReset().mockReturnValue(OK);
     clearCreepMovementStateForTest();

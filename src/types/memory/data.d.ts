@@ -266,6 +266,12 @@ declare global {
     war?: Record<
       string,
       {
+        members?: Record<string, { configName: string; creepNames: string[]; spawnedAt?: number }>;
+        membersVersion?: 1;
+        nextCheckAt?: number;
+        scheduleKey?: string;
+        sharedRetiredAt?: number;
+        entryEffect?: string;
         targetRoom: string;
         sourceRoom: string;
         status: "queued" | "staging" | "clearing" | "downgrading" | "patrol_waiting" | "done" | "failed";
@@ -306,6 +312,7 @@ declare global {
           boostTaskId: string;
           boostGateOpenedAt?: number;
           deployedAt?: number;
+          argsVersion?: string;
           configNames: {
             meleeAttacker: string;
             healer: string;

@@ -1,0 +1,78 @@
+
+
+export const MELEE_COUNT = 2;
+
+export const HEALER_COUNT = 1;
+
+export const DUO_MELEE_COUNT = 1;
+
+export const DUO_HEALER_COUNT = 1;
+
+export const MAX_STAGING_TICKS = 2500;
+
+export const CONTROLLER_ATTACKER_QUEUE_INTERVAL = 1000;
+
+export const WAR_CLEAR_DEBOUNCE_TICKS = 20;
+
+export const DEFAULT_PATROL_INTERVAL_TICKS = 1000;
+
+export const MIN_PATROL_INTERVAL_TICKS = 20;
+
+export const WAR_CONTROLLER_ATTACK_CONFIG_SUFFIX = "controllerAttacker:0";
+
+export const WAR_CONTROLLER_CORE_STRUCTURES = new Set<StructureConstant>([
+  STRUCTURE_SPAWN,
+  STRUCTURE_TOWER,
+]);
+
+export const WAR_T3_TOUGH = RESOURCE_CATALYZED_GHODIUM_ALKALIDE;
+
+export const WAR_T3_ATTACK = RESOURCE_CATALYZED_UTRIUM_ACID;
+
+export const WAR_T3_HEAL = RESOURCE_CATALYZED_LEMERGIUM_ALKALIDE;
+
+export const WAR_T3_MOVE = RESOURCE_CATALYZED_ZYNTHIUM_ALKALIDE;
+
+export const T3_ATTACKER_BODY: BodyPartConstant[] = [
+  TOUGH, TOUGH, TOUGH, TOUGH, TOUGH, TOUGH, TOUGH, TOUGH, TOUGH, TOUGH,
+  ATTACK, ATTACK, ATTACK, ATTACK, ATTACK, ATTACK, ATTACK, ATTACK, ATTACK, ATTACK,
+  ATTACK, ATTACK, ATTACK, ATTACK, ATTACK, ATTACK, ATTACK, ATTACK, ATTACK, ATTACK,
+  ATTACK, ATTACK, ATTACK, ATTACK, ATTACK, ATTACK, ATTACK, ATTACK, ATTACK, ATTACK,
+  MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE,
+];
+
+export const T3_HEALER_BODY: BodyPartConstant[] = [
+  TOUGH, TOUGH, TOUGH, TOUGH, TOUGH, TOUGH, TOUGH, TOUGH, TOUGH, TOUGH,
+  HEAL, HEAL, HEAL, HEAL, HEAL, HEAL, HEAL, HEAL, HEAL, HEAL,
+  HEAL, HEAL, HEAL, HEAL, HEAL, HEAL, HEAL, HEAL, HEAL, HEAL,
+  MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE,
+];
+
+export const TOWER_DRAIN_ATTACKER_BODY: BodyPartConstant[] = [
+  ...Array<BodyPartConstant>(25).fill(ATTACK),
+  ...Array<BodyPartConstant>(25).fill(MOVE),
+];
+
+export const TOWER_DRAIN_HEALER_BODY: BodyPartConstant[] = [
+  ...Array<BodyPartConstant>(20).fill(HEAL),
+  ...Array<BodyPartConstant>(25).fill(MOVE),
+  ...Array<BodyPartConstant>(5).fill(HEAL),
+];
+
+export const T3_ATTACKER_BOOSTS: ResourceConstant[] = [WAR_T3_MOVE, WAR_T3_TOUGH, WAR_T3_ATTACK];
+
+export const T3_HEALER_BOOSTS: ResourceConstant[] = [WAR_T3_MOVE, WAR_T3_TOUGH, WAR_T3_HEAL];
+
+export const T3_BOOST_PARTS: Partial<Record<ResourceConstant, BodyPartConstant>> = {
+  [WAR_T3_MOVE]: MOVE,
+  [WAR_T3_TOUGH]: TOUGH,
+  [WAR_T3_ATTACK]: ATTACK,
+  [WAR_T3_HEAL]: HEAL,
+};
+
+export const T3_DUO_BOOST_AMOUNTS = new Map<ResourceConstant, number>([
+  [WAR_T3_TOUGH, 20 * LAB_BOOST_MINERAL],
+  [WAR_T3_ATTACK, 30 * LAB_BOOST_MINERAL],
+  [WAR_T3_HEAL, 20 * LAB_BOOST_MINERAL],
+  [WAR_T3_MOVE, 18 * LAB_BOOST_MINERAL],
+]);

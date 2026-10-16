@@ -1,3 +1,5 @@
+import { warGeometry, warTerrain, warTerrainVersion } from "@/roles/warGeometry";
+import { warPartner } from "@/roles/warPartner";
 import {
   getHostileTowers as activeTowers,
   getHostileTowerThreats as towerThreats,
@@ -7,7 +9,7 @@ import {
 } from "@/runtime/combatTowerThreat";
 import { clearMovementState, moveToTarget } from "@/roles/shared";
 import { isWalkableConstructionSite, isWalkableStructure } from "@/movement/common";
-import { measureCreepIntent } from "@/runtime/cpuPhaseProfiler";
+import { measureCreepIntent, measureCreepDecision, measureSampledCpuPhase } from "@/runtime/cpuPhaseProfiler";
 import { damageAfterTough } from "@/runtime/powerBankCapability";
 import { requestCombatObservation } from "@/runtime/powerBankObserver";
 import { isRebuildStructureRelevant } from "@/runtime/warRebuildScope";
@@ -32,6 +34,7 @@ export interface TowerDrainPairState {
 
 const MOVE_OPTIONS = { plainCost: 2, swampCost: 8, reusePath: 0, maxRooms: 1, ignoreCreeps: false, avoidExitTiles: false } as const;
 const RETREAT_RATIO = 0.75;
+const plainSwamps = new WeakMap<Uint8Array, number[]>();
 // 退路预算至少保留1000HP，并按可能受损后的真实MOVE/HEAL重算。
 const DAMAGE_RESERVE = 1000;
 
@@ -40,10 +43,14 @@ type DrainMemory = CreepMemory & { _warTowerDrain?: TowerDrainPairState };
 function plainOnlyMatrix(roomName: string, matrix: CostMatrix, force = false): CostMatrix {
   const visible = Game.rooms[roomName];
   if (!force && visible && refillableTowers(visible).length === 0) return matrix;
-  const terrain = Game.map.getRoomTerrain(roomName);
-  // 道路覆盖沼泽后按道路疲劳结算，不能把现成通道一起封掉。
-  const roads = new Set(Game.rooms[roomName]?.find(FIND_STRUCTURES).filter((s) => s.structureType === STRUCTURE_ROAD).map((s) => s.pos.x * 50 + s.pos.y) ?? []);
-  for (let x = 0; x < 50; x++) for (let y = 0; y < 50; y++) if (terrain.get(x, y) === TERRAIN_MASK_SWAMP && !roads.has(x * 50 + y)) matrix.set(x, y, 0xff);
+  const visibleGeometry = visible ? warGeometry(visible, true) : undefined;
+  let tiles = visibleGeometry?.swampTiles;
+  if (!tiles) {
+    const terrain = warTerrain(roomName);
+    tiles = plainSwamps.get(terrain);
+    if (!tiles) { tiles = []; for (let i = 0; i < 2500; i++) if (terrain[i] === TERRAIN_MASK_SWAMP) tiles.push(i); plainSwamps.set(terrain, tiles); }
+  }
+  for (const at of tiles) matrix.set(Math.floor(at / 50), at % 50, 0xff);
   return matrix;
 }
 
@@ -130,33 +137,50 @@ function damageAt(towers: StructureTower[], tile: { x: number; y: number }): num
 
 const UNREACHABLE = 0xffff;
 
-function exitPaths(room: Room, state: TowerDrainPairState, entry: { x: number; y: number }, towers: StructureTower[]) {
+type ExitPaths = { distances: Uint16Array; next: Uint16Array; worstDamage: Float64Array; peaks: Float64Array[] };
+const towerDamageMaps = new Map<string, Float64Array>();
+function towerDamageKey(tower: StructureTower): string { return `${tower.id}:${tower.pos.roomName}:${tower.pos.x}:${tower.pos.y}:${tower.effects?.filter(e => e.effect === PWR_OPERATE_TOWER && e.ticksRemaining > 0).map(e => e.effect === PWR_OPERATE_TOWER ? e.level : undefined).join("|")}`; }
+function towerDamageMap(tower: StructureTower): Float64Array {
+  const key = towerDamageKey(tower); const old = towerDamageMaps.get(key); if (old) return old;
+  const values = new Float64Array(2500);
+  for (let x = 0; x < 50; x++) for (let y = 0; y < 50; y++) values[x * 50 + y] = towerPowerAt(tower, { x, y });
+  if (towerDamageMaps.size >= 32) towerDamageMaps.delete(towerDamageMaps.keys().next().value!);
+  towerDamageMaps.set(key, values); return values;
+}
+const exitFrames = new WeakMap<Game, { tick: number; paths: Map<string, ExitPaths> }>();
+function exitPaths(room: Room, state: TowerDrainPairState, entry: { x: number; y: number }, towers: StructureTower[]): ExitPaths {
+  let exitMemo = exitFrames.get(Game);
+  if (!exitMemo || exitMemo.tick !== Game.time) { exitMemo = { tick: Game.time, paths: new Map() }; exitFrames.set(Game, exitMemo); }
+  const key = `${room.name}:${warGeometry(room, true).signature}:${state.exitDirection}:${state.strictT3}:${entry.x}:${entry.y}:${towers.map(towerDamageKey).join(";")}:${room.find(FIND_HOSTILE_CREEPS).map(c => `${c.id}:${c.pos.x}:${c.pos.y}`).join(";")}`;
+  const old = exitMemo.paths.get(key); if (old) return old;
+  const value = measureSampledCpuPhase("war.exitPaths", () => measureCreepDecision(() => computeExitPaths(room, state, entry, towers)));
+  if (exitMemo.paths.size >= 32) exitMemo.paths.delete(exitMemo.paths.keys().next().value!);
+  exitMemo.paths.set(key, value); return value;
+}
+function computeExitPaths(room: Room, state: TowerDrainPairState, entry: { x: number; y: number }, towers: StructureTower[]): ExitPaths {
   const distances = new Uint16Array(2500).fill(UNREACHABLE);
   const next = new Uint16Array(2500).fill(UNREACHABLE);
   const worstDamage = new Float64Array(2500);
   const tileDamage = new Float64Array(2500).fill(-1);
   const peaks = towers.map(() => new Float64Array(2500));
-  const perTower = towers.map(() => new Float64Array(2500).fill(-1));
-  const blocked = new Uint8Array(2500);
-  const terrain = Game.map.getRoomTerrain(room.name);
-  const roads = new Set(room.find(FIND_STRUCTURES).filter((s) => s.structureType === STRUCTURE_ROAD).map((s) => s.pos.x * 50 + s.pos.y));
+  const perTower = towers.map(towerDamageMap);
+  const geometry = warGeometry(room);
+  const blocked = geometry.blocked.slice();
   const allowSwamps = towers.length === 0 && !state.strictT3;
   const index = (x: number, y: number): number => x * 50 + y;
   const damage = (x: number, y: number): number => {
     const at = index(x, y);
     if (tileDamage[at] < 0) tileDamage[at] = towers.reduce((sum, tower, i) => {
-      perTower[i][at] = towerPowerAt(tower, { x, y });
       return sum + perTower[i][at];
     }, 0);
     return tileDamage[at];
   };
+  if (!allowSwamps) for (const at of geometry.swampTiles) blocked[at] = 1;
   for (let x = 0; x < 50; x++) for (let y = 0; y < 50; y++) {
     const atExit = x === 0 || x === 49 || y === 0 || y === 49;
     const onReturnSide = state.exitDirection === LEFT ? x === 0 : state.exitDirection === RIGHT ? x === 49 : state.exitDirection === TOP ? y === 0 : y === 49;
-    if ((terrain.get(x, y) !== 0 && !(terrain.get(x, y) === TERRAIN_MASK_SWAMP && (allowSwamps || roads.has(index(x, y))))) || (atExit && (!onReturnSide || x === 0 && y === 0 || x === 49 && y === 49 || x === 0 && y === 49 || x === 49 && y === 0))) blocked[index(x, y)] = 1;
+    if (atExit && (!onReturnSide || x === 0 && y === 0 || x === 49 && y === 49 || x === 0 && y === 49 || x === 49 && y === 0)) blocked[index(x, y)] = 1;
   }
-  for (const structure of room.find(FIND_STRUCTURES)) if (!isWalkableStructure(structure)) blocked[index(structure.pos.x, structure.pos.y)] = 1;
-  for (const natural of [...room.find(FIND_SOURCES), ...room.find(FIND_MINERALS), ...room.find(FIND_DEPOSITS)]) blocked[index(natural.pos.x, natural.pos.y)] = 1;
   for (const hostile of room.find(FIND_HOSTILE_CREEPS)) blocked[index(hostile.pos.x, hostile.pos.y)] = 1;
   const queue = new Uint16Array(2500);
   const start = index(entry.x, entry.y);
@@ -220,7 +244,7 @@ export function constrainTowerDrainBreachPath(creep: Creep, roomName: string, ma
   const room = Game.rooms[roomName];
   if (!state || state.phase !== "breaching" || state.targetRoom !== roomName || !state.attackerEntry || !room) return matrix;
   plainOnlyMatrix(roomName, matrix, state.strictT3 === true);
-  const partner = Object.values(Game.creeps).find((candidate) => candidate.memory.configName === creep.memory._warPartnerConfigName && !candidate.memory._warDetached);
+  const partner = warPartner(creep);
   if (!partner) return matrix;
   const attacker = creep.memory.role === "meleeAttacker" ? creep : partner;
   const healer = creep.memory.role === "healer" ? creep : partner;
@@ -292,28 +316,19 @@ function walkable(roomName: string, tile: { x: number; y: number }, room: Room |
 type EntryTile = { x: number; y: number };
 interface EntryCandidate { attacker: EntryTile; healer: EntryTile; score: number; open: boolean; safe: boolean }
 
-let entryTerrainCache: { game: Game; tick: number; map: GameMap; reader: GameMap["getRoomTerrain"]; rooms: Map<string, Uint8Array> } | undefined;
-
-/** 仅复用本帧不可变的原生地形；塔、墙、工地、守军和最终许可仍每次重读。 */
-function entryTerrain(roomName: string): Uint8Array {
-  if (!entryTerrainCache || entryTerrainCache.game !== Game || entryTerrainCache.tick !== Game.time
-    || entryTerrainCache.map !== Game.map || entryTerrainCache.reader !== Game.map.getRoomTerrain) {
-    entryTerrainCache = { game: Game, tick: Game.time, map: Game.map, reader: Game.map.getRoomTerrain, rooms: new Map() };
-  }
-  const cached = entryTerrainCache.rooms.get(roomName);
-  if (cached) return cached;
-  const terrain = Game.map.getRoomTerrain(roomName);
-  const values = new Uint8Array(2500);
-  for (let x = 0; x < 50; x++) for (let y = 0; y < 50; y++) values[x * 50 + y] = terrain.get(x, y);
-  if (entryTerrainCache.rooms.size >= 16) entryTerrainCache.rooms.delete(entryTerrainCache.rooms.keys().next().value!);
-  entryTerrainCache.rooms.set(roomName, values);
-  return values;
-}
+function entryTerrain(roomName: string): Uint8Array { return warTerrain(roomName); }
 
 /** 内区连通性只作入口选择依据，不缓存或代替塔伤、身体和执行矩阵许可。 */
+const entryGraphs = new Map<string, { canStand(tile: EntryTile): boolean; component(tile: EntryTile): number }>();
 function entryRoomGraph(roomName: string, room: Room | undefined, forcePlain = false) {
+  const structuresKey = room ? warGeometry(room, true).signature : "unseen";
+  const plain = forcePlain || !!room && refillableTowers(room).length > 0;
+  const sites = room?.find(FIND_CONSTRUCTION_SITES) ?? [];
+  const hostiles = room?.find(FIND_HOSTILE_CREEPS) ?? [];
+  const key = `${warTerrainVersion(roomName)}:${roomName}:${structuresKey}:${plain}:${room?.controller?.pos?.x}:${room?.controller?.pos?.y}:${sites.filter(s => s.my && !isWalkableConstructionSite(s)).map(s => `${s.pos.x}:${s.pos.y}`).sort().join("|")}:${hostiles.map(c => `${c.pos.x}:${c.pos.y}`).sort().join("|")}`;
+  const old = entryGraphs.get(key); if (old) return old;
   const terrain = entryTerrain(roomName);
-  const structures = room?.find(FIND_STRUCTURES) ?? [];
+  const structures = room ? warGeometry(room).structures : [];
   const roads = new Set(structures.filter(s => s.structureType === STRUCTURE_ROAD).map(s => s.pos.x * 50 + s.pos.y));
   const allowSwamps = !forcePlain && (!room || refillableTowers(room).length === 0);
   const passable = new Uint8Array(2500);
@@ -347,10 +362,12 @@ function entryRoomGraph(roomName: string, room: Room | undefined, forcePlain = f
       }
     }
   }
-  return {
+  const result = {
     canStand: (tile: EntryTile): boolean => tile.x >= 0 && tile.x < 50 && tile.y >= 0 && tile.y < 50 && passable[tile.x * 50 + tile.y] === 1,
     component: (tile: EntryTile): number => tile.x >= 1 && tile.x <= 48 && tile.y >= 1 && tile.y <= 48 ? components[tile.x * 50 + tile.y] : 0,
   };
+  if (entryGraphs.size >= 32) entryGraphs.delete(entryGraphs.keys().next().value!);
+  entryGraphs.set(key, result); return result;
 }
 
 function evaluateEntries(state: TowerDrainPairState, attacker: Creep, healer: Creep, room: Room) {
@@ -523,7 +540,7 @@ function publish(state: TowerDrainPairState, attacker: Creep, healer?: Creep): v
 function withdraw(creep: Creep, state: TowerDrainPairState, entry: { x: number; y: number } | undefined): void {
   if (!entry || !state.retreatRoom || !state.exitDirection) { state.blocker = "missing_exit"; return; }
   if (creep.room.name === state.targetRoom) {
-    const partner = Object.values(Game.creeps).find((actor) => actor.memory.configName === creep.memory._warPartnerConfigName);
+    const partner = warPartner(creep);
     if (partner?.room.name === state.targetRoom && towerDrainPairRange(creep.pos, partner.pos) <= 1 && (creep.fatigue > 0 || partner.fatigue > 0)) return;
     if (!walkable(state.targetRoom, entry, Game.rooms[state.targetRoom])) { state.blocker = "exit_blocked"; return; }
     if (range(creep.pos, entry) === 0) moveAcross(creep, state.exitDirection);
@@ -572,8 +589,8 @@ function leaveBreachExit(creep: Creep, attacker: Creep, healer: Creep, state: To
 export function runTowerDrainPair(creep: Creep, targetRoom: string, partnerConfigName: string, strictT3 = false): boolean {
   requestCombatObservation(targetRoom);
   const red = creep.memory.role === "meleeAttacker";
-  const partner = Object.values(Game.creeps).find((candidate) => candidate.memory.configName === partnerConfigName && candidate.memory.role === (red ? "healer" : "meleeAttacker") && !candidate.memory._warDetached && !candidate.spawning);
-  const attacker = red ? creep : partner;
+  const partner = warPartner(creep, red ? "healer" : "meleeAttacker", partnerConfigName);
+  const attacker = red ? creep : partner?.spawning ? undefined : partner;
   const healer = red ? partner : creep;
   let state = (attacker?.memory as DrainMemory | undefined)?._warTowerDrain ?? (creep.memory as DrainMemory)._warTowerDrain;
   if (!state || state.targetRoom !== targetRoom) state = { targetRoom, phase: "approach" };

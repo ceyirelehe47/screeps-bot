@@ -1,3 +1,4 @@
+import { appendFileSync } from "node:fs";
 import { healerRole } from "@/roles/healer";
 import { meleeAttackerRole } from "@/roles/meleeAttacker";
 import { towerDrainPairRange } from "@/roles/towerDrainPair";
@@ -39,6 +40,12 @@ interface DuoFrame {
 }
 let world: DuoWorld;
 let nextScenarioTick = 2000;
+let matrixConstructions = 0;
+class CountingCostMatrix extends RealCostMatrix {
+  constructor() { super(); matrixConstructions++; }
+  public clone(): CountingCostMatrix { const copy = new CountingCostMatrix(); for (let x = 0; x < 50; x++) for (let y = 0; y < 50; y++) copy.set(x, y, this.get(x, y)); return copy; }
+}
+
 
 class GridPosition extends MockPos {
   public getRangeTo(target: any, y?: number): number {
@@ -153,6 +160,8 @@ class DuoWorld {
   public readonly searches: SearchRecord[] = [];
   public readonly frames: DuoFrame[] = [];
   public findPathCalls = 0;
+  public pathFinderCalls = 0;
+  public terrainReads = 0;
   private pending = new Map<Creep, DirectionConstant>();
   private attacks: Array<{ target: Structure; damage: number }> = [];
   private heals: Creep[] = [];
@@ -176,13 +185,13 @@ class DuoWorld {
   }
 
   public constructor(public readonly order: Order, private readonly scenario?: DrainScenario) {
-    world = this;
-    Object.assign(global, { RoomPosition: GridPosition, PathFinder: { CostMatrix: RealCostMatrix, search: gridSearch } });
+    world = this; matrixConstructions = 0;
+    Object.assign(global, { RoomPosition: GridPosition, PathFinder: { CostMatrix: CountingCostMatrix, search: (...args: Parameters<typeof gridSearch>) => { this.pathFinderCalls++; return gridSearch(...args); } } });
     Game.time = nextScenarioTick;
     nextScenarioTick += 100;
     Game.creeps = {}; Game.powerCreeps = {}; Game.spawns = {};
     Memory.cfg = {}; Memory.runtime = {}; Memory.data = {}; Memory.creeps = {};
-    const roomFor = (name: string): Room => ({ name, getTerrain: () => ({ get: (x: number, y: number) => this.terrain(x, y, name) }),
+    const roomFor = (name: string): Room => ({ name, getTerrain: () => ({ get: (x: number, y: number) => { this.terrainReads++; return this.terrain(x, y, name); } }),
       lookAt: (x: number, y: number) => [
         { type: LOOK_TERRAIN, terrain: this.terrain(x, y, name) === TERRAIN_MASK_WALL ? "wall" : "plain" },
         ...this.structures.filter(value => value.pos.roomName === name && value.pos.x === x && value.pos.y === y)
@@ -201,7 +210,7 @@ class DuoWorld {
     this.room = roomFor(ROOM);
     Game.rooms = { [ROOM]: this.room };
     if (scenario?.geometry.alternateLeft !== undefined) Game.rooms[RETREAT] = roomFor(RETREAT);
-    Game.map = { ...Game.map, getRoomTerrain: (name: string) => ({ get: (x: number, y: number) => this.terrain(x, y, name) }), getRoomStatus: () => ({ status: "normal", timestamp: null }),
+    Game.map = { ...Game.map, getRoomTerrain: (name: string) => ({ get: (x: number, y: number) => { this.terrainReads++; return this.terrain(x, y, name); } }), getRoomStatus: () => ({ status: "normal", timestamp: null }),
       describeExits: (name: string) => scenario ? name === ROOM ? { [TOP]: RETREAT } : name === RETREAT ? { [BOTTOM]: ROOM } : null : null,
       getWorldSize: () => 200 } as GameMap;
     if (scenario) {
@@ -322,6 +331,11 @@ class DuoWorld {
       Object.values(Game.creeps).filter(value => value !== this.red && value !== this.green)
         .map(value => [value.name, value.pos.roomName, value.pos.x, value.pos.y, value.fatigue]),
     ]) });
+    if (process.env.WAR_AB_TRACE) appendFileSync(process.env.WAR_AB_TRACE, JSON.stringify({
+      test: expect.getState().currentTestName, frame: this.frames[this.frames.length - 1],
+      attacks: (this.red.attack as jest.Mock).mock.calls.map(([target]: [Structure]) => target.id),
+      searches: this.searches.length, pathFinderCalls: this.pathFinderCalls, findPathCalls: this.findPathCalls, matrices: matrixConstructions, terrainReads: this.terrainReads,
+    }) + "\n");
     Game.time += 1;
   }
 
