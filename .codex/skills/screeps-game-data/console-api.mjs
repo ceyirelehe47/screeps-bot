@@ -95,7 +95,6 @@ async function apiJson(config, route, options = {}) {
     headers: {
       "Content-Type": "application/json",
       "X-Token": config.token,
-      "X-Username": config.token,
       ...options.headers,
     },
   });
@@ -151,7 +150,6 @@ async function readMemoryPath(config, shard, path) {
   const response = await fetch(url, {
     headers: {
       "X-Token": config.token,
-      "X-Username": config.token,
     },
   });
   const body = await response.json();

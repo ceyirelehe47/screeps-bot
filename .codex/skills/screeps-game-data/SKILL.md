@@ -84,7 +84,7 @@ Screeps 官方文档说明，普通浏览器和 Steam 客户端请求不受此�
 需要估算当前窗口何时恢复时，从仓库根目录执行一次受限状态请求，不输出凭据：
 
 ```bash
-node -e 'const fs=require("node:fs"); const s=JSON.parse(fs.readFileSync(".secret.json","utf8")); const t=process.env.SCREEPS_TOKEN||s.main?.token; fetch("https://screeps.com/api/user/name",{headers:{"X-Token":t,"X-Username":t}}).then(async r=>{const reset=r.headers.get("x-ratelimit-reset"); const now=Math.floor(Date.now()/1000); console.log(JSON.stringify({status:r.status,limit:r.headers.get("x-ratelimit-limit"),remaining:r.headers.get("x-ratelimit-remaining"),reset,secondsUntilReset:reset?Math.max(0,Number(reset)-now):null,body:(await r.text()).slice(0,80)},null,2));})'
+node -e 'const fs=require("node:fs"); const s=JSON.parse(fs.readFileSync(".secret.json","utf8")); const t=process.env.SCREEPS_TOKEN||s.main?.token; fetch("https://screeps.com/api/user/name",{headers:{"X-Token":t}}).then(async r=>{const reset=r.headers.get("x-ratelimit-reset"); const now=Math.floor(Date.now()/1000); console.log(JSON.stringify({status:r.status,limit:r.headers.get("x-ratelimit-limit"),remaining:r.headers.get("x-ratelimit-remaining"),reset,secondsUntilReset:reset?Math.max(0,Number(reset)-now):null,body:(await r.text()).slice(0,80)},null,2));})'
 ```
 
 用户询问还需等待多久时，使用 `secondsUntilReset`。响应头缺失但响应体包含 `retry after Nms` 时换算为秒/分钟。不把 token 放入 `curl` 参数、日志、聊天或命令输出。

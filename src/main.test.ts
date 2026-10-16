@@ -87,10 +87,7 @@ describe("main loop phase ordering", () => {
       }
       const callee = statement.expression.expression;
       if (
-        !ts.isPropertyAccessExpression(callee) ||
-        !ts.isIdentifier(callee.expression) ||
-        callee.expression.text !== "cpuProfiler" ||
-        callee.name.text !== "measure"
+        !ts.isIdentifier(callee) || callee.text !== "runPhase"
       ) {
         continue;
       }
@@ -183,7 +180,11 @@ describe("main loop phase ordering", () => {
       return;
     }
     expect(entityCallback.body.statements).toHaveLength(1);
-    const wrapperStatement = entityCallback.body.statements[0];
+    const entityGuard = entityCallback.body.statements[0];
+    expect(ts.isTryStatement(entityGuard) && entityGuard.catchClause !== undefined).toBe(true);
+    if (!ts.isTryStatement(entityGuard)) return;
+    expect(entityGuard.catchClause!.getText(mainAst)).toContain("reportRuntimeError");
+    const wrapperStatement = entityGuard.tryBlock.statements[0];
     expect(ts.isExpressionStatement(wrapperStatement)).toBe(true);
     if (!ts.isExpressionStatement(wrapperStatement)) {
       return;
@@ -243,14 +244,14 @@ describe("main loop phase ordering", () => {
     expect(registrationCalls.every(({ index }) => index < gameLoopIndex)).toBe(true);
   });
 
-  it("keeps fail-fast propagation and flush even if Treasury cleanup throws", () => {
+  it("isolates phase failures and flushes even if Treasury cleanup throws", () => {
     const gameLoop = getGameLoopDeclaration();
     const lifecycleGuard = gameLoop.body!.statements.find(ts.isTryStatement);
     expect(lifecycleGuard?.finallyBlock).toBeDefined();
-    expect(containsCatchClause(gameLoop)).toBe(false);
+    expect(containsCatchClause(gameLoop)).toBe(true);
     expect(countCalls(gameLoop, "cpuProfiler.flush")).toBe(1);
     expect(lifecycleGuard!.finallyBlock!.getText(mainAst)).toContain(
-      'cpuProfiler.measure("treasuryEndTick", endTreasuryProductionTick)',
+      'runPhase("treasuryEndTick", endTreasuryProductionTick)',
     );
     const cleanupGuard = lifecycleGuard!.finallyBlock!.statements.find(ts.isTryStatement);
     expect(cleanupGuard?.finallyBlock).toBeDefined();
@@ -264,7 +265,7 @@ describe("main loop phase ordering", () => {
       "utf-8",
     );
     expect(mainSrc).toContain(
-      'cpuProfiler.measure("pixelGenerator", runPixelGenerator)',
+      'runPhase("pixelGenerator", runPixelGenerator)',
     );
     expect(pixelSrc).toContain(
       "PIXEL_GENERATOR_PERMANENTLY_DISABLED = true",
@@ -290,5 +291,85 @@ describe("main loop phase ordering", () => {
       wrapper: "measureCreep",
       wrapperPrefixArguments: ["creep"],
     });
+  });
+});
+
+describe("主循环异常隔离", () => {
+  // 运行实际 main.ts 编排；隔离游戏模块副作用，用依赖替身注入异常。
+  function loadLoop(options: { failPhase?: string; begin?: boolean; flushThrows?: boolean } = {}) {
+    const phases: string[] = [];
+    const reportRuntimeError = jest.fn();
+    const creepWorks = [jest.fn(() => { throw new Error("creep 失败"); }), jest.fn()];
+    const spawnWorks = [jest.fn(() => { throw "spawn 失败"; }), jest.fn()];
+    const flush = jest.fn(() => {
+      if (options.flushThrows) throw new Error("flush 失败");
+    });
+    const profiler = {
+      measure: (phase: string, work: () => unknown) => {
+        phases.push(phase);
+        if (phase === options.failPhase) throw new Error(`${phase} 失败`);
+        return work();
+      },
+      measureCreep: (_creep: Creep, work: () => void) => work(),
+      measureRoomPhase: (_phase: string, _room: string, work: () => void) => work(),
+      flush,
+    };
+    const treasuryEnd = jest.fn();
+    const dependencies: Record<string, unknown> = {
+      errorMapper: (next: () => void) => next,
+      reportRuntimeError,
+      createTickCpuProfiler: () => profiler,
+      getTickContextService: () => ({
+        getAllSpawns: () => spawnWorks.map((work, index) => ({ name: `spawn${index}`, room: { name: "E1N1" }, work })),
+        getAllCreeps: () => creepWorks.map((work, index) => ({ name: `creep${index}`, work })),
+      }),
+      beginTreasuryProductionTick: () => options.begin ?? true,
+      endTreasuryProductionTick: treasuryEnd,
+    };
+    const exports: { loop?: () => void } = {};
+    const source = readFileSync(resolve(__dirname, "main.ts"), "utf8");
+    const compiled = ts.transpileModule(source, {
+      compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2019 },
+    }).outputText;
+    const { runInNewContext } = require("node:vm") as typeof import("node:vm");
+    runInNewContext(compiled, {
+      exports,
+      require: () => new Proxy({}, { get: (_target, name: string) => dependencies[name] ?? (() => undefined) }),
+    });
+    return { loop: exports.loop!, phases, reportRuntimeError, creepWorks, spawnWorks, treasuryEnd, flush };
+  }
+
+  it("每个 phase 抛错后仍执行后续 phase 和收尾", () => {
+    const baseline = loadLoop();
+    baseline.loop();
+    for (const failPhase of baseline.phases) {
+      const runtime = loadLoop({ failPhase });
+      expect(() => runtime.loop()).not.toThrow();
+      // begin 异常时没有成功开启 Treasury 生命周期，因此不调用 end。
+      expect(runtime.phases).toEqual(failPhase === "treasuryBeginTick"
+        ? baseline.phases.filter((phase) => phase !== "treasuryEndTick") : baseline.phases);
+      expect(runtime.flush).toHaveBeenCalledTimes(1);
+      expect(runtime.reportRuntimeError).toHaveBeenCalledWith(`phase:${failPhase}`, expect.anything());
+      if (failPhase !== "spawnWork") expect(runtime.spawnWorks[1]).toHaveBeenCalledTimes(1);
+      if (failPhase !== "creepWork") expect(runtime.creepWorks[1]).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it("单只 creep 和单个 spawn 异常不阻断其它实体，并记录身份", () => {
+    const runtime = loadLoop();
+    runtime.loop();
+    expect(runtime.spawnWorks[1]).toHaveBeenCalledTimes(1);
+    expect(runtime.creepWorks[1]).toHaveBeenCalledTimes(1);
+    expect(runtime.reportRuntimeError).toHaveBeenCalledWith("spawn:spawn0", "spawn 失败");
+    expect(runtime.reportRuntimeError).toHaveBeenCalledWith("creep:creep0", expect.anything());
+    expect(runtime.treasuryEnd).toHaveBeenCalledTimes(1);
+    expect(runtime.flush).toHaveBeenCalledTimes(1);
+  });
+
+  it("未开启 Treasury 时不结束生命周期，flush 自身异常也可报告", () => {
+    const runtime = loadLoop({ begin: false, flushThrows: true });
+    expect(() => runtime.loop()).not.toThrow();
+    expect(runtime.treasuryEnd).not.toHaveBeenCalled();
+    expect(runtime.reportRuntimeError).toHaveBeenCalledWith("cpuProfiler.flush", expect.anything());
   });
 });

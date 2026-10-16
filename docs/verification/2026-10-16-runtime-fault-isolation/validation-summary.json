@@ -1,0 +1,200 @@
+{
+  "date": "2026-10-16T19:46:26.970224+08:00",
+  "baseline": "b3f93276b49e2e729dd4829bad5f25fd9f783962",
+  "server": {
+    "sshAlias": "dsh",
+    "hostname": "VM-0-7-ubuntu",
+    "taskRoot": "/root/codex-jobs/20261016-runtime-fault-isolation",
+    "node": "v22.22.1"
+  },
+  "validation": {
+    "baseline": "b3f93276b49e2e729dd4829bad5f25fd9f783962",
+    "stages": [
+      {
+        "stage": "blocks-typecheck",
+        "command": [
+          "npm",
+          "run",
+          "typecheck"
+        ],
+        "exit": 0,
+        "seconds": 51.081
+      },
+      {
+        "stage": "blocks-focused",
+        "command": [
+          "node",
+          "node_modules/jest/bin/jest.js",
+          "--config",
+          "jest.config.cjs",
+          "--runInBand",
+          "--runTestsByPath",
+          "src/main.test.ts",
+          "src/modules/errorMapper.test.ts",
+          "scripts/runtimeSourceMap.test.ts",
+          "test/memoryDeclarationBoundaries.test.ts",
+          "src/runtime/powerBankPathDistance.test.ts",
+          "src/runtime/cpuPhaseProfiler.lowOverhead.test.ts",
+          "--json",
+          "--outputFile=/root/codex-jobs/20261016-runtime-fault-isolation/logs/blocks-focused.json"
+        ],
+        "exit": 0,
+        "seconds": 30.849
+      },
+      {
+        "stage": "blocks-build",
+        "command": [
+          "npm",
+          "run",
+          "build"
+        ],
+        "exit": 0,
+        "seconds": 46.325
+      },
+      {
+        "stage": "blocks-full",
+        "command": [
+          "npm",
+          "run",
+          "test:verify",
+          "--",
+          "--output-dir",
+          "/root/codex-jobs/20261016-runtime-fault-isolation/full-blocks-final"
+        ],
+        "exit": 0,
+        "seconds": 536.869
+      }
+    ]
+  },
+  "full": {
+    "numTotalTestSuites": 260,
+    "numPassedTestSuites": 260,
+    "numFailedTestSuites": 0,
+    "numTotalTests": 1974,
+    "numPassedTests": 1974,
+    "numFailedTests": 0,
+    "numPendingTests": 0,
+    "numTodoTests": 0
+  },
+  "integrity": {
+    "status": "JEST_TEST_INTEGRITY=PASSED",
+    "mode": "run-full",
+    "source": {
+      "commit": "c1372766d757d888725b66f2b68d0fa585231146",
+      "workspaceSha256": "a1faa20ad5255089b1b9f56dc2a52a95e1f511663b27de9b7f68907ae690de62"
+    },
+    "resultsPath": "/root/codex-jobs/20261016-runtime-fault-isolation/full-blocks-final/results.json",
+    "suites": 260,
+    "cases": 1974,
+    "errors": []
+  },
+  "artifact": {
+    "mainBytes": 3420482,
+    "mapBytes": 1140348,
+    "totalBytes": 4560830,
+    "indexEntries": 363634,
+    "blocks": 356,
+    "oracleChecks": 64,
+    "mainSyntaxValid": true,
+    "firstMappingMilliseconds": 4.219626999999946,
+    "cachedMappingMilliseconds": 0.00848000000007687,
+    "mappedLog": "<text style=\"color:#ef9a9a\">[artifact] Error: artifact smoke\n    at phase (../src/main.ts:67:9)</text>",
+    "sha256": {
+      "main.js": "cde2c50133ce7bff118aabe056ffcc897df1657d426027f866887627cff43160",
+      "main.js.map.js": "079a5b1cd437b72f90cd74fdad73ac128120ead4f65ab57c03fea527a0849ab8",
+      "main.js.map": "26c40e8339360d5712292ed4600e650f17c9fe103a67753bdc9eeb2feb4423cf"
+    }
+  },
+  "sourceMatch": {
+    "files": 15,
+    "match": true,
+    "mismatches": [],
+    "sha256": {
+      ".codex/skills/screeps-game-data/SKILL.md": "793b6b0ea002e279fcf1c770989684618d036d5370d564ffe7935276f76c7e32",
+      ".codex/skills/screeps-game-data/console-api.mjs": "29ab3fafb9a1707e9e1e670f2aa0a7d56ad2dff8eba00f379850d589b7b79915",
+      ".codex/skills/screeps-game-data/no-rate-limit.mjs": "b3c20355029879ecab6c493da33c39a8d17f573f7a0f28bcba0a48be7404484a",
+      ".gitignore": "057adcd5d8c9709935e12a93de702927d5bce4545436992e7203487d8bc9d6c0",
+      "jest.config.cjs": "5671ceb1eca6b37609a9d874d6fa8b81d23eac735d215fb4e262158cd9c0f70c",
+      "package-lock.json": "170748f406ad6ead9a337f5f223834905e51b91d2e39d64fb1f5d3a1c84489b4",
+      "package.json": "05325ee7184f8e281ddd046ef454cf4a7268baa2a6ba315e43a47911f596dff2",
+      "rollup.config.js": "448f096b02c46be4401c644d0752de3f0f7899c76385601e92fdcc0cd31c134b",
+      "scripts/lib/runtimeSourceMap.cjs": "ab0c6ba90a863ed78a57dfe4a42dbed9ef0e1a9ac800aee21d026673e4a91242",
+      "scripts/runtimeSourceMap.test.ts": "f4dd41ae2b9c798085e61f1636750b6868c02155c246d53305c330d7b1ea3243",
+      "src/main.test.ts": "f6391df2880b8b7dd3f30e026854b1554413cf6c530c5cfb01804d1a6cc16093",
+      "src/main.ts": "9efed342bac02a31c197af5756f7badda55765e7740add17c54834e461dfc639",
+      "src/modules/errorMapper.test.ts": "0d16afb9c915fc56027b5606371d2eb943b32186668e20314e1125188587feba",
+      "src/modules/errorMapper.ts": "f6936e1cb1aadf33d7210c9f6c5caa789173c155fa3996b9bbbdbab4131f412c",
+      "test/memoryDeclarationBoundaries.test.ts": "1a063b784285586c182eea2425775082d458e19c38df3b40ff1bb45fe89f1a60"
+    }
+  },
+  "strictAudit": {
+    "command": [
+      "node",
+      "node_modules/typescript/bin/tsc",
+      "-p",
+      "tsconfig.build.json",
+      "--noEmit",
+      "--strict"
+    ],
+    "exit": 2,
+    "seconds": 23.028,
+    "errorCount": 238,
+    "byFile": {
+      "src/runtime/hubPlanner.ts": 50,
+      "src/runtime/synthesisControl.ts": 21,
+      "src/roles/carrier.ts": 14,
+      "src/runtime/crossShardColonization.ts": 10,
+      "src/runtime/spawnPlanner.ts": 10,
+      "src/runtime/hubFlag.ts": 9,
+      "src/runtime/marketSaleAutomation.ts": 9,
+      "src/runtime/console/operationsCommands.ts": 8,
+      "src/runtime/marketDirectContinuousPlanner.ts": 7,
+      "src/runtime/interShardControl.ts": 6,
+      "src/movement/staticRoomMatrix.ts": 5,
+      "src/runtime/crossShardSignals.ts": 5,
+      "src/runtime/powerBankHarvest.ts": 5,
+      "src/runtime/tickContext.ts": 5,
+      "src/roles/remoteCarrier.ts": 4,
+      "src/runtime/portalDiscovery.ts": 4,
+      "src/runtime/powerBankBoost.ts": 4,
+      "src/runtime/terminalFeedTarget.ts": 4,
+      "src/runtime/treasuryTerminalTransferLane.ts": 4,
+      "src/runtime/marketSaleDirectAutomation.ts": 3,
+      "src/runtime/marketSaleDirectPending.ts": 3,
+      "src/runtime/powerBankDiscovery.ts": 3,
+      "src/runtime/powerSpawnControl.ts": 3,
+      "src/runtime/treasury/actionContracts.ts": 3,
+      "src/runtime/treasury/facade.ts": 3,
+      "src/roles/upgrader.ts": 2,
+      "src/runtime/carrierTaskBoard.ts": 2,
+      "src/runtime/empireInventoryIndex.ts": 2,
+      "src/runtime/marketBaseResourceAutomation.ts": 2,
+      "src/runtime/marketPerformanceCounters.ts": 2,
+      "src/runtime/powerBankPathDistance.ts": 2,
+      "src/runtime/resourceControl.ts": 2,
+      "src/modules/autoplanner/index.ts": 1,
+      "src/mount/mountSpawn.ts": 1,
+      "src/roles/combatBoosts.ts": 1,
+      "src/roles/crossShardColonizerHarvester.ts": 1,
+      "src/roles/crossShardColonizerWorker.ts": 1,
+      "src/roles/towerDrainPair.ts": 1,
+      "src/runtime/factoryControl.ts": 1,
+      "src/runtime/flagHauling.ts": 1,
+      "src/runtime/hubFactoryPlanner.ts": 1,
+      "src/runtime/logistics/synthesisLogisticsShadow.ts": 1,
+      "src/runtime/marketBaseResourcePolicy.ts": 1,
+      "src/runtime/marketDirectContinuousAutomation.ts": 1,
+      "src/runtime/marketSaleDiagnostics.ts": 1,
+      "src/runtime/marketSalePricing.ts": 1,
+      "src/runtime/powerCreepControl.ts": 1,
+      "src/runtime/treasury/kernel/store.ts": 1,
+      "src/runtime/treasury/observation.ts": 1,
+      "src/runtime/treasuryContinuousOHControl.ts": 1,
+      "src/runtime/treasuryTerminalTransfer.ts": 1,
+      "src/runtime/warControl.ts": 1,
+      "src/runtime/warNpcPolicy.ts": 1,
+      "src/runtime/workerTaskPool.ts": 1
+    }
+  },
+  "deployed": false
+}

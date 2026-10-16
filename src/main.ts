@@ -1,4 +1,4 @@
-import { errorMapper } from "@/modules/errorMapper";
+import { errorMapper, reportRuntimeError } from "@/modules/errorMapper";
 import { mountAll } from "@/mount";
 import { announceDeploy } from "@/runtime/deployAnnounce";
 import { runMemoryCleanup } from "@/runtime/memoryCleanup";
@@ -63,71 +63,91 @@ function gameLoop(): void {
   // 本 tick 的 spawn/creep 快照由 TickContext 统一维护，避免与各模块重复
   // Object.values 扫描；快照在 tick 内不可变。
   const tickContext = getTickContextService();
+  // 只在编排边界隔离异常；模块内部调用仍向上传播，避免继续执行半完成操作。
+  const runPhase = (phase: string, work: () => void): void => {
+    try {
+      cpuProfiler.measure(phase, work);
+    } catch (error) {
+      reportRuntimeError(`phase:${phase}`, error);
+    }
+  };
   let treasuryLifecycleStarted = false;
-  cpuProfiler.measure("treasuryBeginTick", () => {
+  runPhase("treasuryBeginTick", () => {
     treasuryLifecycleStarted = beginTreasuryProductionTick();
   });
 
   try {
-    cpuProfiler.measure("announceDeploy", announceDeploy);
-    cpuProfiler.measure("marketSalePreflight", runMarketSalePreflight);
+    runPhase("announceDeploy", announceDeploy);
+    runPhase("marketSalePreflight", runMarketSalePreflight);
     // 保留冻结生产顺序中的 phase；模块本身由代码级闩永久关闭。
-    cpuProfiler.measure("pixelGenerator", runPixelGenerator);
-    cpuProfiler.measure("productionMonitor", runProductionMonitor);
-    cpuProfiler.measure("nukerControl", runNukerControl);
-    cpuProfiler.measure("hubPlanner", runHubPlanner);
-    cpuProfiler.measure("hubUpgradeControl", runHubUpgradeControl);
-    cpuProfiler.measure("synthesisControl", runSynthesisControl);
-    cpuProfiler.measure("factoryControl", runFactoryControl);
-    cpuProfiler.measure("mineralExtraction", runMineralExtraction);
-    cpuProfiler.measure("resourceControl", runResourceControl);
-    cpuProfiler.measure("marketSaleAutomation", runLiveMarketSaleAutomation);
-    cpuProfiler.measure("hubProgressAnalytics", runHubProgressAnalytics);
-    cpuProfiler.measure("hubProgressOverlay", renderHubProgressOverlays);
-    cpuProfiler.measure("externalTelemetryExport", runExternalTelemetryExport);
-    cpuProfiler.measure("memoryCleanup", runMemoryCleanup);
-    cpuProfiler.measure("portalDiscovery", runPortalDiscovery);
-    cpuProfiler.measure("flagControl", runFlagControl);
-    cpuProfiler.measure("crossShardSignals", runCrossShardSignals);
-    cpuProfiler.measure("interShardControl", runInterShardControl);
-    cpuProfiler.measure("warControl", runWarControl);
-    cpuProfiler.measure("powerBankObserver", runPowerBankObserver);
-    cpuProfiler.measure("powerBankHarvest", runPowerBankHarvest);
-    cpuProfiler.measure("depositHarvest", runDepositHarvest);
-    cpuProfiler.measure("powerCreepControl", runPowerCreepControl);
-    cpuProfiler.measure("powerSpawnControl", runPowerSpawnControl);
-    cpuProfiler.measure("roomPlannerConstruction", runRoomPlannerConstruction);
-    cpuProfiler.measure("linkControl", runLinkControl);
-    cpuProfiler.measure("coreDefense", runCoreDefense);
-    cpuProfiler.measure("defenseMode", runDefenseMode);
-    cpuProfiler.measure("homeDefense", runHomeDefense);
-    cpuProfiler.measure("towerControl", runTowerControl);
-    cpuProfiler.measure("refreshWorkerTasks", refreshWorkerTasks);
-    cpuProfiler.measure("bootstrapRooms", bootstrapRooms);
-    cpuProfiler.measure("remoteMining", runRemoteMining);
-    cpuProfiler.measure("scheduleSpawnTasks", scheduleSpawnTasks);
+    runPhase("pixelGenerator", runPixelGenerator);
+    runPhase("productionMonitor", runProductionMonitor);
+    runPhase("nukerControl", runNukerControl);
+    runPhase("hubPlanner", runHubPlanner);
+    runPhase("hubUpgradeControl", runHubUpgradeControl);
+    runPhase("synthesisControl", runSynthesisControl);
+    runPhase("factoryControl", runFactoryControl);
+    runPhase("mineralExtraction", runMineralExtraction);
+    runPhase("resourceControl", runResourceControl);
+    runPhase("marketSaleAutomation", runLiveMarketSaleAutomation);
+    runPhase("hubProgressAnalytics", runHubProgressAnalytics);
+    runPhase("hubProgressOverlay", renderHubProgressOverlays);
+    runPhase("externalTelemetryExport", runExternalTelemetryExport);
+    runPhase("memoryCleanup", runMemoryCleanup);
+    runPhase("portalDiscovery", runPortalDiscovery);
+    runPhase("flagControl", runFlagControl);
+    runPhase("crossShardSignals", runCrossShardSignals);
+    runPhase("interShardControl", runInterShardControl);
+    runPhase("warControl", runWarControl);
+    runPhase("powerBankObserver", runPowerBankObserver);
+    runPhase("powerBankHarvest", runPowerBankHarvest);
+    runPhase("depositHarvest", runDepositHarvest);
+    runPhase("powerCreepControl", runPowerCreepControl);
+    runPhase("powerSpawnControl", runPowerSpawnControl);
+    runPhase("roomPlannerConstruction", runRoomPlannerConstruction);
+    runPhase("linkControl", runLinkControl);
+    runPhase("coreDefense", runCoreDefense);
+    runPhase("defenseMode", runDefenseMode);
+    runPhase("homeDefense", runHomeDefense);
+    runPhase("towerControl", runTowerControl);
+    runPhase("refreshWorkerTasks", refreshWorkerTasks);
+    runPhase("bootstrapRooms", bootstrapRooms);
+    runPhase("remoteMining", runRemoteMining);
+    runPhase("scheduleSpawnTasks", scheduleSpawnTasks);
 
-    cpuProfiler.measure("spawnWork", () => {
+    runPhase("spawnWork", () => {
       tickContext.getAllSpawns().forEach((spawn) => {
-        cpuProfiler.measureRoomPhase("spawnWork", spawn.room.name, () => spawn.work());
+        try {
+          cpuProfiler.measureRoomPhase("spawnWork", spawn.room.name, () => spawn.work());
+        } catch (error) {
+          reportRuntimeError(`spawn:${spawn.name}`, error);
+        }
       });
     });
-    cpuProfiler.measure("creepWork", () => {
+    runPhase("creepWork", () => {
       tickContext.getAllCreeps().forEach((creep) => {
-        cpuProfiler.measureCreep(creep, () => creep.work());
+        try {
+          cpuProfiler.measureCreep(creep, () => creep.work());
+        } catch (error) {
+          reportRuntimeError(`creep:${creep.name}`, error);
+        }
       });
     });
     // 库存影子等价验证（Phase 1 只读观察者）：低频对账新索引与直读 Store，
     // 不参与任何生产决策；详见 empireInventoryShadow.ts。
-    cpuProfiler.measure("empireInventoryShadow", runEmpireInventoryShadowCheck);
+    runPhase("empireInventoryShadow", runEmpireInventoryShadowCheck);
   } finally {
     try {
-      cpuProfiler.measure("treasuryT1Shadow", runTreasuryT1ShadowObservation);
+      runPhase("treasuryT1Shadow", runTreasuryT1ShadowObservation);
       if (treasuryLifecycleStarted) {
-        cpuProfiler.measure("treasuryEndTick", endTreasuryProductionTick);
+        runPhase("treasuryEndTick", endTreasuryProductionTick);
       }
     } finally {
-      cpuProfiler.flush();
+      try {
+        cpuProfiler.flush();
+      } catch (error) {
+        reportRuntimeError("cpuProfiler.flush", error);
+      }
     }
   }
 }

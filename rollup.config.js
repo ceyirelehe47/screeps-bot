@@ -1,5 +1,4 @@
 import clear from "rollup-plugin-clear";
-import screeps from "rollup-plugin-screeps";
 import copy from "rollup-plugin-copy";
 import typescript from "rollup-plugin-typescript2";
 import resolve from "@rollup/plugin-node-resolve";
@@ -11,6 +10,7 @@ import { execSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { createRuntimeSourceMapModule, assertModuleSize } from "./scripts/lib/runtimeSourceMap.cjs";
 import { assertDeployableGitState, diffRemoteModules } from "./scripts/lib/deployGuard.cjs";
 
 const require = createRequire(import.meta.url);
@@ -84,15 +84,9 @@ if (buildDirty && isProductionDeploy) {
 const buildTag = `${buildVersion}+${buildGitHash}@${buildTime}`;
 
 function createAwaitedScreepsPlugin(deployConfig) {
-  // rollup-plugin-screeps@1.0.1 does not return its upload Promise from
-  // writeBundle. Keep its source-map handling, but perform and await the
-  // upload here so `npm run push` cannot report success before the API does.
-  const sourceMapPlugin = screeps({ config: deployConfig, dryRun: true });
   return {
-    ...sourceMapPlugin,
+    name: "awaited-screeps-deploy",
     async writeBundle(options, bundle) {
-      await sourceMapPlugin.writeBundle.call(this, options, bundle);
-
       // 构建身份：对主产物（append 前）计算 SHA-256 并以全局赋值追加到
       // bundle 末尾——模块加载完成后 announceDeploy 首 tick 即可读取，
       // 与本地/远端的内容比对使用同一份最终文本。
@@ -105,19 +99,13 @@ function createAwaitedScreepsPlugin(deployConfig) {
       );
       console.log(`[deploy] bundle sha256: ${bundleHash.slice(0, 16)}… (full in Memory.runtime.lastDeployBundleHash)`);
 
-      if (!deployConfig) {
-        return;
-      }
+      const sourceMap = JSON.parse(bundle[path.basename(options.file)].map.toString());
+      writeFileSync(`${options.file}.map.js`, createRuntimeSourceMapModule(sourceMap));
 
       const outputDirectory = path.dirname(options.file);
       const modules = {};
       for (const file of readdirSync(outputDirectory)) {
         const absolutePath = path.join(outputDirectory, file);
-        // Keep source maps locally, but do not count the generated map module
-        // against Screeps' 5 MB code upload limit.
-        if (file.endsWith(".map.js")) {
-          continue;
-        }
         if (file.endsWith(".js")) {
           modules[file.replace(/\.js$/i, "")] = readFileSync(absolutePath, "utf8");
         } else if (file.endsWith(".wasm")) {
@@ -128,6 +116,8 @@ function createAwaitedScreepsPlugin(deployConfig) {
       if (Object.keys(modules).length === 0) {
         throw new Error("Screeps upload failed: no runtime modules were generated");
       }
+      console.log(`[deploy] runtime modules: ${assertModuleSize(modules)} bytes (including source map)`);
+      if (!deployConfig) return;
       const api = new ScreepsAPI(deployConfig);
       if (!deployConfig.token) {
         await api.auth();
@@ -216,9 +206,8 @@ export default {
       },
     }),
     commonjs(),
-    // Whitespace/comment formatting only. Keep identifiers and statements as
-    // emitted by Rollup while staying below the production code-size ceiling.
-    terser({ compress: false, mangle: false, format: { comments: "some" } }),
+    // 保留名称便于诊断；使用默认安全压缩，不开启 unsafe 系列变换。
+    terser({ compress: { passes: 2 }, mangle: false, format: { comments: "some" } }),
     deployPlugin,
   ],
 };

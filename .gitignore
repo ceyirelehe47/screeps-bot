@@ -35,3 +35,7 @@ graphify-out/
 .opencode/
 .worktrees/
 .env
+
+# 本地代理指令保留在磁盘，不随仓库发布。
+CLAUDE.md
+claude.md

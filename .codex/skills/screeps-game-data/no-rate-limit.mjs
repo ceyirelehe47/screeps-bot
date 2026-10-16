@@ -20,7 +20,7 @@ if (action === "--status") {
   const [query, probe] = await Promise.all([
     fetch(queryUrl, { signal: AbortSignal.timeout(15_000) }),
     fetch("https://screeps.com/api/user/name", {
-      headers: { "X-Token": token, "X-Username": token },
+      headers: { "X-Token": token },
       signal: AbortSignal.timeout(15_000),
     }),
   ]);

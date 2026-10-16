@@ -126,13 +126,14 @@ const MEMORY_BRANCHES = {
   analytics: {
     declaration: "src/types/memory/analytics.d.ts",
     interfaceName: "ScreepsMemoryAnalytics",
-    schemaFingerprint: "8dc56bc39214dd02906c02dba674664c2a2441d01a341a7d1a4bff1993f97245",
+    schemaFingerprint: "0a39e00353e761e1980e1fd965988ea67113448b256a57155f5e5b35811263c4",
     imports: [
       "@/runtime/cpuMonitor:CpuMonitorMemoryV2",
       "@/runtime/hubProgress:HubProgressSnapshot",
+      "@/runtime/powerBankPathDistance:PowerBankPathDiagnostics",
       "@/runtime/warControl:WarStatusTaskSnapshot",
     ],
-    fields: ["production", "war", "moduleCpu", "cpuMonitor", "hub"],
+    fields: ["production", "war", "moduleCpu", "cpuMonitor", "hub", "powerBankPathDiagnostics"],
   },
 } as const;
 
