@@ -17,11 +17,17 @@ import type {
   HubRuntimeProtectionExtension,
 } from "@/runtime/hubProtectionSnapshot";
 import { Panel, type VisualSurface } from "@/visual/panel";
+import { Card } from "@/visual/card";
 import {
+  VIS_DIM,
   VIS_ERROR,
   VIS_HEADER_FILL,
+  VIS_INBOUND,
   VIS_MUTED,
   VIS_OK,
+  VIS_OUTBOUND,
+  VIS_TEXT,
+  VIS_TITLE,
   VIS_WARN,
 } from "@/visual/palette";
 
@@ -490,97 +496,102 @@ function formatLogisticsRow(row: HubLogisticsVisualRow): string {
   return `${arrow} ${row.classification} ${row.counterpartRoom} ${row.resource} ${formatCompactAmount(row.remaining)} · ${formatTickAge(row.age)}${blocked}`;
 }
 
-function formatReserveRow(row: HubReserveVisualRow): string {
-  const hubGap = row.hubDeficit > 0 ? `(-${formatCompactAmount(row.hubDeficit)})` : "";
-  const networkGap = row.networkDeficit > 0 ? ` N-${formatCompactAmount(row.networkDeficit)}` : "";
-  return `${row.compound} H${formatCompactAmount(row.hubAmount)}/${formatCompactAmount(row.hubReserve)}${hubGap}${networkGap}`;
-}
-
-function hubPanelHeight(model: HubVisualModel): number {
-  const alertRows = model.alerts.length + (model.alertOverflow > 0 ? 1 : 0);
-  const progressHeight = model.progressMode === "determinate" ? VISUAL_BAR_STRIDE : VISUAL_ROW_STRIDE;
-  const logisticsRows = model.logistics.totalTasks === 0
-    ? 1
-    : model.logistics.rows.length + (model.logistics.overflow > 0 ? 1 : 0);
-  const reserveRows = model.t3Reserve.totalCompounds === 0 || model.t3Reserve.rows.length === 0
-    ? 1
-    : model.t3Reserve.rows.length + (model.t3Reserve.overflow > 0 ? 1 : 0);
-  return VISUAL_HEADER_STRIDE * 4 + alertRows * VISUAL_ROW_STRIDE + progressHeight + logisticsRows * VISUAL_ROW_STRIDE + reserveRows * VISUAL_ROW_STRIDE +
-    (model.factory ? VISUAL_HEADER_STRIDE + VISUAL_ROW_STRIDE * (Object.keys(model.factory.missing).length > 0 ? 2 : 1) : 0);
-}
-
 function healthColor(model: HubVisualModel): string {
   if (model.healthLevel === "error") return VIS_ERROR;
   if (model.healthLevel === "warn") return VIS_WARN;
   return VIS_OK;
 }
 
+function blockedTag(row: HubLogisticsVisualRow): string {
+  if (!row.blockedReason) return "";
+  const age = row.blockedAge === null ? "" : ` ${formatTickAge(row.blockedAge)}`;
+  return `⚠ ${formatBlockedReason(row.blockedReason)}${age}`;
+}
+
 export function drawHubVisualPanel(rv: VisualSurface, model: HubVisualModel): number {
-  const p = new Panel({ rv, x: HUB_VISUAL_X, y: HUB_VISUAL_Y, width: HUB_VISUAL_WIDTH });
-  p.background(hubPanelHeight(model));
+  const card = new Card({ rv, x: HUB_VISUAL_X, y: HUB_VISUAL_Y, width: HUB_VISUAL_WIDTH });
+  const accent = healthColor(model);
 
   const statusParts = [model.status];
   if (model.stage && model.stage !== model.status) statusParts.push(model.stage);
-  p.sectionHeader(
-    `HUB ${model.hubRoomName} · ${statusParts.join("/")} · ${model.healthLabel}`,
-    { fill: healthColor(model), opacity: model.healthLevel === "ok" ? 0.22 : 0.35 },
-  );
-  for (const alert of model.alerts) {
-    p.textRow(`⚠ ${alert}`, { font: 0.35, color: model.healthLevel === "error" ? VIS_ERROR : VIS_WARN });
-  }
-  if (model.alertOverflow > 0) {
-    p.textRow(`+${model.alertOverflow} more alerts`, { font: 0.35, color: VIS_MUTED });
-  }
+  card.header(`HUB ${model.hubRoomName}`, statusParts.join(" · "), { label: model.healthLabel, color: accent });
 
-  const productionParts = [`${model.production.activeRooms} active`];
-  if (model.production.blockedRooms > 0) productionParts.push(`${model.production.blockedRooms} blocked`);
-  p.sectionHeader(`Production · ${productionParts.join(" · ")}`);
+  const alertLines = model.alerts.map(alert => `⚠  ${alert}`);
+  if (model.alertOverflow > 0) alertLines.push(`+${model.alertOverflow} more alerts`);
+  card.callout(alertLines, model.healthLevel === "error" ? VIS_ERROR : VIS_WARN);
+
+  // 生产
+  const productionMeta = model.production.blockedRooms > 0
+    ? { text: `${model.production.activeRooms} active · ${model.production.blockedRooms} blocked`, color: VIS_ERROR }
+    : { text: `${model.production.activeRooms} active`, color: VIS_DIM };
+  card.section("Production", productionMeta);
   if (model.progressMode === "determinate") {
-    const progressPercent = model.progressPercent ?? 0;
-    const barColor = model.healthLevel === "error" ? VIS_ERROR : progressPercent >= 1 ? VIS_OK : VIS_WARN;
-    p.progressBar(progressPercent, barColor, model.progressText);
+    const pct = model.progressPercent ?? 0;
+    const barColor = model.healthLevel === "error" ? VIS_ERROR : pct >= 1 ? VIS_OK : VIS_INBOUND;
+    const right = model.progressText.startsWith(`${model.activeProduct} `)
+      ? model.progressText.slice(`${model.activeProduct} `.length).replace(/ (\d+%)$/, "  ·  $1")
+      : model.progressText;
+    card.bar(pct, barColor, model.activeProduct ?? "", right);
+  } else if (model.progressMode === "activity") {
+    card.row([
+      { text: "●", at: 0, color: VIS_OK },
+      { text: model.progressText, at: 0.45, color: VIS_TITLE },
+    ]);
   } else {
-    p.textRow(model.progressText, {
-      font: 0.4,
-      color: model.progressMode === "activity" ? VIS_OK : VIS_MUTED,
-    });
+    card.row([{ text: "idle", at: 0, color: VIS_DIM }]);
   }
 
   if (model.factory) {
-    p.sectionHeader(`Factory · ${model.factory.status}`);
-    p.textRow(`${model.factory.product ?? "idle"} · ${model.factory.stage}`, { font: 0.35 });
-    const missing = Object.entries(model.factory.missing).slice(0, 4).map(([r, n]) => `${r}:${formatCompactAmount(n)}`);
-    if (missing.length > 0) p.textRow(`need ${missing.join(" ")}`, { font: 0.35, color: VIS_WARN });
+    const missing = Object.entries(model.factory.missing).slice(0, 3).map(([r, n]) => `${r}:${formatCompactAmount(n)}`);
+    card.row([
+      { text: "Factory", at: 0, color: VIS_DIM },
+      { text: `${model.factory.product ?? "idle"} · ${model.factory.stage}`, at: 1.6, color: VIS_TITLE },
+      { text: model.factory.status, at: 0, align: "right", color: missing.length > 0 ? VIS_WARN : VIS_DIM },
+    ]);
+    if (missing.length > 0) card.row([
+      { text: "need", at: 0, color: VIS_DIM },
+      { text: missing.join("  "), at: 1.6, font: 0.32, color: VIS_WARN },
+    ]);
   }
 
+  // 物流
   const inboundCount = model.logistics.imports + model.logistics.reclaims;
-  p.sectionHeader(`Logistics · ←${inboundCount} →${model.logistics.exports}`);
-
+  card.section("Logistics", { text: `in ${inboundCount}   out ${model.logistics.exports}` });
   for (const row of model.logistics.rows) {
-    p.textRow(formatLogisticsRow(row), { font: 0.35, color: row.blockedReason ? VIS_WARN : undefined });
+    const inbound = row.direction === "in";
+    const tag = blockedTag(row);
+    card.row([
+      { text: `${inbound ? "←" : "→"}  ${row.classification} ${row.counterpartRoom}`, at: 0, color: row.blockedReason ? VIS_WARN : inbound ? VIS_INBOUND : VIS_OUTBOUND },
+      { text: row.resource, at: 4.1, color: VIS_TITLE, bold: true },
+      { text: tag ? `${formatCompactAmount(row.remaining)} · ${formatTickAge(row.age)}   ${tag}` : `${formatCompactAmount(row.remaining)} · ${formatTickAge(row.age)}`, at: 0, align: "right", color: tag ? VIS_WARN : VIS_DIM },
+    ]);
   }
-  if (model.logistics.totalTasks === 0) {
-    p.textRow("none", { font: 0.35, color: VIS_MUTED });
-  }
-  if (model.logistics.overflow > 0) {
-    p.textRow(`+${model.logistics.overflow} more tasks`, { font: 0.35, color: VIS_MUTED });
-  }
+  if (model.logistics.totalTasks === 0) card.row([{ text: "no pending transfers", at: 0, color: VIS_DIM }]);
+  if (model.logistics.overflow > 0) card.row([{ text: `+${model.logistics.overflow} more tasks`, at: 0, color: VIS_DIM }]);
 
-  p.sectionHeader("Reserve");
+  // 储备
+  const reserveMeta = model.t3Reserve.totalCompounds > 0
+    ? { text: `${model.t3Reserve.stockedCompounds}/${model.t3Reserve.totalCompounds} stocked`, color: model.t3Reserve.rows.length === 0 ? VIS_OK : VIS_DIM }
+    : undefined;
+  card.section("Reserve", reserveMeta);
   if (model.t3Reserve.totalCompounds === 0) {
-    p.textRow("not configured", { font: 0.35, color: VIS_MUTED });
+    card.row([{ text: "not configured", at: 0, color: VIS_DIM }]);
   } else if (model.t3Reserve.rows.length === 0) {
-    p.textRow(`${model.t3Reserve.stockedCompounds}/${model.t3Reserve.totalCompounds} stocked`, { font: 0.35, color: VIS_OK });
+    card.row([{ text: "✓ all compounds at reserve", at: 0, color: VIS_OK }]);
   }
   for (const row of model.t3Reserve.rows) {
-    const deficitColor = row.totalDeficit >= 5000 ? VIS_ERROR : VIS_WARN;
-    p.textRow(formatReserveRow(row), { font: 0.35, color: deficitColor });
+    const severity = row.totalDeficit >= 5000 ? VIS_ERROR : VIS_WARN;
+    const pct = row.hubReserve > 0 ? row.hubAmount / row.hubReserve : 0;
+    card.meter(2.3, 4.2, pct, severity);
+    card.row([
+      { text: row.compound, at: 0, color: severity, bold: true },
+      { text: `${formatCompactAmount(row.hubAmount)}/${formatCompactAmount(row.hubReserve)}`, at: 6.9, color: VIS_TEXT },
+      { text: row.networkDeficit > 0 ? `net -${formatCompactAmount(row.networkDeficit)}` : "", at: 0, align: "right", color: VIS_DIM },
+    ]);
   }
-  if (model.t3Reserve.overflow > 0) {
-    p.textRow(`+${model.t3Reserve.overflow} more deficits`, { font: 0.35, color: VIS_MUTED });
-  }
+  if (model.t3Reserve.overflow > 0) card.row([{ text: `+${model.t3Reserve.overflow} more deficits`, at: 0, color: VIS_DIM }]);
 
-  return p.callsUsed;
+  return card.flush();
 }
 
 
@@ -1409,7 +1420,7 @@ export function buildHubOverlayLines(snapshot: HubProgressSnapshot): string[] {
 }
 
 const MAX_LINK_LABELS = 2;
-const MAX_HUB_VISUAL_CALLS = 80;
+const MAX_HUB_VISUAL_CALLS = 100;
 const MAX_SATELLITE_PANELS = 6;
 
 export interface HubOverlayRenderStats {

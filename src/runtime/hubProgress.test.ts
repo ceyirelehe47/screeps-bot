@@ -349,7 +349,7 @@ describe("renderHubProgressOverlays", () => {
 
     expect(stats).toEqual(expect.objectContaining({ satellitePanels: 6, skippedSatellitePanels: 2 }));
     expect(stats!.callsUsed).toBe(calls.length);
-    expect(stats!.callsUsed).toBeLessThanOrEqual(80);
+    expect(stats!.callsUsed).toBeLessThanOrEqual(100);
     expect(headers.some((call) => call.roomName === "W9N1")).toBe(true);
     expect(headers.some((call) => call.roomName === "W8N1")).toBe(false);
   });
