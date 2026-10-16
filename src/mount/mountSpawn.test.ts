@@ -9,6 +9,7 @@ jest.mock("@/runtime/cpuPhaseProfiler", () => ({
 }));
 
 import { mountSpawn } from "@/mount/mountSpawn";
+import { releaseWarTaskOwner } from "@/runtime/warControl";
 import {
   RCL8_UPGRADER_MAINTENANCE_BODY,
   RCL8_UPGRADER_RECOVERY_START_TICKS,
@@ -44,6 +45,24 @@ describe("mountSpawn", () => {
     Memory.data = { creepConfigs: {} } as Memory["data"];
     Game.rooms = {};
     Game.spawns = {};
+  });
+
+  it("战争孵化接受后同 tick 停止任务，尚未进入 Game.creeps 的 Memory 也会解绑", () => {
+    const room = { name: "E1N57", controller: { my: true, level: 8 }, energyAvailable: 300, energyCapacityAvailable: 300 } as unknown as Room;
+    const name = "E1N57:war:E3N57:meleeAttacker:0";
+    Memory.creeps = {};
+    Memory.data!.war = { E3N57: { targetRoom: "E3N57", sourceRoom: room.name, status: "clearing", reason: "manual", attempts: 1,
+      createdAt: Game.time, updatedAt: Game.time, membersVersion: 1, members: {} } };
+    Memory.data!.creepConfigs![name] = { role: "meleeAttacker", name: "war-born", roomName: room.name, args: ["E3N57"], body: [ATTACK, MOVE] };
+    const spawn = createSpawn("Spawn1", room, []); Game.rooms = { E1N57: room }; Game.spawns = { Spawn1: spawn };
+    (spawn.spawnCreep as jest.Mock).mockImplementation((_body, creepName, options) => { Memory.creeps[creepName] = options.memory; return OK; });
+    Object.setPrototypeOf(spawn, prototype);
+    expect((spawn as unknown as { mainSpawn(config: string): boolean }).mainSpawn(name)).toBe(true);
+    expect(Game.creeps["war-born"]).toBeUndefined();
+    expect(Memory.data!.war!.E3N57.members?.[name].creepNames).toContain("war-born");
+    expect(releaseWarTaskOwner("E3N57")).toMatchObject({ ok: true, removedTask: true });
+    expect(Memory.creeps["war-born"]).toMatchObject({ _warDetached: true, roleArgs: ["E3N57"] });
+    expect(Memory.creeps["war-born"].configName).toBeUndefined();
   });
 
   it("同tick多Spawn生产同角色不重名，配对Memory归属保持独立", () => {

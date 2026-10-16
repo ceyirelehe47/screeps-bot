@@ -7,6 +7,7 @@ import { getCreepConfigService } from "@/runtime/runtimeServices";
 import { isRcl8MaintenanceUpgraderConfig } from "@/runtime/upgraderPolicy";
 import type { CreepConfig, RoleName } from "@/types/system";
 import { canSpawnDepositConfig } from "@/runtime/depositHarvest";
+import { registerWarSpawn } from "@/runtime/war/store";
 
 let spawnNameGame: typeof Game | undefined;
 let spawnNameTick = -1;
@@ -310,6 +311,7 @@ export function mountSpawn(): void {
     const code = this.spawnCreep(body, name, options);
 
     if (code === OK) {
+      registerWarSpawn(configName, name);
       recordFixedCpuAction("spawnWork");
       if (isTransientConfigName(configName)) {
         creepConfigs.remove(configName);

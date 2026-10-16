@@ -28,6 +28,19 @@ export interface WarGenerationState {
 
 export interface WarMember { configName: string; creepNames: string[]; spawnedAt?: number }
 
+/** spawnCreep(OK) 当帧登记，停止任务时不依赖尚未出现的 Game.creeps/native spawning。 */
+export function registerWarSpawn(configName: string, creepName: string): void {
+  if (!configName.includes(":war:")) return;
+  const task = Object.values(Memory.data?.war ?? {}).find(candidate => candidate.members?.[configName]
+    || configName.startsWith(`${candidate.sourceRoom}:war:${candidate.targetRoom}:`));
+  if (!task) return;
+  const members = task.members ??= {};
+  const member = members[configName] ??= { configName, creepNames: [] };
+  if (!Array.isArray(member.creepNames)) member.creepNames = [];
+  if (!member.creepNames.includes(creepName)) member.creepNames.push(creepName);
+  member.spawnedAt ??= Game.time;
+}
+
 export interface WarTask {
   entryEffect?: string;
   members?: Record<string, WarMember>;
