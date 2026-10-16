@@ -155,6 +155,7 @@ describe("runMemoryCleanup", () => {
     const configName = "W1N1:war:W2N2:meleeAttacker:0";
     const survivor = {
       name: "war-survivor",
+      room: Game.rooms.W1N1,
       memory: {
         role: "meleeAttacker",
         roleArgs: ["W2N2", "", "", "", ""],
