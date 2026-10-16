@@ -16,14 +16,12 @@ import type {
   HubProtectionRevisionMarker,
   HubRuntimeProtectionExtension,
 } from "@/runtime/hubProtectionSnapshot";
-import { Panel, type VisualSurface } from "@/visual/panel";
+import type { VisualSurface } from "@/visual/panel";
 import { Card } from "@/visual/card";
 import {
   VIS_DIM,
   VIS_ERROR,
-  VIS_HEADER_FILL,
   VIS_INBOUND,
-  VIS_MUTED,
   VIS_OK,
   VIS_OUTBOUND,
   VIS_TEXT,
@@ -255,9 +253,6 @@ const DEFAULT_TERMINAL_ENERGY_RESERVE = 20_000;
 const HUB_VISUAL_X = 1;
 const HUB_VISUAL_Y = 2;
 const HUB_VISUAL_WIDTH = 13.5;
-const VISUAL_HEADER_STRIDE = 0.7;
-const VISUAL_ROW_STRIDE = 0.7;
-const VISUAL_BAR_STRIDE = 0.6;
 
 export interface HubVisualModel {
   hubRoomName: string;
@@ -600,77 +595,59 @@ const SATELLITE_VISUAL_X = 1;
 const SATELLITE_VISUAL_Y = 2;
 const SATELLITE_VISUAL_WIDTH = 13.5;
 
-function buildSatelliteSupplyText(room: ProductionRoomEntry): string {
-  const upstreamLabels = room.upstream
-    .slice(0, MAX_LINK_LABELS)
-    .map(u => u.roomName);
-  const upstreamStr = upstreamLabels.length > 0
-    ? `←${upstreamLabels.join(",")}${room.upstream.length > MAX_LINK_LABELS ? `+${room.upstream.length - MAX_LINK_LABELS}` : ""}`
-    : "";
-
-  const downstreamLabels = room.downstream
-    .slice(0, MAX_LINK_LABELS)
-    .map(d => d.roomName);
-  const downstreamStr = downstreamLabels.length > 0
-    ? `→${downstreamLabels.join(",")}${room.downstream.length > MAX_LINK_LABELS ? `+${room.downstream.length - MAX_LINK_LABELS}` : ""}`
-    : "";
-
-  const supplyParts: string[] = [];
-  if (upstreamStr) supplyParts.push(upstreamStr);
-  if (downstreamStr) supplyParts.push(downstreamStr);
-  if (room.directSupplyAmount > 0) supplyParts.push(`direct:${formatCompactAmount(room.directSupplyAmount)}`);
-  if (room.hubSurplusAmount > 0) supplyParts.push(`hub:${formatCompactAmount(room.hubSurplusAmount)}`);
-  return supplyParts.join(" ");
+function formatRoomList(rooms: Array<{ roomName: string }>): string {
+  const names = Array.from(new Set(rooms.map(r => r.roomName)));
+  const shown = names.slice(0, MAX_LINK_LABELS).join(", ");
+  return names.length > MAX_LINK_LABELS ? `${shown} +${names.length - MAX_LINK_LABELS}` : shown;
 }
 
-function satellitePanelHeight(room: ProductionRoomEntry): number {
-  const progressHeight = room.targetAmount > 0 ? VISUAL_BAR_STRIDE : VISUAL_ROW_STRIDE;
-  const optionalRows = Number(buildSatelliteSupplyText(room).length > 0) + Number(!!room.blocker);
-  return VISUAL_HEADER_STRIDE + progressHeight + optionalRows * VISUAL_ROW_STRIDE;
+function satelliteStageColor(room: ProductionRoomEntry): string {
+  if (room.stage === "blocked" || room.blocker) return VIS_ERROR;
+  if (room.stage === "synthesizing" || (room.targetAmount > 0 && room.progressPercent >= 1)) return VIS_OK;
+  if (room.stage === "idle") return VIS_DIM;
+  return VIS_WARN;
 }
+
+/** 先构建卫星房卡片，输出前可核对精确调用数。 */
+function buildSatelliteCard(rv: VisualSurface, room: ProductionRoomEntry): Card {
+  const card = new Card({ rv, x: SATELLITE_VISUAL_X, y: SATELLITE_VISUAL_Y, width: SATELLITE_VISUAL_WIDTH });
+  const accent = satelliteStageColor(room);
+  card.header(`SAT ${room.roomName}`, "", { label: room.blocker ? "blocked" : room.stage, color: accent });
+
+  if (room.blocker) card.callout([`⚠  ${room.blocker}`], VIS_ERROR);
+
+  if (room.targetAmount > 0) {
+    const pct = room.progressPercent;
+    card.bar(pct, accent, room.product, `${formatCompactAmount(room.currentAmount)}/${formatCompactAmount(room.targetAmount)}  ${Math.round(pct * 100)}%`);
+  } else {
+    card.row([
+      { text: room.product, at: 0, color: VIS_TITLE, bold: true },
+      { text: `${formatCompactAmount(room.currentAmount)} · no target`, at: 0, align: "right", color: VIS_DIM },
+    ]);
+  }
+
+  // 每行只用一次文字调用，控制单个卫星面板的绘图开销。
+  if (room.upstream.length > 0) card.row([{ text: `←  from  ${formatRoomList(room.upstream)}`, at: 0, color: VIS_INBOUND }]);
+  if (room.downstream.length > 0) card.row([{ text: `→  to  ${formatRoomList(room.downstream)}`, at: 0, color: VIS_OUTBOUND }]);
+  const route: string[] = [];
+  if (room.directSupplyAmount > 0) route.push(`direct ${formatCompactAmount(room.directSupplyAmount)}`);
+  if (room.hubSurplusAmount > 0) route.push(`via hub ${formatCompactAmount(room.hubSurplusAmount)}`);
+  if (route.length > 0) card.row([{ text: `route  ${route.join("  ·  ")}`, at: 0, color: VIS_DIM }]);
+  return card;
+}
+
+const NULL_VISUAL_SURFACE: VisualSurface = {
+  rect() { return NULL_VISUAL_SURFACE; },
+  text() { return NULL_VISUAL_SURFACE; },
+};
 
 export function estimateSatellitePanelCalls(room: ProductionRoomEntry): number {
-  const progressCalls = room.targetAmount > 0 ? (room.progressPercent > 0 ? 3 : 2) : 1;
-  return 1 + 2 + progressCalls + Number(buildSatelliteSupplyText(room).length > 0) + Number(!!room.blocker);
+  return buildSatelliteCard(NULL_VISUAL_SURFACE, room).pendingCalls;
 }
 
-/** Render a compact production panel in a satellite room. */
+/** 在卫星房绘制紧凑生产卡片。 */
 export function drawSatellitePanel(rv: VisualSurface, room: ProductionRoomEntry): number {
-  const p = new Panel({ rv, x: SATELLITE_VISUAL_X, y: SATELLITE_VISUAL_Y, width: SATELLITE_VISUAL_WIDTH });
-  p.background(satellitePanelHeight(room));
-
-  const headerFill = room.stage === "blocked" || room.blocker
-    ? VIS_ERROR
-    : room.stage === "synthesizing"
-      ? VIS_OK
-      : VIS_HEADER_FILL;
-  p.sectionHeader(`Production: ${room.product} [${room.stage}]`, {
-    fill: headerFill,
-    opacity: headerFill === VIS_HEADER_FILL ? 0.8 : 0.3,
-  });
-
-  const pct = room.progressPercent;
-  const progressLabel = `${formatCompactAmount(room.currentAmount)}/${formatCompactAmount(room.targetAmount)} ${Math.round(pct * 100)}%`;
-  const barColor = room.stage === "blocked" ? VIS_ERROR
-    : room.stage === "synthesizing" ? VIS_OK
-    : pct >= 1 ? VIS_OK
-    : VIS_MUTED;
-  if (room.targetAmount > 0) {
-    p.progressBar(pct, barColor, progressLabel);
-  } else {
-    p.textRow(`${formatCompactAmount(room.currentAmount)} · no target`, { font: 0.35, color: VIS_MUTED });
-  }
-
-  const supplyText = buildSatelliteSupplyText(room);
-  if (supplyText) {
-    p.textRow(supplyText, { font: 0.35, color: VIS_MUTED });
-  }
-
-  if (room.blocker) {
-    p.textRow(`⚠ ${room.blocker}`, { font: 0.35, color: VIS_ERROR });
-  }
-
-  return p.callsUsed;
+  return buildSatelliteCard(rv, room).flush();
 }
 
 function classifyTransferTask(
@@ -1420,8 +1397,12 @@ export function buildHubOverlayLines(snapshot: HubProgressSnapshot): string[] {
 }
 
 const MAX_LINK_LABELS = 2;
-const MAX_HUB_VISUAL_CALLS = 100;
-const MAX_SATELLITE_PANELS = 6;
+/**
+ * 为主面板与最多 24 个卫星面板预留绘图预算。
+ * 单卡片费用随内容变化，输出前按实际缓冲指令数检查预算。
+ */
+const MAX_SATELLITE_PANELS = 24;
+const MAX_HUB_VISUAL_CALLS = 450;
 
 export interface HubOverlayRenderStats {
   callsUsed: number;
@@ -1472,13 +1453,16 @@ export function renderHubProgressOverlays(): HubOverlayRenderStats | null {
   let skippedSatellitePanels = 0;
 
   for (const room of buildSatelliteCandidates(snapshot)) {
-    const estimatedCalls = estimateSatellitePanelCalls(room);
-    if (satellitePanels >= MAX_SATELLITE_PANELS || callsUsed + estimatedCalls > MAX_HUB_VISUAL_CALLS) {
+    if (satellitePanels >= MAX_SATELLITE_PANELS) {
       skippedSatellitePanels++;
       continue;
     }
-    const satelliteRv = new RoomVisual(room.roomName);
-    callsUsed += drawSatellitePanel(satelliteRv, room);
+    const satelliteCard = buildSatelliteCard(new RoomVisual(room.roomName), room);
+    if (callsUsed + satelliteCard.pendingCalls > MAX_HUB_VISUAL_CALLS) {
+      skippedSatellitePanels++;
+      continue;
+    }
+    callsUsed += satelliteCard.flush();
     satellitePanels++;
   }
 

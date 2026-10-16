@@ -1,5 +1,8 @@
 import {
   buildHubProgressSnapshot,
+  drawSatellitePanel,
+  estimateSatellitePanelCalls,
+  type ProductionRoomEntry,
   renderHubProgressOverlays,
   resetHubVisualCacheForTests,
 } from "@/runtime/hubProgress";
@@ -12,6 +15,29 @@ type RuntimeGlobal = typeof global & {
 function resetRuntimeServices(): void {
   delete (global as RuntimeGlobal).__runtimeServices;
 }
+
+describe("卫星面板绘图预算", () => {
+  it.each([0, 0.5, 1, null])("进度 %s 下的预测调用数与实际输出一致", (progress) => {
+    const room: ProductionRoomEntry = {
+      roomName: "W12N34", product: RESOURCE_CATALYZED_GHODIUM_ACID,
+      stage: progress === null ? "blocked" : "synthesizing", blocker: progress === null ? "missing reagent" : null,
+      targetAmount: progress === null ? 0 : 10000, currentAmount: (progress ?? 0) * 10000,
+      progressPercent: progress ?? 0, isHubRoom: false,
+      upstream: ["W1N1", "W1N1", "W2N1", "W3N1"].map(roomName => ({ roomName, resource: RESOURCE_HYDROGEN })),
+      downstream: [{ roomName: "W4N1", resource: RESOURCE_CATALYZED_GHODIUM_ACID }],
+      directSupplyAmount: 1000, hubSurplusAmount: 2000,
+    };
+    const rv = new RoomVisual(room.roomName);
+    (global as any).__resetRoomVisualCalls();
+    const predicted = estimateSatellitePanelCalls(room);
+    expect((global as any).__roomVisualCalls).toHaveLength(0);
+    expect(drawSatellitePanel(rv, room)).toBe(predicted);
+    const calls: Array<{ method: string; args: any[] }> = (global as any).__roomVisualCalls;
+    expect(calls).toHaveLength(predicted);
+    expect(calls.find(call => call.method === "text" && String(call.args[0]).includes("from"))?.args[0])
+      .toBe("←  from  W1N1, W2N1 +1");
+  });
+});
 
 function makeMockTask(
   overrides: Partial<{
@@ -300,7 +326,8 @@ describe("renderHubProgressOverlays", () => {
   it("keeps real calls within budget and prioritizes blocked satellites before the hard cap", () => {
     Game.cpu = { bucket: 5000, limit: 500, used: 0, tickLimit: 500, getUsed: () => 0 } as any;
     Game.time = 101;
-    const satelliteNames = ["W2N1", "W3N1", "W4N1", "W5N1", "W6N1", "W7N1", "W8N1", "W9N1"];
+    const satelliteNames = Array.from({ length: 26 }, (_, index) => `W${index + 2}N1`);
+    const blockedName = satelliteNames[satelliteNames.length - 1];
     Game.rooms = {
       W1N1: { name: "W1N1", controller: { my: true }, find: () => [] } as any,
       ...Object.fromEntries(satelliteNames.map((roomName) => [
@@ -328,14 +355,14 @@ describe("renderHubProgressOverlays", () => {
       rooms: Object.fromEntries(satelliteNames.map((roomName) => [
         roomName,
         {
-          stage: roomName === "W9N1" ? "blocked" : "synthesizing",
+          stage: roomName === blockedName ? "blocked" : "synthesizing",
           activeProduct: RESOURCE_UTRIUM_HYDRIDE,
           reagentLabIds: [],
           productLabIds: [],
           successfulRuns: 0,
           pendingTasks: 0,
           lastTransitionAt: 100,
-          ...(roomName === "W9N1" ? { lastError: "missing reagent" } : {}),
+          ...(roomName === blockedName ? { lastError: "missing reagent" } : {}),
         },
       ])),
     } as any;
@@ -344,13 +371,15 @@ describe("renderHubProgressOverlays", () => {
     const calls: Array<{ roomName: string; method: string; args: any[] }> =
       (global as any).__roomVisualCalls;
     const headers = calls.filter(
-      (call) => call.method === "text" && String(call.args[0]).startsWith("Production:"),
+      (call) => call.method === "text" && String(call.args[0]).startsWith("SAT "),
     );
 
-    expect(stats).toEqual(expect.objectContaining({ satellitePanels: 6, skippedSatellitePanels: 2 }));
+    expect(stats).toEqual(expect.objectContaining({ satellitePanels: 24, skippedSatellitePanels: 2 }));
     expect(stats!.callsUsed).toBe(calls.length);
-    expect(stats!.callsUsed).toBeLessThanOrEqual(100);
-    expect(headers.some((call) => call.roomName === "W9N1")).toBe(true);
-    expect(headers.some((call) => call.roomName === "W8N1")).toBe(false);
+    expect(stats!.callsUsed).toBeLessThanOrEqual(450);
+    expect(headers.some((call) => call.roomName === blockedName)).toBe(true);
+    // 非阻塞房间按名称排序，末尾两个超出面板上限。
+    const lastByName = satelliteNames.filter((name) => name !== blockedName).sort((a, b) => a.localeCompare(b)).slice(-2);
+    for (const name of lastByName) expect(headers.some((call) => call.roomName === name)).toBe(false);
   });
 });

@@ -64,6 +64,11 @@ export class Card {
     return this.used;
   }
 
+  /** flush() 将产生的精确调用数：一次背景，加所有缓冲指令。 */
+  get pendingCalls(): number {
+    return this.flushed ? 0 : this.ops.length + 1;
+  }
+
   private get innerLeft(): number {
     return this.x + this.padX;
   }
