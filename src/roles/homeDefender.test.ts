@@ -152,3 +152,37 @@ describe("homeDefenderRole", () => {
     expect(defender.moveTo).not.toHaveBeenCalled();
   });
 });
+
+it("专用 lab 每 tick 只强化一名防御者，敌人进核心区时优先战斗", () => {
+  jest.clearAllMocks(); Game.time += 1;
+  const room = createRoom([]);
+  const makeDefender = (name: string) => ({ name, room, memory: { role: "homeDefender" },
+    body: [{ type: ATTACK, hits: 100 }], pos: new MockPos(10, 11, room.name), attack: jest.fn(() => OK) } as unknown as Creep);
+  const first = makeDefender("first"), second = makeDefender("second");
+  const lab = { my: true, room, store: { getUsedCapacity: () => 300 }, boostCreep: jest.fn(() => OK) } as unknown as StructureLab;
+  Memory.cfg = { homeDefense: { rooms: { W1N1: { boostLabId: "lab" } } } };
+  Game.getObjectById = jest.fn(() => lab) as unknown as Game["getObjectById"];
+  (getSafeZone as jest.Mock).mockReturnValue(new Set([10 * 50 + 10]));
+  (getPlayerHostiles as jest.Mock).mockReturnValue([]);
+  (getAssignedDefenseFront as jest.Mock).mockReturnValue(null);
+  (getTowerFocusFront as jest.Mock).mockReturnValue(null);
+  homeDefenderRole(room.name).target(first); homeDefenderRole(room.name).target(second);
+  expect(lab.boostCreep).toHaveBeenCalledTimes(1);
+  Game.time += 1;
+  const hostile = createHostile("inside", 10, 10);
+  (getPlayerHostiles as jest.Mock).mockReturnValue([hostile]);
+  homeDefenderRole(room.name).target(second);
+  expect(lab.boostCreep).toHaveBeenCalledTimes(1);
+  expect(second.attack).toHaveBeenCalledWith(hostile);
+  // 强化路径无解时继续在边界交战，不能被实验室永久拴住。
+  Game.time += 1;
+  const outside = createHostile("outside", 11, 11);
+  (getPlayerHostiles as jest.Mock).mockReturnValue([outside]);
+  (getBoundaryRamparts as jest.Mock).mockReturnValue([createRampart(10, 11)]);
+  (lab.boostCreep as jest.Mock).mockReturnValue(ERR_NOT_IN_RANGE);
+  const { moveToTarget } = jest.requireMock("@/roles/shared");
+  moveToTarget.mockReturnValue(ERR_NO_PATH);
+  homeDefenderRole(room.name).target(second);
+  expect(second.attack).toHaveBeenCalledWith(outside);
+  moveToTarget.mockReturnValue(OK);
+});

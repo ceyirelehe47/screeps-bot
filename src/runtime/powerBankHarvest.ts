@@ -228,7 +228,7 @@ function ensureCombatTaskIds(task: PowerBankHarvestTask, index: number, stage?: 
     for (const configName of getCombatConfigNames(task, role, index)) {
       for (const creep of getTickContextService().getCreepsByConfigName(configName)) {
         const mem = creep.memory as PowerBankReinforcementCreepMemory;
-        if (mem.taskId === undefined || mem.taskId === task.id) {
+        if (!creep.memory._recycleToRoom && (mem.taskId === undefined || mem.taskId === task.id)) {
           mem.taskId = task.id;
           (mem as PowerBankCreepMemory & { pairGeneration?: number }).pairGeneration =
             getCombatGeneration(task, index);
@@ -379,6 +379,7 @@ function neutralizeTaskCreeps(task: PowerBankHarvestTask): void {
     seen.add(creep.name);
     const mem = creep.memory as PowerBankReinforcementCreepMemory;
     delete mem.taskId;
+    delete mem.configName;
     delete mem.powerBankReinforcementStage;
     creep.memory.working = false;
   }
@@ -388,6 +389,7 @@ function neutralizeTaskCreeps(task: PowerBankHarvestTask): void {
       if (seen.has(creep.name)) continue;
       const mem = creep.memory as PowerBankReinforcementCreepMemory;
       delete mem.taskId;
+      delete mem.configName;
       delete mem.powerBankReinforcementStage;
       creep.memory.working = false;
     }
@@ -925,7 +927,8 @@ function abortUnfinishablePair(task: PowerBankHarvestTask, bank: StructurePowerB
   const finish = estimateRemainingAttackTicks(bank, pair.attacker, pair.healer);
   const travel = Math.max(minimumRemainingTravel(pair.attacker.pos, bank.pos), minimumRemainingTravel(pair.healer.pos, bank.pos));
   const ttl = Math.min(pair.attacker.ticksToLive ?? CREEP_LIFE_TIME, pair.healer.ticksToLive ?? CREEP_LIFE_TIME);
-  if (finish + travel + POWER_BANK_COMBAT_TTL_MARGIN < ttl) return false;
+  const runtimeMargin = 20;
+  if (finish + travel + runtimeMargin < ttl) return false;
   // 即使理想通路下也不能一队完成：停止投入，现役空载成员通过共用交通回收。
   const configs = new Set(getTaskConfigNames(task));
   for (const name of configs) {
@@ -994,7 +997,7 @@ function ensureHaulerConfigs(task: PowerBankHarvestTask): void {
 
     for (const creep of getTickContextService().getCreepsByConfigName(configName)) {
       const mem = creep.memory as PowerBankCreepMemory;
-      if (mem.taskId === undefined || mem.taskId === task.id) {
+      if (!creep.memory._recycleToRoom && (mem.taskId === undefined || mem.taskId === task.id)) {
         mem.taskId = task.id;
       }
     }
@@ -1004,7 +1007,7 @@ function ensureHaulerConfigs(task: PowerBankHarvestTask): void {
 function getAssignableCreepByConfigName(configName: string, taskId: string): Creep | undefined {
   return getTickContextService().getCreepsByConfigName(configName).find((creep) => {
     const mem = creep.memory as PowerBankCreepMemory;
-    return mem.taskId === undefined || mem.taskId === taskId;
+    return !creep.memory._recycleToRoom && (mem.taskId === undefined || mem.taskId === taskId);
   });
 }
 
@@ -1676,7 +1679,9 @@ function processAttacking(task: PowerBankHarvestTask): void {
     transitionTask(task, POWER_BANK_STATUS.HAULING);
     cleanupAllCombatConfigs(task);
     cleanupReinforcement(task);
-    ensureHaulerConfigs(task);
+    const hasDroppedPower = Game.rooms[task.targetRoom].find(FIND_DROPPED_RESOURCES)
+      .some(resource => resource.resourceType === RESOURCE_POWER && resource.amount > 0);
+    if (hasDroppedPower) ensureHaulerConfigs(task);
     retireCombatCreeps(task);
     return;
   }
@@ -2008,7 +2013,7 @@ function processHauling(task: PowerBankHarvestTask): void {
   const targetRoom = Game.rooms[task.targetRoom];
   if (!targetRoom) {
     setPowerBankBlocker(task, "hauling_target_not_visible", 3);
-    ensureHaulerConfigs(task);
+    requestPowerBankObservation(task.targetRoom);
     return;
   }
   task.lastVisibleAt = Game.time;
@@ -2104,7 +2109,7 @@ function ensureCreepTaskIds(task: PowerBankHarvestTask): void {
   for (const attackerConfigName of getCombatConfigNames(task, "attacker", activeIndex)) {
     for (const creep of getTickContextService().getCreepsByConfigName(attackerConfigName)) {
       const mem = creep.memory as PowerBankCreepMemory;
-      if (mem.taskId === undefined || mem.taskId === task.id) {
+      if (!creep.memory._recycleToRoom && (mem.taskId === undefined || mem.taskId === task.id)) {
         mem.taskId = task.id;
         (mem as PowerBankCreepMemory & { pairGeneration?: number }).pairGeneration = generation;
       }
@@ -2114,7 +2119,7 @@ function ensureCreepTaskIds(task: PowerBankHarvestTask): void {
   for (const healerConfigName of getCombatConfigNames(task, "healer", activeIndex)) {
     for (const creep of getTickContextService().getCreepsByConfigName(healerConfigName)) {
       const mem = creep.memory as PowerBankCreepMemory;
-      if (mem.taskId === undefined || mem.taskId === task.id) {
+      if (!creep.memory._recycleToRoom && (mem.taskId === undefined || mem.taskId === task.id)) {
         mem.taskId = task.id;
         (mem as PowerBankCreepMemory & { pairGeneration?: number }).pairGeneration = generation;
       }

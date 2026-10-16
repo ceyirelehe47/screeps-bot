@@ -15,6 +15,7 @@ import {
   runRemoteMining,
   processRemoteConfigLifecycle,
   getActiveDefenseReason,
+  getRemoteThreatReason,
   REMOTE_INVADER_CORE_MIN_SOURCE_CAPACITY,
   upsertScoutConfig,
 } from "@/runtime/remoteMining";
@@ -457,4 +458,25 @@ describe("外矿 Observer 视野租约与 scout 回退", () => {
     upsertScoutConfig("W1N1", "W66N0");
     expect(Memory.data!.creepConfigs![getRemoteMiningScoutConfigName("W1N1", "W66N0")]).toBeUndefined();
   });
+});
+
+
+it("容器在自己的衰减点扣血不判攻击，额外损伤才进入玩家防御", () => {
+  Game.time = 123; Game.creeps = {}; Game.spawns = {};
+  const source = { id: "source", pos: { x: 10, y: 10 } } as Source;
+  const container = { id: "container", structureType: STRUCTURE_CONTAINER, pos: { x: 11, y: 10 }, hits: 10000, ticksToDecay: 1 } as StructureContainer;
+  const hostile = { owner: { username: "enemy" } } as Creep;
+  const room = { name: "W1N0", controller: { reservation: { username: "Invader", ticksToEnd: 4500 } },
+    find: (kind: FindConstant, opts?: { filter?: (s: any) => boolean }) => {
+      const objects = kind === FIND_STRUCTURES ? [container] : kind === FIND_HOSTILE_CREEPS ? [hostile] : [];
+      return opts?.filter ? objects.filter(opts.filter) : objects;
+    } } as unknown as Room;
+  const task = { sourceRoom: "W1N1", targetRoom: room.name, status: "active", sourceIds: [source.id], assignedAt: 1, updatedAt: 1 } as import("@/runtime/remoteMining").RemoteMiningTask;
+  Game.getObjectById = jest.fn(() => source) as unknown as Game["getObjectById"];
+  expect(getRemoteThreatReason(room)).toBeNull();
+  expect(getActiveDefenseReason(room, task)).toBeNull();
+  Game.time += 1; container.hits -= CONTAINER_DECAY; container.ticksToDecay = CONTAINER_DECAY_TIME;
+  expect(getActiveDefenseReason(room, task)).toBeNull();
+  Game.time += 1; container.hits -= 1; container.ticksToDecay -= 1;
+  expect(getActiveDefenseReason(room, task)).toBe("player_aggression");
 });

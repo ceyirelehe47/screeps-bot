@@ -274,8 +274,7 @@ function cleanupFlagHaulConfig(task: FlagHaulTask): boolean {
     const liveCreeps = getLiveCreepsByConfig(configName);
     for (const creep of liveCreeps) {
       if (creep.store.getUsedCapacity() === 0) {
-        if (isInvaderFlag(task.flagName)) retireEmptySalvageMember(task, creep);
-        else creep.suicide();
+        retireEmptySalvageMember(task, creep);
       } else if (isInvaderFlag(task.flagName)) creep.memory.working = true;
     }
 

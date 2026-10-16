@@ -38,7 +38,11 @@ export const workerRole: RoleFactory = () => ({
 
     if (task.type === "build") {
       const buildCode = measureCreepIntent(() => creep.build(target as ConstructionSite));
-      moveToRemoteWorkTarget(creep, target);
+      const buildMoveCode = moveToRemoteWorkTarget(creep, target);
+      if (buildCode === ERR_NOT_IN_RANGE && buildMoveCode === ERR_NO_PATH) {
+        releaseWorkerTask(creep);
+        return false;
+      }
 
       if (buildCode === ERR_INVALID_TARGET || completeWorkerTaskIfDone(task)) {
         releaseWorkerTask(creep);

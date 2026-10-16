@@ -1,0 +1,37 @@
+{
+  "schema": "screeps-jest-integrity/v1",
+  "repoRoot": "/root/codex-jobs/20261017-screeps-scan-01a145fb/repo",
+  "resultsPath": "/root/codex-jobs/20261017-screeps-scan-01a145fb/logs/full-final/results.json",
+  "nodeVersion": "v22.22.1",
+  "sourceBefore": {
+    "commit": "7eb814a4bfb2da0682eb6745d38fd075f1c85b77",
+    "workspaceSha256": "4a506a4568921f64e3fb1acabeed6e3b5ea9c731fd850d4d1a9a3fe2eef42762"
+  },
+  "sourceAfter": {
+    "commit": "7eb814a4bfb2da0682eb6745d38fd075f1c85b77",
+    "workspaceSha256": "4a506a4568921f64e3fb1acabeed6e3b5ea9c731fd850d4d1a9a3fe2eef42762"
+  },
+  "listArgs": [
+    "--config",
+    "jest.config.cjs",
+    "--listTests",
+    "--json"
+  ],
+  "runArgs": [
+    "--config",
+    "jest.config.cjs",
+    "--runInBand",
+    "--json",
+    "--outputFile=/root/codex-jobs/20261017-screeps-scan-01a145fb/logs/full-final/results.json"
+  ],
+  "discoveryRun": {
+    "status": 0,
+    "signal": null
+  },
+  "testRun": {
+    "status": 0,
+    "signal": null
+  },
+  "discoverySha256": "3c48630f98da63fd150df06af661d1e34a4a48618eb4df0c83ba932e09fa94d1",
+  "resultsSha256": "48aed5d78303fe33a8b0a7997a1f39911bba29a615c7a5276d4c29e2940b689c"
+}

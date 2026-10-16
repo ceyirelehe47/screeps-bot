@@ -453,3 +453,33 @@ describe("remoteCarrierRole", () => {
     expect(delivered).toBe(false);
   });
 });
+
+
+it("路径 incomplete 不让新生搬运自杀，短 TTL 缓存过期后重新寻路", () => {
+  const home = createHomeRoom("W1N1");
+  const creep = { name: "healthy", ticksToLive: 1500, room: home, pos: home.storage!.pos,
+    memory: { configName: "W1N1:haul:W5N7:carrier:HAUL" }, store: createStore({}), suicide: jest.fn() } as unknown as Creep;
+  (PathFinder.search as jest.Mock).mockReturnValue({ incomplete: true, path: [] });
+  const role = remoteCarrierRole("W5N7");
+  role.prepare!(creep); role.prepare!(creep);
+  expect(creep.suicide).not.toHaveBeenCalled(); expect(PathFinder.search).toHaveBeenCalledTimes(1);
+  Game.time += 26; role.prepare!(creep);
+  expect(PathFinder.search).toHaveBeenCalledTimes(2);
+});
+it("跳过 nuker、敌方私有 rampart 覆盖目标，并短期拉黑确定失败的目标", () => {
+  createHomeRoom("W1N1");
+  const covered = { id: "covered", structureType: STRUCTURE_TERMINAL, my: false,
+    pos: { x: 20, y: 20, roomName: "W5N5", lookFor: () => [{ structureType: STRUCTURE_RAMPART, my: false, isPublic: false }] },
+    store: createStore({ H: 500 }) } as unknown as StructureTerminal;
+  const nuker = { id: "nuker", structureType: STRUCTURE_NUKER, store: createStore({ energy: 1000 }) } as StructureNuker;
+  const bad = { id: "bad", structureType: STRUCTURE_CONTAINER, pos: { x: 21, y: 20 }, store: createStore({ H: 100 }) } as unknown as StructureContainer;
+  const good = { id: "good", structureType: STRUCTURE_CONTAINER, pos: { x: 22, y: 20 }, store: createStore({ H: 50 }) } as unknown as StructureContainer;
+  const room = { name: "W5N5", find: (kind: FindConstant, opts?: { filter?: (s: Structure) => boolean }) =>
+    kind === FIND_STRUCTURES ? [nuker, covered, bad, good].filter(s => opts?.filter?.(s) ?? true) : [] } as unknown as Room;
+  const creep = { room, name: "picker", pos: { getRangeTo: () => 1 }, memory: { configName: "W1N1:haul:W5N5:carrier:HAUL" },
+    store: createStore({}), withdraw: jest.fn(() => ERR_INVALID_TARGET) } as unknown as Creep;
+  const role = remoteCarrierRole("W5N5"); role.source!(creep);
+  expect(creep.withdraw).toHaveBeenLastCalledWith(bad, RESOURCE_HYDROGEN);
+  Game.time += 1; role.source!({ ...creep } as Creep);
+  expect(creep.withdraw).toHaveBeenLastCalledWith(good, RESOURCE_HYDROGEN);
+});

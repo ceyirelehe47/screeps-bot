@@ -219,7 +219,7 @@ describe("partial withdrawal and maintenance", () => {
 
     expect(creep.withdraw).not.toHaveBeenCalledWith(source1Container, RESOURCE_ENERGY);
     expect(creep.pickup).toHaveBeenCalledWith(source2Drop);
-    expect(result).toBe(true);
+    expect(result).toBe(false);
   });
 });
 
@@ -313,4 +313,20 @@ describe("stable cardinal route passing", () => {
       expect(call[2]).toBe("W5N5|W1N1");
     }
   });
+});
+
+
+it("取到少量能量仍保持取货阶段，下 tick 满载后才切换", () => {
+  const pos = makePos(26, 25, "W5N5"), container = makeSourceContainer(20, pos);
+  const room = makeRoom("W5N5", { structures: [container] });
+  const creep = makeCreep({ room, energy: 0, pos: makePos(25, 25, "W5N5") });
+  Game.getObjectById = jest.fn(() => ({ id: "src1", pos: makePos(27, 25, "W5N5") })) as unknown as Game["getObjectById"];
+  Memory.data = { remoteMining: { W5N5: { sourceRoom: "W1N1", targetRoom: "W5N5", status: "active", sourceIds: ["src1"],
+    assignedAt: 1, updatedAt: 1 } } };
+  const role = remoteMiningCarrierRole("W5N5", "src1");
+  expect(role.source!(creep)).toBe(false);
+  expect(creep.withdraw).toHaveBeenCalledWith(container, RESOURCE_ENERGY);
+  Object.assign(creep, { store: createStore({ energy: 800 }, 800) });
+  Game.time += 1;
+  expect(role.source!(creep)).toBe(true);
 });

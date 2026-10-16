@@ -186,6 +186,7 @@ describe("mountCreep carrier switching", () => {
       },
       say: jest.fn(),
       transfer: jest.fn(() => ERR_FULL),
+      drop: jest.fn(() => OK),
       withdraw: jest.fn(() => ERR_NOT_ENOUGH_RESOURCES),
     } as unknown as Creep;
     ensureCreepAssignmentState(creep.name).synthesisCarrierTaskId = "lab-cleanup-task";
@@ -194,6 +195,7 @@ describe("mountCreep carrier switching", () => {
 
     creep.work();
     expect(creep.memory.working).toBe(true);
+    expect(creep.drop).toHaveBeenCalledWith(RESOURCE_KEANIUM);
 
     creep.work();
     expect(creep.memory.working).toBe(true);

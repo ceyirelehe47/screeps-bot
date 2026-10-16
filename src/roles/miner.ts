@@ -13,6 +13,14 @@ function getSource(sourceId?: string): Source | null {
   return Game.getObjectById(sourceId as Id<Source>);
 }
 
+function unloadOverflow(creep: Creep): boolean {
+  const container = (creep.pos.findInRange(FIND_STRUCTURES, 1, {
+    filter: s => s.structureType === STRUCTURE_CONTAINER && (s as StructureContainer).store.getFreeCapacity(RESOURCE_ENERGY) > 0,
+  }) as StructureContainer[])[0];
+  const code = measureCreepIntent(() => container ? creep.transfer(container, RESOURCE_ENERGY) : creep.drop(RESOURCE_ENERGY));
+  return code === OK;
+}
+
 export const minerRole: RoleFactory = (sourceId?: string) => ({
   source: (creep): boolean => {
     const source = getSource(sourceId);
@@ -78,7 +86,7 @@ export const minerRole: RoleFactory = (sourceId?: string) => ({
 
     const linkFreeCapacity = link.store.getFreeCapacity(RESOURCE_ENERGY);
     if (linkFreeCapacity <= 0) {
-      return false;
+      return unloadOverflow(creep);
     }
 
     const transferCode = measureCreepIntent(() => creep.transfer(link, RESOURCE_ENERGY));
@@ -92,7 +100,7 @@ export const minerRole: RoleFactory = (sourceId?: string) => ({
     }
 
     if (transferCode === ERR_FULL) {
-      return false;
+      return unloadOverflow(creep);
     }
 
     return false;

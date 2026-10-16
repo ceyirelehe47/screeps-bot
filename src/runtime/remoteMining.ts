@@ -19,6 +19,7 @@ export type RemoteDefenseReason = "npc_invader" | "npc_invader_core" | "player_a
 export interface DamageSnapshot {
   tick: number;
   hits: number;
+  ticksToDecay?: number;
 }
 
 export interface DamageSnapshots {
@@ -258,7 +259,6 @@ function isRoomStatusNormal(roomName: string): boolean {
 export function getRemoteThreatReason(room: Room): RemoteSuspendReason | null {
   const controller = room.controller;
   const invaderCores = getInvaderCores(room);
-  const hasSupportedCore = invaderCores.some(core => core.level === 0);
 
   if (controller?.owner && !controller.my) {
     return "hostile_owner";
@@ -267,7 +267,7 @@ export function getRemoteThreatReason(room: Room): RemoteSuspendReason | null {
   if (
     controller?.reservation &&
     controller.reservation.username !== getMyUsername() &&
-    !(hasSupportedCore && controller.reservation.username === INVADER_USERNAME)
+    controller.reservation.username !== INVADER_USERNAME
   ) {
     return "hostile_reservation";
   }
@@ -395,12 +395,7 @@ function snapshotContainerHits(
 
     for (const container of containers) {
       validIds.add(container.id);
-      const prev = snapshots.containers[container.id];
-      if (prev && now - prev.tick >= SNAPSHOT_STALE_TICKS) {
-        snapshots.containers[container.id] = { tick: now, hits: container.hits };
-      } else {
-        snapshots.containers[container.id] = { tick: now, hits: container.hits };
-      }
+      snapshots.containers[container.id] = { tick: now, hits: container.hits, ticksToDecay: container.ticksToDecay };
     }
   }
 
@@ -446,7 +441,8 @@ function detectPlayerAggression(
         const isOwnedRoom = room.controller?.my === true;
         const decayInterval = isOwnedRoom ? CONTAINER_DECAY_TIME_OWNED : CONTAINER_DECAY_TIME;
         const ticksSinceSnapshot = now - prev.tick;
-        const decayIntervals = Math.floor(ticksSinceSnapshot / decayInterval);
+        const firstDecay = prev.ticksToDecay ?? (container.ticksToDecay >= decayInterval - ticksSinceSnapshot ? ticksSinceSnapshot : decayInterval);
+        const decayIntervals = ticksSinceSnapshot >= firstDecay ? 1 + Math.floor((ticksSinceSnapshot - firstDecay) / decayInterval) : 0;
         const expectedDecay = decayIntervals * CONTAINER_DECAY;
         const actualLoss = prev.hits - container.hits;
         if (actualLoss > expectedDecay) return true;

@@ -264,12 +264,14 @@ export const healerRole: RoleFactory = (
       return false;
     }
 
+    let healed = false;
     const escortTarget = measureCreepDecision(() => getEscortTarget(creep, targetRoom));
     if (escortTarget) {
       if (escortTarget.hits < escortTarget.hitsMax) {
         const healCode = measureCreepIntent(() => creep.heal(escortTarget));
+        healed = healCode === OK;
         if (healCode === ERR_NOT_IN_RANGE) {
-          measureCreepIntent(() => creep.rangedHeal(escortTarget));
+          healed = measureCreepIntent(() => creep.rangedHeal(escortTarget)) === OK;
           moveToTarget(creep, escortTarget, 1, { plainCost: 2, swampCost: 8, reusePath: 3, maxRooms: 1 });
         }
       } else if (!creep.pos.isNearTo(escortTarget)) {
@@ -277,7 +279,7 @@ export const healerRole: RoleFactory = (
       }
     }
 
-    if (creep.hits < creep.hitsMax) {
+    if (!healed && creep.hits < creep.hitsMax) {
       measureCreepIntent(() => creep.heal(creep));
     }
 

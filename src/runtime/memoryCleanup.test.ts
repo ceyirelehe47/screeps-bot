@@ -477,3 +477,21 @@ describe("runMemoryCleanup", () => {
     expect(snapshotManagedGcState()).toEqual(converged);
   });
 });
+
+
+it("布局 TTL 只淘汰失去所有权且过期的房间", () => {
+  resetRuntimeServices();
+  Game.time = 51000;
+  Game.rooms = { W1N1: createOwnedRoom("W1N1") };
+  Game.spawns = {};
+  Memory.cfg = {};
+  Memory.data = { roomPlanner: {
+    W1N1: { savedAt: 0, layout: {} },
+    W2N2: { savedAt: Game.time, layout: {} },
+    W3N3: { savedAt: 0, layout: {} },
+  } } as any;
+  runMemoryCleanup();
+  expect(Memory.data!.roomPlanner!.W1N1).toBeDefined();
+  expect(Memory.data!.roomPlanner!.W2N2).toBeDefined();
+  expect(Memory.data!.roomPlanner!.W3N3).toBeUndefined();
+});

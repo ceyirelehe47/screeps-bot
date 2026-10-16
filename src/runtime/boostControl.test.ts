@@ -1,5 +1,5 @@
 import { createMockStore } from "@mock/powerBank";
-import { buyBoostIfNeeded, DEFENSE_BOOST_COMPOUND } from "@/runtime/boostControl";
+import { buyBoostIfNeeded, syncBoostLabTask, DEFENSE_BOOST_COMPOUND } from "@/runtime/boostControl";
 import {
   clearMarketActionArbiterForTest,
   executeTerminalAction,
@@ -50,6 +50,7 @@ describe("boost control market gateway", () => {
       maxBoostDealEnergyCostRatio: 1,
     };
     (Game as any).market = {
+      credits: 1_000_000,
       getAllOrders: jest.fn(() => [createBoostOrder()]),
       calcTransactionCost: jest.fn(() => 100),
       deal: jest.fn(() => OK),
@@ -100,4 +101,19 @@ describe("boost control market gateway", () => {
     expect(Game.market.deal).not.toHaveBeenCalled();
     expect(getTerminalActionClaim("W1N1")?.actor).toBe("resourceControl");
   });
+});
+
+
+it("防御 boost lab 同时补矿物和 boost 能量", () => {
+  const { clearCarrierTaskBoardForTest, listCarrierTasksByRoom } = require("@/runtime/carrierTaskBoard");
+  clearCarrierTaskBoardForTest();
+  Memory.cfg = { homeDefense: { rooms: { W1N1: { boostLabId: "lab" } } } };
+  const room = createRoom(); Object.assign(room, { energyCapacityAvailable: 1300 });
+  Object.assign(room.storage!, { id: "storage", store: createMockStore({ energy: 10000, [DEFENSE_BOOST_COMPOUND]: 1000 }) });
+  const lab = { id: "lab", room, store: createMockStore({}, 3000) } as StructureLab;
+  Game.getObjectById = jest.fn(() => lab) as unknown as Game["getObjectById"];
+  syncBoostLabTask(room);
+  const steps = listCarrierTasksByRoom(room.name).flatMap((task: any) => task.steps);
+  expect(steps).toContainEqual(expect.objectContaining({ resource: RESOURCE_ENERGY, toId: "lab", amount: 200 }));
+  expect(steps).toContainEqual(expect.objectContaining({ resource: DEFENSE_BOOST_COMPOUND, toId: "lab", amount: 300 }));
 });

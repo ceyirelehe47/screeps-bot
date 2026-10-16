@@ -341,6 +341,7 @@ describe("roomWorkforce", () => {
     expect(getInventoryConfigNames(reserveRoom)).toEqual([
       "W1N6:harvester:source-a",
       "W1N6:carrier:0",
+      "W1N6:worker:0",
     ]);
     expect(reserveRoom.memory.workerConstructionTier).toBe(3);
 

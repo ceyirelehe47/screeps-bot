@@ -141,7 +141,9 @@ const T3_RESOURCES = new Set<ResourceConstant>([
   RESOURCE_CATALYZED_GHODIUM_ACID,
   RESOURCE_CATALYZED_GHODIUM_ALKALIDE,
 ]);
-const outboundTravelEstimateCache = new Map<string, number>();
+const outboundTravelEstimateCache = new Map<string, { ticks: number; expiresAt: number }>();
+let outboundEstimateTick = -1;
+let outboundEstimateGame: Game | undefined;
 
 function getStoredResources(store: StoreDefinition): ResourceConstant[] {
   return (Object.keys(store) as ResourceConstant[]).filter((resource) => store.getUsedCapacity(resource) > 0);
@@ -205,7 +207,8 @@ function isWithdrawTarget(structure: Structure<StructureConstant>): structure is
   if (
     structure.structureType === STRUCTURE_CONTROLLER ||
     structure.structureType === STRUCTURE_SPAWN ||
-    structure.structureType === STRUCTURE_EXTENSION
+    structure.structureType === STRUCTURE_EXTENSION ||
+    structure.structureType === STRUCTURE_NUKER
   ) {
     return false;
   }
@@ -229,7 +232,12 @@ function getRemoteHaulTargets(room: Room, salvage = false): RemoteHaulTarget[] {
 
 function selectPickupTarget(creep: Creep, salvage = false): { target: RemoteHaulTarget; resource: ResourceConstant } | null {
   return measureCreepDecision(() => {
+    const rejected = creep.memory.remoteCarrierRejectedTargets;
+    if (rejected) for (const [id, until] of Object.entries(rejected)) if (until <= Game.time) delete rejected[id];
     const candidates = getRemoteHaulTargets(creep.room, salvage)
+      .filter(target => (rejected?.[target.id] ?? 0) <= Game.time)
+      .filter(target => !("my" in target && target.my === false && target.pos.lookFor(LOOK_STRUCTURES)
+        .some(s => s.structureType === STRUCTURE_RAMPART && !(s as StructureRampart).my && !(s as StructureRampart).isPublic)))
       .filter((target) => !salvage || isInvaderSalvagePositionSafe(creep.room, target.pos))
       .map((target) => ({
         target,
@@ -286,10 +294,13 @@ function getOutboundTravelCacheKey(startPos: RoomPosition, targetRoom: string): 
 }
 
 function estimateOutboundTravelTicks(startPos: RoomPosition, targetRoom: string): number {
+  if (Game.time < outboundEstimateTick || (Game.time === outboundEstimateTick && outboundEstimateGame !== Game)) outboundTravelEstimateCache.clear();
+  outboundEstimateTick = Game.time;
+  outboundEstimateGame = Game;
   const cacheKey = getOutboundTravelCacheKey(startPos, targetRoom);
   const cached = outboundTravelEstimateCache.get(cacheKey);
-  if (cached !== undefined) {
-    return cached;
+  if (cached && cached.expiresAt > Game.time) {
+    return cached.ticks;
   }
 
   const search = PathFinder.search(startPos, { pos: new RoomPosition(25, 25, targetRoom), range: 1 }, {
@@ -298,8 +309,9 @@ function estimateOutboundTravelTicks(startPos: RoomPosition, targetRoom: string)
     plainCost: 2,
     swampCost: 10,
   });
-  const estimate = search.incomplete ? Infinity : search.path.length;
-  outboundTravelEstimateCache.set(cacheKey, estimate);
+  const estimate = search.incomplete ? Math.max(50, Game.map.getRoomLinearDistance(startPos.roomName, targetRoom) * 50) : search.path.length;
+  if (outboundTravelEstimateCache.size >= 128) outboundTravelEstimateCache.delete(outboundTravelEstimateCache.keys().next().value!);
+  outboundTravelEstimateCache.set(cacheKey, { ticks: estimate, expiresAt: Game.time + (search.incomplete ? 25 : 500) });
 
   return estimate;
 }
@@ -446,6 +458,11 @@ export const remoteCarrierRole: RoleFactory = (targetRoom: string, targetX?: str
     }
     if (code !== OK) {
       exposureClaim?.release();
+      if (code === ERR_NOT_OWNER || code === ERR_INVALID_TARGET) {
+        const rejected = creep.memory.remoteCarrierRejectedTargets ??= {};
+        if (Object.keys(rejected).length >= 16) delete rejected[Object.keys(rejected)[0]];
+        rejected[assignment.target.id] = Game.time + 50;
+      }
     }
     if (salvage && code === OK) { markSalvageIntent(creep); return false; }
     return isCarryStoreFull(creep);

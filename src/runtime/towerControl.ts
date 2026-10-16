@@ -387,21 +387,23 @@ function chooseCoordinatedBurstTarget(
   return combinedBurst > incomingHeal ? preferredTarget : null;
 }
 
-function runTowerCombat(room: Room, towers: StructureTower[], hostiles: Creep[], woundedCreeps: Creep[]): boolean {
+function runTowerCombat(room: Room, towers: StructureTower[], hostiles: Creep[], woundedCreeps: Creep[], emergencyRamparts: StructureRampart[]): boolean {
   if (hostiles.length <= 0 || towers.length <= 0) {
     return false;
   }
 
   const attackTowers: StructureTower[] = [];
+  let healed = false;
   for (const tower of towers) {
-    if (woundedCreeps.length > 0) {
+    if (!healed && woundedCreeps.length > 0) {
       const target = tower.pos.findClosestByRange(woundedCreeps);
       if (target) {
         const code = tower.heal(target);
         if (code === OK) {
+          healed = true;
           recordFixedCpuAction("towerControl");
+          continue;
         }
-        continue;
       }
     }
     attackTowers.push(tower);
@@ -425,6 +427,7 @@ function runTowerCombat(room: Room, towers: StructureTower[], hostiles: Creep[],
   const coordinatedBurstTarget = chooseCoordinatedBurstTarget(room, combatHostiles, analysis);
 
   if (!coordinatedBurstTarget && isAllHostilesImmune(analysis, combatHostiles)) {
+    for (const tower of attackTowers) runTowerPeaceFlow(tower, emergencyRamparts, [], []);
     delete state.focusTargetId;
     delete state.lastFocusHits;
     delete state.stalledTicks;
@@ -502,7 +505,7 @@ export function runTowerControl(): void {
     const emergencyRamparts = collectEmergencyRamparts(room);
     const woundedCreeps = (roomContext?.getMyCreeps() || []).filter((creep) => creep.hits < creep.hitsMax);
 
-    if (runTowerCombat(room, towers, hostiles, woundedCreeps)) {
+    if (runTowerCombat(room, towers, hostiles, woundedCreeps, emergencyRamparts)) {
       continue;
     }
 

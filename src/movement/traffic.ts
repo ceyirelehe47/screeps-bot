@@ -56,10 +56,11 @@ export function isBlockerActivelyMoving(blocker: AnyCreep): boolean {
   if (state.pathingRequestedAt === Game.time) {
     return true;
   }
-  if (state.movePathState && state.movePathState.expiresAt > Game.time) {
+  const recentlyRequested = state.pathingRequestedAt !== undefined && state.pathingRequestedAt >= Game.time - 1;
+  if (recentlyRequested && state.movePathState && state.movePathState.expiresAt > Game.time) {
     return true;
   }
-  if (state.travelState && state.travelState.targetRoom !== blocker.room?.name) {
+  if (recentlyRequested && state.travelState && state.travelState.targetRoom !== blocker.room?.name) {
     return true;
   }
   return false;

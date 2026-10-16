@@ -1,0 +1,15 @@
+
+> screeps@2026.10.16-2 test
+> jest --config jest.config.cjs --runInBand --runTestsByPath src/roles/homeDefender.test.ts
+
+PASS src/roles/homeDefender.test.ts
+  ✓ 专用 lab 每 tick 只强化一名防御者，敌人进核心区时优先战斗 (4 ms)
+  homeDefenderRole
+    ✓ attacks an adjacent hostile when the assigned boundary target retreats out of range (11 ms)
+    ✓ never calls raw creep.moveTo (3 ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       3 passed, 3 total
+Snapshots:   0 total
+Time:        1.733 s
+Ran all test suites within paths "src/roles/homeDefender.test.ts".

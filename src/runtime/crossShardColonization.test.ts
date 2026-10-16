@@ -161,3 +161,22 @@ describe("runCrossShardColonizationByFlag", () => {
     expect(spawnB.memory.spawnList).toContain(configName);
   });
 });
+
+
+it("Portal 旧快照已过期时不能继续排队，并撤销原有待孵化配置", () => {
+  resetRuntimeServices(); Game.time = 10000; Game.creeps = {}; Game.flags = {};
+  Game.shard = { name: "shard0" } as Game["shard"];
+  const room = createRoom("W1N1"), spawn = createSpawn("Spawn", room);
+  Game.rooms = { W1N1: room }; Game.spawns = { Spawn: spawn };
+  const configName = "W1N1:crossShard:shard1:W9N9:claimer:0";
+  spawn.memory.spawnList = [configName];
+  Memory.data = { creepConfigs: { [configName]: { role: "crossShardClaimer", args: [], roomName: room.name } },
+    interShardPortals: { p: { id: "p", originRoom: "W1N2", destinationShard: "shard1", destinationRoom: "W9N8",
+      discoveredAt: 9000, lastSeenAt: 9000, ticksToDecay: 500 } },
+    crossShardColonization: { "shard1:W9N9": { targetShard: "shard1", targetRoom: "W9N9", sourceRoom: room.name,
+      status: "planning", flagName: "CLX_shard1_W9N9", claimerConfigName: configName, createdAt: 9000, updatedAt: 9000 } } } as any;
+  Object.assign(Game, { map: { getRoomLinearDistance: () => 1 } });
+  runCrossShardColonizationByFlag();
+  expect(spawn.memory.spawnList).not.toContain(configName);
+  expect(Memory.data!.crossShardColonization!["shard1:W9N9"].status).toBe("blocked");
+});

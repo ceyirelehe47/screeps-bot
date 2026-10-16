@@ -77,7 +77,7 @@ function getSpawnConfigPriority(roomName: string, configName: string): number {
   if (config?.roomName === roomName &&
       ((config.role === "harvester" && configName.startsWith(`${roomName}:harvester:`)) ||
        (config.role === "miner" && configName.startsWith(`${roomName}:miner:`))) &&
-      isNewRoomMiningRecovery(roomName) && !hasRoomSourceWorker(roomName) && !shouldSkipConfigInDefenseMode(config)) return -2;
+      Game.rooms[roomName]?.controller?.my && !hasRoomSourceWorker(roomName) && !shouldSkipConfigInDefenseMode(config)) return -2;
   if (isRcl8MaintenanceUpgraderConfig(configName, config)) {
     return -1;
   }
@@ -993,7 +993,7 @@ function ensureEmergencyCarrier(spawn: StructureSpawn): void {
 function ensureRecoveryHarvester(
   room: Room, spawns: StructureSpawn[], configs: Record<string, CreepConfig>, context: SpawnPlanningContext,
 ): boolean {
-  if (!isNewRoomMiningRecovery(room.name)) return false;
+  if (!room.controller?.my) return false;
   const local = Object.entries(configs).filter(([name, config]) => config.roomName === room.name &&
     ((name.startsWith(`${room.name}:harvester:`) && config.role === "harvester") ||
      (name.startsWith(`${room.name}:miner:`) && config.role === "miner")));

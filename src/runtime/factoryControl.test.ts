@@ -131,3 +131,52 @@ describe("cooldown and capacity", () => {
     expect(factory.produce).not.toHaveBeenCalled();
   });
 });
+
+
+it("带等级配方只在工厂等级相等且 Operate Factory 生效时补料", () => {
+  const { clearCarrierTaskBoardForTest, listCarrierTasksByRoom } = require("@/runtime/carrierTaskBoard");
+  for (const [level, effectLevel, remaining, allowed] of [[2, 1, 10, false], [1, 1, 0, false], [1, 1, 10, true]]) {
+    clearCarrierTaskBoardForTest(); Memory.runtime = undefined;
+    const { room, factory } = createFactoryRoom({ storageResources: { energy: 300000, utrium_bar: 100, zynthium_bar: 100 },
+      factoryOverrides: { level: Number(level) } });
+    Object.assign(factory, { effects: [{ effect: PWR_OPERATE_FACTORY, level: effectLevel, ticksRemaining: remaining }] });
+    setupGameRooms({ W1N1: room });
+    setConfig({ enabled: true, targets: [{ resource: "composite", targetAmount: 100 }] });
+    runFactoryControl();
+    if (!allowed) {
+      expect(listCarrierTasksByRoom(room.name)).toHaveLength(0);
+      expect(factory.produce).not.toHaveBeenCalled();
+    } else expect(Memory.runtime?.factoryControl?.rooms.W1N1.activeTarget).toBe("composite");
+  }
+});
+
+
+it("工厂补料来源选择扣除 terminal 中待售锁定量", () => {
+  const { clearCarrierTaskBoardForTest, listCarrierTasksByRoom } = require("@/runtime/carrierTaskBoard");
+  const { clearMarketSaleExposureReservationsForTest } = require("@/runtime/marketSaleExposure");
+  clearCarrierTaskBoardForTest(); clearMarketSaleExposureReservationsForTest(); Memory.runtime = undefined;
+  const { room, storage } = createFactoryRoom({ storageResources: { energy: 300000 }, terminalResources: { energy: 500000 } });
+  setupGameRooms({ W1N1: room });
+  setConfig({ enabled: true, targets: [{ resource: RESOURCE_BATTERY, targetAmount: 50 }] });
+  Memory.data = { marketSaleAutomation: { managedOrders: {}, pendingDirectDeals: { held: {
+    requestId: "held", status: "reconcile_gap", canaryRoomName: room.name, resource: RESOURCE_ENERGY,
+    dealAmount: 400000, transactionEnergy: 0,
+  } } } } as any;
+  runFactoryControl();
+  expect(listCarrierTasksByRoom(room.name).flatMap((task: any) => task.steps))
+    .toContainEqual(expect.objectContaining({ resource: RESOURCE_ENERGY, fromId: storage.id }));
+});
+
+
+it("不支持的旧配方释放残留原料，仍保留下一个可生产配方的输入", () => {
+  const { clearCarrierTaskBoardForTest, listCarrierTasksByRoom } = require("@/runtime/carrierTaskBoard");
+  clearCarrierTaskBoardForTest(); Memory.runtime = undefined;
+  const { room, factory } = createFactoryRoom({ terminalResources: {}, factoryOverrides: { level: 1,
+    store: createMockStore({ utrium_bar: 100, energy: 600 }) } });
+  setupGameRooms({ W1N1: room });
+  setConfig({ enabled: true, targets: [{ resource: "composite", targetAmount: 100 }, { resource: RESOURCE_BATTERY, targetAmount: 50 }] });
+  runFactoryControl();
+  const steps = listCarrierTasksByRoom(room.name).flatMap((task: any) => task.steps);
+  expect(steps).toContainEqual(expect.objectContaining({ fromId: factory.id, resource: "utrium_bar", amount: 100 }));
+  expect(steps.some((step: any) => step.fromId === factory.id && step.resource === RESOURCE_ENERGY)).toBe(false);
+});

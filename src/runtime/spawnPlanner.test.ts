@@ -125,12 +125,13 @@ describe("采矿持续补员回归", () => {
     expect(spawn.memory.spawnList![0]).toBe(miner);
     expect(spawn.memory.spawnList!.some(n => n.includes(":bootstrapHarvester:"))).toBe(false);
   });
-  it("没有新房支援策略的房间保持原有队列和身体策略", () => {
+  it("普通自有房团灭后也恢复应急采矿，保留常规配置体型", () => {
     const { spawn, carrier } = stalledRoom(213);
     Memory.cfg = {};
     scheduleSpawnTasks();
-    expect(spawn.memory.spawnList![0]).toBe(carrier);
-    expect(spawn.memory.spawnList!.some(n => n.includes(":bootstrapHarvester:"))).toBe(false);
+    expect(spawn.memory.spawnList![0]).toContain(":bootstrapHarvester:");
+    expect(Memory.data!.creepConfigs![spawn.memory.spawnList![0]].body).toEqual([WORK, MOVE]);
+    expect(spawn.memory.spawnList).toContain(carrier);
   });
 
   it("无Storage房间在矿工仍有100TTL时预留下一代补能与运输时间", () => {

@@ -1,0 +1,82 @@
+
+> screeps@2026.10.16-2 test
+> jest --config jest.config.cjs --runInBand --runTestsByPath src/runtime/spawnPlanner.test.ts src/runtime/towerControl.test.ts src/runtime/memoryCleanup.test.ts src/runtime/powerBankTransit.test.ts --json --outputFile=../logs/first-red.json
+
+FAIL src/runtime/spawnPlanner.test.ts
+  ● 采矿持续补员回归 › 普通自有房团灭后也恢复应急采矿，保留常规配置体型
+
+    expect(received).toContain(expected) // indexOf
+
+    Expected substring: ":bootstrapHarvester:"
+    Received string:    "E3N54:carrier:0"
+
+      130 |     Memory.cfg = {};
+      131 |     scheduleSpawnTasks();
+    > 132 |     expect(spawn.memory.spawnList![0]).toContain(":bootstrapHarvester:");
+          |                                        ^
+      133 |     expect(Memory.data!.creepConfigs![spawn.memory.spawnList![0]].body).toEqual([WORK, MOVE]);
+      134 |     expect(spawn.memory.spawnList).toContain(carrier);
+      135 |   });
+
+      at Object.<anonymous> (src/runtime/spawnPlanner.test.ts:132:40)
+
+FAIL src/runtime/memoryCleanup.test.ts
+  ● 布局 TTL 只淘汰失去所有权且过期的房间
+
+    expect(received).toBeDefined()
+
+    Received: undefined
+
+      492 |   } } as any;
+      493 |   runMemoryCleanup();
+    > 494 |   expect(Memory.data!.roomPlanner!.W1N1).toBeDefined();
+          |                                          ^
+      495 |   expect(Memory.data!.roomPlanner!.W2N2).toBeDefined();
+      496 |   expect(Memory.data!.roomPlanner!.W3N3).toBeUndefined();
+      497 | });
+
+      at Object.<anonymous> (src/runtime/memoryCleanup.test.ts:494:42)
+
+FAIL src/runtime/powerBankTransit.test.ts
+  ● 没有 Observer 覆盖时依赖已知所有权继续行军，仍避开已知敌房
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+      129 | it("没有 Observer 覆盖时依赖已知所有权继续行军，仍避开已知敌房", () => {
+      130 |   (requestCombatObservation as jest.Mock).mockReturnValue(false);
+    > 131 |   expect(isPowerBankTransitRoomAllowed("E3N60")).toBe(true);
+          |                                                  ^
+      132 |   Memory.runtime!.powerBankOwnedRoomIntel = { E3N58: { owner: "enemy", lastSeenAt: Game.time - 500 } };
+      133 |   expect(isPowerBankTransitRoomAllowed("E3N58")).toBe(false);
+      134 |   (requestCombatObservation as jest.Mock).mockReturnValue(true);
+
+      at Object.<anonymous> (src/runtime/powerBankTransit.test.ts:131:50)
+
+FAIL src/runtime/towerControl.test.ts
+  ● 战斗中只用一座塔治疗，其余塔继续攻击
+
+    expect(received).toHaveLength(expected)
+
+    Expected length: 1
+    Received length: 3
+    Received array:  [{"attack": [Function mockConstructor], "heal": [Function mockConstructor], "id": "a", "pos": {"roomName": "W1N3", "x": 10, "y": 10}, "repair": [Function mockConstructor], "store": {"getCapacity": [Function mockConstructor], "getFreeCapacity": [Function mockConstructor], "getUsedCapacity": [Function mockConstructor]}, "structureType": "tower"}, {"attack": [Function mockConstructor], "heal": [Function mockConstructor], "id": "b", "pos": {"roomName": "W1N3", "x": 11, "y": 10}, "repair": [Function mockConstructor], "store": {"getCapacity": [Function mockConstructor], "getFreeCapacity": [Function mockConstructor], "getUsedCapacity": [Function mockConstructor]}, "structureType": "tower"}, {"attack": [Function mockConstructor], "heal": [Function mockConstructor], "id": "c", "pos": {"roomName": "W1N3", "x": 12, "y": 10}, "repair": [Function mockConstructor], "store": {"getCapacity": [Function mockConstructor], "getFreeCapacity": [Function mockConstructor], "getUsedCapacity": [Function mockConstructor]}, "structureType": "tower"}]
+
+      204 |   Game.rooms[name] = room;
+      205 |   runTowerControl();
+    > 206 |   expect(towers.filter(t => (t.heal as jest.Mock).mock.calls.length)).toHaveLength(1);
+          |                                                                       ^
+      207 |   expect(towers.filter(t => (t.attack as jest.Mock).mock.calls.length)).toHaveLength(2);
+      208 | });
+      209 |
+
+      at Object.<anonymous> (src/runtime/towerControl.test.ts:206:71)
+
+Test Suites: 4 failed, 4 total
+Tests:       4 failed, 34 passed, 38 total
+Snapshots:   0 total
+Time:        7.956 s
+Ran all test suites within paths "src/runtime/spawnPlanner.test.ts", "src/runtime/towerControl.test.ts", "src/runtime/memoryCleanup.test.ts", "src/runtime/powerBankTransit.test.ts".
+Test results written to: ../logs/first-red.json

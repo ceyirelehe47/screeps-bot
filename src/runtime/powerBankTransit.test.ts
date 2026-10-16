@@ -124,3 +124,12 @@ it("缓存规划事实不代替实际迁房落点的原生安全门", () => {
   room.controller = { my: false, owner: { username: "enemy" } } as StructureController;
   expect(options.canMoveStep?.({ roomName: "E3N58" } as RoomPosition)).toBe(false);
 });
+
+
+it("没有 Observer 覆盖时依赖已知所有权继续行军，仍避开已知敌房", () => {
+  (requestCombatObservation as jest.Mock).mockReturnValue(false);
+  expect(isPowerBankTransitRoomAllowed("E3N60")).toBe(true);
+  Memory.runtime!.powerBankOwnedRoomIntel = { E3N58: { owner: "enemy", lastSeenAt: Game.time - 500 } };
+  expect(isPowerBankTransitRoomAllowed("E3N58")).toBe(false);
+  (requestCombatObservation as jest.Mock).mockReturnValue(true);
+});

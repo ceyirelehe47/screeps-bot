@@ -111,6 +111,17 @@ describe("powerSpawnControl", () => {
     resetScenarioState();
   });
 
+  it("补能不得穿透 storage 的 energyFloor", () => {
+    const { room, storage } = createScenario();
+    (storage.store as MutableStore).set(RESOURCE_ENERGY, 120_123);
+    runPowerSpawnControl();
+    expect(listCarrierTasksByRoom(room.name)[0].steps.find(step => step.resource === RESOURCE_ENERGY)?.amount).toBe(123);
+    (storage.store as MutableStore).set(RESOURCE_ENERGY, 120_000);
+    Game.time += 1;
+    runPowerSpawnControl();
+    expect(listCarrierTasksByRoom(room.name)[0].steps.some(step => step.resource === RESOURCE_ENERGY)).toBe(false);
+  });
+
   it("覆盖所有合格房间的专用补给、自动加工和多房并行", () => {
     const { room, powerSpawn, storage } = createScenario({ roomName: "E6N59" });
 

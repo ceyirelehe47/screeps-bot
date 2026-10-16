@@ -1,0 +1,1714 @@
+PASS test/memoryDeclarationBoundaries.test.ts (25.35 s)
+PASS src/runtime/marketBaseResourcePermit.test.ts (100.049 s)
+PASS src/runtime/marketBaseResourceEgressTrialR2.integration.test.ts (77.5 s)
+PASS src/runtime/marketBaseResourceAutomation.test.ts (54.613 s)
+PASS test/localDispatchPerformanceBaseline.test.ts (41.266 s)
+  ● Console
+
+    console.log
+      LOCAL_DISPATCH_PERFORMANCE_BASELINE {"schema":"local-dispatch-performance-baseline/v2","implementation":"full-ref-local-dispatch","fixture":{"rooms":20,"tasksPerRoom":20,"totalTasksPerDomain":400,"actors":50},"protocol":{"clock":"process.hrtime.bigint","timingUnit":"milliseconds","warmupBatches":5,"measuredBatches":30,"iterationsPerBatch":100,"p95":"nearest-rank","timingPassFail":"observation-only; deployment CPU gate is the live same-shard window","complexityPassFail":"deterministic public-input/read-DTO counts"},"preChangeEvidence":{"source":"openspec/changes/local-dispatch-ownership/evidence/pre-change-baseline.md","commit":"df2e1af60a035fd99406888d69bba9903e8a7118","observation":{"workerCurrent":{"median":12.083,"p95":12.378},"workerRelease":{"median":39.879,"p95":40.633},"carrierList":{"median":13.476,"p95":14.086},"carrierClaim":{"median":12.937,"p95":13.586},"carrierReplace":{"median":61.892,"p95":66.713}}},"scenarios":{"workerCurrent":{"samples":[441.130508,444.193559,440.413659,441.68381,440.948328,440.716327,440.038636,440.913084,439.861435,443.485337,455.641847,440.993201,452.46186,442.658144,440.463057,450.891203,439.058657,445.129731,439.861255,459.920537,439.817164,446.530116,439.457336,438.815706,440.909895,439.769792,442.169525,441.728107,441.383558,440.643217],"median":440.970764,"p95":455.641847,"min":438.815706,"max":459.920537,"relativeToPreChange":{"median":36.495139,"p95":36.810619}},"workerRelease":{"samples":[354.894287,366.729669,352.176484,352.251365,361.41807,351.327821,356.98859,352.488617,350.632146,369.819521,351.954849,352.226182,357.97943,351.63684,352.378423,354.094542,362.202502,350.722859,352.758978,349.524153,352.538105,352.793793,349.411958,354.934491,349.244138,360.623615,363.099335,354.588896,350.132246,366.263339],"median":352.648541,"p95":366.729669,"min":349.244138,"max":369.819521,"relativeToPreChange":{"median":8.842963,"p95":9.025415}},"carrierList":{"samples":[13.828169,9.054816,10.431062,8.996163,8.965738,9.696055,8.883875,8.911559,9.034368,9.617856,8.876205,9.030345,8.855,8.850325,9.736239,9.023962,8.955762,8.986224,9.049694,9.561616,9.467508,9.010235,8.960425,8.94889,9.495547,10.866604,10.403555,8.98758,9.529129,8.995808],"median":9.027154,"p95":10.866604,"min":8.850325,"max":13.828169,"relativeToPreChange":{"median":0.669869,"p95":0.771447}},"carrierClaim":{"samples":[141.674682,137.401229,136.091587,116.301157,68.412064,68.263092,69.865932,68.98748,68.836472,68.592432,106.82585,73.860116,68.50639,69.016775,68.630206,68.330257,68.572067,69.546885,74.702441,68.324813,69.598769,68.605922,68.622893,69.060509,86.841638,69.626796,68.585742,69.030693,68.254549,68.628079],"median":69.002128,"p95":137.401229,"min":68.254549,"max":141.674682,"relativeToPreChange":{"median":5.333704,"p95":10.113442}},"carrierReplace":{"samples":[221.581943,223.632895,214.970646,214.753968,259.338597,214.89253,213.05763,215.23644,213.773427,262.897086,220.000226,222.459611,217.44175,253.39569,217.81014,219.372691,218.80599,208.942982,270.677932,223.561869,220.98242,209.183395,215.096821,278.432174,243.472369,219.959102,211.146978,273.530117,217.782703,213.406912],"median":219.08934,"p95":273.530117,"min":208.942982,"max":278.432174,"relativeToPreChange":{"median":3.539865,"p95":4.100102}}},"complexityGates":{"workerRelease":{"acquireCalls":5000,"releaseCalls":5000,"exactRoomDescriptorReads":5000,"exactTaskDescriptorReads":5000,"boardEnumerations":0},"workerAcquireReconcile":{"acquireCalls":50,"reconcileCalls":50,"assignedCreepsDescriptorReads":150},"carrier":{"exact":{"exactCalls":400,"exactResults":400,"refDescriptorReads":2400},"list":{"listCalls":20,"listResults":400},"replace":{"replaceCalls":2000,"replaceResults":40000,"draftIndexReads":40000,"stepIndexReads":40000},"claim":{"claimCalls":5000,"successfulClaims":5000,"releasedClaims":5000,"claimStepIndexReads":5000,"actorDescriptorReads":5000,"actorEnumerations":0},"readDto":{"snapshotCalls":1,"snapshotEntries":400,"stepArrayEnumerations":400,"stepEntryDescriptorReads":800}}},"limitations":["Node/Jest wall-clock is not Screeps CPU and old/current samples came from separate processes.","Relative old/current wall-clock ratios are observations, never pass/fail authorization.","Worker current starts bound; Carrier claim is the uncontended immediate-release path.","Carrier complexity probes observe public inputs/read DTOs and never the private Map hierarchy."]}
+
+      at Object.<anonymous> (test/localDispatchPerformanceBaseline.test.ts:761:13)
+
+PASS test/ambientGlobalAbiBoundaries.test.ts (26.316 s)
+PASS scripts/monitor-service.test.ts (18.363 s)
+PASS src/runtime/treasuryT4ValidationCache.test.ts (11.887 s)
+  ● Console
+
+    console.log
+      {"kind":"treasury-production-T4","tick":100,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":150,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":200,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":100,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":150,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":200,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":100,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":150,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":200,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":100,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":150,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":200,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":100,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":150,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":200,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":100,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":150,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":200,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":100,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":150,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":200,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":100,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":150,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":200,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":100,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":150,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":200,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":100,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":150,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":200,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":100,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":150,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":200,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":100,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":150,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":200,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":100,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":150,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":200,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":100,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":150,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":200,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":100,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":150,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":200,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":100,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":150,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":200,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":100,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":150,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":200,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":100,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":150,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":200,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":100,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":150,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":200,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":100,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":150,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":200,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":100,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":100,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":150,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":200,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":100,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":150,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":200,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+PASS test/localDispatchArchitectureBoundaries.test.ts (10.973 s)
+PASS test/typescriptConfigBoundaries.test.ts (9.668 s)
+PASS src/roles/towerDrainPair.test.ts (7.724 s)
+PASS src/runtime/treasuryT4Budget.test.ts (7.331 s)
+PASS src/roles/warDuoMovement.integration.test.ts (6.182 s)
+PASS test/roleIdentityCatalogBoundaries.test.ts
+PASS src/runtime/treasuryT4Continuous.integration.test.ts (5.369 s)
+  ● Console
+
+    console.log
+      {"kind":"treasury-production-T4","tick":100,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":150,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":200,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":100,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":150,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":100,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":150,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":200,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":100,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":150,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":200,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":251,"taskId":"next-epoch-OH-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":100,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":100,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown","reason":"Treasury terminal.send returned an invalid native result"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":100,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":100,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_blocked","reason":"执行前复验失败：容量不足：E4N58/terminal/OH 可用 9 < 最坏流出 10"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":100,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":100,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":100,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":100,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown","reason":"T4 reset after debit before native"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":100,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":150,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":200,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":100,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T1","tick":100,"taskId":"history-H","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":112,"taskId":"history-UH","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T3","tick":124,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":200,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":100,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":150,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":200,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":100,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+PASS test/taskSystemCatalogBoundaries.test.ts (5.231 s)
+PASS src/runtime/treasuryT4ProducerBridge.integration.test.ts
+  ● Console
+
+    console.log
+      {"kind":"treasury-production-T4","tick":100,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":150,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":200,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":100,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":150,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":200,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":100,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":150,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":200,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":100,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":150,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":200,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":100,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":150,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":200,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":300,"taskId":"260:4:OH:E4N58->E1N57","status":"dispatch_unknown","reason":"Treasury terminal.send returned an invalid native result"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":100,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":150,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":200,"taskId":"90:1:OH:E4N58->E1N57:T4","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":300,"taskId":"260:5:OH:E4N58->E1N57","status":"dispatch_unknown","reason":"Treasury terminal.send returned an invalid native result"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":120,"taskId":"110:1:OH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":170,"taskId":"110:1:OH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":220,"taskId":"110:1:OH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T4","tick":120,"taskId":"110:1:OH:E4N58->E1N57","status":"dispatch_unknown","reason":"Treasury terminal.send returned an invalid native result"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+PASS test/taskSystemArchitectureBoundaries.test.ts
+PASS src/runtime/treasuryT2Binding.integration.test.ts
+  ● Console
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T1","tick":100,"taskId":"old-H-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":108,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"candidate_rejected","reason":"live facts, fee, or shared receiver capacity outside policy"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_blocked","reason":"执行前复验失败：容量不足：E4N58/terminal/UH 可用 -615 < 最坏流出 100"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"quota_reservation_failed","reason":"dispatch was not entered"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_not_executed"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown","reason":"Treasury terminal.send returned an invalid native result"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown","reason":"Treasury terminal.send returned an invalid native result"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown","reason":"Treasury terminal.send returned an invalid native result"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown","reason":"Treasury terminal.send returned an invalid native result"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown","reason":"Treasury terminal.send returned an invalid native result"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T1","tick":100,"taskId":"malformed-H-task","status":"dispatch_unknown","reason":"Treasury terminal.send returned an invalid native result"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+PASS src/runtime/treasuryTerminalTransfer.integration.test.ts
+  ● Console
+
+    console.log
+      {"kind":"treasury-production-T1","tick":100,"taskId":"existing-H-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T1","tick":100,"taskId":"existing-H-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T1","tick":100,"taskId":"existing-H-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T1","tick":100,"taskId":"existing-H-task","status":"dispatch_not_executed"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T1","tick":100,"taskId":"existing-H-task","status":"dispatch_unknown","reason":"unknown native result"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T1","tick":100,"taskId":"existing-H-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T1","tick":100,"taskId":"existing-H-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T1","tick":100,"taskId":"existing-H-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T1","tick":100,"taskId":"existing-H-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T1","tick":120,"taskId":"existing-H-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+PASS src/runtime/bootstrapArchitecture.test.ts
+PASS src/runtime/treasuryT2Lifecycle.integration.test.ts
+  ● Console
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"existing-UH-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"existing-UH-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"existing-UH-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"existing-UH-task","status":"dispatch_not_executed"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"existing-UH-task","status":"dispatch_unknown","reason":"unknown native result"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"existing-UH-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"existing-UH-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"existing-UH-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"existing-UH-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+PASS src/runtime/linkNetworkMemoryOwnership.test.ts
+PASS src/runtime/marketBaseResourceLedger.test.ts
+PASS src/runtime/treasuryT3Binding.integration.test.ts
+  ● Console
+
+    console.log
+      {"kind":"treasury-production-T3","tick":100,"taskId":"90:1:OH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T3","tick":100,"taskId":"90:1:OH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T3","tick":100,"taskId":"90:1:OH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T3","tick":100,"taskId":"90:1:OH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T3","tick":100,"taskId":"90:1:OH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T3","tick":100,"taskId":"90:1:OH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T3","tick":100,"taskId":"90:1:OH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T3","tick":100,"taskId":"90:1:OH:E4N58->E1N57","status":"dispatch_not_executed"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T1","tick":100,"taskId":"old-H-settled","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":112,"taskId":"old-UH-settled","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T3","tick":124,"taskId":"90:1:OH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T3","tick":100,"taskId":"90:1:OH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T3","tick":100,"taskId":"90:1:OH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T3","tick":100,"taskId":"90:1:OH:E4N58->E1N57","status":"admission_rejected","reason":"容量不足：E4N58/terminal/OH 可用 -861 < 最坏流出 26"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T3","tick":100,"taskId":"90:1:OH:E4N58->E1N57","status":"dispatch_blocked","reason":"执行前复验失败：容量不足：E4N58/terminal/OH 可用 -861 < 最坏流出 26"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+PASS src/main.test.ts
+PASS src/runtime/treasuryT2Concurrency.test.ts
+  ● Console
+
+    console.log
+      {"kind":"treasury-production-T2","tick":101,"taskId":"real-UH-synthesis-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":101,"taskId":"real-UH-synthesis-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":101,"taskId":"real-UH-synthesis-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":101,"taskId":"real-UH-synthesis-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":101,"taskId":"real-UH-synthesis-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":101,"taskId":"real-UH-synthesis-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":101,"taskId":"real-UH-synthesis-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":101,"taskId":"real-UH-synthesis-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"real-UH-synthesis-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"real-UH-synthesis-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"real-UH-synthesis-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"real-UH-synthesis-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"real-UH-synthesis-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"real-UH-synthesis-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"real-UH-synthesis-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"real-UH-synthesis-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"real-UH-synthesis-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":101,"taskId":"real-UH-synthesis-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":101,"taskId":"real-UH-synthesis-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":101,"taskId":"real-UH-synthesis-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":101,"taskId":"real-UH-synthesis-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"real-UH-synthesis-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"real-UH-synthesis-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"real-UH-synthesis-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"real-UH-synthesis-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"real-UH-synthesis-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"real-UH-synthesis-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"real-UH-synthesis-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"real-UH-synthesis-task","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+PASS src/runtime/marketSaleAutomation.test.ts
+PASS src/runtime/hubPlanner.test.ts
+PASS src/runtime/powerBankHarvest.test.ts
+PASS src/runtime/powerBankObserver.test.ts
+  ● Console
+
+    console.log
+      {"kind":"observerSharedQueryBudget","activeQueries":1,"reachabilityQueries":1,"publishedRooms":["E10N60"]}
+
+      at Object.<anonymous> (src/runtime/powerBankObserver.test.ts:102:13)
+
+PASS src/runtime/treasuryT3Lifecycle.integration.test.ts
+  ● Console
+
+    console.log
+      {"kind":"treasury-production-T3","tick":100,"taskId":"90:1:OH:E4N58->E1N57","status":"quota_reservation_failed","reason":"dispatch was not entered"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T3","tick":100,"taskId":"90:1:OH:E4N58->E1N57","status":"quota_reservation_failed","reason":"dispatch was not entered"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+PASS src/runtime/resourceControl.capacityRegression.test.ts
+PASS src/runtime/taskSystem/snapshot.test.ts
+PASS src/runtime/treasuryT2LegacyCargo.test.ts
+  ● Console
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+PASS test/runtimePublicApiBoundaries.test.ts
+PASS src/roles/carrier.terminalFeedBound.test.ts
+PASS src/runtime/synthesisControl.test.ts
+PASS src/roles/homeDefender.test.ts
+PASS src/runtime/treasuryT4LegacyFenceCache.test.ts
+PASS src/runtime/powerBankPathDistance.test.ts
+PASS src/runtime/roomWorkforce.test.ts
+PASS src/roles/powerBankCombatPair.test.ts
+  ● Console
+
+    console.log
+      {"kind":"pairQueryBudget","reads":[["E0N0:creep:0:16",1],["E0N0:creep:0:17",1],["E0N0:creep:0:18",1],["E0N0:powerCreep:0:16",1],["E0N0:powerCreep:0:17",1],["E0N0:powerCreep:0:18",1],["W0N0:creep:49:16",1],["W0N0:creep:49:17",1],["W0N0:creep:49:18",1],["W0N0:powerCreep:49:16",1],["W0N0:powerCreep:49:17",1],["W0N0:powerCreep:49:18",1]],"staticQueries":7,"output":[["red",3],["green",3]]}
+
+      at Object.<anonymous> (src/roles/powerBankCombatPair.test.ts:165:13)
+
+    console.log
+      {"kind":"pairQueryPerformance","frames":250,"creeps":402,"creepQueries":250,"looks":3000,"staticQueries":1750,"matrixConstructions":1750,"elapsedMs":222.43947300000036,"output":[3,3]}
+
+      at Object.<anonymous> (src/roles/powerBankCombatPair.test.ts:192:13)
+
+PASS src/runtime/factoryControl.test.ts
+PASS scripts/lib/monitorInspect.test.ts
+PASS src/runtime/powerBankSourceSelection.test.ts
+PASS src/runtime/treasuryT2PowerCargo.test.ts
+  ● Console
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+    console.log
+      {"kind":"treasury-production-T2","tick":100,"taskId":"90:1:UH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+PASS src/mount/mountCreep.test.ts
+PASS src/runtime/colonization.travelPath.test.ts
+PASS src/runtime/marketSaleExposure.test.ts
+PASS src/runtime/powerBankHarvest.fairness.test.ts
+PASS src/runtime/marketSalePlanningAuthorization.test.ts
+PASS src/runtime/canonicalStableHashPrefix.test.ts
+PASS src/roles/powerBankHauler.test.ts
+PASS src/runtime/empireInventoryIndex.test.ts
+PASS src/roles/meleeAttacker.test.ts
+PASS src/runtime/resourceMarketOperations.test.ts
+PASS src/runtime/hubProductionIntegration.test.ts
+PASS src/runtime/warControl.test.ts
+PASS src/roles/towerDrainEntry.test.ts
+PASS src/runtime/powerBankBoost.test.ts
+PASS src/runtime/workerTaskPool.characterization.test.ts
+PASS src/modules/errorMapper.test.ts
+PASS src/runtime/localDispatchOwnership.target.test.ts
+PASS src/runtime/remoteMining.test.ts
+PASS src/roles/healer.test.ts
+PASS src/runtime/resourceControl.test.ts
+PASS src/roles/carrier.test.ts
+PASS src/movement/staticRoomMatrix.test.ts
+PASS src/roles/remoteCarrier.test.ts
+PASS src/runtime/flagHauling.test.ts
+  ● Console
+
+    console.log
+      [flag-haul] started: flag=HAUL_W1N1_INVADER_W5N5 target=W5N5 source=W1N1
+
+      at upsertFlagHaulTask (src/runtime/flagHauling.ts:415:13)
+
+    console.log
+      [flag-haul] cancelled: flag=HAUL_W1N1_INVADER_W5N5 target=W5N5
+
+      at runFlagHaulingByFlag (src/runtime/flagHauling.ts:530:17)
+
+    console.log
+      [flag-haul] started: flag=HAUL_W1N1_INVADER_W5N5 target=W5N5 source=W1N1
+
+      at upsertFlagHaulTask (src/runtime/flagHauling.ts:415:13)
+
+    console.log
+      [flag-haul] started: flag=HAUL_W1N1_INVADER_W5N5 target=W5N5 source=W1N1
+
+      at upsertFlagHaulTask (src/runtime/flagHauling.ts:415:13)
+
+    console.log
+      [flag-haul] started: flag=HAUL_W1N1_INVADER_W5N5 target=W5N5 source=W1N1
+
+      at upsertFlagHaulTask (src/runtime/flagHauling.ts:415:13)
+
+    console.log
+      [flag-haul] started: flag=HAUL_W1N1_INVADER_W5N5 target=W5N5 source=W1N1
+
+      at upsertFlagHaulTask (src/runtime/flagHauling.ts:415:13)
+
+    console.log
+      [flag-haul] started: flag=HAUL_W1N1_INVADER_W5N5 target=W5N5 source=W1N1
+
+      at upsertFlagHaulTask (src/runtime/flagHauling.ts:415:13)
+
+    console.log
+      [flag-haul] started: flag=HAUL_W1N1_INVADER_W5N5 target=W5N5 source=W1N1
+
+      at upsertFlagHaulTask (src/runtime/flagHauling.ts:415:13)
+
+    console.log
+      [flag-haul] started: flag=HAUL_W1N1_INVADER_W5N5 target=W5N5 source=W1N1
+
+      at upsertFlagHaulTask (src/runtime/flagHauling.ts:415:13)
+
+    console.log
+      [flag-haul] started: flag=HAUL_W1N1_INVADER_W5N5 target=W5N5 source=W1N1
+
+      at upsertFlagHaulTask (src/runtime/flagHauling.ts:415:13)
+
+    console.log
+      [flag-haul] started: flag=HAUL_W1N1_INVADER_W5N5 target=W5N5 source=W1N1
+
+      at upsertFlagHaulTask (src/runtime/flagHauling.ts:415:13)
+
+    console.log
+      [flag-haul] started: flag=HAUL_W1N1_INVADER_W5N5 target=W5N5 source=W1N1
+
+      at upsertFlagHaulTask (src/runtime/flagHauling.ts:415:13)
+
+    console.log
+      [flag-haul] started: flag=HAUL_W1N1_INVADER_W5N5 target=W5N5 source=W1N1
+
+      at upsertFlagHaulTask (src/runtime/flagHauling.ts:415:13)
+
+    console.log
+      [flag-haul] started: flag=HAUL_W1N1_INVADER_W5N5 target=W5N5 source=W1N1
+
+      at upsertFlagHaulTask (src/runtime/flagHauling.ts:415:13)
+
+    console.log
+      [flag-haul] started: flag=HAUL target=W5N5 source=W1N1
+
+      at upsertFlagHaulTask (src/runtime/flagHauling.ts:415:13)
+
+PASS scripts/lib/testIntegrityGuard.test.ts
+PASS src/runtime/colonizationSupport.test.ts
+PASS src/runtime/marketSaleSession.test.ts
+PASS src/movement/routing.unified.test.ts
+PASS src/runtime/empireInventoryShadow.test.ts
+  ● Console
+
+    console.log
+      [inventory-shadow] parity mismatch +5 this check (total 5): tick=10000 room=<empire> resource=energy field=empireTotal index=6200 direct=1200
+
+      at runEmpireInventoryShadowCheck (src/runtime/empireInventoryShadow.ts:1045:13)
+
+    console.log
+      [inventory-shadow] parity mismatch +7 this check (total 7): tick=10000 room=<creeps>:cargo resource=- field=oracleStoreTotal index=30 direct=99
+
+      at runEmpireInventoryShadowCheck (src/runtime/empireInventoryShadow.ts:1045:13)
+
+    console.log
+      [inventory-shadow] parity mismatch +3 this check (total 3): tick=10040 room=W1N57 resource=- field=factoryUsedCapacity index=40 direct=0
+
+      at runEmpireInventoryShadowCheck (src/runtime/empireInventoryShadow.ts:1045:13)
+
+    console.log
+      [inventory-shadow] parity mismatch +3 this check (total 3): tick=10000 room=W1N57 resource=- field=factoryUsedCapacity index=40 direct=0
+
+      at runEmpireInventoryShadowCheck (src/runtime/empireInventoryShadow.ts:1045:13)
+
+    console.log
+      [inventory-shadow] parity mismatch +1 this check (total 1): tick=10000 room=W1N57:storage resource=silicon field=oracleResourceAmount index=0 direct=42
+
+      at runEmpireInventoryShadowCheck (src/runtime/empireInventoryShadow.ts:1045:13)
+
+PASS src/runtime/synthesisTransferDemand.test.ts
+PASS scripts/lib/monitorInspectQuery.test.ts
+PASS src/runtime/marketSalePlanningGate.test.ts
+PASS src/runtime/logistics/resourceTransferTasks.test.ts
+PASS src/runtime/externalTelemetry.test.ts
+PASS src/runtime/treasuryT2FenceCache.test.ts
+PASS src/runtime/treasuryT3Preparing.integration.test.ts
+  ● Console
+
+    console.log
+      {"kind":"treasury-production-T3","tick":101,"taskId":"90:1:OH:E4N58->E1N57","status":"dispatch_unknown"}
+
+      at logDecision (src/runtime/treasuryTerminalTransferLane.ts:1023:11)
+
+PASS src/movement/routing.test.ts
+PASS src/runtime/bootstrap.test.ts
+PASS src/roles/powerBankScout.test.ts
+PASS src/runtime/consoleCommands.test.ts
+PASS src/runtime/powerBankSearch.test.ts
+PASS src/runtime/treasuryT4BudgetCache.test.ts
+PASS src/runtime/towerControl.scanThrottle.test.ts
+PASS src/runtime/crossShardColonization.test.ts
+PASS src/runtime/marketBaseResourceEgressTrialR2.test.ts
+PASS src/runtime/treasuryT4StopBoundary.test.ts
+PASS src/mount/mountCreep.lifecycleCache.test.ts
+PASS src/runtime/cpuTickHealth.test.ts
+PASS src/runtime/cpuPhaseProfiler.lowOverhead.test.ts
+PASS src/runtime/taskSystem/adapters/powerBankWorkflow.test.ts
+PASS src/runtime/marketSaleDirectAutomation.test.ts
+PASS src/roles/colonizerHarvester.test.ts
+PASS scripts/lib/redactSecrets.test.ts
+PASS src/movement/pathing.crossTickCache.test.ts
+PASS src/runtime/marketBaseResourcePolicy.test.ts
+PASS src/runtime/boostControl.test.ts
+  ● Console
+
+    console.log
+      [boostControl] buy W1N1: XUH2O=1000 price=5.000 cost=100
+
+      at buyBoostIfNeeded (src/runtime/boostControl.ts:156:13)
+
+PASS src/runtime/colonization.handoff.test.ts
+  ● Console
+
+    console.log
+      [colonization] complete: E3N54 rcl≥3, flag removed
+
+      at processTask (src/runtime/colonization.ts:1365:17)
+
+PASS src/roles/worker.test.ts
+PASS src/runtime/powerBankRouteCache.test.ts
+PASS src/roles/remoteMiningCarrier.test.ts
+PASS src/runtime/marketDirectContinuousAutomation.test.ts
+PASS src/runtime/marketDirectContinuousLedger.test.ts
+PASS src/mount/mountSpawn.test.ts
+PASS src/runtime/workerTaskPool.test.ts
+PASS src/roles/remoteWorker.test.ts
+PASS src/runtime/dispatchOwnership/carrierAmountSlice.test.ts
+PASS src/runtime/hubProgress.test.ts
+PASS src/runtime/roomPlannerConstruction.test.ts
+PASS src/runtime/marketDirectContinuousPolicy.test.ts
+PASS src/runtime/dispatchOwnership/actorBinding.test.ts
+PASS src/runtime/hubOHReserve.test.ts
+PASS src/runtime/marketSaleProtectionAdapter.test.ts
+PASS src/runtime/taskSystem/adapters/powerCreepAction.test.ts
+PASS src/runtime/taskSystem/adapters/workflowAdapters.test.ts
+PASS src/movement/traffic.test.ts
+PASS src/runtime/marketSaleRuntime.test.ts
+PASS src/roles/colonizerUpgrader.test.ts
+PASS src/runtime/hubFactoryPlanner.test.ts
+PASS src/runtime/marketSaleFeeLedger.test.ts
+PASS src/runtime/dispatchOwnership/workerSlot.test.ts
+PASS src/roles/index.test.ts
+PASS src/runtime/nukerControl.test.ts
+PASS src/runtime/roomWorkforceIdentity.test.ts
+PASS src/runtime/carrierTaskBoard.test.ts
+PASS src/roles/energyTargets.test.ts
+PASS src/runtime/powerCreepControl.test.ts
+PASS src/runtime/marketSaleConfig.test.ts
+PASS src/runtime/depositHarvest.sourceFairness.test.ts
+PASS src/runtime/treasuryTerminalTransfer.test.ts
+PASS src/runtime/colonization.test.ts
+  ● Console
+
+    console.log
+      [colonization] rescout W1N2: pending scout route invalid or interrupted by dangerous room
+
+      at requestScoutRescan (src/runtime/colonization.ts:987:11)
+
+    console.log
+      [colonization] abandon W1N2: flag removed by player
+
+      at abandonColonization (src/runtime/colonization.ts:1046:11)
+
+    console.log
+      [colonization] abandon W1N2: flag removed by player
+
+      at abandonColonization (src/runtime/colonization.ts:1046:11)
+
+PASS src/roles/carrier.bestCandidate.test.ts
+PASS src/runtime/powerBankHarvest.cleanupBatch.test.ts
+PASS src/runtime/memoryCleanup.test.ts
+PASS src/runtime/synthesisControlStateMachine.test.ts
+PASS src/movement/traffic.receipt.test.ts
+PASS src/runtime/marketDirectContinuousPlanner.test.ts
+PASS src/runtime/carrierTaskBoard.revisionCache.test.ts
+PASS src/roles/depositHarvester.test.ts
+PASS scripts/lib/deployGuard.test.ts
+PASS src/runtime/linkControl.test.ts
+PASS src/roles/shared.test.ts
+PASS src/runtime/spawnPlanner.test.ts
+PASS src/runtime/marketSalePricingAdapter.test.ts
+PASS src/runtime/remoteEntranceLink.test.ts
+PASS src/runtime/hubUpgradeControl.test.ts
+PASS src/movement/traffic.naturalObstacles.test.ts
+PASS src/runtime/treasuryT2LegacyRoot.test.ts
+PASS src/roles/powerBankHealer.test.ts
+PASS src/runtime/memorySizeRegression.test.ts
+PASS src/runtime/colonizationHarvesterPreSpawn.test.ts
+PASS src/runtime/towerControl.test.ts
+PASS src/runtime/powerBankDiscovery.test.ts
+PASS src/runtime/portalDiscovery.test.ts
+PASS src/runtime/homeDefense.test.ts
+PASS src/config/spawnProfiles.test.ts
+PASS src/runtime/remoteMining.planningBudget.test.ts
+PASS src/runtime/mineralExtraction.test.ts
+PASS src/runtime/empireInventoryBenchmark.test.ts
+  ● Console
+
+    console.log
+      [inventory-bench] rooms=8 legacyPerResourceCalls=1344 newKeyEnumeration=61 legacyScanMs=0.861 indexBuildMs=0.804
+
+      at Object.<anonymous> (src/runtime/empireInventoryBenchmark.test.ts:166:13)
+
+PASS src/runtime/hubFlag.test.ts
+PASS test/warWorkflowLifecycleBoundaries.test.ts
+PASS src/roles/powerBankAttacker.test.ts
+PASS src/runtime/coreDefense.test.ts
+  ● Console
+
+    console.log
+      [coreDefense] W1N1 activated safe mode: core under creep attack
+
+      at tryActivateSafeMode (src/runtime/coreDefense.ts:31:11)
+
+    console.log
+      [coreDefense] W1N1 activated safe mode: core under creep attack
+
+      at tryActivateSafeMode (src/runtime/coreDefense.ts:31:11)
+
+    console.log
+      [coreDefense] W1N1 activated safe mode: core under creep attack
+
+      at tryActivateSafeMode (src/runtime/coreDefense.ts:31:11)
+
+    console.log
+      [coreDefense] W1N1 activated safe mode: core under creep attack
+
+      at tryActivateSafeMode (src/runtime/coreDefense.ts:31:11)
+
+PASS src/runtime/marketSaleProtectionMemo.test.ts
+PASS src/movement/pathing.test.ts
+PASS src/movement/roomTopologyRevision.test.ts
+PASS src/runtime/safeZoneHelpers.test.ts
+PASS src/runtime/colonizationSupport.transit.test.ts
+PASS src/runtime/powerSpawnControl.test.ts
+PASS src/runtime/powerBankViability.test.ts
+PASS src/runtime/taskSystem/adapters/factoryCommand.test.ts
+PASS src/runtime/depositPathDistance.test.ts
+PASS src/runtime/cpuMonitor.test.ts
+PASS src/runtime/deployAnnounce.test.ts
+PASS src/runtime/marketActionArbiter.test.ts
+PASS src/runtime/taskSystem/registry.test.ts
+PASS src/runtime/tickContext.typedIndex.test.ts
+PASS src/runtime/powerDistribution.test.ts
+PASS src/runtime/console/operationsCommands.test.ts
+PASS src/roles/mineralHarvester.test.ts
+PASS test/defenseMode.test.ts
+PASS src/movement/routing.combat.test.ts
+PASS src/runtime/energyInflowGuard.test.ts
+PASS src/runtime/taskSystem/adapters/spawnProduction.test.ts
+PASS src/runtime/logistics/receiverCapacityLedger.test.ts
+PASS src/runtime/roomPlannerConstruction.stagger.test.ts
+PASS src/roles/upgrader.test.ts
+PASS src/runtime/treasuryT4Facts.test.ts
+PASS src/runtime/powerBankTransit.test.ts
+PASS src/runtime/hubProtectionSnapshot.test.ts
+PASS src/runtime/depositHarvest.test.ts
+PASS src/runtime/console/resourceTransferCommands.test.ts
+PASS src/runtime/treasuryT2Binding.red.test.ts
+PASS src/runtime/minerBodyPolicy.test.ts
+PASS src/runtime/marketWriteArchitecture.test.ts
+PASS src/runtime/powerBankThreat.test.ts
+PASS src/runtime/invaderSalvageSafety.test.ts
+PASS src/runtime/workerTaskPool.colonizationSupport.test.ts
+PASS src/runtime/taskSystem/adapters/resourceTransfer.test.ts
+PASS src/runtime/emergencySpawning.test.ts
+PASS src/runtime/autoReserveFlag.test.ts
+  ● Console
+
+    console.log
+      [reserve] W1N1 entered reserve mode at 74999 energy
+
+      at runAutoReserveFlags (src/runtime/autoReserveFlag.ts:45:17)
+
+PASS src/runtime/resourceReservation.test.ts
+PASS src/runtime/taskSystem/catalog.test.ts
+PASS src/runtime/marketSaleDirectShadow.test.ts
+PASS src/runtime/marketSaleDiagnostics.test.ts
+PASS src/runtime/terminalBootstrapRecovery.test.ts
+PASS src/runtime/powerBankCapability.test.ts
+PASS src/roles/remoteDefender.test.ts
+PASS src/runtime/spawnQueueOwnership.test.ts
+PASS test/harvester.test.ts
+PASS src/runtime/taskSystem/adapters/workerWork.test.ts
+PASS src/runtime/mineralHarvestPolicy.test.ts
+PASS src/runtime/marketSaleDirectPending.test.ts
+PASS src/runtime/taskSystem/adapters/carrierLogistics.test.ts
+PASS src/runtime/treasuryT3Facts.test.ts
+PASS src/runtime/treasuryT2Facts.test.ts
+PASS scripts/runtimeSourceMap.test.ts
+PASS src/movement/metrics.flush.test.ts
+PASS src/runtime/marketSalePricing.test.ts
+PASS src/runtime/taskSystem/adapters/warWorkflow.test.ts
+PASS src/runtime/creepAssignmentState.test.ts
+PASS src/runtime/upgraderPolicy.test.ts
+PASS src/runtime/taskSystem/model.test.ts
+PASS src/types/roleCatalog.test.ts
+PASS src/runtime/powerBankStatus.test.ts
+PASS src/runtime/depositViability.test.ts
+PASS src/runtime/marketSaleProtection.test.ts
+PASS src/runtime/linkNetworkMemory.test.ts
+PASS src/runtime/energyPickupReservation.test.ts
+PASS src/runtime/marketSaleLifecycle.test.ts
+PASS test/miner.test.ts
+PASS src/runtime/localCarrierDestinationCapacity.test.ts
+PASS test/tickContext.test.ts
+PASS src/runtime/logistics/capacityHeadroom.test.ts
+PASS src/roles/combatBoosts.test.ts
+PASS src/runtime/pixelGenerator.test.ts
+PASS src/visual/panel.test.ts
+PASS src/config/deployment.test.ts
+PASS src/roles/remoteMiningReserver.test.ts
+PASS src/roles/claimer.test.ts
+PASS src/runtime/safeZone.test.ts
+PASS src/movement/common.test.ts
+PASS src/runtime/dispatchOwnership/ref.test.ts
+PASS src/runtime/roomEnergyPolicy.test.ts
+PASS src/runtime/planningCpuBudget.test.ts
+PASS src/runtime/memoryAudit.test.ts
+PASS src/runtime/marketSaleDirectEngineAssumptions.test.ts
+PASS src/runtime/terminalActionEnergyOwnership.test.ts
+PASS src/runtime/reactionMap.test.ts
+PASS src/runtime/powerBankConstants.test.ts
+PASS src/visual/palette.test.ts
+PASS src/runtime/scoutFlag.test.ts
+PASS src/roles/scout.test.ts
+PASS src/runtime/marketSaleDirectPricing.test.ts
+PASS src/runtime/carrierBodyPolicy.test.ts
+PASS src/runtime/hostilePriorities.test.ts
+PASS src/runtime/roomTypes.test.ts
+PASS src/runtime/actionLog.test.ts
+PASS src/runtime/productionStateMachine.test.ts
+PASS src/runtime/configNormalize.test.ts
+
+Test Suites: 266 passed, 266 total
+Tests:       2025 passed, 2025 total
+Snapshots:   0 total
+Time:        483.55 s, estimated 532 s
+Ran all test suites.
+Test results written to: ../logs/full-final/results.json

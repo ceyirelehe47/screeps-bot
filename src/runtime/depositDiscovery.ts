@@ -17,7 +17,7 @@ export function recordDepositDiscovery(deposit: Deposit): void {
     if (prior.resourceType !== deposit.depositType || prior.targetRoom !== deposit.pos.roomName ||
       prior.depositPos.x !== deposit.pos.x || prior.depositPos.y !== deposit.pos.y) return;
     prior.lastSeenAt = Game.time;
-    prior.expiresAt = Math.min(prior.expiresAt, Game.time + deposit.ticksToDecay);
+    prior.expiresAt = Game.time + deposit.ticksToDecay;
     prior.lastCooldown = deposit.lastCooldown;
     prior.cooldown = deposit.cooldown;
     return;

@@ -372,7 +372,7 @@ export const remoteMiningCarrierRole: RoleFactory = (targetRoom: string, sourceI
             if (getCarriedEnergy(creep) > MAINTENANCE_RESERVE_ENERGY) {
               runMaintenance(creep);
             }
-            return true;
+            return false; // withdraw 意图到下一 tick 才改变 Store，再按满载判定返程。
           }
         }
       }
@@ -392,7 +392,7 @@ export const remoteMiningCarrierRole: RoleFactory = (targetRoom: string, sourceI
           return false;
         }
         if (code === OK) {
-          return true;
+          return false;
         }
       }
 

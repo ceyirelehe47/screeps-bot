@@ -135,6 +135,8 @@ declare global {
       market?: {
         enabled?: boolean;
         emergencyBuyEnabled?: boolean;
+        creditReserve?: number;
+        energyShadowPrice?: number;
         nativeMineralAutoSellThreshold?: number;
         maxDealsPerRun?: number;
         minDealAmount?: number;

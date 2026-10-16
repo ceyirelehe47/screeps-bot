@@ -1,3 +1,4 @@
+import { DEFENSE_BOOST_COMPOUND } from "@/runtime/boostControl";
 import { getSafeZone } from "@/runtime/safeZone";
 import { measureCreepDecision, measureCreepIntent } from "@/runtime/cpuPhaseProfiler";
 import { getAssignedDefenseFront, getDefenderRole, getTowerFocusFront, type DefenseFrontSummary } from "@/runtime/defenseCoordination";
@@ -6,6 +7,8 @@ import { chooseBoundaryBurstEngagement, chooseInsideBurstTarget } from "@/runtim
 import { createSafeZoneCostCallback, getBoundaryRamparts } from "@/runtime/safeZoneHelpers";
 import { moveToTarget, moveToTargetRoom } from "@/roles/shared";
 import type { RoleFactory } from "@/types/system";
+
+const boostIntentTicks = new WeakMap<StructureLab, number>();
 
 function findEngagedHostileIdByOtherDefenders(creep: Creep, hostiles: Creep[]): Id<Creep> | null {
   for (const other of creep.room.find(FIND_MY_CREEPS)) {
@@ -67,6 +70,24 @@ export const homeDefenderRole: RoleFactory = (roomName: string, slot?: string) =
     if (safeZone.size === 0) return false;
 
     const allHostiles = measureCreepDecision(() => getPlayerHostiles(creep.room));
+    const boostLabId = Memory.cfg?.homeDefense?.rooms?.[roomName]?.boostLabId;
+    const lab = boostLabId ? Game.getObjectById(boostLabId as Id<StructureLab>) : null;
+    if (lab?.my && lab.room.name === roomName && boostIntentTicks.get(lab) !== Game.time && !allHostiles.some(h => safeZone.has(h.pos.x * 50 + h.pos.y))) {
+      const unboosted = creep.body.filter(part => part.type === ATTACK && !part.boost && part.hits > 0).length;
+      const count = Math.min(unboosted, Math.floor(lab.store.getUsedCapacity(DEFENSE_BOOST_COMPOUND) / LAB_BOOST_MINERAL),
+        Math.floor(lab.store.getUsedCapacity(RESOURCE_ENERGY) / LAB_BOOST_ENERGY));
+      if (count > 0) {
+        const code = measureCreepIntent(() => lab.boostCreep(creep, count));
+        if (code === OK) {
+          boostIntentTicks.set(lab, Game.time);
+          return false;
+        }
+        if (code === ERR_NOT_IN_RANGE) {
+          const moveCode = moveToTarget(creep, lab, 1);
+          if (moveCode !== ERR_NO_PATH && moveCode !== ERR_INVALID_TARGET) return false;
+        }
+      }
+    }
     const assignedFront = getAssignedDefenseFront(roomName, slot) || getTowerFocusFront(roomName);
     const defenderRole = getDefenderRole(roomName, slot);
     const hostiles = assignedFront

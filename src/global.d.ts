@@ -727,6 +727,7 @@ declare global {
     _warRetireToRoom?: string;
     /** 已终止任务的空载成员通过共用交通返回此房回收。 */
     _recycleToRoom?: string;
+    remoteCarrierRejectedTargets?: Record<string, number>;
     _colonizationRetiring?: string;
     _warTowerDrain?: import("@/roles/towerDrainPair").TowerDrainPairState;
     _move?: {
@@ -753,6 +754,12 @@ declare global {
   interface RoomMemory {
     workerConstructionTier?: 0 | 1 | 2 | 3;
     coreRampartHits?: Record<string, number>;
+    coreDefenseSnapshot?: {
+      tick: number;
+      rampartDecay: Record<string, number>;
+      structureHits: Record<string, { hits: number; x: number; y: number }>;
+      nukes: Array<{ x: number; y: number; landsAt: number }>;
+    };
   }
 
   interface SpawnMemory {

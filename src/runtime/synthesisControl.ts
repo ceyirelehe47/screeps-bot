@@ -1,3 +1,4 @@
+import { getTerminalAmountOutsideMarketSaleExposure } from "@/runtime/marketSaleExposure";
 import {
   countsResourceTransferTaskTowardDemand,
   createAutomaticResourceTransferTask,
@@ -523,9 +524,11 @@ function getConfiguredLab(room: Room, id: string): StructureLab | null {
 }
 
 function resolveLabTopology(room: Room, roomCfg: SynthesisRoomConfig): LabTopology | null {
-  const labs = room.find(FIND_MY_STRUCTURES, {
+  // 显式指定的防御 boost lab 独占，不能被常规合成清料或补成其它矿物。
+  const boostLabId = Memory.cfg?.homeDefense?.rooms?.[room.name]?.boostLabId;
+  const labs = (room.find(FIND_MY_STRUCTURES, {
     filter: (structure) => structure.structureType === STRUCTURE_LAB,
-  }) as StructureLab[];
+  }) as StructureLab[]).filter(lab => lab.id !== boostLabId);
   if (labs.length < 3) {
     return null;
   }
@@ -533,7 +536,7 @@ function resolveLabTopology(room: Room, roomCfg: SynthesisRoomConfig): LabTopolo
   if (roomCfg.reagentLabIds.length === 2) {
     const first = getConfiguredLab(room, roomCfg.reagentLabIds[0]);
     const second = getConfiguredLab(room, roomCfg.reagentLabIds[1]);
-    if (first && second) {
+    if (first && second && labs.includes(first) && labs.includes(second)) {
       const productLabs = labs.filter(
         (lab) =>
           lab.id !== first.id &&
@@ -742,7 +745,7 @@ function resolveCleanupTargetStructure(room: Room, resource: ResourceConstant): 
 }
 
 function resolveSupplySourceStructure(room: Room, resource: ResourceConstant): StructureTerminal | StructureStorage | null {
-  const terminalAmount = room.terminal?.store.getUsedCapacity(resource) || 0;
+  const terminalAmount = room.terminal ? getTerminalAmountOutsideMarketSaleExposure(room.terminal, resource, room.name) : 0;
   const storageAmount = room.storage?.store.getUsedCapacity(resource) || 0;
   if (terminalAmount <= 0 && storageAmount <= 0) {
     return null;
@@ -1021,7 +1024,9 @@ function generateSupplyTask(
       continue;
     }
 
-    const available = source.store.getUsedCapacity(reagent);
+    const available = source.structureType === STRUCTURE_TERMINAL
+      ? getTerminalAmountOutsideMarketSaleExposure(source, reagent, room.name)
+      : source.store.getUsedCapacity(reagent);
     const amount = Math.min(deficit, available);
     const isAmountPartialTopUp = amount > 0 && amount < LAB_REACTION_AMOUNT
       && desiredLabAmount >= LAB_REACTION_AMOUNT
@@ -1589,6 +1594,7 @@ function handleRoom(
   let stage = roomState.stage;
   let nextReactionAt = planChanged ? undefined : roomState.nextReactionAt;
   if (planChanged) {
+    roomState.loadingSinceTick = undefined;
     stage = "acquiring";
     roomState.lastTransitionAt = Game.time;
   }
@@ -1620,7 +1626,7 @@ function handleRoom(
   const productUnloadTask = !hasContamination && stage !== "acquiring" && stage !== "loading"
     ? generateProductUnloadTask(room, topology.productLabs, activePlan.product, activePlan.targetAmount, stage === "synthesizing" ? 701 : 1)
     : null;
-  const prevProductUnloadTask = roomState.activeProduct && roomState.activeProduct !== activePlan.product && roomState.targetAmount
+  const prevProductUnloadTask = !hasContamination && roomState.activeProduct && roomState.activeProduct !== activePlan.product && roomState.targetAmount
     ? generateProductUnloadTask(room, topology.productLabs, roomState.activeProduct as ResourceConstant, roomState.targetAmount as number, 1)
     : null;
   const boardTasks = hasContamination

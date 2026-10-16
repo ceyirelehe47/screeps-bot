@@ -54,7 +54,7 @@ function cleanupStalePortalEntries(store: NonNullable<NonNullable<Memory["data"]
   const now = Game.time;
   for (const [portalId, entry] of Object.entries(store)) {
     const staleByTime = now - entry.lastSeenAt > PORTAL_STALE_TTL;
-    const decayed = typeof entry.ticksToDecay === "number" && entry.ticksToDecay <= 0;
+    const decayed = typeof entry.ticksToDecay === "number" && entry.ticksToDecay - (now - entry.lastSeenAt) <= 0;
     if (staleByTime || decayed) {
       delete store[portalId];
     }

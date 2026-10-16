@@ -1,4 +1,6 @@
 /** 从 resourceControl.ts 分离的独立职责模块；共享状态仅由此处持有。 */
+import { getProductReagents, roundUpReactionAmount } from "@/runtime/reactionMap";
+import { roomResourceAmount } from "@/runtime/synthesisReadModel";
 import { isHubOnlyReserveCompound } from "@/config/hub";
 import {
   RESOURCE_CONTROL_BASE_MINERALS as BASE_MINERALS,
@@ -44,6 +46,8 @@ const HUB_INTERMEDIATES: ResourceConstant[] = [
 export interface ResourceControlMarketConfig {
   enabled: boolean;
   emergencyBuyEnabled: boolean;
+  creditReserve?: number;
+  energyShadowPrice?: number;
   nativeMineralAutoSellThreshold: number;
   maxDealsPerRun: number;
   minDealAmount: number;
@@ -151,24 +155,27 @@ function getMarketBuyDemandDeficit(
     return 0;
   }
 
-  const activeMissing = getActiveSynthesisMissing(snapshot.roomName, resource);
-  if (activeMissing > 0) {
-    return activeMissing;
-  }
-
-  const demandTarget = getSynthesisDemandTarget(snapshot.roomName, resource);
-  if (demandTarget <= 0) {
-    return 0;
-  }
-
   const room = Game.rooms[snapshot.roomName];
+  // 内部 send 已接受后 Store 尚未更新，而调拨任务已扣减；补上本 tick 快照的收货差量。
   const current = room?.controller?.my
-    ? getResourceControlRoomStock(room, resource)
+    ? getResourceControlRoomStock(room, resource) + getTerminalResourceAmount(snapshot, resource)
+      - (room.terminal?.store.getUsedCapacity(resource) ?? 0)
     : getStock(snapshot, resource);
   const incoming =
     context.healthyIncomingByRoomResource.get(
       roomResourceKey(snapshot.roomName, resource),
     ) || 0;
+  const state = Memory.runtime?.synthesisControl?.rooms?.[snapshot.roomName];
+  if (getActiveSynthesisMissing(snapshot.roomName, resource) > 0 && room && state?.activeProduct &&
+      ["acquiring", "loading", "synthesizing"].includes(state.stage) &&
+      getProductReagents(state.activeProduct)?.includes(resource) &&
+      typeof state.batchSize === "number" && typeof state.targetAmount === "number") {
+    // missing 是上次采样的净缺口；从实际批次重建毛需求，再扣当帧库存和在途。
+    const productDeficit = Math.max(0, state.targetAmount - roomResourceAmount(room, state.activeProduct));
+    const required = Math.min(state.batchSize, roundUpReactionAmount(productDeficit));
+    return Math.max(0, required - current - incoming);
+  }
+  const demandTarget = getSynthesisDemandTarget(snapshot.roomName, resource);
   return Math.max(0, demandTarget - current - incoming);
 }
 
@@ -180,9 +187,11 @@ function findBestBuyOrder(
   maxDealEnergyCostRatio: number,
   priceCap?: number,
   priceFloor?: number,
+  energyShadowPrice = 0.12,
 ): Order | null {
   const orders = Game.market.getAllOrders({ type, resourceType: resource });
   let best: Order | null = null;
+  let bestEffectivePrice = Infinity;
 
   for (const order of orders) {
     if (order.amount < amount || !order.roomName) {
@@ -206,6 +215,14 @@ function findBestBuyOrder(
       continue;
     }
 
+    if (type === ORDER_SELL) {
+      const effectivePrice = resource === RESOURCE_ENERGY
+        ? (amount > cost ? order.price * amount / (amount - cost) : Infinity)
+        : order.price + cost / amount * energyShadowPrice;
+      if (!Number.isFinite(effectivePrice) || (priceCap !== undefined && effectivePrice > priceCap)) continue;
+      if (effectivePrice < bestEffectivePrice) { best = order; bestEffectivePrice = effectivePrice; }
+      continue;
+    }
     if (!best) {
       best = order;
       continue;
@@ -301,6 +318,7 @@ export function applyMarketOps(
 
   const actions: string[] = [];
   let dealsDone = 0;
+  let availableCredits = Math.max(0, (Game.market.credits || 0) - (marketCfg.creditReserve ?? 100_000));
 
   // 永久闩与 Memory 配置无关。Emergency/production purchases 仍由
   // `emergencyBuyEnabled` 独立控制，不能因关闭旧卖家而移除生存购买。
@@ -573,7 +591,8 @@ export function applyMarketOps(
       continue;
     }
 
-    const need = Math.max(0, room.energyTarget - room.storageEnergy);
+    const incoming = context.healthyIncomingByRoomResource.get(roomResourceKey(room.roomName, RESOURCE_ENERGY)) || 0;
+    const need = Math.max(0, room.energyTarget - room.storageEnergy - room.terminalEnergy - incoming);
     if (need < marketCfg.minDealAmount) {
       continue;
     }
@@ -600,6 +619,7 @@ export function applyMarketOps(
       marketCfg.maxDealEnergyCostRatio,
       maxBuyPrice,
       undefined,
+      marketCfg.energyShadowPrice,
     );
     if (!order || !order.roomName) {
       continue;
@@ -610,7 +630,7 @@ export function applyMarketOps(
       room.roomName,
       order.roomName,
     );
-    if (transferCost > room.terminalEnergy) {
+    if (transferCost > getEnergyAvailableForFees(room) || amount * order.price > availableCredits) {
       continue;
     }
 
@@ -635,6 +655,7 @@ export function applyMarketOps(
       continue;
     }
 
+    availableCredits -= amount * order.price;
     room.terminalEnergy = Math.max(
       0,
       room.terminalEnergy + amount - transferCost,
@@ -715,6 +736,7 @@ export function applyMarketOps(
         marketCfg.maxDealEnergyCostRatio,
         maxBuyPrice,
         undefined,
+        marketCfg.energyShadowPrice,
       );
       if (!order || !order.roomName) {
         continue;
@@ -725,7 +747,7 @@ export function applyMarketOps(
         room.roomName,
         order.roomName,
       );
-      if (transferCost > room.terminalEnergy) {
+      if (transferCost > getEnergyAvailableForFees(room) || amount * order.price > availableCredits) {
         continue;
       }
 
@@ -752,12 +774,14 @@ export function applyMarketOps(
         continue;
       }
 
+      availableCredits -= amount * order.price;
       room.terminalEnergy = Math.max(0, room.terminalEnergy - transferCost);
       terminalBusy.add(room.roomName);
       dealsDone += 1;
       actions.push(
         `market-buy:${room.roomName}:${resource}=${amount}:price=${order.price.toFixed(3)}:cost=${transferCost}`,
       );
+      break;
     }
   }
 

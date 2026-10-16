@@ -18,6 +18,7 @@ function createRoom(name: string, storageEnergy: number, level = 4, terminalEner
           resource === RESOURCE_ENERGY ? terminalEnergy : 0,
       },
     } as unknown as StructureTerminal,
+    find: jest.fn(() => []),
     createFlag: jest.fn((_pos: RoomPosition, flagName?: string) => flagName || name),
   } as unknown as Room;
   Game.rooms[name] = room;
@@ -55,4 +56,16 @@ describe("runAutoReserveFlags", () => {
     runAutoReserveFlags();
     expect(room.createFlag).not.toHaveBeenCalled();
   });
+});
+
+
+it("关键工地存在时不进入储备，并退出已有自动储备", () => {
+  const room = createRoom("W4N4", 1);
+  room.find = jest.fn(() => [{ structureType: STRUCTURE_SPAWN }]) as Room["find"];
+  runAutoReserveFlags();
+  expect(room.createFlag).not.toHaveBeenCalled();
+  const flag = { remove: jest.fn() } as unknown as Flag;
+  Game.flags.RESERVE_W4N4 = flag;
+  runAutoReserveFlags();
+  expect(flag.remove).toHaveBeenCalledTimes(1);
 });

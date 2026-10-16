@@ -398,6 +398,25 @@ describe("powerBankHarvest", () => {
     resetPowerBankFixture();
   });
 
+  it("重新发现同一 bank 不得认领已进入回收的旧成员", () => {
+    setupSourceRoom(); setupTargetRoom();
+    const taskId = "pb-recycled";
+    const pair = setupOwnedCombatPair({ taskId });
+    for (const actor of [pair.attacker, pair.healer]) {
+      delete actor.memory.taskId;
+      actor.memory._recycleToRoom = SOURCE_ROOM;
+    }
+    const bank = createMockPowerBank({ id: taskId + "-bank", roomName: TARGET_ROOM, ticksToDecay: 5000 });
+    mockObjects(pair.attacker, pair.healer, bank);
+    addTask(makeTask({ id: taskId, bankId: bank.id, sourceRoom: SOURCE_ROOM, status: POWER_BANK_STATUS.SPAWNING,
+      tier: 8, stageEnteredAt: Game.time, bankExpiresAt: Game.time + 5000 }));
+    runPowerBankHarvest();
+    expect(pair.attacker.memory.taskId).toBeUndefined();
+    expect(pair.healer.memory.taskId).toBeUndefined();
+    expect(getTask(taskId)?.attackerId).toBeUndefined();
+    expect(getTask(taskId)?.healerId).toBeUndefined();
+  });
+
   it("旧计划日期已过也不提前生运输者；开打后按剩余血量倒推真实窗口", () => {
     setupSourceRoom(); setupTargetRoom();
     // discovered 顺延不能拦截已经开打的任务或到点的运输补员。
@@ -439,6 +458,7 @@ describe("powerBankHarvest", () => {
     expect(Memory.data!.powerBankHarvestHistory!.slice(-1)[0]).toMatchObject({ failReason: "one_pair_runtime_ttl_insufficient" });
     for (const actor of [pair.attacker, pair.healer]) {
       expect(actor.memory._recycleToRoom).toBe(SOURCE_ROOM);
+      expect(actor.memory.configName).toBeUndefined();
       expect(actor.suicide).not.toHaveBeenCalled();
     }
     expect(Object.keys(Memory.data!.creepConfigs!).filter(n => n.includes(":hauler:") || n.includes(":attacker:1:") || n.includes(":healer:1:"))).toHaveLength(0);
@@ -1048,11 +1068,14 @@ describe("powerBankHarvest", () => {
       lastBankHits: bank.hits, lastBankProgressAt: Game.time, stageEnteredAt: Game.time,
       bankExpiresAt: Game.time + 5000 }));
     runPowerBankHarvest();
-    if (condition === "healthy") expect(getTask(taskId)?.reinforcement).toBeUndefined();
+    if (condition !== "damaged") {
+      expect(getTask(taskId)).toBeDefined();
+      expect(getTask(taskId)?.reinforcement).toBeUndefined();
+    }
     else expect(Memory.data!.powerBankHarvestHistory!.slice(-1)[0]).toMatchObject({ taskId, failReason: "one_pair_runtime_ttl_insufficient" });
   });
 
-  it.each([400, 140])("损毁HEAL需要暂停恢复，TTL为%s时按真实恢复时间决定继续或撤回", (ttl) => {
+  it.each([400, 140, 50])("损毁HEAL需要暂停恢复，TTL为%s时按真实恢复时间决定继续或撤回", (ttl) => {
     Game.time = 400;
     setupSourceRoom();
     const taskId = `pb-heal-recovery-${ttl}`;
@@ -1067,7 +1090,10 @@ describe("powerBankHarvest", () => {
       lastBankHits: bank.hits, lastBankProgressAt: Game.time, stageEnteredAt: Game.time,
       bankExpiresAt: Game.time + 5000 }));
     runPowerBankHarvest();
-    if (ttl === 400) expect(getTask(taskId)?.reinforcement).toBeUndefined();
+    if (ttl >= 140) {
+      expect(getTask(taskId)).toBeDefined();
+      expect(getTask(taskId)?.reinforcement).toBeUndefined();
+    }
     else expect(Memory.data!.powerBankHarvestHistory!.slice(-1)[0]).toMatchObject({ taskId, failReason: "one_pair_runtime_ttl_insufficient" });
   });
 
@@ -1324,6 +1350,7 @@ describe("powerBankHarvest", () => {
       haulingStartedTick: Game.time,
     });
     expect(getTask("pb-bank-gone")?.outcome).toBeUndefined();
+    expect(Object.values(getCreepConfigService().list()).filter(config => config.taskId === "pb-bank-gone" && config.role === "powerBankHauler")).toHaveLength(0);
     expect(Memory.data?.powerBankHarvestHistory).toContainEqual(expect.objectContaining({
       taskId: "pb-zero-yield",
       status: POWER_BANK_STATUS.FAILED,

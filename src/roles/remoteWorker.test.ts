@@ -207,3 +207,13 @@ describe("remoteWorkerRole - repairs damaged source container", () => {
     expect(creep.memory._remoteWorkerRepairTargetId).toBe(selectedContainer.id);
   });
 });
+
+
+it("目标房没有建修任务时留在房内，避免空闲跨边界往返", () => {
+  const room = makeRoom(TARGET_ROOM); Game.rooms[TARGET_ROOM] = room;
+  const creep = makeCreep({ room, energy: 100 });
+  Game.getObjectById = jest.fn(() => null) as Game["getObjectById"];
+  expect(remoteWorkerRole(TARGET_ROOM).target(creep)).toBe(false);
+  expect(moveToTargetRoom).not.toHaveBeenCalled();
+  expect(clearMovementState).toHaveBeenCalledWith(creep);
+});

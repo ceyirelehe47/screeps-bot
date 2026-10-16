@@ -85,3 +85,13 @@ describe("Deposit 一代owner与孵化门", () => {
     expect(Memory.data!.creepConfigs!.orphan).toBeUndefined(); expect(Game.spawns.Spawn1.memory.spawnList).toEqual([]);
   });
 });
+
+
+it("新鲜 Deposit 视野可延长到期时间，不复活终态", () => {
+  const task = Memory.data!.depositHarvest!.d1;
+  task.status = "failed";
+  task.expiresAt = Game.time + 10;
+  recordDepositDiscovery(deposit());
+  expect(task.expiresAt).toBe(Game.time + 5_000);
+  expect(task.status).toBe("failed");
+});

@@ -197,7 +197,7 @@ describe("bootstrapRooms", () => {
     expect(getCreepConfigService().get(configName)).toBeUndefined();
   });
 
-  it("fails closed for reserved room types while RESERVE flags drain only worker ownership", () => {
+  it("fails closed for reserved room types while RESERVE flags retain one maintenance worker", () => {
     Memory.cfg = { rooms: { W1N1: { type: "reserved" } } };
     const reservedRoom = createRoom({ name: "W1N1", sources: [createSource("reserved-source", "W1N1")] });
     const reserveFlagRoom = createRoom({
@@ -230,10 +230,10 @@ describe("bootstrapRooms", () => {
     bootstrapRooms();
 
     expect(getCreepConfigService().get("W1N1:harvester:reserved-source")).toBeUndefined();
-    expect(getCreepConfigService().get("W5N5:worker:0")?.roomName).toBeUndefined();
+    expect(getCreepConfigService().get("W5N5:worker:0")?.roomName).toBe("W5N5");
     expect(getCreepConfigService().get("W5N5:harvester:source-a")?.roomName).toBe("W5N5");
     expect(getCreepConfigService().get("W5N5:carrier:0")?.roomName).toBe("W5N5");
-    expect(reserveSpawn.memory.spawnList).toEqual(["manual:keep"]);
+    expect(reserveSpawn.memory.spawnList).toEqual(["W5N5:worker:0", "manual:keep"]);
     expect(Game.creeps.workerLive.suicide).not.toHaveBeenCalled();
   });
 

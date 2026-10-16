@@ -221,6 +221,7 @@ describe("mountSpawn", () => {
       const blockerMemory: Record<string, unknown> = {};
       const blockerRoom = { room: undefined as unknown as Room };
       const blocker = {
+        my: true,
         move: blockerMove,
         pos: blockerPos,
         memory: blockerMemory,
@@ -232,6 +233,7 @@ describe("mountSpawn", () => {
       const powerCreepMemory: Record<string, unknown> = {};
       const powerCreepPos = { x: 25, y: 24 };
       const powerCreepObj = {
+        my: true,
         move: powerCreepMove,
         pos: powerCreepPos,
         memory: powerCreepMemory,
@@ -297,6 +299,15 @@ describe("mountSpawn", () => {
       expect(powerCreepMove).toHaveBeenCalledWith(TOP);
       expect(powerCreepMemory._spawnYield).toEqual({ dir: TOP, tick: Game.time });
       expect(openSpawn.spawnCreep).not.toHaveBeenCalled();
+
+      // 敌方 creep.memory 在引擎中为 undefined，不能写让位指令。
+      blockerMove.mockClear();
+      blocker.my = false;
+      Object.defineProperty(blocker, "memory", { configurable: true, get: () => undefined });
+      expect(() => prototype.work.call(openSpawn)).not.toThrow();
+      expect(blockerMove).not.toHaveBeenCalled();
+      blocker.my = true;
+      Object.defineProperty(blocker, "memory", { configurable: true, value: blockerMemory });
 
       // 配置在孵化期间改变时，挡位仍读取本次孵化的真实出口。
       blockerMove.mockClear();

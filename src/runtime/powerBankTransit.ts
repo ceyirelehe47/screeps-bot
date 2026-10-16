@@ -33,12 +33,14 @@ function getVisibleRoomOwnershipImpl(): readonly VisibleRoomOwnership[] {
   return observations;
 }
 
-/** 下一房未知时先取得原生视野；固定任务路线不能覆盖当帧所有权。 */
+/** 可观察时等待原生视野，盲区回退至已确认的所有权情报。 */
 export function isPowerBankTransitRoomAllowed(roomName: string): boolean {
   const room = Game.rooms[roomName];
   if (!room) {
-    requestCombatObservation(roomName);
-    return false;
+    // 有观察覆盖时等待新鲜视野；覆盖不到时用已确认所有权避让。
+    // 未知普通房只能在进入后确认，不能因此永久卡在边界。
+    const observing = requestCombatObservation(roomName);
+    return !observing && !Memory.runtime?.powerBankOwnedRoomIntel?.[roomName];
   }
   return !room.controller?.owner || room.controller.my === true;
 }
@@ -51,7 +53,7 @@ function getPowerBankOwnedAvoidRoomsImpl(): string[] {
   const runtime = Memory.runtime ??= {};
   const intel = runtime.powerBankOwnedRoomIntel ??= {};
   // 失去视野不能撤销已确认的敌方所有权。只有新的原生视野证明已无主
-  // 或属于己方，才允许路线重新使用它；实际跨房仍由 fresh 视野门核验。
+  // 或属于己方，才允许路线重新使用它；有观察能力的跨房仍需新鲜视野核验。
   for (const { roomName, enemyOwner } of getVisibleRoomOwnership()) {
     if (enemyOwner !== undefined) {
       const previous = intel[roomName];

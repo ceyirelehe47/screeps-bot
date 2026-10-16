@@ -1,145 +1,95 @@
 import { getTickContextService } from "@/runtime/runtimeServices";
 
-const CORE_RAMPART_ATTACK_RANGE = 3;
-const NUKE_IGNORE_TIME_TO_LAND = 1;
+const CORE_ATTACK_RANGE = 3;
 const NUKE_DAMAGE_RANGE = 2;
 
-function getCoreRampartHitStore(room: Room): Record<string, number> {
-  room.memory.coreRampartHits = room.memory.coreRampartHits || {};
-  return room.memory.coreRampartHits;
-}
-
-function getCorePositionsFromPlan(room: Room): RoomPosition[] {
+function getCorePositions(room: Room, structures: Structure<StructureConstant>[]): RoomPosition[] {
   const layout = Memory.data?.roomPlanner?.[room.name]?.layout;
-  if (!layout) {
-    return [];
-  }
-
-  const merged = [...(layout[STRUCTURE_SPAWN] ?? []), ...(layout[STRUCTURE_STORAGE] ?? [])];
+  const positions = [...(layout?.[STRUCTURE_SPAWN] ?? []), ...(layout?.[STRUCTURE_STORAGE] ?? []),
+    ...structures.map(structure => structure.pos)];
   const seen = new Set<string>();
-  const result: RoomPosition[] = [];
-
-  for (const pos of merged) {
+  return positions.filter(pos => {
     const key = `${pos.x}:${pos.y}`;
-    if (seen.has(key)) {
-      continue;
-    }
-
+    if (seen.has(key)) return false;
     seen.add(key);
-    result.push(new RoomPosition(pos.x, pos.y, room.name));
-  }
-
-  return result;
+    return true;
+  }).map(pos => new RoomPosition(pos.x, pos.y, room.name));
 }
 
-function getRampartAtPosition(pos: RoomPosition): StructureRampart | null {
-  const structures = pos.lookFor(LOOK_STRUCTURES);
-  const rampart = structures.find((structure) => structure.structureType === STRUCTURE_RAMPART);
-  return (rampart as StructureRampart | undefined) || null;
-}
-
-function hasCreepThreatNearRampart(room: Room, rampart: StructureRampart): boolean {
-  const hostiles = room.find(FIND_HOSTILE_CREEPS, {
-    filter: (creep) =>
-      (creep.getActiveBodyparts(ATTACK) > 0 ||
-        creep.getActiveBodyparts(RANGED_ATTACK) > 0 ||
-        creep.getActiveBodyparts(WORK) > 0) &&
-      creep.pos.getRangeTo(rampart.pos) <= CORE_RAMPART_ATTACK_RANGE,
-  });
-
-  return hostiles.length > 0;
-}
-
-function hasNukeDamageAtPosition(room: Room, pos: RoomPosition): boolean {
-  const nukes = room.find(FIND_NUKES);
-  return nukes.some(
-    (nuke) => nuke.timeToLand <= NUKE_IGNORE_TIME_TO_LAND && nuke.pos.getRangeTo(pos) <= NUKE_DAMAGE_RANGE,
-  );
-}
-
-function getExpectedNaturalRampartLoss(previousHits: number): number {
-  if (Game.time % RAMPART_DECAY_TIME !== 0) {
-    return 0;
-  }
-
-  return Math.min(previousHits, RAMPART_DECAY_AMOUNT);
-}
-
-function canActivateSafeMode(room: Room): boolean {
-  const controller = room.controller;
-  if (!controller || !controller.my) {
-    return false;
-  }
-
-  if ((controller.safeMode ?? 0) > 0) {
-    return false;
-  }
-
-  if ((controller.safeModeCooldown ?? 0) > 0) {
-    return false;
-  }
-
-  return (controller.safeModeAvailable ?? 0) > 0;
+function hasCreepThreatNearPosition(hostiles: Creep[], pos: RoomPosition): boolean {
+  return hostiles.some(creep =>
+    ((creep.getActiveBodyparts(ATTACK) > 0 || creep.getActiveBodyparts(WORK) > 0) && creep.pos.getRangeTo(pos) <= 1) ||
+    (creep.getActiveBodyparts(RANGED_ATTACK) > 0 && creep.pos.getRangeTo(pos) <= CORE_ATTACK_RANGE));
 }
 
 function tryActivateSafeMode(room: Room): boolean {
-  if (!canActivateSafeMode(room)) {
-    return false;
-  }
-
-  const code = room.controller!.activateSafeMode();
-  if (code === OK) {
-    console.log(`[coreDefense] ${room.name} activated safe mode: core rampart under creep attack`);
-    return true;
-  }
-
-  return false;
+  const controller = room.controller;
+  if (!controller?.my || (controller.safeMode ?? 0) > 0 || (controller.safeModeCooldown ?? 0) > 0 ||
+      (controller.safeModeAvailable ?? 0) <= 0) return false;
+  const code = controller.activateSafeMode();
+  if (code !== OK) return false;
+  console.log(`[coreDefense] ${room.name} activated safe mode: core under creep attack`);
+  return true;
 }
 
-function evaluateRoomCoreRamparts(room: Room): void {
-  const hitStore = getCoreRampartHitStore(room);
-  const corePositions = getCorePositionsFromPlan(room);
-  const validKeys = new Set<string>();
-  let safeModeTriggered = false;
+function evaluateRoomCore(room: Room): void {
+  const context = getTickContextService().getRoomContext(room);
+  const hostiles = context?.getHostileCreeps() ?? room.find(FIND_HOSTILE_CREEPS);
+  const structures = (context?.getMyStructures() ?? room.find(FIND_MY_STRUCTURES)).filter(structure =>
+    structure.structureType === STRUCTURE_SPAWN || structure.structureType === STRUCTURE_STORAGE ||
+    structure.structureType === STRUCTURE_TOWER);
+  const hitStore = room.memory.coreRampartHits ??= {};
+  const previous = room.memory.coreDefenseSnapshot;
+  const elapsed = previous ? Math.max(0, Game.time - previous.tick) : 1;
+  const decayTimers: Record<string, number> = {};
+  const structureHits: Record<string, { hits: number; x: number; y: number }> = {};
+  const nukes = room.find(FIND_NUKES).map(nuke => ({ x: nuke.pos.x, y: nuke.pos.y, landsAt: Game.time + nuke.timeToLand }));
+  const nukeDamageAt = (pos: RoomPosition): boolean => [...nukes, ...(previous?.nukes ?? [])].some(nuke =>
+    nuke.landsAt >= Game.time - elapsed && nuke.landsAt <= Game.time + 1 &&
+    Math.max(Math.abs(nuke.x - pos.x), Math.abs(nuke.y - pos.y)) <= NUKE_DAMAGE_RANGE);
+  let triggered = false;
+  const triggerAt = (pos: RoomPosition): void => {
+    if (!triggered && !nukeDamageAt(pos) && hasCreepThreatNearPosition(hostiles, pos)) triggered = tryActivateSafeMode(room);
+  };
 
-  for (const pos of corePositions) {
+  // attackController 生效后 upgradeBlocked 会禁止激活；相邻敌 CLAIM 必须提前拦截。
+  if (room.controller?.pos && hostiles.some(creep => creep.getActiveBodyparts(CLAIM) > 0 && creep.pos.getRangeTo(room.controller!.pos) <= 1)) {
+    triggered = tryActivateSafeMode(room);
+  }
+
+  const validKeys = new Set<string>();
+  for (const pos of getCorePositions(room, structures)) {
     const key = `${pos.x}:${pos.y}`;
     validKeys.add(key);
-
-    const rampart = getRampartAtPosition(pos);
-    if (!rampart) {
-      delete hitStore[key];
-      continue;
-    }
-
+    const rampart = pos.lookFor(LOOK_STRUCTURES).find(structure => structure.structureType === STRUCTURE_RAMPART &&
+      (structure as StructureRampart).my) as StructureRampart | undefined;
     const previousHits = hitStore[key];
-    const hitLoss = previousHits === undefined ? 0 : previousHits - rampart.hits;
-    const naturalLoss = previousHits === undefined ? 0 : getExpectedNaturalRampartLoss(previousHits);
-    const hostileLoss = hitLoss - naturalLoss;
-    if (
-      !safeModeTriggered &&
-      previousHits !== undefined &&
-      hitLoss > 0 &&
-      hostileLoss > 0 &&
-      !hasNukeDamageAtPosition(room, rampart.pos) &&
-      hasCreepThreatNearRampart(room, rampart)
-    ) {
-      safeModeTriggered = tryActivateSafeMode(room);
-    }
-
-    hitStore[key] = rampart.hits;
+    const hitLoss = previousHits === undefined ? 0 : previousHits - (rampart?.hits ?? 0);
+    const previousDecay = previous?.rampartDecay[key];
+    // 以结构计时器判断这段时间内是否真实跨过衰减点；兼容首次升级时仅有 hits 的旧快照。
+    const decays = previousDecay !== undefined
+      ? (elapsed >= previousDecay ? 1 + Math.floor((elapsed - previousDecay) / RAMPART_DECAY_TIME) : 0)
+      : (rampart && rampart.ticksToDecay >= RAMPART_DECAY_TIME - elapsed ? 1 : 0);
+    const naturalLoss = Math.min(previousHits ?? 0, decays * RAMPART_DECAY_AMOUNT);
+    if (hitLoss > naturalLoss) triggerAt(pos);
+    if (rampart) {
+      hitStore[key] = rampart.hits;
+      decayTimers[key] = rampart.ticksToDecay;
+    } else delete hitStore[key];
   }
+  for (const key of Object.keys(hitStore)) if (!validKeys.has(key)) delete hitStore[key];
 
-  for (const key of Object.keys(hitStore)) {
-    if (!validKeys.has(key)) {
-      delete hitStore[key];
-    }
+  for (const structure of structures) {
+    const priorHits = previous?.structureHits[structure.id];
+    if (priorHits !== undefined && structure.hits < priorHits.hits) triggerAt(structure.pos);
+    structureHits[structure.id] = { hits: structure.hits, x: structure.pos.x, y: structure.pos.y };
   }
+  for (const [id, lost] of Object.entries(previous?.structureHits ?? {})) {
+    if (!structureHits[id]) triggerAt(new RoomPosition(lost.x, lost.y, room.name));
+  }
+  room.memory.coreDefenseSnapshot = { tick: Game.time, rampartDecay: decayTimers, structureHits, nukes };
 }
 
 export function runCoreDefense(): void {
-  const rooms = getTickContextService().getMyRooms();
-  for (const room of rooms) {
-    evaluateRoomCoreRamparts(room);
-  }
+  for (const room of getTickContextService().getMyRooms()) evaluateRoomCore(room);
 }

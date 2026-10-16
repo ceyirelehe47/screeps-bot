@@ -10,7 +10,7 @@ const MEMORY_BRANCHES = {
   cfg: {
     declaration: "src/types/memory/cfg.d.ts",
     interfaceName: "ScreepsMemoryConfig",
-    schemaFingerprint: "177a2ada1772ec2924bb10886318875e88ab10b177893dc3e2b34258e277605d",
+    schemaFingerprint: "dde5d309152630f8661e522aa72913aa2e2629f13e0975c4a958c1e60e785650",
     imports: ["@/runtime/depositHarvest:DepositHarvestConfig", "@/types/system:RoomType"],
     fields: [
       "colonizationSupport",

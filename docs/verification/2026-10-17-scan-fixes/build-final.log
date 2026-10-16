@@ -1,0 +1,10 @@
+
+> screeps@2026.10.16-2 build
+> rollup -c
+
+No deployment target set. Build only.
+[36m
+[1msrc/main.ts[22m → [1mdist/main.js[22m...[39m
+[deploy] bundle sha256: 2d2b3bd9096d4e37… (full in Memory.runtime.lastDeployBundleHash)
+[deploy] runtime modules: 4600594 bytes (including source map)
+[32mcreated [1mdist/main.js[22m in [1m1m 20.1s[22m[39m

@@ -4,10 +4,6 @@ import type { RoleFactory } from "@/types/system";
 
 const TRAVEL_OPTS = { plainCost: 2, swampCost: 10, travelRange: 3 as const, reusePath: 10 };
 
-function getHomeRoomName(creep: Creep): string {
-  return creep.memory.configName?.split(":")[0] || creep.room.name;
-}
-
 function getCarriedEnergy(creep: Creep): number {
   return creep.store.getUsedCapacity(RESOURCE_ENERGY);
 }
@@ -176,8 +172,6 @@ export const remoteWorkerRole: RoleFactory = (targetRoom: string) => {
     },
 
     target: (creep): boolean => {
-      const homeName = getHomeRoomName(creep);
-
       if (creep.room.name !== targetRoom) {
         moveToTargetRoom(creep, targetRoom, undefined, TRAVEL_OPTS);
         return false;
@@ -237,7 +231,7 @@ export const remoteWorkerRole: RoleFactory = (targetRoom: string) => {
         return false;
       }
 
-      moveToTargetRoom(creep, homeName, undefined, TRAVEL_OPTS);
+      clearMovementState(creep);
       return false;
     },
   };

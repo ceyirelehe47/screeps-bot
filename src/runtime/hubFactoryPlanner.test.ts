@@ -194,3 +194,16 @@ describe("HUB 工厂规划和执行", () => {
     expect(visual.text.mock.calls.some(call => String(call[0]).includes("reductant:100"))).toBe(true);
   });
 });
+
+
+it("HUB 清料跟随真正选中的配方，跳过已满足的队首不会往返搬输入", () => {
+  clearCarrierTaskBoardForTest(); Memory.runtime = undefined; Game.time = 1000;
+  const w = makeRoom("W1N1", { energy: 300000, purifier: 100, H: 10000 }, { reductant: 100, energy: 200 });
+  Game.rooms = { W1N1: w.room };
+  Memory.cfg = { factoryControl: { enabled: true, rooms: { W1N1: { enabled: true, managedBy: "hubFactoryPlanner",
+    targets: [{ resource: "purifier", targetAmount: 100 }, { resource: "H", targetAmount: 11000 }] } } } };
+  const planner = jest.spyOn(require("@/runtime/hubFactoryPlanner"), "planHubFactory").mockImplementation(() => undefined);
+  try { runFactoryControl(); } finally { planner.mockRestore(); }
+  expect(listCarrierTasksByRoom("W1N1").some(task => task.type === "factory_unload" && task.steps.some(s => s.resource === "reductant"))).toBe(false);
+  expect(w.factory.produce).toHaveBeenCalledWith("H");
+});

@@ -224,19 +224,18 @@ export function buildRoomWorkforceInventory(room: Room): RoomWorkforceInventory 
   }
 
   const reserveMode = isRoomInReserveMode(room.name);
-  let constructionTierEffect: ConstructionTierEffect = { kind: "preserve" };
-  if (!reserveMode) {
-    const workerDecision = getDesiredWorkerCountDecision(room);
-    constructionTierEffect = workerDecision.constructionTierEffect;
-    for (let i = 0; i < workerDecision.count; i++) {
-      configs.push({
-        kind: "worker",
-        configName: formatRoomWorkforceConfigName(room.name, "worker", i),
-        role: "worker",
-        args: [],
-        slot: i,
-      });
-    }
+  const workerDecision: { count: number; constructionTierEffect: ConstructionTierEffect } = reserveMode
+    ? { count: 1, constructionTierEffect: { kind: "preserve" } }
+    : getDesiredWorkerCountDecision(room);
+  const { constructionTierEffect } = workerDecision;
+  for (let i = 0; i < workerDecision.count; i++) {
+    configs.push({
+      kind: "worker",
+      configName: formatRoomWorkforceConfigName(room.name, "worker", i),
+      role: "worker",
+      args: [],
+      slot: i,
+    });
   }
 
   return {

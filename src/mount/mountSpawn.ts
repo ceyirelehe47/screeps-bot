@@ -164,6 +164,7 @@ function directBlockingCreepsOffSpawn(spawn: StructureSpawn): void {
   }
   const birthKeys = new Set(birthPositions.map((pos) => `${pos.x}:${pos.y}`));
   for (const blocker of blockers) {
+    if (!blocker.my) continue;
     const exit = DEFAULT_EXIT_DIRECTIONS.find((direction) => {
       const [dx, dy] = EXIT_DIRECTION_DELTAS[direction];
       const x = blocker.pos.x + dx;

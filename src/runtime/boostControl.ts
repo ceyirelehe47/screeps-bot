@@ -5,6 +5,8 @@ import {
   executeMarketDeal,
 } from "@/runtime/marketActionArbiter";
 import { getTickContextService } from "@/runtime/runtimeServices";
+import { getTerminalAmountOutsideMarketSaleExposure } from "@/runtime/marketSaleExposure";
+import { resolveRoomEnergyPolicy } from "@/runtime/roomEnergyPolicy";
 import { calcEffectiveDamage } from "@/runtime/towerControl";
 
 export const DEFENSE_BOOST_COMPOUND = RESOURCE_CATALYZED_UTRIUM_ACID;
@@ -128,7 +130,10 @@ export function buyBoostIfNeeded(room: Room): void {
   if (!order?.roomName) return;
 
   const transferCost = Game.market.calcTransactionCost(amount, room.name, order.roomName);
-  if (transferCost > room.terminal.store.getUsedCapacity(RESOURCE_ENERGY)) return;
+  const reserve = resolveRoomEnergyPolicy(Memory.cfg?.resourceControl?.rooms?.[room.name]).terminalEnergyReserve;
+  if (transferCost > room.terminal.store.getUsedCapacity(RESOURCE_ENERGY) - reserve) return;
+  const creditReserve = Memory.cfg?.resourceControl?.market?.creditReserve ?? 100_000;
+  if (!Number.isFinite(Game.market.credits) || Game.market.credits - amount * order.price < creditReserve) return;
 
   declareMarketActionIntent(
     BOOST_CONTROL_PRODUCER,
@@ -173,7 +178,7 @@ export function syncBoostLabTask(room: Room): void {
 
   // Step 1: offload terminal → storage so storage becomes the supply source
   if (terminal && storage) {
-    const terminalHas = terminal.store.getUsedCapacity(DEFENSE_BOOST_COMPOUND);
+    const terminalHas = getTerminalAmountOutsideMarketSaleExposure(terminal, DEFENSE_BOOST_COMPOUND, room.name);
     const storageFree = storage.store.getFreeCapacity(DEFENSE_BOOST_COMPOUND);
     const offloadAmt = Math.min(terminalHas, storageFree);
     if (offloadAmt > 0) {
@@ -230,6 +235,18 @@ export function syncBoostLabTask(room: Room): void {
     }
   }
 
+  const attackParts = Math.min(25, Math.floor(room.energyCapacityAvailable / (BODYPART_COST[ATTACK] + BODYPART_COST[MOVE])));
+  const energyMissing = Math.max(0, attackParts * LAB_BOOST_ENERGY - lab.store.getUsedCapacity(RESOURCE_ENERGY));
+  const sourceEnergy = (source: StructureStorage | StructureTerminal): number => source === terminal
+    ? getTerminalAmountOutsideMarketSaleExposure(source as StructureTerminal, RESOURCE_ENERGY, room.name)
+    : source.store.getUsedCapacity(RESOURCE_ENERGY);
+  const energySource = [storage, terminal].find(source => source && sourceEnergy(source) > 0);
+  if (energySource && energyMissing > 0) {
+    drafts.push({ id: `boostControl:lab_supply:${room.name}:energy`, type: "lab_supply", priority: BOOST_LAB_SUPPLY_PRIORITY,
+      steps: [{ id: `energy:${energySource.id}->${lab.id}`, resource: RESOURCE_ENERGY,
+        fromKind: energySource === storage ? "storage" : "terminal", toKind: "lab", fromId: energySource.id, toId: lab.id,
+        amount: Math.min(energyMissing, sourceEnergy(energySource), lab.store.getFreeCapacity(RESOURCE_ENERGY)) }] });
+  }
   replaceCarrierTasksForProducerRoom(BOOST_CONTROL_PRODUCER, room.name, drafts);
 }
 

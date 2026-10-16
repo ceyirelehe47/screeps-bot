@@ -1,0 +1,12 @@
+{
+  "status": "JEST_TEST_INTEGRITY=PASSED",
+  "mode": "run-full",
+  "source": {
+    "commit": "7eb814a4bfb2da0682eb6745d38fd075f1c85b77",
+    "workspaceSha256": "4a506a4568921f64e3fb1acabeed6e3b5ea9c731fd850d4d1a9a3fe2eef42762"
+  },
+  "resultsPath": "/root/codex-jobs/20261017-screeps-scan-01a145fb/logs/full-final/results.json",
+  "suites": 266,
+  "cases": 2025,
+  "errors": []
+}

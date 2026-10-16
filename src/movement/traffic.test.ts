@@ -1,5 +1,5 @@
 import { clearCreepMovementStateForTest, ensureCreepMovementState } from "@/movement/creepState";
-import { cancelMoveIntent, getMoveIntentReceipt, issueMove, moveToAdjacentPosition } from "@/movement/traffic";
+import { cancelMoveIntent, isBlockerActivelyMoving, getMoveIntentReceipt, issueMove, moveToAdjacentPosition } from "@/movement/traffic";
 
 jest.mock("@/runtime/runtimeServices", () => ({
   getTickContextService: jest.fn(),
@@ -64,6 +64,7 @@ function makeCreep(name: string, x: number, y: number, roomName = "W1N1") {
 
 
 function planHeadOnStep(creep: Creep, target: RoomPosition): void {
+  ensureCreepMovementState(creep).pathingRequestedAt = Game.time;
   ensureCreepMovementState(creep).movePathState = {
     key: "head-on",
     steps: [
@@ -160,4 +161,16 @@ describe("moveToAdjacentPosition", () => {
     expect(healer.move).not.toHaveBeenCalled();
     expect(attacker.move).toHaveBeenCalledWith(RIGHT);
   });
+});
+
+
+it("旧路径仍未过期但已两 tick 无请求的 creep 可让路", () => {
+  clearCreepMovementStateForTest();
+  const creep = makeCreep("idle", 10, 10);
+  const state = ensureCreepMovementState(creep);
+  planHeadOnStep(creep, { x: 11, y: 10, roomName: "W1N1" } as RoomPosition);
+  state.pathingRequestedAt = Game.time - 2;
+  expect(isBlockerActivelyMoving(creep)).toBe(false);
+  state.pathingRequestedAt = Game.time - 1;
+  expect(isBlockerActivelyMoving(creep)).toBe(true);
 });

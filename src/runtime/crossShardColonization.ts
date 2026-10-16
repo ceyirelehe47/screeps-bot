@@ -153,7 +153,8 @@ function selectSourceAndPortal(
     return null;
   }
 
-  const portals = Object.values(getInterShardPortals()).filter((portal) => portal.destinationShard === targetShard);
+  const portals = Object.values(getInterShardPortals()).filter(portal => portal.destinationShard === targetShard &&
+    (portal.ticksToDecay === undefined || portal.ticksToDecay - Math.max(0, Game.time - portal.lastSeenAt) >= MIN_PORTAL_TICKS_TO_DECAY));
   if (portals.length === 0) {
     return null;
   }
@@ -562,6 +563,7 @@ function processTask(task: CrossShardColonizationTask): void {
 
   const selected = selectSourceAndPortal(task.targetShard, task.preferredSourceRoom);
   if (!selected) {
+    cleanupTaskConfigs(task);
     task.status = "blocked";
     task.reason = "no reachable source room or inter-shard portal";
     task.portalId = undefined;
@@ -574,16 +576,6 @@ function processTask(task: CrossShardColonizationTask): void {
   task.portalId = selected.portal.id;
   task.portalRoom = selected.portal.originRoom;
   task.destinationRoom = selected.portal.destinationRoom;
-
-  if (
-    typeof selected.portal.ticksToDecay === "number" &&
-    selected.portal.ticksToDecay > 0 &&
-    selected.portal.ticksToDecay < MIN_PORTAL_TICKS_TO_DECAY
-  ) {
-    task.status = "blocked";
-    task.reason = `portal decaying soon (${selected.portal.ticksToDecay})`;
-    return;
-  }
 
   ensureClaimer(task);
   if (task.status === "ready" || task.status === "spawning" || task.status === "in_transit") {

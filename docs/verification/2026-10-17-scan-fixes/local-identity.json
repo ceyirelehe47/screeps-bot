@@ -1,0 +1,8 @@
+{
+  "all_source_files_match": true,
+  "matched_files": 623,
+  "modified_source_and_test_files": 67,
+  "source_tree_sha256": "2221ec8c1df2776f272b44dc26d8fa72029cbf7d3d2c91362e04bcd4af8a8e44",
+  "baseline_commit": "a9c1f81a225731a1ca247cfc33a3a2dfd0e7dba2",
+  "local_worktree": "/Users/forst/.codex/worktrees/scan-fixes-20261017/screeps"
+}

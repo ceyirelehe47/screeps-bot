@@ -193,3 +193,32 @@ describe("runTowerControl", () => {
     expect(towerB.attack).not.toHaveBeenCalled();
   });
 });
+
+
+it("战斗中只用一座塔治疗，其余塔继续攻击", () => {
+  const name = "W1N3";
+  const towers = [createTower(name, "a", 10, 10), createTower(name, "b", 11, 10), createTower(name, "c", 12, 10)];
+  const hostile = createHostile(name, "enemy", 13, 10);
+  const ally = { pos: new MockPos(10, 11, name), hits: 99, hitsMax: 100 } as unknown as Creep;
+  const room = createRoom(name, { towers, hostiles: [hostile], myCreeps: [ally] });
+  Game.rooms[name] = room;
+  runTowerControl();
+  expect(towers.filter(t => (t.heal as jest.Mock).mock.calls.length)).toHaveLength(1);
+  expect(towers.filter(t => (t.attack as jest.Mock).mock.calls.length)).toHaveLength(2);
+});
+
+
+it("敌方治疗超过塔伤害时仍修应急 rampart", () => {
+  const name = "W1N4";
+  const tower = createTower(name, "tower", 10, 10);
+  const hostile = createHostile(name, "healer", 30, 30, { body: createBody(HEAL, 50), hits: 5000 });
+  const rampart = { id: "rampart", structureType: STRUCTURE_RAMPART, my: true,
+    pos: new MockPos(11, 10, name), hits: 1000, hitsMax: 100000 } as unknown as StructureRampart;
+  const room = createRoom(name, { towers: [tower], hostiles: [hostile], structures: [tower, rampart] });
+  const nativeFind = room.find;
+  room.find = jest.fn((kind: FindConstant) => kind === FIND_MY_STRUCTURES ? [tower, rampart] : nativeFind(kind)) as Room["find"];
+  Game.rooms[name] = room;
+  runTowerControl();
+  expect(tower.attack).not.toHaveBeenCalled();
+  expect(tower.repair).toHaveBeenCalledWith(rampart);
+});

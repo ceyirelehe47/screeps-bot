@@ -155,11 +155,12 @@ function reserveCarrierPickupTarget(
       );
 }
 
-function getBestStoredResource(target: DeadStorePickupTarget): ResourceConstant | null {
+function getBestStoredResource(target: DeadStorePickupTarget, creep: Creep): ResourceConstant | null {
   // 单次循环取存量最大的资源；平局保留 Object.keys 的首个（与原稳定排序一致）。
   let best: ResourceConstant | null = null;
   let bestAmount = 0;
   for (const resource of Object.keys(target.store) as ResourceConstant[]) {
+    if (resource !== RESOURCE_ENERGY && !getSynthesisCleanupDeliveryTarget(creep, resource)) continue;
     const amount = (target.store.getUsedCapacity(resource) ?? 0);
     if (amount > bestAmount) {
       best = resource;
@@ -1343,7 +1344,7 @@ function pickupOwnedRoomDeadStoreResource(creep: Creep): { picked: boolean; outO
     let best: DeadStorePickupAssignment | null = null;
     let bestRange = Infinity;
     for (const target of [...tombstones, ...ruins]) {
-      const resource = getBestStoredResource(target);
+      const resource = getBestStoredResource(target, creep);
       if (!resource) {
         continue;
       }
@@ -1782,6 +1783,11 @@ function deliverSynthesisCarrierResource(creep: Creep): boolean {
       : getSynthesisCleanupDeliveryTarget(creep, resource);
   if (!target) {
     clearSynthesisCarrierTaskPlan(creep);
+    // 无卸货空间时释放已有杂物，避免永久卡在非能量交付阶段。
+    if (!assignedResource && fallbackResource) {
+      measureCreepIntent(() => creep.drop(fallbackResource));
+      return true;
+    }
     return false;
   }
 

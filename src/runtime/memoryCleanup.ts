@@ -195,7 +195,7 @@ function cleanupRoomPlannerMemory(ownedRooms: Set<string>, colonizationTargets: 
     const staleByRoom = !ownedRooms.has(roomName) && !colonizationTargets.has(roomName);
     const staleByTime = Game.time - data.savedAt > ROOM_PLANNER_TTL;
 
-    if (staleByRoom || staleByTime) {
+    if (staleByRoom && staleByTime) {
       delete Memory.data.roomPlanner[roomName];
       removed += 1;
     }

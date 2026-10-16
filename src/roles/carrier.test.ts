@@ -1542,4 +1542,19 @@ describe("carrierRole mineral hauling", () => {
     expect(getCreepAssignmentState(creep.name)?.synthesisCarrierPendingTaskRef)
       .toBeUndefined();
   });
+
+it("没有杂物卸货空间时不从墓碑取矿物，已带矿物则放下恢复工作", () => {
+  const room = createRoom("W140N1", { level: 3, storage: null, terminal: null });
+  const creep = createCreep(room);
+  const tombstone = { id: "mineral-tomb", pos: creep.pos, store: {
+    H: 50, getUsedCapacity: (r?: ResourceConstant) => r === undefined || r === RESOURCE_HYDROGEN ? 50 : 0,
+  } } as unknown as Tombstone;
+  room.find = jest.fn((kind: FindConstant) => kind === FIND_TOMBSTONES ? [tombstone] : []) as Room["find"];
+  carrierRole().source!(creep);
+  expect(creep.withdraw).not.toHaveBeenCalledWith(tombstone, RESOURCE_HYDROGEN);
+  Object.assign(creep, { store: { H: 50, getUsedCapacity: (r?: ResourceConstant) => r === undefined || r === RESOURCE_HYDROGEN ? 50 : 0 }, drop: jest.fn(() => OK) });
+  carrierRole().target(creep);
+  expect(creep.drop).toHaveBeenCalledWith(RESOURCE_HYDROGEN);
+});
+
 });

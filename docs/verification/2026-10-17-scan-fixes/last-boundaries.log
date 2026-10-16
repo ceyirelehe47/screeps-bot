@@ -1,0 +1,36 @@
+
+> screeps@2026.10.16-2 test
+> jest --config jest.config.cjs --runInBand --runTestsByPath src/runtime/factoryControl.test.ts src/runtime/coreDefense.test.ts src/runtime/hubFactoryPlanner.test.ts src/roles/remoteWorker.test.ts
+
+PASS src/runtime/factoryControl.test.ts
+PASS src/runtime/hubFactoryPlanner.test.ts
+PASS src/runtime/coreDefense.test.ts
+  ● Console
+
+    console.log
+      [coreDefense] W1N1 activated safe mode: core under creep attack
+
+      at tryActivateSafeMode (src/runtime/coreDefense.ts:31:11)
+
+    console.log
+      [coreDefense] W1N1 activated safe mode: core under creep attack
+
+      at tryActivateSafeMode (src/runtime/coreDefense.ts:31:11)
+
+    console.log
+      [coreDefense] W1N1 activated safe mode: core under creep attack
+
+      at tryActivateSafeMode (src/runtime/coreDefense.ts:31:11)
+
+    console.log
+      [coreDefense] W1N1 activated safe mode: core under creep attack
+
+      at tryActivateSafeMode (src/runtime/coreDefense.ts:31:11)
+
+PASS src/roles/remoteWorker.test.ts
+
+Test Suites: 4 passed, 4 total
+Tests:       31 passed, 31 total
+Snapshots:   0 total
+Time:        2.133 s
+Ran all test suites within paths "src/runtime/factoryControl.test.ts", "src/runtime/coreDefense.test.ts", "src/runtime/hubFactoryPlanner.test.ts", "src/roles/remoteWorker.test.ts".

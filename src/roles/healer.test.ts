@@ -235,3 +235,15 @@ describe("healerRole war duo staging", () => {
     expect(healer.pos.isNearTo(attacker.pos)).toBe(true);
   });
 });
+
+
+it("自己轻伤时不覆盖给搭档的治疗意图", () => {
+  const healer = createMockPowerBankCreep("healer", { name: "green", roomName: TARGET_ROOM, x: 19, y: 20 });
+  const ally = createMockPowerBankCreep("meleeAttacker", { name: "red", roomName: TARGET_ROOM, x: 20, y: 20 });
+  healer.hits -= 1; ally.hits -= 100;
+  healer.room.find = jest.fn(() => [ally]) as Room["find"];
+  Game.creeps = { green: healer, red: ally };
+  healerRole().target(healer);
+  expect(healer.heal).toHaveBeenCalledTimes(1);
+  expect(healer.heal).toHaveBeenCalledWith(ally);
+});

@@ -4,6 +4,9 @@ jest.mock("@/runtime/safeZone", () => ({
 
 jest.mock("@/runtime/boostControl", () => ({
   clearBoostLabTasks: jest.fn(),
+  syncBoostLabTask: jest.fn(),
+  buyBoostIfNeeded: jest.fn(),
+  shouldBoostDefender: jest.fn(() => true),
 }));
 
 import { runHomeDefense } from "@/runtime/homeDefense";
@@ -204,4 +207,16 @@ describe("runHomeDefense", () => {
       expect(spawnB.memory.spawnList).toContain(`${roomName}:carrier:0`);
     });
   });
+});
+
+
+it("确需强化的防御任务连接 boost 补给与购买入口", () => {
+  resetRuntimeServices(); Game.time += 1;
+  const room = createRoom("W6N6", { hostiles: [createHostile("W6N6", 20, 20)] });
+  Game.rooms = { W6N6: room }; const spawn = createSpawn(room); Game.spawns = { Spawn: spawn };
+  Memory.cfg = { homeDefense: { rooms: { W6N6: { boostLabId: "boost-lab" } } } };
+  runHomeDefense();
+  const { syncBoostLabTask, buyBoostIfNeeded } = jest.requireMock("@/runtime/boostControl");
+  expect(syncBoostLabTask).toHaveBeenCalledWith(room);
+  expect(buyBoostIfNeeded).toHaveBeenCalledWith(room);
 });

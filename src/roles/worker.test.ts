@@ -270,7 +270,7 @@ describe("workerRole", () => {
   });
 
   it("keeps or releases unreachable work according to the task retry contract", () => {
-    for (const type of ["build", "upgrade"] as const) {
+    for (const type of ["upgrade"] as const) {
       resetWorkerFixture();
       arrangeTask(type);
       const { creep } = createCreep(50);
@@ -320,4 +320,14 @@ describe("workerRole", () => {
       expect(mockedMoveToTarget).not.toHaveBeenCalled();
     }
   });
+});
+
+
+it("建造目标无路可达时释放任务", () => {
+  const { creep } = createCreep(100, 100);
+  arrangeTask("build");
+  (creep.build as jest.Mock).mockReturnValue(ERR_NOT_IN_RANGE);
+  mockedMoveToRemoteWorkTarget.mockReturnValue(ERR_NO_PATH);
+  expect(workerRole().target(creep)).toBe(false);
+  expect(mockedReleaseWorkerTask).toHaveBeenCalledWith(creep);
 });

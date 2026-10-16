@@ -852,3 +852,66 @@ describe("synthesis boost pause/resume contract", () => {
     expect(roomState.nextReactionAt).toBeUndefined();
   });
 });
+
+
+it("换配方重置补料超时，同份旧产物仅由一个清理任务认领", () => {
+  resetRuntimeServices(); clearCarrierTaskBoardForTest(); Game.time = 1000; Game.creeps = {};
+  Memory.cfg = { synthesisControl: { enabled: true, rooms: { W1N1: { enabled: true,
+    reactions: [{ product: RESOURCE_HYDROXIDE, targetAmount: 5000, batchSize: 500 }] } } } };
+  Memory.data = {};
+  const room = createRoomWithResources({ name: "W1N1", mineralType: RESOURCE_CATALYST, storageEnergy: 300000 });
+  Game.rooms = { W1N1: room };
+  const labs = room.find(FIND_MY_STRUCTURES) as StructureLab[];
+  const product = labs[2];
+  Object.assign(product, { mineralType: RESOURCE_UTRIUM_HYDRIDE, store: {
+    getUsedCapacity: (r?: ResourceConstant) => r === RESOURCE_UTRIUM_HYDRIDE ? 100 : 0,
+    getFreeCapacity: () => 2900,
+  } });
+  Game.getObjectById = jest.fn(id => labs.find(lab => lab.id === id) ?? null) as Game["getObjectById"];
+  Memory.runtime = { synthesisControl: { rooms: { W1N1: { stage: "loading", activeProduct: RESOURCE_UTRIUM_HYDRIDE,
+    targetAmount: 5000, batchSize: 500, loadingSinceTick: 1, reagentLabIds: labs.slice(0, 2).map(l => l.id),
+    productLabIds: [product.id] } } } } as any;
+  runSynthesisControl();
+  const state = Memory.runtime!.synthesisControl!.rooms.W1N1;
+  expect(state.activeProduct).toBe(RESOURCE_HYDROXIDE);
+  expect(state.loadingSinceTick).toBe(Game.time);
+  const { listCarrierTasksByRoom } = require("@/runtime/carrierTaskBoard");
+  const productClaims = listCarrierTasksByRoom(room.name).flatMap((task: any) => task.steps)
+    .filter((step: any) => step.fromId === product.id && step.resource === RESOURCE_UTRIUM_HYDRIDE);
+  expect(productClaims).toHaveLength(1);
+});
+
+
+it("合成补料比较可取库存，terminal 待售锁定后选择 storage", () => {
+  const { createMockStore } = require("@mock/powerBank");
+  const { clearMarketSaleExposureReservationsForTest } = require("@/runtime/marketSaleExposure");
+  const { listCarrierTasksByRoom } = require("@/runtime/carrierTaskBoard");
+  resetRuntimeServices(); clearCarrierTaskBoardForTest(); clearMarketSaleExposureReservationsForTest();
+  Game.time = 1000; Game.creeps = {}; Memory.runtime = undefined;
+  Memory.cfg = { synthesisControl: { enabled: true, rooms: { W1N1: { reactions: [{ product: RESOURCE_HYDROXIDE, targetAmount: 5000, batchSize: 500 }] } } } };
+  const room = createRoomWithResources({ name: "W1N1", mineralType: RESOURCE_CATALYST, terminalResources: { H: 1000 } });
+  Object.assign(room.storage!, { store: createMockStore({ energy: 300000, H: 500, O: 500 }) });
+  const labs = room.find(FIND_MY_STRUCTURES) as StructureLab[];
+  Game.rooms = { W1N1: room };
+  Game.getObjectById = jest.fn(id => labs.find(lab => lab.id === id) ?? null) as Game["getObjectById"];
+  Memory.data = { marketSaleAutomation: { managedOrders: {}, pendingDirectDeals: { held: {
+    requestId: "held", status: "reconcile_gap", canaryRoomName: room.name, resource: RESOURCE_HYDROGEN,
+    dealAmount: 1000, transactionEnergy: 0,
+  } } } } as any;
+  runSynthesisControl();
+  expect(listCarrierTasksByRoom(room.name).flatMap((task: any) => task.steps))
+    .toContainEqual(expect.objectContaining({ resource: RESOURCE_HYDROGEN, fromId: room.storage!.id }));
+});
+
+
+it("防御专用 boost lab 不会被常规合成抢占", () => {
+  resetRuntimeServices(); clearCarrierTaskBoardForTest(); Game.time = 1000;
+  const room = createRoomWithResources({ name: "W1N1", mineralType: RESOURCE_CATALYST });
+  Game.rooms = { W1N1: room }; Memory.runtime = undefined; Memory.data = {};
+  Memory.cfg = { homeDefense: { rooms: { W1N1: { boostLabId: "W1N1-lab-3" } } },
+    synthesisControl: { enabled: true, rooms: { W1N1: { reactions: [{ product: RESOURCE_HYDROXIDE, targetAmount: 5000 }] } } } };
+  runSynthesisControl();
+  expect(Memory.runtime!.synthesisControl!.rooms.W1N1.lastError).toBe("lab_topology_unavailable");
+  const { listCarrierTasksByRoom } = require("@/runtime/carrierTaskBoard");
+  expect(listCarrierTasksByRoom(room.name)).toHaveLength(0);
+});

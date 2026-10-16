@@ -24,6 +24,13 @@ export function runAutoReserveFlags(): void {
       Memory.cfg?.resourceControl?.rooms?.[room.name],
     );
     const storageEnergy = room.storage.store.getUsedCapacity(RESOURCE_ENERGY);
+    const hasCriticalConstruction = room.find(FIND_MY_CONSTRUCTION_SITES).some(site =>
+      site.structureType === STRUCTURE_SPAWN || site.structureType === STRUCTURE_STORAGE ||
+      site.structureType === STRUCTURE_TOWER || site.structureType === STRUCTURE_EXTENSION);
+    if (hasCriticalConstruction) {
+      if (flag) flag.remove();
+      continue;
+    }
 
     if (storageEnergy < policy.energyFloor) {
       if (flag) {

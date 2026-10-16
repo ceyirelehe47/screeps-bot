@@ -116,3 +116,12 @@ describe("minerRole – work position alignment with harvester", () => {
     expect(creep.harvest).not.toHaveBeenCalled();
   });
 });
+
+
+it("link 满载时放下溢出能量而非永久卡在交付阶段", () => {
+  const { getSourceAdjacentLink } = jest.requireMock("@/runtime/sourceLink");
+  getSourceAdjacentLink.mockReturnValue({ store: { getFreeCapacity: () => 0 } });
+  const creep = Object.assign(makeCreep(11, 10, ROOM, 0, 50), { drop: jest.fn(() => OK) });
+  expect(minerRole(SOURCE_ID).target(creep as unknown as Creep)).toBe(true);
+  expect(creep.drop).toHaveBeenCalledWith(RESOURCE_ENERGY);
+});

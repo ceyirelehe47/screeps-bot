@@ -8,6 +8,7 @@
  * product selling is owned by the market-sale automation domain.
  */
 
+import { getTerminalAmountOutsideMarketSaleExposure } from "@/runtime/marketSaleExposure";
 import { normalizeBoolean, normalizeNumber } from "@/runtime/configNormalize";
 import { HUB_FACTORY_OWNER, planHubFactory } from "@/runtime/hubFactoryPlanner";
 import { getReservedProductionAmountExcludingHolder } from "@/runtime/resourceReservation";
@@ -418,6 +419,12 @@ function getRequiredFactoryLevel(resource: ResourceConstant): number {
   return recipe?.level ?? 0;
 }
 
+/** 无等级配方不受等级影响；有等级配方必须与工厂及当前生效能力一致。 */
+function canProduceFactoryLevel(factory: StructureFactory, level: number): boolean {
+  return level === 0 || (factory.level === level && (factory.effects ?? []).some(effect =>
+    effect.effect === PWR_OPERATE_FACTORY && "level" in effect && effect.level === level && effect.ticksRemaining > 0));
+}
+
 /**
  * Recursively walk COMMODITIES tree for a target product.
  * Returns the list of resources to produce in dependency order,
@@ -680,7 +687,7 @@ function resolveSupplySourceStructure(
   room: Room,
   resource: ResourceConstant,
 ): StructureTerminal | StructureStorage | null {
-  const terminalAmount = room.terminal?.store.getUsedCapacity(resource) ?? 0;
+  const terminalAmount = room.terminal ? getTerminalAmountOutsideMarketSaleExposure(room.terminal, resource, room.name) : 0;
   const storageAmount = room.storage?.store.getUsedCapacity(resource) ?? 0;
   if (terminalAmount <= 0 && storageAmount <= 0) return null;
   if (terminalAmount >= storageAmount && room.terminal && terminalAmount > 0) {
@@ -710,7 +717,8 @@ function generateFactorySupplyDrafts(
     const source = resolveSupplySourceStructure(room, comp);
     if (!source) continue;
 
-    const sourceAmount = source.store.getUsedCapacity(comp) ?? 0;
+    const sourceAmount = source.structureType === STRUCTURE_TERMINAL
+      ? getTerminalAmountOutsideMarketSaleExposure(source, comp, room.name) : source.store.getUsedCapacity(comp) ?? 0;
     if (sourceAmount <= 0) continue;
 
     const fromKind = source.structureType === STRUCTURE_TERMINAL ? "terminal" : "storage";
@@ -788,7 +796,8 @@ function generateBatteryDecompressSupplyDraft(
   const source = resolveSupplySourceStructure(room, RESOURCE_BATTERY);
   if (!source) return null;
 
-  const sourceAmount = source.store.getUsedCapacity(RESOURCE_BATTERY) ?? 0;
+  const sourceAmount = source.structureType === STRUCTURE_TERMINAL
+    ? getTerminalAmountOutsideMarketSaleExposure(source, RESOURCE_BATTERY, room.name) : source.store.getUsedCapacity(RESOURCE_BATTERY) ?? 0;
   if (sourceAmount <= 0) return null;
 
   const fromKind = source.structureType === STRUCTURE_TERMINAL ? "terminal" : "storage";
@@ -1309,29 +1318,36 @@ export function runFactoryControl(): void {
     // 已产出的成品先卸出；总库存达到目标不能让最后一批留在工厂。
     // HUB 切换目标时同时清理不再需要的输入，避免残料堵满工厂。
     const queued = resolveTargetQueue(config, roomName);
-    const nextRecipe = queued[0] ? getCommodityRecipe(queued[0].resource) : null;
-    const cleanup = Object.keys(factory.store).find(name => {
-      const resource = name as ResourceConstant;
-      if ((factory.store.getUsedCapacity(resource) ?? 0) <= 0) return false;
-      if (roomCfg?.drainOnly) return true;
-      if (resource === previousActiveTarget) return true;
-      return roomCfg?.managedBy === HUB_FACTORY_OWNER && !(nextRecipe?.components[resource]);
-    }) as ResourceConstant | undefined;
-    if (cleanup) {
-      const draft = generateFactoryUnloadDraft(room, factory, cleanup, roomName);
-      state.stage = draft ? "unloading" : "blocked";
-      state.sleepReason = draft ? undefined : "unload_target_full";
-      state.lastError = draft ? undefined : "unload_target_full";
-      state.sleepUntilTick = undefined;
-      replaceCarrierTasksForProducerRoom(FACTORY_CARRIER_TASK_PRODUCER, roomName, draft ? [draft] : []);
-      continue;
-    }
+    // 旧 blocked 状态可能已把原料搬进不受支持的工厂；跳过配方时释放无用输入。
+    const releaseGatedInputs = queued.some(target => !canProduceFactoryLevel(factory, getRequiredFactoryLevel(target.resource)));
+    const unloadInventory = (productionTarget?: ResourceConstant): boolean => {
+      const nextRecipe = productionTarget ? getCommodityRecipe(productionTarget) : null;
+      const cleanup = Object.keys(factory.store).find(name => {
+        const resource = name as ResourceConstant;
+        if ((factory.store.getUsedCapacity(resource) ?? 0) <= 0) return false;
+        if (roomCfg?.drainOnly) return true;
+        if (resource === previousActiveTarget && !nextRecipe?.components[resource]) return true;
+        return (roomCfg?.managedBy === HUB_FACTORY_OWNER || releaseGatedInputs) && !(nextRecipe?.components[resource]);
+      }) as ResourceConstant | undefined;
+      if (cleanup) {
+        const draft = generateFactoryUnloadDraft(room, factory, cleanup, roomName);
+        state.stage = draft ? "unloading" : "blocked";
+        state.sleepReason = draft ? undefined : "unload_target_full";
+        state.lastError = draft ? undefined : "unload_target_full";
+        state.sleepUntilTick = undefined;
+        replaceCarrierTasksForProducerRoom(FACTORY_CARRIER_TASK_PRODUCER, roomName, draft ? [draft] : []);
+        state.activeTarget = previousActiveTarget;
+        return true;
+      }
+      return false;
+    };
 
     const targetQueue = roomCfg?.drainOnly ? [] : queued;
     const resourceFloors = resolveResourceFloors(config, roomName);
     const productionCaps = resolveProductionCaps(config, roomName);
 
     if (targetQueue.length === 0) {
+      if (unloadInventory()) continue;
       state.stage = "sleeping";
       state.sleepReason = "empty_target_queue";
       state.activeTarget = undefined;
@@ -1362,7 +1378,7 @@ export function runFactoryControl(): void {
       const cap = target.cap || 0;
 
       const requiredLevel = getRequiredFactoryLevel(resource);
-      if (requiredLevel > (factory.level ?? 0)) {
+      if (!canProduceFactoryLevel(factory, requiredLevel)) {
         if (!highestLevelGated || requiredLevel > highestLevelGated.requiredLevel) {
           highestLevelGated = { resource, requiredLevel };
         }
@@ -1403,7 +1419,7 @@ export function runFactoryControl(): void {
         holderId,
       );
 
-      if (decomposition.requiredLevel > (factory.level ?? 0)) {
+      if (!canProduceFactoryLevel(factory, decomposition.requiredLevel)) {
         if (!highestLevelGated || decomposition.requiredLevel > highestLevelGated.requiredLevel) {
           highestLevelGated = { resource, requiredLevel: decomposition.requiredLevel };
         }
@@ -1438,6 +1454,8 @@ export function runFactoryControl(): void {
       planned = true;
       break;
     }
+
+    if (unloadInventory(planned ? state.activeTarget : undefined)) continue;
 
     if (!planned) {
       state.activeTarget = undefined;

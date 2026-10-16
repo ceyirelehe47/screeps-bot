@@ -67,7 +67,11 @@ function removeScoutConfig(flagName: string): void {
   if (!config) return;
 
   // Stop spawning: clear roomName so the spawn system won't re-queue it
+  const wasActive = !!config.roomName;
   delete config.roomName;
+  for (const spawn of Object.values(Game.spawns)) {
+    if (spawn.memory.spawnList) spawn.memory.spawnList = spawn.memory.spawnList.filter(name => name !== configName);
+  }
 
   // Remove if no live creep is using this config
   const tickContext = getTickContextService();
@@ -76,7 +80,7 @@ function removeScoutConfig(flagName: string): void {
     delete store[configName];
   }
 
-  console.log(`[scout] cancelled: flag=${flagName}`);
+  if (wasActive) console.log(`[scout] cancelled: flag=${flagName}`);
 }
 
 export function runScoutByFlag(): void {

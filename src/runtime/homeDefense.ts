@@ -1,6 +1,6 @@
 import { getCreepConfigService, getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
 import { getSafeZone } from "@/runtime/safeZone";
-import { clearBoostLabTasks } from "@/runtime/boostControl";
+import { clearBoostLabTasks, syncBoostLabTask, buyBoostIfNeeded, shouldBoostDefender } from "@/runtime/boostControl";
 import { canTowersHandleHostiles } from "@/runtime/towerControl";
 import { getPlayerHostiles } from "@/runtime/defenseMode";
 import { assignDefenderSlot, clearDefenseCoordination, setDefenderRole, writeDefenseFronts } from "@/runtime/defenseCoordination";
@@ -174,7 +174,10 @@ export function runHomeDefense(): void {
       } else {
         ensureDefenders(room, desiredCount);
         stopQueuedDefenderSpawning(room.name, desiredCount);
-        clearBoostLabTasks(room.name);
+        if (Memory.cfg?.homeDefense?.rooms?.[room.name]?.boostLabId && shouldBoostDefender(room, playerHostiles)) {
+          syncBoostLabTask(room);
+          buyBoostIfNeeded(room);
+        } else clearBoostLabTasks(room.name);
       }
     } else {
       removeDefendersAbove(room.name, 0);
