@@ -139,7 +139,7 @@ const UNREACHABLE = 0xffff;
 
 type ExitPaths = { distances: Uint16Array; next: Uint16Array; worstDamage: Float64Array; peaks: Float64Array[] };
 const towerDamageMaps = new Map<string, Float64Array>();
-function towerDamageKey(tower: StructureTower): string { return `${tower.id}:${tower.pos.roomName}:${tower.pos.x}:${tower.pos.y}:${tower.effects?.filter(e => e.effect === PWR_OPERATE_TOWER && e.ticksRemaining > 0).map(e => e.effect === PWR_OPERATE_TOWER ? e.level : undefined).join("|")}`; }
+function towerDamageKey(tower: StructureTower): string { return `${tower.id}:${tower.pos.roomName}:${tower.pos.x}:${tower.pos.y}:${tower.effects?.filter(e => e.effect === PWR_OPERATE_TOWER && e.ticksRemaining > 0).map(e => e.effect === PWR_OPERATE_TOWER ? e.level ?? 1 : undefined).join("|")}`; }
 function towerDamageMap(tower: StructureTower): Float64Array {
   const key = towerDamageKey(tower); const old = towerDamageMaps.get(key); if (old) return old;
   const values = new Float64Array(2500);
@@ -589,8 +589,8 @@ function leaveBreachExit(creep: Creep, attacker: Creep, healer: Creep, state: To
 export function runTowerDrainPair(creep: Creep, targetRoom: string, partnerConfigName: string, strictT3 = false): boolean {
   requestCombatObservation(targetRoom);
   const red = creep.memory.role === "meleeAttacker";
-  const partner = warPartner(creep, red ? "healer" : "meleeAttacker", partnerConfigName);
-  const attacker = red ? creep : partner?.spawning ? undefined : partner;
+  const partner = warPartner(creep, red ? "healer" : "meleeAttacker", partnerConfigName, true);
+  const attacker = red ? creep : partner;
   const healer = red ? partner : creep;
   let state = (attacker?.memory as DrainMemory | undefined)?._warTowerDrain ?? (creep.memory as DrainMemory)._warTowerDrain;
   if (!state || state.targetRoom !== targetRoom) state = { targetRoom, phase: "approach" };

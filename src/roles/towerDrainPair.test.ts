@@ -112,6 +112,24 @@ describe("towerDrainDuo 公共战术门", () => {
     Game.map = { describeExits: jest.fn((name: string) => name === TARGET ? { [LEFT]: RETREAT } : name === RETREAT ? { [RIGHT]: TARGET } : {}), getRoomTerrain: jest.fn(() => ({ get: jest.fn(() => 0) })) } as unknown as GameMap;
   });
 
+  it.each([true, false])("搭档仍在生成时保持 partner_missing 等待/撤回，当前为攻击兵=%s", red => {
+    const { attacker, healer } = pair(true, []);
+    const actor = red ? attacker : healer;
+    const partner = red ? healer : attacker; partner.spawning = true;
+    runTowerDrainPair(actor, TARGET, red ? GREEN_CONFIG : RED_CONFIG);
+    expect(actor.memory._warTowerDrain?.blocker).toBe("partner_missing");
+    expect(actor.memory._warTowerDrain?.phase).toBe("retreating");
+    expect(attacker.attack).not.toHaveBeenCalled();
+  });
+
+  it("同配置的生成中替补不能遮住已就绪搭档", () => {
+    const { attacker, healer } = pair(true, []);
+    const forming = { ...healer, name: "forming", spawning: true } as Creep;
+    Game.creeps = { red: attacker, forming, green: healer };
+    runTowerDrainPair(attacker, TARGET, GREEN_CONFIG);
+    expect(attacker.memory._warTowerDrain?.blocker).not.toBe("partner_missing");
+  });
+
   it("T3必须耗尽塔能量才推进，即使当前塔伤低于强化治疗", () => {
     const { attacker, healer } = t3Pair(false, [tower("last-shot", 10)]);
     meleeAttackerRole(TARGET, "", "", "", GREEN_CONFIG, "t3TowerDrainDuo").target(attacker);
