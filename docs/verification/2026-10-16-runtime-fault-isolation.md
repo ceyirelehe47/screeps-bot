@@ -64,4 +64,4 @@
 
 原始证据保留在本 worktree 的 `monitor-data/20261016-runtime-fault-isolation/`：完整 Jest 结果与日志、发现清单、执行身份、聚焦/红灯结果、strict 日志和产物检查日志。该目录按现有规则忽略，未加入 Git；服务器原始目录同样保留。归档 `final-evidence.tar.gz` 的 SHA256 为 `1a2dcddaedf0925f326cb4496c68c06246e68975a6690575eaabc14f54287d29`。
 
-远端 origin/main 在收尾核对时仍为 `b3f93276b49e2e729dd4829bad5f25fd9f783962`。本轮未提交、未合并、未部署；构建产物属于隔离验证工作树，不是生产发布身份。
+上述验证完成时，远端 origin/main 仍为 `b3f93276b49e2e729dd4829bad5f25fd9f783962`，当时尚未提交、合并或部署。用户随后授权提交与部署，正式发布身份及线上验收见[发布记录](2026-10-16-runtime-fault-isolation-release.md)。前述验证工作树产物与正式发布产物分开记录。
