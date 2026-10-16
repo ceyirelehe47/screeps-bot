@@ -4,6 +4,7 @@ import {
   type TreasuryActionAdapter,
   type TreasuryActionReconcilerFacts,
 } from "@/runtime/treasury/actionContracts";
+import { DIAGNOSTIC_MIN_BUCKET } from "@/runtime/diagnosticBudget";
 import {
   createTreasuryReadOnlyObserver,
   type TreasuryReadOnlyConfig,
@@ -1186,7 +1187,7 @@ function runTreasuryT1ShadowObservation(): void {
       intervalTicks: 100,
       maxSampleCpu: 1,
       reserveCpu: 5,
-      minBucket: 2_000,
+      minBucket: DIAGNOSTIC_MIN_BUCKET,
       maxLogBytes: 8_192,
     };
     shadowObserver = createTreasuryReadOnlyObserver(config, {

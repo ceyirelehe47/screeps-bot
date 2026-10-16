@@ -1,4 +1,5 @@
 import { getCreepConfigService, getMemoryService } from "@/runtime/runtimeServices";
+import { hasDiagnosticBudget } from "@/runtime/diagnosticBudget";
 import { HUB_RESERVE_PER_COMPOUND, HUB_RESERVE_PER_ROOM, isHubOnlyReserveCompound, getHubOnlyReserve } from "@/config/hub";
 import type { ResourceTransferTask } from "@/runtime/logistics/resourceTransferTasks";
 import { ensureResourceTransferTaskStore } from "@/runtime/logistics/resourceTransferTasks";
@@ -15,12 +16,16 @@ import type {
   HubProtectionRevisionMarker,
   HubRuntimeProtectionExtension,
 } from "@/runtime/hubProtectionSnapshot";
-import { Panel, type VisualSurface } from "@/visual/panel";
+import type { VisualSurface } from "@/visual/panel";
+import { Card } from "@/visual/card";
 import {
+  VIS_DIM,
   VIS_ERROR,
-  VIS_HEADER_FILL,
-  VIS_MUTED,
+  VIS_INBOUND,
   VIS_OK,
+  VIS_OUTBOUND,
+  VIS_TEXT,
+  VIS_TITLE,
   VIS_WARN,
 } from "@/visual/palette";
 
@@ -248,9 +253,6 @@ const DEFAULT_TERMINAL_ENERGY_RESERVE = 20_000;
 const HUB_VISUAL_X = 1;
 const HUB_VISUAL_Y = 2;
 const HUB_VISUAL_WIDTH = 13.5;
-const VISUAL_HEADER_STRIDE = 0.7;
-const VISUAL_ROW_STRIDE = 0.7;
-const VISUAL_BAR_STRIDE = 0.6;
 
 export interface HubVisualModel {
   hubRoomName: string;
@@ -489,97 +491,102 @@ function formatLogisticsRow(row: HubLogisticsVisualRow): string {
   return `${arrow} ${row.classification} ${row.counterpartRoom} ${row.resource} ${formatCompactAmount(row.remaining)} · ${formatTickAge(row.age)}${blocked}`;
 }
 
-function formatReserveRow(row: HubReserveVisualRow): string {
-  const hubGap = row.hubDeficit > 0 ? `(-${formatCompactAmount(row.hubDeficit)})` : "";
-  const networkGap = row.networkDeficit > 0 ? ` N-${formatCompactAmount(row.networkDeficit)}` : "";
-  return `${row.compound} H${formatCompactAmount(row.hubAmount)}/${formatCompactAmount(row.hubReserve)}${hubGap}${networkGap}`;
-}
-
-function hubPanelHeight(model: HubVisualModel): number {
-  const alertRows = model.alerts.length + (model.alertOverflow > 0 ? 1 : 0);
-  const progressHeight = model.progressMode === "determinate" ? VISUAL_BAR_STRIDE : VISUAL_ROW_STRIDE;
-  const logisticsRows = model.logistics.totalTasks === 0
-    ? 1
-    : model.logistics.rows.length + (model.logistics.overflow > 0 ? 1 : 0);
-  const reserveRows = model.t3Reserve.totalCompounds === 0 || model.t3Reserve.rows.length === 0
-    ? 1
-    : model.t3Reserve.rows.length + (model.t3Reserve.overflow > 0 ? 1 : 0);
-  return VISUAL_HEADER_STRIDE * 4 + alertRows * VISUAL_ROW_STRIDE + progressHeight + logisticsRows * VISUAL_ROW_STRIDE + reserveRows * VISUAL_ROW_STRIDE +
-    (model.factory ? VISUAL_HEADER_STRIDE + VISUAL_ROW_STRIDE * (Object.keys(model.factory.missing).length > 0 ? 2 : 1) : 0);
-}
-
 function healthColor(model: HubVisualModel): string {
   if (model.healthLevel === "error") return VIS_ERROR;
   if (model.healthLevel === "warn") return VIS_WARN;
   return VIS_OK;
 }
 
+function blockedTag(row: HubLogisticsVisualRow): string {
+  if (!row.blockedReason) return "";
+  const age = row.blockedAge === null ? "" : ` ${formatTickAge(row.blockedAge)}`;
+  return `⚠ ${formatBlockedReason(row.blockedReason)}${age}`;
+}
+
 export function drawHubVisualPanel(rv: VisualSurface, model: HubVisualModel): number {
-  const p = new Panel({ rv, x: HUB_VISUAL_X, y: HUB_VISUAL_Y, width: HUB_VISUAL_WIDTH });
-  p.background(hubPanelHeight(model));
+  const card = new Card({ rv, x: HUB_VISUAL_X, y: HUB_VISUAL_Y, width: HUB_VISUAL_WIDTH });
+  const accent = healthColor(model);
 
   const statusParts = [model.status];
   if (model.stage && model.stage !== model.status) statusParts.push(model.stage);
-  p.sectionHeader(
-    `HUB ${model.hubRoomName} · ${statusParts.join("/")} · ${model.healthLabel}`,
-    { fill: healthColor(model), opacity: model.healthLevel === "ok" ? 0.22 : 0.35 },
-  );
-  for (const alert of model.alerts) {
-    p.textRow(`⚠ ${alert}`, { font: 0.35, color: model.healthLevel === "error" ? VIS_ERROR : VIS_WARN });
-  }
-  if (model.alertOverflow > 0) {
-    p.textRow(`+${model.alertOverflow} more alerts`, { font: 0.35, color: VIS_MUTED });
-  }
+  card.header(`HUB ${model.hubRoomName}`, statusParts.join(" · "), { label: model.healthLabel, color: accent });
 
-  const productionParts = [`${model.production.activeRooms} active`];
-  if (model.production.blockedRooms > 0) productionParts.push(`${model.production.blockedRooms} blocked`);
-  p.sectionHeader(`Production · ${productionParts.join(" · ")}`);
+  const alertLines = model.alerts.map(alert => `⚠  ${alert}`);
+  if (model.alertOverflow > 0) alertLines.push(`+${model.alertOverflow} more alerts`);
+  card.callout(alertLines, model.healthLevel === "error" ? VIS_ERROR : VIS_WARN);
+
+  // 生产
+  const productionMeta = model.production.blockedRooms > 0
+    ? { text: `${model.production.activeRooms} active · ${model.production.blockedRooms} blocked`, color: VIS_ERROR }
+    : { text: `${model.production.activeRooms} active`, color: VIS_DIM };
+  card.section("Production", productionMeta);
   if (model.progressMode === "determinate") {
-    const progressPercent = model.progressPercent ?? 0;
-    const barColor = model.healthLevel === "error" ? VIS_ERROR : progressPercent >= 1 ? VIS_OK : VIS_WARN;
-    p.progressBar(progressPercent, barColor, model.progressText);
+    const pct = model.progressPercent ?? 0;
+    const barColor = model.healthLevel === "error" ? VIS_ERROR : pct >= 1 ? VIS_OK : VIS_INBOUND;
+    const right = model.progressText.startsWith(`${model.activeProduct} `)
+      ? model.progressText.slice(`${model.activeProduct} `.length).replace(/ (\d+%)$/, "  ·  $1")
+      : model.progressText;
+    card.bar(pct, barColor, model.activeProduct ?? "", right);
+  } else if (model.progressMode === "activity") {
+    card.row([
+      { text: "●", at: 0, color: VIS_OK },
+      { text: model.progressText, at: 0.45, color: VIS_TITLE },
+    ]);
   } else {
-    p.textRow(model.progressText, {
-      font: 0.4,
-      color: model.progressMode === "activity" ? VIS_OK : VIS_MUTED,
-    });
+    card.row([{ text: "idle", at: 0, color: VIS_DIM }]);
   }
 
   if (model.factory) {
-    p.sectionHeader(`Factory · ${model.factory.status}`);
-    p.textRow(`${model.factory.product ?? "idle"} · ${model.factory.stage}`, { font: 0.35 });
-    const missing = Object.entries(model.factory.missing).slice(0, 4).map(([r, n]) => `${r}:${formatCompactAmount(n)}`);
-    if (missing.length > 0) p.textRow(`need ${missing.join(" ")}`, { font: 0.35, color: VIS_WARN });
+    const missing = Object.entries(model.factory.missing).slice(0, 3).map(([r, n]) => `${r}:${formatCompactAmount(n)}`);
+    card.row([
+      { text: "Factory", at: 0, color: VIS_DIM },
+      { text: `${model.factory.product ?? "idle"} · ${model.factory.stage}`, at: 1.6, color: VIS_TITLE },
+      { text: model.factory.status, at: 0, align: "right", color: missing.length > 0 ? VIS_WARN : VIS_DIM },
+    ]);
+    if (missing.length > 0) card.row([
+      { text: "need", at: 0, color: VIS_DIM },
+      { text: missing.join("  "), at: 1.6, font: 0.32, color: VIS_WARN },
+    ]);
   }
 
+  // 物流
   const inboundCount = model.logistics.imports + model.logistics.reclaims;
-  p.sectionHeader(`Logistics · ←${inboundCount} →${model.logistics.exports}`);
-
+  card.section("Logistics", { text: `in ${inboundCount}   out ${model.logistics.exports}` });
   for (const row of model.logistics.rows) {
-    p.textRow(formatLogisticsRow(row), { font: 0.35, color: row.blockedReason ? VIS_WARN : undefined });
+    const inbound = row.direction === "in";
+    const tag = blockedTag(row);
+    card.row([
+      { text: `${inbound ? "←" : "→"}  ${row.classification} ${row.counterpartRoom}`, at: 0, color: row.blockedReason ? VIS_WARN : inbound ? VIS_INBOUND : VIS_OUTBOUND },
+      { text: row.resource, at: 4.1, color: VIS_TITLE, bold: true },
+      { text: tag ? `${formatCompactAmount(row.remaining)} · ${formatTickAge(row.age)}   ${tag}` : `${formatCompactAmount(row.remaining)} · ${formatTickAge(row.age)}`, at: 0, align: "right", color: tag ? VIS_WARN : VIS_DIM },
+    ]);
   }
-  if (model.logistics.totalTasks === 0) {
-    p.textRow("none", { font: 0.35, color: VIS_MUTED });
-  }
-  if (model.logistics.overflow > 0) {
-    p.textRow(`+${model.logistics.overflow} more tasks`, { font: 0.35, color: VIS_MUTED });
-  }
+  if (model.logistics.totalTasks === 0) card.row([{ text: "no pending transfers", at: 0, color: VIS_DIM }]);
+  if (model.logistics.overflow > 0) card.row([{ text: `+${model.logistics.overflow} more tasks`, at: 0, color: VIS_DIM }]);
 
-  p.sectionHeader("Reserve");
+  // 储备
+  const reserveMeta = model.t3Reserve.totalCompounds > 0
+    ? { text: `${model.t3Reserve.stockedCompounds}/${model.t3Reserve.totalCompounds} stocked`, color: model.t3Reserve.rows.length === 0 ? VIS_OK : VIS_DIM }
+    : undefined;
+  card.section("Reserve", reserveMeta);
   if (model.t3Reserve.totalCompounds === 0) {
-    p.textRow("not configured", { font: 0.35, color: VIS_MUTED });
+    card.row([{ text: "not configured", at: 0, color: VIS_DIM }]);
   } else if (model.t3Reserve.rows.length === 0) {
-    p.textRow(`${model.t3Reserve.stockedCompounds}/${model.t3Reserve.totalCompounds} stocked`, { font: 0.35, color: VIS_OK });
+    card.row([{ text: "✓ all compounds at reserve", at: 0, color: VIS_OK }]);
   }
   for (const row of model.t3Reserve.rows) {
-    const deficitColor = row.totalDeficit >= 5000 ? VIS_ERROR : VIS_WARN;
-    p.textRow(formatReserveRow(row), { font: 0.35, color: deficitColor });
+    const severity = row.totalDeficit >= 5000 ? VIS_ERROR : VIS_WARN;
+    const pct = row.hubReserve > 0 ? row.hubAmount / row.hubReserve : 0;
+    card.meter(2.3, 4.2, pct, severity);
+    card.row([
+      { text: row.compound, at: 0, color: severity, bold: true },
+      { text: `${formatCompactAmount(row.hubAmount)}/${formatCompactAmount(row.hubReserve)}`, at: 6.9, color: VIS_TEXT },
+      { text: row.networkDeficit > 0 ? `net -${formatCompactAmount(row.networkDeficit)}` : "", at: 0, align: "right", color: VIS_DIM },
+    ]);
   }
-  if (model.t3Reserve.overflow > 0) {
-    p.textRow(`+${model.t3Reserve.overflow} more deficits`, { font: 0.35, color: VIS_MUTED });
-  }
+  if (model.t3Reserve.overflow > 0) card.row([{ text: `+${model.t3Reserve.overflow} more deficits`, at: 0, color: VIS_DIM }]);
 
-  return p.callsUsed;
+  return card.flush();
 }
 
 
@@ -588,77 +595,59 @@ const SATELLITE_VISUAL_X = 1;
 const SATELLITE_VISUAL_Y = 2;
 const SATELLITE_VISUAL_WIDTH = 13.5;
 
-function buildSatelliteSupplyText(room: ProductionRoomEntry): string {
-  const upstreamLabels = room.upstream
-    .slice(0, MAX_LINK_LABELS)
-    .map(u => u.roomName);
-  const upstreamStr = upstreamLabels.length > 0
-    ? `←${upstreamLabels.join(",")}${room.upstream.length > MAX_LINK_LABELS ? `+${room.upstream.length - MAX_LINK_LABELS}` : ""}`
-    : "";
-
-  const downstreamLabels = room.downstream
-    .slice(0, MAX_LINK_LABELS)
-    .map(d => d.roomName);
-  const downstreamStr = downstreamLabels.length > 0
-    ? `→${downstreamLabels.join(",")}${room.downstream.length > MAX_LINK_LABELS ? `+${room.downstream.length - MAX_LINK_LABELS}` : ""}`
-    : "";
-
-  const supplyParts: string[] = [];
-  if (upstreamStr) supplyParts.push(upstreamStr);
-  if (downstreamStr) supplyParts.push(downstreamStr);
-  if (room.directSupplyAmount > 0) supplyParts.push(`direct:${formatCompactAmount(room.directSupplyAmount)}`);
-  if (room.hubSurplusAmount > 0) supplyParts.push(`hub:${formatCompactAmount(room.hubSurplusAmount)}`);
-  return supplyParts.join(" ");
+function formatRoomList(rooms: Array<{ roomName: string }>): string {
+  const names = Array.from(new Set(rooms.map(r => r.roomName)));
+  const shown = names.slice(0, MAX_LINK_LABELS).join(", ");
+  return names.length > MAX_LINK_LABELS ? `${shown} +${names.length - MAX_LINK_LABELS}` : shown;
 }
 
-function satellitePanelHeight(room: ProductionRoomEntry): number {
-  const progressHeight = room.targetAmount > 0 ? VISUAL_BAR_STRIDE : VISUAL_ROW_STRIDE;
-  const optionalRows = Number(buildSatelliteSupplyText(room).length > 0) + Number(!!room.blocker);
-  return VISUAL_HEADER_STRIDE + progressHeight + optionalRows * VISUAL_ROW_STRIDE;
+function satelliteStageColor(room: ProductionRoomEntry): string {
+  if (room.stage === "blocked" || room.blocker) return VIS_ERROR;
+  if (room.stage === "synthesizing" || (room.targetAmount > 0 && room.progressPercent >= 1)) return VIS_OK;
+  if (room.stage === "idle") return VIS_DIM;
+  return VIS_WARN;
 }
+
+/** 先构建卫星房卡片，输出前可核对精确调用数。 */
+function buildSatelliteCard(rv: VisualSurface, room: ProductionRoomEntry): Card {
+  const card = new Card({ rv, x: SATELLITE_VISUAL_X, y: SATELLITE_VISUAL_Y, width: SATELLITE_VISUAL_WIDTH });
+  const accent = satelliteStageColor(room);
+  card.header(`SAT ${room.roomName}`, "", { label: room.blocker ? "blocked" : room.stage, color: accent });
+
+  if (room.blocker) card.callout([`⚠  ${room.blocker}`], VIS_ERROR);
+
+  if (room.targetAmount > 0) {
+    const pct = room.progressPercent;
+    card.bar(pct, accent, room.product, `${formatCompactAmount(room.currentAmount)}/${formatCompactAmount(room.targetAmount)}  ${Math.round(pct * 100)}%`);
+  } else {
+    card.row([
+      { text: room.product, at: 0, color: VIS_TITLE, bold: true },
+      { text: `${formatCompactAmount(room.currentAmount)} · no target`, at: 0, align: "right", color: VIS_DIM },
+    ]);
+  }
+
+  // 每行只用一次文字调用，控制单个卫星面板的绘图开销。
+  if (room.upstream.length > 0) card.row([{ text: `←  from  ${formatRoomList(room.upstream)}`, at: 0, color: VIS_INBOUND }]);
+  if (room.downstream.length > 0) card.row([{ text: `→  to  ${formatRoomList(room.downstream)}`, at: 0, color: VIS_OUTBOUND }]);
+  const route: string[] = [];
+  if (room.directSupplyAmount > 0) route.push(`direct ${formatCompactAmount(room.directSupplyAmount)}`);
+  if (room.hubSurplusAmount > 0) route.push(`via hub ${formatCompactAmount(room.hubSurplusAmount)}`);
+  if (route.length > 0) card.row([{ text: `route  ${route.join("  ·  ")}`, at: 0, color: VIS_DIM }]);
+  return card;
+}
+
+const NULL_VISUAL_SURFACE: VisualSurface = {
+  rect() { return NULL_VISUAL_SURFACE; },
+  text() { return NULL_VISUAL_SURFACE; },
+};
 
 export function estimateSatellitePanelCalls(room: ProductionRoomEntry): number {
-  const progressCalls = room.targetAmount > 0 ? (room.progressPercent > 0 ? 3 : 2) : 1;
-  return 1 + 2 + progressCalls + Number(buildSatelliteSupplyText(room).length > 0) + Number(!!room.blocker);
+  return buildSatelliteCard(NULL_VISUAL_SURFACE, room).pendingCalls;
 }
 
-/** Render a compact production panel in a satellite room. */
+/** 在卫星房绘制紧凑生产卡片。 */
 export function drawSatellitePanel(rv: VisualSurface, room: ProductionRoomEntry): number {
-  const p = new Panel({ rv, x: SATELLITE_VISUAL_X, y: SATELLITE_VISUAL_Y, width: SATELLITE_VISUAL_WIDTH });
-  p.background(satellitePanelHeight(room));
-
-  const headerFill = room.stage === "blocked" || room.blocker
-    ? VIS_ERROR
-    : room.stage === "synthesizing"
-      ? VIS_OK
-      : VIS_HEADER_FILL;
-  p.sectionHeader(`Production: ${room.product} [${room.stage}]`, {
-    fill: headerFill,
-    opacity: headerFill === VIS_HEADER_FILL ? 0.8 : 0.3,
-  });
-
-  const pct = room.progressPercent;
-  const progressLabel = `${formatCompactAmount(room.currentAmount)}/${formatCompactAmount(room.targetAmount)} ${Math.round(pct * 100)}%`;
-  const barColor = room.stage === "blocked" ? VIS_ERROR
-    : room.stage === "synthesizing" ? VIS_OK
-    : pct >= 1 ? VIS_OK
-    : VIS_MUTED;
-  if (room.targetAmount > 0) {
-    p.progressBar(pct, barColor, progressLabel);
-  } else {
-    p.textRow(`${formatCompactAmount(room.currentAmount)} · no target`, { font: 0.35, color: VIS_MUTED });
-  }
-
-  const supplyText = buildSatelliteSupplyText(room);
-  if (supplyText) {
-    p.textRow(supplyText, { font: 0.35, color: VIS_MUTED });
-  }
-
-  if (room.blocker) {
-    p.textRow(`⚠ ${room.blocker}`, { font: 0.35, color: VIS_ERROR });
-  }
-
-  return p.callsUsed;
+  return buildSatelliteCard(rv, room).flush();
 }
 
 function classifyTransferTask(
@@ -1408,8 +1397,12 @@ export function buildHubOverlayLines(snapshot: HubProgressSnapshot): string[] {
 }
 
 const MAX_LINK_LABELS = 2;
-const MAX_HUB_VISUAL_CALLS = 80;
-const MAX_SATELLITE_PANELS = 6;
+/**
+ * 为主面板与最多 24 个卫星面板预留绘图预算。
+ * 单卡片费用随内容变化，输出前按实际缓冲指令数检查预算。
+ */
+const MAX_SATELLITE_PANELS = 24;
+const MAX_HUB_VISUAL_CALLS = 450;
 
 export interface HubOverlayRenderStats {
   callsUsed: number;
@@ -1440,8 +1433,11 @@ function buildSatelliteCandidates(snapshot: HubProgressSnapshot): ProductionRoom
 export function renderHubProgressOverlays(): HubOverlayRenderStats | null {
   if (typeof RoomVisual === "undefined") return null;
   if (!Memory.cfg?.hub?.enabled) return null;
-
-  if (Game.cpu.bucket < 100) return null;
+  const visuals = Memory.cfg.hub.visuals;
+  if (visuals?.enabled !== true) return null;
+  if (visuals.untilTick !== undefined &&
+    (!Number.isFinite(visuals.untilTick) || Game.time >= visuals.untilTick)) return null;
+  if (!hasDiagnosticBudget(visuals.minBucket)) return null;
 
   const visualState = getHubVisualState();
   const { snapshot, model } = visualState;
@@ -1457,13 +1453,16 @@ export function renderHubProgressOverlays(): HubOverlayRenderStats | null {
   let skippedSatellitePanels = 0;
 
   for (const room of buildSatelliteCandidates(snapshot)) {
-    const estimatedCalls = estimateSatellitePanelCalls(room);
-    if (satellitePanels >= MAX_SATELLITE_PANELS || callsUsed + estimatedCalls > MAX_HUB_VISUAL_CALLS) {
+    if (satellitePanels >= MAX_SATELLITE_PANELS) {
       skippedSatellitePanels++;
       continue;
     }
-    const satelliteRv = new RoomVisual(room.roomName);
-    callsUsed += drawSatellitePanel(satelliteRv, room);
+    const satelliteCard = buildSatelliteCard(new RoomVisual(room.roomName), room);
+    if (callsUsed + satelliteCard.pendingCalls > MAX_HUB_VISUAL_CALLS) {
+      skippedSatellitePanels++;
+      continue;
+    }
+    callsUsed += satelliteCard.flush();
     satellitePanels++;
   }
 

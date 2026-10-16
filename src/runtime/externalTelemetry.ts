@@ -1,4 +1,6 @@
 import { getCpuMonitorHistory, normalizeCpuMonitorConfig } from "@/runtime/cpuMonitor";
+import { hasDiagnosticBudget } from "@/runtime/diagnosticBudget";
+import { requestMemorySegments } from "@/runtime/memorySegments";
 import type {
   CpuMonitorSnapshotV2,
   CpuMonitorSummaryV2,
@@ -971,11 +973,12 @@ export function runExternalTelemetryExport(): void {
   if (Game.time % sampleInterval !== 0) {
     return;
   }
+  if (!hasDiagnosticBudget(cfg.minBucket)) return;
 
   const segmentId = toValidSegmentId(cfg.segmentId);
   const snapshot = buildTelemetrySnapshot(sampleInterval, segmentId);
   const payload = serializeSnapshot(snapshot);
 
-  RawMemory.setActiveSegments([segmentId]);
+  requestMemorySegments([segmentId]);
   RawMemory.segments[segmentId] = payload;
 }

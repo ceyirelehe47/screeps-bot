@@ -1,0 +1,35 @@
+{
+  "baselineCommit": "4bdb6b38",
+  "patch": "hub-panel-美化-v3.patch",
+  "includesV2": true,
+  "satelliteCap": 24,
+  "visualCallBudget": 450,
+  "defaultEnabled": false,
+  "minBucket": 8000,
+  "typecheckPassed": true,
+  "testSuitesPassed": 5,
+  "testsPassed": 30,
+  "testFailures": 0,
+  "sourceFilesMatched": 631,
+  "sourceUnchanged": true,
+  "visualCases": {
+    "active": {
+      "beforeCalls": 7,
+      "afterCalls": 13
+    },
+    "loading": {
+      "beforeCalls": 6,
+      "afterCalls": 12
+    },
+    "blocked": {
+      "beforeCalls": 8,
+      "afterCalls": 15
+    },
+    "idle": {
+      "beforeCalls": 4,
+      "afterCalls": 8
+    }
+  },
+  "layoutFindings": [],
+  "renderEnvironment": "DejaVu Sans / Resvg on isolated dsh job; offline fixtures, not live CPU evidence"
+}

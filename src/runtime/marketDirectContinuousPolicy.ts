@@ -31,6 +31,52 @@ type CanonicalValue =
 const canonicalStableFrozenSerializationCache = new WeakMap<object, string>();
 const canonicalStableFrozenHashCache = new WeakMap<object, string>();
 
+// Memory 每 tick 重新解析，不能按可变对象身份复用授权摘要。完整规范字符串
+// 相等才复用 hash，仍先执行全部规范化/非法值检查。容量按 UTF-16 code unit
+// 和条目数双限额；只保存堆中计算结果，不缓存安全判断或写入 Memory。
+const CANONICAL_HASH_TEXT_MIN_LENGTH = 2048;
+const CANONICAL_HASH_TEXT_MAX_LENGTH = 1_048_576;
+const CANONICAL_HASH_TEXT_TOTAL_LIMIT = 2_097_152;
+const CANONICAL_HASH_TEXT_ENTRY_LIMIT = 8;
+const canonicalHashTexts = new Map<string, string>();
+let canonicalHashTextSize = 0;
+
+// 原始字符串是不可变值，可以按完整内容复用 JSON 转义，避免每次重解析
+// permit/anchor 后对重复字段名和证据字符串重新 stringify。FIFO 双限额
+// 不保存对象引用，也不会略过后续对象形状或非法值校验。
+const canonicalStringCache = new Map<string, string>();
+let canonicalStringCacheSize = 0;
+
+function canonicalStringSerialize(value: string): string {
+  const cached = canonicalStringCache.get(value);
+  if (cached !== undefined) return cached;
+  const serialized = JSON.stringify(value);
+  if (value.length <= 4096) {
+    while (canonicalStringCache.size >= 2048 || canonicalStringCacheSize + value.length + serialized.length > 262144) {
+      const oldest = canonicalStringCache.keys().next().value;
+      if (oldest === undefined) break;
+      canonicalStringCacheSize -= oldest.length + canonicalStringCache.get(oldest)!.length;
+      canonicalStringCache.delete(oldest);
+    }
+    canonicalStringCache.set(value, serialized);
+    canonicalStringCacheSize += value.length + serialized.length;
+  }
+  return serialized;
+}
+
+function rememberCanonicalHashText(text: string, hash: string): void {
+  if (text.length < CANONICAL_HASH_TEXT_MIN_LENGTH || text.length > CANONICAL_HASH_TEXT_MAX_LENGTH) return;
+  while (canonicalHashTexts.size >= CANONICAL_HASH_TEXT_ENTRY_LIMIT ||
+    canonicalHashTextSize + text.length > CANONICAL_HASH_TEXT_TOTAL_LIMIT) {
+    const oldest = canonicalHashTexts.keys().next().value;
+    if (oldest === undefined) break;
+    canonicalHashTexts.delete(oldest);
+    canonicalHashTextSize -= oldest.length;
+  }
+  canonicalHashTexts.set(text, hash);
+  canonicalHashTextSize += text.length;
+}
+
 function canonicalChildSerializationIsImmutable(value: unknown): boolean {
   return (
     value === null ||
@@ -44,9 +90,8 @@ function canonicalStableSerialize(
   active: unknown[] = [],
 ): string {
   if (value === null) return "null";
-  if (typeof value === "string" || typeof value === "boolean") {
-    return JSON.stringify(value);
-  }
+  if (typeof value === "string") return canonicalStringSerialize(value);
+  if (typeof value === "boolean") return value ? "true" : "false";
   if (typeof value === "number") {
     if (!Number.isFinite(value)) {
       throw new TypeError("canonical value contains a non-finite number");
@@ -88,7 +133,7 @@ function canonicalStableSerialize(
         if (record[key] === undefined) {
           throw new TypeError("canonical value contains undefined");
         }
-        return `${JSON.stringify(key)}:${canonicalStableSerialize(
+        return `${canonicalStringSerialize(key)}:${canonicalStableSerialize(
           record[key],
           active,
         )}`;
@@ -148,6 +193,15 @@ export function canonicalStableHashV1(value: unknown): string {
     if (cached !== undefined) return cached;
   }
   const canonical = canonicalStableSerialize(value);
+  const textHash = canonicalHashTexts.get(canonical);
+  if (textHash !== undefined) {
+    canonicalHashTexts.delete(canonical);
+    canonicalHashTexts.set(canonical, textHash);
+    if (value !== null && typeof value === "object" && canonicalStableFrozenSerializationCache.has(value)) {
+      canonicalStableFrozenHashCache.set(value, textHash);
+    }
+    return textHash;
+  }
   let first = 0x811c9dc5;
   let second = 0x9e3779b9;
   let third = 0x85ebca6b;
@@ -201,6 +255,7 @@ export function canonicalStableHashV1(value: unknown): string {
     .map((word) => word.toString(16).padStart(8, "0"))
     .join("");
   const hash = `csh1:${words}`;
+  rememberCanonicalHashText(canonical, hash);
   if (
     value !== null &&
     typeof value === "object" &&

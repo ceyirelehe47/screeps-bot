@@ -7,6 +7,8 @@
  * 确认并删除 data 记录后自动释放。
  */
 
+import { isPermitChainStorageReady } from "@/runtime/permitChainStorageGuard";
+
 export interface MarketSaleTerminalExposure {
   reservedAmount: number;
   blocked: boolean;
@@ -436,6 +438,7 @@ export function compileMarketSaleTerminalExposureIndex(
 }
 
 export function compileLiveMarketSaleTerminalExposureIndex(): CompiledMarketSaleTerminalExposureIndex {
+  if (!isPermitChainStorageReady()) return { get: () => ({ reservedAmount: 0, blocked: true }) };
   const config = Memory.cfg?.marketSaleAutomation;
   const directStrategyActive =
     config?.mode === "direct" ||
@@ -546,6 +549,7 @@ export function getMarketSaleTerminalExposure(
   roomName: string,
   resourceType: ResourceConstant,
 ): MarketSaleTerminalExposure {
+  if (!isPermitChainStorageReady()) return { reservedAmount: 0, blocked: true };
   const config = Memory.cfg?.marketSaleAutomation;
   const directStrategyActive =
     config?.mode === "direct" ||
@@ -595,7 +599,7 @@ export function getTerminalAmountsOutsideMarketSaleExposure(
   const roomName = options.roomName ?? (
     terminal as StructureTerminal & { room?: Room }
   ).room?.name;
-  if (!roomName) {
+  if (!roomName || !isPermitChainStorageReady()) {
     for (const resource of uniqueResources) result.set(resource, 0);
     return result;
   }

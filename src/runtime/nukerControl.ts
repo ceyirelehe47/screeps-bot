@@ -71,10 +71,8 @@ function getReservationHolderId(
 }
 
 export function getOwnedNuker(room: Room): StructureNuker | null {
-  return room.find(FIND_MY_STRUCTURES).find(
-    (structure): structure is StructureNuker =>
-      structure.structureType === STRUCTURE_NUKER,
-  ) || null;
+  return (getTickContextService().getRoomContext(room)
+    ?.getMyStructuresByType(STRUCTURE_NUKER)[0] as StructureNuker | undefined) ?? null;
 }
 
 export function getNukerGhodiumProductionDemand(): number {
@@ -143,7 +141,7 @@ function getCarriedAmountToNuker(
   resource: ResourceConstant,
 ): number {
   let amount = 0;
-  for (const creep of Object.values(Game.creeps)) {
+  for (const creep of getTickContextService().getAllCreeps()) {
     const state = getCreepAssignmentState(creep.name);
     if (
       state?.synthesisCarrierPendingToId !== nukerId ||

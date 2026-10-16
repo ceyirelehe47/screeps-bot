@@ -1,0 +1,310 @@
+{
+  "schema": "screeps-memory-permit-offline/v1",
+  "baseCommit": "90b4ef18",
+  "deployment": false,
+  "defaults": {
+    "permitChainSegmentsEnabled": false,
+    "wholeMemoryHeapCacheImplemented": false
+  },
+  "scope": "V3 permitChain segments with decoded immutable heap cache",
+  "comparison": {
+    "fixtureDate": "2026-10-10",
+    "groups": [
+      {
+        "group": 0,
+        "baseline": {
+          "ms": 2245.141516999999,
+          "parses": 12,
+          "stats": {
+            "hits": 0,
+            "decodes": 0,
+            "prepared": 0,
+            "activated": 0,
+            "lastReason": "disabled"
+          },
+          "persistedBytes": 1595729,
+          "segmentBytes": 0,
+          "outputSha256": "6363e024bb42290cf3783f01b717c31847130eaf83a8ece7c0d811d0fc44d7e7"
+        },
+        "candidate": {
+          "ms": 2067.2049289999977,
+          "parses": 15,
+          "stats": {
+            "hits": 12,
+            "decodes": 1,
+            "prepared": 1,
+            "activated": 1,
+            "lastReason": "readback_confirmed"
+          },
+          "persistedBytes": 834494,
+          "segmentBytes": 169570,
+          "outputSha256": "6363e024bb42290cf3783f01b717c31847130eaf83a8ece7c0d811d0fc44d7e7"
+        }
+      },
+      {
+        "group": 1,
+        "baseline": {
+          "ms": 2239.9691340000027,
+          "parses": 12,
+          "stats": {
+            "hits": 0,
+            "decodes": 0,
+            "prepared": 0,
+            "activated": 0,
+            "lastReason": "disabled"
+          },
+          "persistedBytes": 1595729,
+          "segmentBytes": 0,
+          "outputSha256": "6363e024bb42290cf3783f01b717c31847130eaf83a8ece7c0d811d0fc44d7e7"
+        },
+        "candidate": {
+          "ms": 2128.3672159999987,
+          "parses": 15,
+          "stats": {
+            "hits": 12,
+            "decodes": 1,
+            "prepared": 1,
+            "activated": 1,
+            "lastReason": "readback_confirmed"
+          },
+          "persistedBytes": 834494,
+          "segmentBytes": 169570,
+          "outputSha256": "6363e024bb42290cf3783f01b717c31847130eaf83a8ece7c0d811d0fc44d7e7"
+        }
+      },
+      {
+        "group": 2,
+        "baseline": {
+          "ms": 2191.0240459999986,
+          "parses": 12,
+          "stats": {
+            "hits": 0,
+            "decodes": 0,
+            "prepared": 0,
+            "activated": 0,
+            "lastReason": "disabled"
+          },
+          "persistedBytes": 1595729,
+          "segmentBytes": 0,
+          "outputSha256": "6363e024bb42290cf3783f01b717c31847130eaf83a8ece7c0d811d0fc44d7e7"
+        },
+        "candidate": {
+          "ms": 2111.574360999988,
+          "parses": 15,
+          "stats": {
+            "hits": 12,
+            "decodes": 1,
+            "prepared": 1,
+            "activated": 1,
+            "lastReason": "readback_confirmed"
+          },
+          "persistedBytes": 834494,
+          "segmentBytes": 169570,
+          "outputSha256": "6363e024bb42290cf3783f01b717c31847130eaf83a8ece7c0d811d0fc44d7e7"
+        }
+      },
+      {
+        "group": 3,
+        "baseline": {
+          "ms": 2142.734779000006,
+          "parses": 12,
+          "stats": {
+            "hits": 0,
+            "decodes": 0,
+            "prepared": 0,
+            "activated": 0,
+            "lastReason": "disabled"
+          },
+          "persistedBytes": 1595729,
+          "segmentBytes": 0,
+          "outputSha256": "6363e024bb42290cf3783f01b717c31847130eaf83a8ece7c0d811d0fc44d7e7"
+        },
+        "candidate": {
+          "ms": 2157.305035000001,
+          "parses": 15,
+          "stats": {
+            "hits": 12,
+            "decodes": 1,
+            "prepared": 1,
+            "activated": 1,
+            "lastReason": "readback_confirmed"
+          },
+          "persistedBytes": 834494,
+          "segmentBytes": 169570,
+          "outputSha256": "6363e024bb42290cf3783f01b717c31847130eaf83a8ece7c0d811d0fc44d7e7"
+        }
+      },
+      {
+        "group": 4,
+        "baseline": {
+          "ms": 2147.539364999997,
+          "parses": 12,
+          "stats": {
+            "hits": 0,
+            "decodes": 0,
+            "prepared": 0,
+            "activated": 0,
+            "lastReason": "disabled"
+          },
+          "persistedBytes": 1595729,
+          "segmentBytes": 0,
+          "outputSha256": "6363e024bb42290cf3783f01b717c31847130eaf83a8ece7c0d811d0fc44d7e7"
+        },
+        "candidate": {
+          "ms": 2153.1085999999923,
+          "parses": 15,
+          "stats": {
+            "hits": 12,
+            "decodes": 1,
+            "prepared": 1,
+            "activated": 1,
+            "lastReason": "readback_confirmed"
+          },
+          "persistedBytes": 834494,
+          "segmentBytes": 169570,
+          "outputSha256": "6363e024bb42290cf3783f01b717c31847130eaf83a8ece7c0d811d0fc44d7e7"
+        }
+      },
+      {
+        "group": 5,
+        "baseline": {
+          "ms": 2167.073209999995,
+          "parses": 12,
+          "stats": {
+            "hits": 0,
+            "decodes": 0,
+            "prepared": 0,
+            "activated": 0,
+            "lastReason": "disabled"
+          },
+          "persistedBytes": 1595729,
+          "segmentBytes": 0,
+          "outputSha256": "6363e024bb42290cf3783f01b717c31847130eaf83a8ece7c0d811d0fc44d7e7"
+        },
+        "candidate": {
+          "ms": 2061.8773199999923,
+          "parses": 15,
+          "stats": {
+            "hits": 12,
+            "decodes": 1,
+            "prepared": 1,
+            "activated": 1,
+            "lastReason": "readback_confirmed"
+          },
+          "persistedBytes": 834494,
+          "segmentBytes": 169570,
+          "outputSha256": "6363e024bb42290cf3783f01b717c31847130eaf83a8ece7c0d811d0fc44d7e7"
+        }
+      },
+      {
+        "group": 6,
+        "baseline": {
+          "ms": 2227.3156390000004,
+          "parses": 12,
+          "stats": {
+            "hits": 0,
+            "decodes": 0,
+            "prepared": 0,
+            "activated": 0,
+            "lastReason": "disabled"
+          },
+          "persistedBytes": 1595729,
+          "segmentBytes": 0,
+          "outputSha256": "6363e024bb42290cf3783f01b717c31847130eaf83a8ece7c0d811d0fc44d7e7"
+        },
+        "candidate": {
+          "ms": 2074.0509880000027,
+          "parses": 15,
+          "stats": {
+            "hits": 12,
+            "decodes": 1,
+            "prepared": 1,
+            "activated": 1,
+            "lastReason": "readback_confirmed"
+          },
+          "persistedBytes": 834494,
+          "segmentBytes": 169570,
+          "outputSha256": "6363e024bb42290cf3783f01b717c31847130eaf83a8ece7c0d811d0fc44d7e7"
+        }
+      }
+    ],
+    "framesPerGroupPerVariant": 12,
+    "setupExcluded": true,
+    "timedPhases": [
+      "Memory parse",
+      "permit hydration",
+      "full market preflight",
+      "console write",
+      "driver persistence"
+    ],
+    "allLogicalOutputHashesEqual": true,
+    "baselineMedianMs": 2191.0240459999986,
+    "candidateMedianMs": 2111.574360999988,
+    "pairedReductionMedianPercent": 4.854284087615246,
+    "fasterGroups": 5,
+    "stableCpuGainEstablished": false,
+    "benchmarkSourceMatchesValidatedSource": true
+  },
+  "storage": {
+    "permitChainJsonBytes": 761912,
+    "inlineMainBytes": 1595729,
+    "segmentsMainBytes": 834494,
+    "segmentBytesIncludingEnvelopes": 169570,
+    "mainSizeReductionPercent": 47.70452877650278
+  },
+  "rejectedWholeMemoryHeapCache": {
+    "separateNormalizationPairedReductionMedianPercent": -41.2259538066245,
+    "streamNormalizationPairedReductionMedianPercent": -59.078560382478514,
+    "retainedInProduction": false
+  },
+  "validation": {
+    "status": "passed",
+    "sourceAndConfigFiles": 630,
+    "trackedDocumentationAndFixtures": 619,
+    "totalMatchedInputs": 1249,
+    "totalSuites": 267,
+    "passedSuites": 267,
+    "totalTests": 2009,
+    "passedTests": 2009,
+    "failedTests": 0,
+    "pendingTests": 0,
+    "todoTests": 0,
+    "integrityStatus": "JEST_TEST_INTEGRITY=PASSED",
+    "sourceUnchanged": true,
+    "inputManifestSha256": "de7e96cbad57b8d82f4d66dff9c4b129084f042a2e0ea42b85083c3511632304",
+    "commands": [
+      {
+        "name": "typecheck-final",
+        "exit": 0,
+        "seconds": 53.999,
+        "reusedAfterFixtureOnlyCopy": true
+      },
+      {
+        "name": "full-final",
+        "exit": 0,
+        "seconds": 492.678
+      },
+      {
+        "name": "build-final",
+        "exit": 0,
+        "seconds": 81.564
+      }
+    ],
+    "artifacts": {
+      "dist/main.js": {
+        "bytes": 3459678,
+        "sha256": "2f8e92524c90d4f1fec4c0a64ba94ee4ab65d7fda7bc8c4efbe5a2ec45bb3ecf"
+      },
+      "dist/main.js.map": {
+        "bytes": 9504039,
+        "sha256": "a1a4b4368cf9ba28ba4f0157fc1874efb6f80c5b81903ffdafe8bae392f1b8a1"
+      },
+      "dist/main.js.map.js": {
+        "bytes": 1160733,
+        "sha256": "dc579bbb9231b9a28f2b3bcce05fa35989808dd3b7375a4d89b1eae253f08f0c"
+      }
+    },
+    "circularDependencyWarnings": 0,
+    "runtimeModuleBytes": 4620411
+  }
+}

@@ -51,6 +51,8 @@ declare global {
       enabled?: boolean;
       sampleInterval?: number;
       segmentId?: number;
+      /** 默认 8000；定向诊断可显式设为 0。 */
+      minBucket?: number;
     };
     movementMetrics?: {
       /** 显式观测模式：off（不记录）/ totals（默认，仅累计 totals）/ rooms（含房间分桶，定向诊断用）。 */
@@ -62,6 +64,15 @@ declare global {
       /** 市场子 phase 临时诊断窗口（提交 A 测量用）：窗口到期自动关闭。 */
       enabled?: boolean;
       windowTicks?: number;
+    };
+    /** 持久化优化默认关闭；已有冷 manifest 即使停用，也必须先恢复完整链。 */
+    memoryStorage?: {
+      permitChain?: {
+        enabled?: boolean;
+        banks?: [number[], number[]];
+        minBucket?: number;
+        minFreeCpu?: number;
+      };
     };
     cpuProfiler?: {
       enabled?: boolean;
@@ -222,6 +233,8 @@ declare global {
     };
     hub?: {
       enabled?: boolean;
+      /** 绘图默认关闭；untilTick 到期自动停止，minBucket 默认 8000。 */
+      visuals?: { enabled?: boolean; untilTick?: number; minBucket?: number };
       hubRoomName?: string;
       /** @deprecated Upgraders are now maintained automatically in every owned room. */
       upgraderRoomNames?: string[];

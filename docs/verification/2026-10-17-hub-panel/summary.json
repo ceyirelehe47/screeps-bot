@@ -1,0 +1,87 @@
+{
+  "schema": "screeps-hub-panel-verification/v1",
+  "date": "2026-10-17",
+  "baseCommit": "79002475",
+  "deployment": false,
+  "patch": {
+    "fileName": "hub-panel-美化.patch",
+    "sha256": "1c3b30414fe746dc5633b81c5d637e6ac10f5cd14d940e62e2974304b941f540"
+  },
+  "adaptations": [
+    "factory shortages on a separate row",
+    "Chinese component documentation"
+  ],
+  "source": {
+    "matchedFiles": 631,
+    "unchangedBeforeAfter": true,
+    "inputManifestSha256": "0aa750e121cff5baba3048dd946a6f541c9ddb820105646d3ef052fb4b5f0431"
+  },
+  "tests": {
+    "numTotalTestSuites": 4,
+    "numPassedTestSuites": 4,
+    "numFailedTestSuites": 0,
+    "numTotalTests": 25,
+    "numPassedTests": 25,
+    "numFailedTests": 0,
+    "numPendingTests": 0,
+    "numTodoTests": 0,
+    "success": true
+  },
+  "testScope": "targeted Hub progress, Hub factory, Panel and palette; full project suite not rerun",
+  "commands": [
+    {
+      "name": "typecheck-final",
+      "exit": 0,
+      "seconds": 54.08
+    },
+    {
+      "name": "tests-final",
+      "exit": 0,
+      "seconds": 4.563
+    },
+    {
+      "name": "build-final",
+      "exit": 0,
+      "seconds": 82.424
+    }
+  ],
+  "visuals": {
+    "offline": true,
+    "font": "DejaVu Sans",
+    "layoutFindings": [],
+    "mainPanelCalls": {
+      "idle": {
+        "before": 12,
+        "after": 19
+      },
+      "active": {
+        "before": 23,
+        "after": 49
+      },
+      "blocked": {
+        "before": 24,
+        "after": 51
+      }
+    },
+    "totalBudget": 100,
+    "maxSatellitePanels": 6,
+    "defaultEnabled": false,
+    "defaultMinBucket": 8000
+  },
+  "artifacts": {
+    "dist/main.js": {
+      "bytes": 3463549,
+      "sha256": "796c24ca2d4a731285116d8ab3e9c0ef7778e45cd4dc65ab0c936a14f0cffabb"
+    },
+    "dist/main.js.map": {
+      "bytes": 9517893,
+      "sha256": "dae040c4f6b2d0cc50cc62af75c7c9732475d214bf8decee46ba39c697ea593f"
+    },
+    "dist/main.js.map.js": {
+      "bytes": 1162788,
+      "sha256": "edbcb2f701a562a185e235c21ec9d145d312d13eefc06924a9643d847efc66fe"
+    }
+  },
+  "circularDependencyWarnings": 0,
+  "runtimeModuleBytes": 4626337
+}

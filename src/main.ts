@@ -2,6 +2,8 @@ import { errorMapper, reportRuntimeError } from "@/modules/errorMapper";
 import { mountAll } from "@/mount";
 import { announceDeploy } from "@/runtime/deployAnnounce";
 import { runMemoryCleanup } from "@/runtime/memoryCleanup";
+import { beginMemoryStorageTick, finishMemoryStorageTick } from "@/runtime/memoryStorage";
+import { isPermitChainStorageUnavailableError } from "@/runtime/permitChainStorageGuard";
 import { runInterShardControl } from "@/runtime/interShardControl";
 import { runCrossShardSignals } from "@/runtime/crossShardSignals";
 import { runPixelGenerator } from "@/runtime/pixelGenerator";
@@ -58,6 +60,7 @@ export function addNumbers(num1: number, num2: number): number {
 }
 
 function gameLoop(): void {
+  beginMemoryStorageTick();
   const cpuProfiler = createTickCpuProfiler();
   setActiveTickCpuProfiler(cpuProfiler);
   // 本 tick 的 spawn/creep 快照由 TickContext 统一维护，避免与各模块重复
@@ -68,7 +71,7 @@ function gameLoop(): void {
     try {
       cpuProfiler.measure(phase, work);
     } catch (error) {
-      reportRuntimeError(`phase:${phase}`, error);
+      if (!isPermitChainStorageUnavailableError(error)) reportRuntimeError(`phase:${phase}`, error);
     }
   };
   let treasuryLifecycleStarted = false;
@@ -147,6 +150,9 @@ function gameLoop(): void {
         cpuProfiler.flush();
       } catch (error) {
         reportRuntimeError("cpuProfiler.flush", error);
+      } finally {
+        try { finishMemoryStorageTick(); }
+        catch (error) { reportRuntimeError("memoryStorage.finish", error); }
       }
     }
   }

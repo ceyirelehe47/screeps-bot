@@ -10,7 +10,7 @@ const MEMORY_BRANCHES = {
   cfg: {
     declaration: "src/types/memory/cfg.d.ts",
     interfaceName: "ScreepsMemoryConfig",
-    schemaFingerprint: "dde5d309152630f8661e522aa72913aa2e2629f13e0975c4a958c1e60e785650",
+    schemaFingerprint: "a866cfe37de387db185635412efe79e6fb11ad828a7cc701b5c09196435a852e",
     imports: ["@/runtime/depositHarvest:DepositHarvestConfig", "@/types/system:RoomType"],
     fields: [
       "colonizationSupport",
@@ -26,6 +26,7 @@ const MEMORY_BRANCHES = {
       "telemetry",
       "movementMetrics",
       "marketSaleDiagnostics",
+      "memoryStorage",
       "cpuProfiler",
       "synthesisControl",
       "homeDefense",
@@ -88,9 +89,10 @@ const MEMORY_BRANCHES = {
     declaration: "src/types/memory/data.d.ts",
     interfaceName: "ScreepsMemoryData",
     // 新增显式T3耗塔战术；现有NPC与搬运生命周期保持原字段。
-    schemaFingerprint: "836e5cfb470f8d5cdc7ed9b9d68b47a28b3fcd8411d983e45275c0c363a352f4",
+    schemaFingerprint: "1b3cf3342050654c970258d17db74d96d4ca2f6ff908d3c16738d994cd614d56",
     imports: [
       "@/runtime/depositHarvest:DepositHarvestTask",
+      "@/runtime/permitChainSegments:PermitChainStorageMemory",
       "@/runtime/marketActionArbiter:MarketAccountClaim",
       "@/runtime/marketActionArbiter:MarketActionJournalEntry",
       "@/runtime/marketBaseResourceAutomation:MarketBaseResourceV3RuntimeState",
@@ -105,6 +107,7 @@ const MEMORY_BRANCHES = {
       "@/types/system:CreepConfig",
     ],
     fields: [
+      "permitChainSegments",
       "depositHarvest",
       "creepConfigs",
       "manualUpgraders",

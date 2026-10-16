@@ -1,6 +1,7 @@
 import { clearCreepMovementStateForTest, clearMovementAnalyticsForTest, ensureCreepMovementState, getMovementAnalyticsForTest } from "@/movement";
 import { recordMovementMetric } from "@/movement/metrics";
 import { runExternalTelemetryExport } from "@/runtime/externalTelemetry";
+import { requestMemorySegments } from "@/runtime/memorySegments";
 import { resetCpuMonitorStore } from "@/runtime/cpuMonitor";
 import {
   clearWorkerTaskBoardForTest,
@@ -119,6 +120,18 @@ it("debug top 25 保留分数与同分名称顺序，未选中成员仍计入 mo
 });
 
 describe("runExternalTelemetryExport Worker task observation", () => {
+  it("低 bucket 暂停导出，显式诊断恢复时保留其它 segment 申请", () => {
+    Game.cpu.bucket = 7999;
+    requestMemorySegments([3]);
+    runExternalTelemetryExport();
+    expect(RawMemory.segments[42]).toBeUndefined();
+    expect(RawMemory.setActiveSegments).toHaveBeenCalledTimes(1);
+    Memory.cfg!.telemetry!.minBucket = 0;
+    runExternalTelemetryExport();
+    expect(JSON.parse(RawMemory.segments[42]).tick).toBe(Game.time);
+    expect(RawMemory.setActiveSegments).toHaveBeenLastCalledWith([3, 42]);
+  });
+
   beforeEach(() => {
     setupBasicEnv();
     resetCpuMonitorStore();

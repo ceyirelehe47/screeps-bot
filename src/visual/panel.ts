@@ -69,7 +69,7 @@ export class Panel {
     const inset = 0.08;
     this.rv.rect(this.x - inset, this.y - inset, this.width + inset * 2, height + inset * 2, {
       fill: VIS_PANEL_FILL,
-      opacity: 0.72,
+      opacity: 0.82,
       stroke: VIS_PANEL_STROKE,
       strokeWidth: 0.03,
     });
@@ -108,15 +108,15 @@ export class Panel {
   progressBar(percent: number, fillColor: string, label: string): void {
     const barWidth = this.width - this.paddingX * 2;
     this.rv.rect(this.x + this.paddingX, this.y, barWidth, this.barHeight, {
-      fill: "transparent",
+      fill: VIS_HEADER_FILL,
       stroke: VIS_PANEL_STROKE,
-      strokeWidth: 0.03,
-      opacity: 0.8,
+      strokeWidth: 0.02,
+      opacity: 0.9,
     });
     if (percent > 0) {
       this.rv.rect(this.x + this.paddingX, this.y, barWidth * percent, this.barHeight, {
         fill: fillColor,
-        opacity: 0.4,
+        opacity: 0.55,
         strokeWidth: 0,
       });
     }
