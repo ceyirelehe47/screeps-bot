@@ -1,35 +1,65 @@
+import { AUTHORITY_EXECUTOR_SHARD } from "@/config/deployment";
 import { BUILD_INFO } from "@/buildMeta";
-import { runtime, finiteNonNegative, treasuryT1SerializedBytes, type Control, type Read } from "@/runtime/treasuryFirstLiveState";
+import { runtime, finiteNonNegative, treasuryT1SerializedBytes } from "@/runtime/treasuryFirstLiveState";
 import { createTreasuryFirstLiveState } from "@/runtime/treasuryFirstLiveState";
 import { TREASURY_TERMINAL_LANES, TREASURY_T4_LANE, treasuryLaneTaskMatches } from "@/runtime/treasuryTerminalLane";
 import { readTreasuryLaneResponsibility, type TreasuryT1Quota } from "@/runtime/treasuryTerminalResponsibility";
 import { readTreasuryCoreStoreHealth, detectLegacyTreasuryStores } from "@/runtime/treasury/kernel/store";
 import { isKnownEmptyLegacyTreasuryRoot } from "@/runtime/treasuryTerminalResponsibility";
-import { inspectTreasuryResourceTransferReadiness, inspectTreasuryResourceTransferPreparation } from "@/runtime/resourceControl";
-import { inspectConfiguredSynthesisTransferDemand } from "@/runtime/synthesisControl";
+import {
+  inspectTreasuryResourceTransferReadiness,
+  inspectTreasuryResourceTransferPreparation,
+} from "@/runtime/resourceControlReadModel";
+import { inspectConfiguredSynthesisTransferDemand } from "@/runtime/synthesisReadModel";
 import { cancelResourceTransferTask, type ResourceTransferTask } from "@/runtime/logistics/resourceTransferTasks";
 import { getLocalCarrierDestinationCommittedAmount } from "@/runtime/localCarrierDestinationCapacity";
 import { getCreepAssignmentState } from "@/runtime/creepAssignmentState";
 import { formatTreasuryTransactionId, formatTreasuryStableTransactionId } from "@/runtime/treasury/transactionId";
-import { hasTerminalActionClaim, hasTerminalSendEffectThisTick, hasTerminalCargoEffectThisTick } from "@/runtime/marketActionArbiter";
+import {
+  hasTerminalActionClaim,
+  hasTerminalSendEffectThisTick,
+  hasTerminalCargoEffectThisTick,
+} from "@/runtime/marketActionArbiter";
 import { hasTreasuryTerminalFence } from "@/runtime/treasuryTaskCommitmentBridge";
 import { buildTreasuryCommitmentIndex, isValidTreasuryTransferTaskForCommitment } from "@/runtime/treasury/commitments";
 import { buildTreasuryObservation } from "@/runtime/treasury/observation";
 import { inspectTreasuryCarrierProductionCommitment } from "@/runtime/treasuryT3LocationCommitments";
 import {
-  checkTreasuryContinuousOHBudget, normalizeTreasuryContinuousOHPolicy, summarizeTreasuryContinuousOHBudget,
+  checkTreasuryContinuousOHBudget,
+  normalizeTreasuryContinuousOHPolicy,
+  summarizeTreasuryContinuousOHBudget,
   type TreasuryContinuousOHPolicy,
 } from "@/runtime/treasuryContinuousOHBudget";
 import {
-  CONTROL_RUN_ID, CONTINUOUS_RUN_ID, CONTINUOUS_ACTION_KIND,
-  TREASURY_CONTINUOUS_OH_SESSION_MS, TREASURY_CONTINUOUS_OH_SESSION_TICKS,
+  CONTROL_RUN_ID,
+  CONTINUOUS_RUN_ID,
+  CONTINUOUS_ACTION_KIND,
+  TREASURY_CONTINUOUS_OH_SESSION_MS,
+  TREASURY_CONTINUOUS_OH_SESSION_TICKS,
   TREASURY_CONTINUOUS_OH_MAX_MEMORY_BYTES,
-  readTreasuryContinuousOHState, writeTreasuryContinuousOHState, treasuryContinuousOHStatePayload,
+  readTreasuryContinuousOHState,
+  writeTreasuryContinuousOHState,
+  treasuryContinuousOHStatePayload,
   treasuryContinuousOHWorkKey,
   sealTreasuryContinuousOHState,
   observeTreasuryContinuousOHClock,
-  type TreasuryContinuousOHState, type TreasuryContinuousOHCycle, type TreasuryContinuousOHClosedCertificate,
+  type TreasuryContinuousOHState,
+  type TreasuryContinuousOHCycle,
+  type TreasuryContinuousOHClosedCertificate,
 } from "@/runtime/treasuryContinuousOHState";
+import {
+  readTreasuryContinuousOHControl,
+  readTreasuryContinuousOHQuota,
+} from "@/runtime/treasuryContinuousOHReadModel";
+export {
+  readTreasuryContinuousOHControl,
+  readTreasuryContinuousOHQuota,
+  continuousClosedWorkAcknowledged,
+  readTreasuryContinuousOHClosedWorkSet,
+  continuousSessionOwnsActivity,
+} from "@/runtime/treasuryContinuousOHReadModel";
+export type { TreasuryContinuousOHQuotaRead } from "@/runtime/treasuryContinuousOHReadModel";
+
 
 export interface TreasuryContinuousOHEnableOptions {
   readonly pilotTaskId: string;
@@ -38,10 +68,6 @@ export interface TreasuryContinuousOHEnableOptions {
   readonly policy?: Partial<TreasuryContinuousOHPolicy>;
 }
 export type TreasuryContinuousOHResult = { readonly ok: boolean; readonly reason: string };
-export type TreasuryContinuousOHQuotaRead =
-  | { readonly status: "absent" }
-  | { readonly status: "invalid" }
-  | { readonly status: "valid"; readonly value: TreasuryT1Quota };
 
 const ok = (reason: string): TreasuryContinuousOHResult => ({ ok: true, reason });
 const fail = (reason: string): TreasuryContinuousOHResult => ({ ok: false, reason });
@@ -63,7 +89,7 @@ function safeEnvironment(): boolean {
 }
 
 function deploymentMatches(state?: TreasuryContinuousOHState): boolean {
-  return Game.shard?.name === "shard1" && BUILD_INFO.dirty === false && BUILD_INFO.bundleHash !== "none" &&
+  return Game.shard?.name === AUTHORITY_EXECUTOR_SHARD && BUILD_INFO.dirty === false && BUILD_INFO.bundleHash !== "none" &&
     runtime()?.lastDeployTag === BUILD_INFO.tag && runtime()?.lastDeployBundleHash === BUILD_INFO.bundleHash &&
     (!state || state.deployTag === BUILD_INFO.tag && state.deployBundleHash === BUILD_INFO.bundleHash);
 }
@@ -189,57 +215,6 @@ function cycleGateReason(state: TreasuryContinuousOHState, cycle: TreasuryContin
   // 产品每 tick 自己续 lease。reset 的已接纳责任用持久原attempt恢复；无接纳的过期lease取消。
   if (clock.ms >= cycle.controlUntilMs && cycle.quota === null) return "cycle_lease_expired";
   return null;
-}
-
-export function readTreasuryContinuousOHControl(): Read {
-  const read = readTreasuryContinuousOHState();
-  if (read.status !== "valid") return read;
-  const state = read.value;
-  const cycle = state.currentCycle;
-  const value: Control & { sequence: number } = {
-    schemaVersion: 1, runId: CONTROL_RUN_ID,
-    status: cycle?.status ?? (state.sessionStatus === "stopped" || state.sessionStatus === "stopping" ? "closed" : "active"),
-    startedAtTick: cycle?.startedAtTick ?? state.enabledAtTick,
-    startedAtMs: cycle?.startedAtMs ?? state.enabledAtMs,
-    deadlineTick: cycle?.deadlineTick ?? state.deadlineTick,
-    deadlineMs: cycle?.deadlineMs ?? state.deadlineMs,
-    lastHeartbeatAtMs: cycle?.lastHeartbeatAtMs ?? state.enabledAtMs,
-    controlUntilMs: cycle?.controlUntilMs ?? state.deadlineMs,
-    taskId: cycle?.taskId ?? "", taskCreatedAt: cycle?.taskCreatedAt ?? 0,
-    taskAmount: cycle?.taskAmount ?? 0, taskRemainingAtArm: cycle?.taskRemainingAtArm ?? 0,
-    sourceTerminalId: state.sourceTerminalId, targetTerminalId: state.targetTerminalId,
-    deployTag: state.deployTag, deployBundleHash: state.deployBundleHash,
-    closeReason: cycle?.closeReason ?? state.stopReason,
-    maxSliceAmount: cycle?.amount ?? 0, sequence: cycle?.sequence ?? 0, hash: state.hash,
-  };
-  return { status: "valid", value };
-}
-
-export function readTreasuryContinuousOHQuota(): TreasuryContinuousOHQuotaRead {
-  const read = readTreasuryContinuousOHState();
-  if (read.status !== "valid") return read;
-  const quota = read.value.currentCycle?.quota;
-  return quota ? { status: "valid", value: quota } : { status: "absent" };
-}
-
-export function continuousClosedWorkAcknowledged(workKey: string, attemptId?: string): boolean {
-  const read = readTreasuryContinuousOHState();
-  return read.status === "valid" && read.value.closedCycles.some((cert) => cert.ring !== null &&
-    cert.cycle.quota?.status === "drained" && cert.ring.workKey === workKey &&
-    (attemptId === undefined || cert.ring.attemptId === attemptId));
-}
-
-/** 同次 fresh 责任读取只验证一遍完整book，不为ring每条再读整本。 */
-export function readTreasuryContinuousOHClosedWorkSet(): ReadonlySet<string> | null {
-  const read = readTreasuryContinuousOHState();
-  if (read.status === "invalid") return null;
-  return new Set(read.status === "absent" ? [] : read.value.closedCycles.flatMap((cert) =>
-    cert.ring !== null && cert.cycle.quota?.status === "drained" ? [`${cert.ring.workKey}\n${cert.ring.attemptId}`] : []));
-}
-
-export function continuousSessionOwnsActivity(): boolean {
-  const read = readTreasuryContinuousOHState();
-  return read.status === "invalid" || read.status === "valid" && read.value.sessionStatus !== "stopped";
 }
 
 /**
@@ -633,6 +608,7 @@ export function acceptTreasuryContinuousOHPilot(): TreasuryContinuousOHResult {
     const read = readTreasuryContinuousOHState();
     if (read.status !== "valid") return fail(read.status);
     const state = read.value;
+    if (state.pilot.taskId === null) return fail("pilot_task_missing");
     if (state.pilot.releasedAtTick !== null) return fail("pilot_already_released");
     if (state.sessionStatus !== "pilot_complete_awaiting_release" || state.currentCycle !== null) return fail("pilot_not_awaiting_release");
     const fixed = fixedGateReason(state);

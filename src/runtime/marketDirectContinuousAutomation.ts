@@ -1,3 +1,4 @@
+import { AUTHORITY_ROOMS } from "@/config/deployment";
 import {
   claimPreparedDirectMarketClaims,
   executePreparedDirectMarketDeal,
@@ -149,9 +150,9 @@ export const LEGACY_X_V1_OUTCOME_GOLDEN: DirectDealOutcome = {
   orderId: "6a65e025656d080013ccad03",
   configRevision: "x-direct-2026-07-26-r1",
   directSafetyFingerprint: LEGACY_X_DIRECT_SAFETY_FINGERPRINT,
-  canaryRoomName: "E6N59",
+  canaryRoomName: AUTHORITY_ROOMS.legacyXSeller,
   resource: "X" as ResourceConstant,
-  orderRoomName: "E21S49",
+  orderRoomName: AUTHORITY_ROOMS.legacyXBuyer,
   observedOrderPrice: 694.963,
   observedOrderPriceMilli: 694_963,
   observedOrderAmount: 28_920,
@@ -180,8 +181,8 @@ export const LEGACY_X_V1_OUTCOME_GOLDEN: DirectDealOutcome = {
   actualOrderType: "buy",
   actualOrderPrice: 694.963,
   actualResource: "X",
-  actualFrom: "E6N59",
-  actualTo: "E21S49",
+  actualFrom: AUTHORITY_ROOMS.legacyXSeller,
+  actualTo: AUTHORITY_ROOMS.legacyXBuyer,
   actualAmount: 1_000,
   actualTransactionEnergy: 394,
   actualNetCreditsMilli: 682_331_360,
@@ -451,8 +452,8 @@ function toLegacyReviewedFixture(
     resolvedAt: 72_585_531,
     attemptAt: 72_585_530,
     transactionTime: 72_585_530,
-    sellerRoom: "E6N59",
-    orderRoom: "E21S49",
+    sellerRoom: AUTHORITY_ROOMS.legacyXSeller,
+    orderRoom: AUTHORITY_ROOMS.legacyXBuyer,
     resource: "X",
     observedOrderAmount: 28_920,
     actualAmount: 1_000,
@@ -2081,7 +2082,7 @@ function projectLegacyV2ReadinessAuthorization(
     !legacyEntry ||
     legacyEntry.resourceType !== RESOURCE_CATALYST ||
     legacyEntry.allowedRoomNames.length !== 1 ||
-    legacyEntry.allowedRoomNames[0] !== "E6N59" ||
+    legacyEntry.allowedRoomNames[0] !== AUTHORITY_ROOMS.legacyXSeller ||
     !lifecycle ||
     !marketDirectPermitAllowsNewDeal(
       state.permitChain,
@@ -2099,7 +2100,7 @@ function projectLegacyV2ReadinessAuthorization(
     | undefined;
   try {
     terminal = dependencies.readTerminal(
-      "E6N59",
+      AUTHORITY_ROOMS.legacyXSeller,
       RESOURCE_CATALYST,
     );
   } catch {
@@ -2107,7 +2108,7 @@ function projectLegacyV2ReadinessAuthorization(
   }
   if (
     !terminal ||
-    terminal.roomName !== "E6N59" ||
+    terminal.roomName !== AUTHORITY_ROOMS.legacyXSeller ||
     !terminal.owned ||
     typeof terminal.terminalId !== "string" ||
     terminal.terminalId.length === 0
@@ -2905,7 +2906,7 @@ function buildContinuousFullRead(
       if (
         entry.entryId === "base-x-e6n59-v1" &&
         entry.resourceType === RESOURCE_CATALYST &&
-        roomName === "E6N59"
+        roomName === AUTHORITY_ROOMS.legacyXSeller
       ) {
         const readiness =
           readLegacyV2DynamicTerminalEnergyReserve(
@@ -3813,8 +3814,9 @@ export function runMarketDirectContinuousPreflight(
   );
   applyFinalizedLifecycleReceipts(state, input.tick);
   projectContinuousCompatibility(state);
-  if (state.ledger.blocker) {
-    rejectedByReason[state.ledger.blocker.code] = 1;
+  const projectedBlocker = readContinuousBlocker(state);
+  if (projectedBlocker) {
+    rejectedByReason[projectedBlocker.code] = 1;
   }
   return {
     actions,
@@ -4656,3 +4658,5 @@ export function marketDirectContinuousStatus(
       state.baseResourceV3,
   };
 }
+
+function readContinuousBlocker(state: MarketDirectContinuousAutomationState) { return state.ledger.blocker; }

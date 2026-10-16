@@ -298,6 +298,22 @@ describe("mountSpawn", () => {
       expect(powerCreepMemory._spawnYield).toEqual({ dir: TOP, tick: Game.time });
       expect(openSpawn.spawnCreep).not.toHaveBeenCalled();
 
+      // 配置在孵化期间改变时，挡位仍读取本次孵化的真实出口。
+      blockerMove.mockClear();
+      powerCreepMove.mockClear();
+      Memory.cfg ??= {};
+      Memory.cfg.rooms ??= {};
+      const previousRoomConfig = Memory.cfg.rooms[openRoom.name];
+      Memory.cfg.rooms[openRoom.name] = { spawnExitDirections: { Spawn1: [TOP] } };
+      const nativeExitSpawn = makeSpawningSpawn("Spawn1", openRoom);
+      nativeExitSpawn.spawning!.directions = [RIGHT];
+      Object.setPrototypeOf(nativeExitSpawn, prototype);
+      prototype.work.call(nativeExitSpawn);
+      expect(blockerMove).toHaveBeenCalledWith(TOP);
+      expect(powerCreepMove).not.toHaveBeenCalled();
+      if (previousRoomConfig) Memory.cfg.rooms[openRoom.name] = previousRoomConfig;
+      else delete Memory.cfg.rooms[openRoom.name];
+
       // 边界锁定：remainingTime=1（> 0 最近值）不触发；-0.4（小数 needTime
       // 落地 / 冻结期真实取值）触发——防止未来误改为 === 0 使冻结场景回归。
       blockerMove.mockClear();

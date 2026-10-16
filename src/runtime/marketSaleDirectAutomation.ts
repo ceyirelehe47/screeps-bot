@@ -273,12 +273,12 @@ function normalizeQualification(
             safetyFingerprint: canary.safetyFingerprint,
           }
         : undefined,
-      consecutiveCycles: raw.consecutiveCycles,
+      consecutiveCycles: raw.consecutiveCycles ?? 0,
       lastCycleTick: raw.lastCycleTick,
       qualifiedAt: raw.qualifiedAt,
       lastLifecycleKey: raw.lastLifecycleKey,
       lastLifecycleTick: raw.lastLifecycleTick,
-      activationAuthorized: raw.activationAuthorized,
+      activationAuthorized: raw.activationAuthorized === true,
     },
     valid: true,
   };
@@ -493,7 +493,7 @@ function ownOrderSummary(orders: readonly MarketOrderSnapshot[]): {
     const remaining = Number.isSafeInteger(order.remainingAmount)
       ? order.remainingAmount
       : order.amount;
-    if (remaining <= 0) {
+    if (remaining === undefined || remaining <= 0) {
       zeroRemainingOwnOrderCount += 1;
     } else if (order.type === ORDER_BUY) {
       manualBuyOrderCount += 1;

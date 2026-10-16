@@ -1,4 +1,4 @@
-import { inspectSynthesisTransferNeed } from "@/runtime/synthesisControl";
+import { inspectSynthesisTransferNeed } from "@/runtime/synthesisReadModel";
 import type { ResourceTransferTask } from "@/runtime/logistics/resourceTransferTasks";
 import type { TreasuryTerminalLane } from "@/runtime/treasuryTerminalLane";
 

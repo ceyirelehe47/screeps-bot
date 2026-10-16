@@ -31,10 +31,19 @@ import { encodeTreasuryTerminalFacts, decodeTreasuryTerminalFacts,
   type TreasuryTerminalFacts as DurableT1Facts, type TreasuryTerminalEndpoint as EndpointSnapshot } from "@/runtime/treasuryTerminalFacts";
 import { createTreasuryTerminalControl } from "@/runtime/treasuryTerminalControl";
 import { writeTreasuryContinuousOHQuota } from "@/runtime/treasuryContinuousOHControl";
-import { readTreasuryLaneQuota, readTreasuryLaneResponsibility, type TreasuryT1Quota as T1Quota } from "@/runtime/treasuryTerminalResponsibility";
-import { TREASURY_TERMINAL_LANES, treasuryLaneTaskMatches, treasuryLaneWorkKey, type TreasuryTerminalLane } from "@/runtime/treasuryTerminalLane";
+import {
+  readTreasuryLaneQuota,
+  readTreasuryLaneResponsibility,
+  type TreasuryT1Quota as T1Quota,
+} from "@/runtime/treasuryTerminalResponsibility";
+import {
+  TREASURY_TERMINAL_LANES,
+  treasuryLaneTaskMatches,
+  treasuryLaneWorkKey,
+  type TreasuryTerminalLane,
+} from "@/runtime/treasuryTerminalLane";
 import { readTreasuryCoreStoreHealth } from "@/runtime/treasury/kernel/store";
-import { inspectTreasuryResourceTransferReadiness } from "@/runtime/resourceControl";
+import { inspectTreasuryResourceTransferReadiness } from "@/runtime/resourceControlReadModel";
 import { withTreasuryTerminalNativeGrant } from "@/runtime/treasuryTerminalDispatchAuthority";
 import { resolveTreasuryTerminalSliceAmount } from "@/runtime/treasuryTerminalAmount";
 
@@ -100,6 +109,7 @@ let activeLifecycleTick = -1;
 let lifecycleBlockReason: string | null = null;
 let dispatchContext: DispatchContext | null = null;
 let lastNativeAttempt: LastNativeAttempt | null = null;
+function readLastNativeAttempt(): LastNativeAttempt | null { return lastNativeAttempt; }
 let shadowObserver: ReturnType<typeof createTreasuryReadOnlyObserver> | null = null;
 let shadowObserverShard: string | null = null;
 
@@ -1146,7 +1156,7 @@ function runTreasuryTerminalTransferTask(
     dispatchContext = null;
   }
 
-  const nativeAttempt = lastNativeAttempt;
+  const nativeAttempt = readLastNativeAttempt();
   if (nativeAttempt && nativeAttempt.attemptId === admission.attemptId && nativeAttempt.code === OK) {
     try {
       onScheduled(nativeAttempt.amount, nativeAttempt.fee);

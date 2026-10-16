@@ -756,7 +756,7 @@ export function computeEffectiveNetFloor(
   }
 
   const entries: Array<[EffectiveFloorComponent, number | undefined]> =
-    isFinitePositive(input.dynamicFloor)
+    input.dynamicFloor !== undefined && isFinitePositive(input.dynamicFloor)
       ? [
           ["hard", input.hardFloor],
           ["economic", input.economicFloor],

@@ -1,3 +1,4 @@
+import { AUTHORITY_ROOMS } from "@/config/deployment";
 import { TREASURY_T2_LANE, treasuryLaneWorkKey } from "@/runtime/treasuryTerminalLane";
 export const TREASURY_T2_RUN_ID = TREASURY_T2_LANE.runId;
 export const TREASURY_T2_ACTION_KIND = TREASURY_T2_LANE.actionKind;
@@ -28,7 +29,7 @@ export function encodeTreasuryT2DurableFacts(f: DurableT2Facts): string | null {
       ![f.taskCreatedAt,f.amount,f.tick,f.quote].every(integer) || f.amount < 1 || f.amount > 100 || f.quote > 100 ||
       !endpoint(f.source) || !endpoint(f.target) || f.source.id === f.target.id) return null;
   const e = (v: TreasuryT2EndpointFacts) => [v.id,v.resourceAmount,v.energy,v.used,v.free,v.capacity,v.cooldown];
-  const raw = ["t2", f.runId, "UH", "E4N58", "E1N57", "automatic", "synthesis:E1N57:UH2O",
+  const raw = ["t2", f.runId, "UH", AUTHORITY_ROOMS.reagentSource, AUTHORITY_ROOMS.synthesisHub, "automatic", AUTHORITY_ROOMS.synthesisReason,
     f.taskId,f.taskCreatedAt,f.amount,f.tick,f.quote,f.username,...e(f.source),...e(f.target)].join("|");
   return raw.length <= 512 ? raw : null;
 }
@@ -36,7 +37,7 @@ export function decodeTreasuryT2DurableFacts(raw: unknown): DurableT2Facts | nul
   if (typeof raw !== "string" || raw.length > 512) return null;
   const a = raw.split("|");
   if (a.length !== 27 || a[0] !== "t2" || a[1] !== TREASURY_T2_RUN_ID || a[2] !== "UH" ||
-      a[3] !== "E4N58" || a[4] !== "E1N57" || a[5] !== "automatic" || a[6] !== "synthesis:E1N57:UH2O") return null;
+      a[3] !== AUTHORITY_ROOMS.reagentSource || a[4] !== AUTHORITY_ROOMS.synthesisHub || a[5] !== "automatic" || a[6] !== AUTHORITY_ROOMS.synthesisReason) return null;
   const n = (i: number) => DECIMAL.test(a[i]) ? Number(a[i]) : NaN;
   const e = (i: number): TreasuryT2EndpointFacts => ({id:a[i],resourceAmount:n(i+1),energy:n(i+2),used:n(i+3),free:n(i+4),capacity:n(i+5),cooldown:n(i+6)});
   const f: DurableT2Facts = {schemaVersion:1,runId:a[1],taskId:a[7],taskCreatedAt:n(8),amount:n(9),tick:n(10),quote:n(11),username:a[12],source:e(13),target:e(20)};

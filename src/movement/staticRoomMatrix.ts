@@ -29,11 +29,16 @@ export interface StaticRoomMatrixSources {
   controller: StructureController | undefined;
 }
 
-const EMPTY_STRUCTURES: Structure<StructureConstant>[] = Object.freeze([]) as Structure<StructureConstant>[];
-const EMPTY_SITES: ConstructionSite[] = Object.freeze([]) as ConstructionSite[];
-const EMPTY_SOURCES: Source[] = Object.freeze([]) as Source[];
-const EMPTY_MINERALS: Mineral[] = Object.freeze([]) as Mineral[];
-const EMPTY_DEPOSITS: Deposit[] = Object.freeze([]) as Deposit[];
+const EMPTY_STRUCTURES: Structure<StructureConstant>[] = [];
+Object.freeze(EMPTY_STRUCTURES);
+const EMPTY_SITES: ConstructionSite[] = [];
+Object.freeze(EMPTY_SITES);
+const EMPTY_SOURCES: Source[] = [];
+Object.freeze(EMPTY_SOURCES);
+const EMPTY_MINERALS: Mineral[] = [];
+Object.freeze(EMPTY_MINERALS);
+const EMPTY_DEPOSITS: Deposit[] = [];
+Object.freeze(EMPTY_DEPOSITS);
 
 /** 不可见房间：只有 terrain 可查，自然对象与结构状态未知，留 0 走引擎默认。 */
 export const TERRAIN_ONLY_ROOM_MATRIX_SOURCES: StaticRoomMatrixSources = {

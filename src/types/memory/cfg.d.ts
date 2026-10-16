@@ -17,6 +17,8 @@ declare global {
       string,
       {
         type?: RoomType;
+        /** 孵化出口；按 spawn 名配置。空数组恢复引擎默认，坏值保留兼容安全策略。 */
+        spawnExitDirections?: Record<string, DirectionConstant[]>;
       }
     >;
     worker?: {

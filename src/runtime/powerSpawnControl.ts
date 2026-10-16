@@ -74,7 +74,7 @@ function shouldPublishResourceStep(
   if (capacity <= 0) {
     return false;
   }
-  const used = powerSpawn.store.getUsedCapacity(resource);
+  const used = (powerSpawn.store.getUsedCapacity(resource) ?? 0);
   const hadStep = !!existingTask?.steps.some((step) => step.resource === resource);
   if (hadStep) {
     return used < Math.ceil(capacity * POWER_SPAWN_HIGH_WATER_RATIO);
@@ -89,7 +89,7 @@ function createSupplyStep(
   preference: "storage" | "terminal",
 ): CarrierTaskStep | null {
   const capacity = powerSpawn.store.getCapacity(resource) || 0;
-  const missing = capacity - powerSpawn.store.getUsedCapacity(resource);
+  const missing = capacity - (powerSpawn.store.getUsedCapacity(resource) ?? 0);
   if (missing <= 0) {
     return null;
   }

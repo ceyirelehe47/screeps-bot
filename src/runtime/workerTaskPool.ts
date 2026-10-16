@@ -1,5 +1,9 @@
 import type { WorkerTask } from "@/types/system";
-import { getPlannedControllerLinkPos, getPlannedStoragePos, getSourceContainerPositionsForRoom } from "@/runtime/roomPlannerConstruction";
+import {
+  getPlannedControllerLinkPos,
+  getPlannedStoragePos,
+  getSourceContainerPositionsForRoom,
+} from "@/runtime/roomPlannerConstruction";
 import { getCreepAssignmentState } from "@/runtime/creepAssignmentState";
 import { measureCreepDecision } from "@/runtime/cpuPhaseProfiler";
 import { getCreepConfigService, getTickContextService } from "@/runtime/runtimeServices";
@@ -290,7 +294,7 @@ function createBuildTask(site: ConstructionSite): WorkerTask {
     id: `build:${site.id}`,
     type: "build",
     targetId: site.id,
-    roomName: site.room.name,
+    roomName: site.pos.roomName,
     priority: getBuildPriority(site.structureType),
     requiredWork: remaining,
     assignedCreeps: [],

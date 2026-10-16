@@ -1,5 +1,5 @@
 import * as coreStore from "@/runtime/treasury/kernel/store";
-import * as terminalControl from "@/runtime/treasuryTerminalControl";
+import * as terminalControl from "@/runtime/treasuryTerminalControlReadModel";
 import * as responsibility from "@/runtime/treasuryTerminalResponsibility";
 import { hasTreasuryTerminalFence, hasTreasuryT1TerminalFence } from "@/runtime/treasuryTaskCommitmentBridge";
 import { TREASURY_T1_LANE, TREASURY_T2_LANE, TREASURY_TERMINAL_LANES } from "@/runtime/treasuryTerminalLane";

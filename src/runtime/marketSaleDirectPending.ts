@@ -495,7 +495,7 @@ export function isRecoverablePendingDirectDeal(
     plannedFloor === undefined ||
     pending.netCreditsMilli !== expectedPlannedNet ||
     pending.netCreditsMilli < plannedFloor ||
-    pending.worstCaseNetCreditsMilli <
+    (pending.worstCaseNetCreditsMilli ?? -Infinity) <
       pending.effectiveNetFloorMilli
   ) {
     return false;
@@ -573,7 +573,7 @@ export function isRecoverablePendingDirectDeal(
     missingTicks.some(
       (tick) =>
         !nonNegativeSafeInteger(tick) ||
-        tick <= pending.attemptAt,
+        (pending.attemptAt === undefined || tick <= pending.attemptAt),
     ) ||
     new Set(missingTicks).size !== missingTicks.length ||
     missingTicks.some(
@@ -964,7 +964,7 @@ export function isRecoverableDirectDealOutcome(
     required === undefined ||
     outcome.plannedNetCreditsMilli !== plannedNet ||
     outcome.plannedNetCreditsMilli < required ||
-    outcome.worstCaseNetCreditsMilli <
+    (outcome.worstCaseNetCreditsMilli ?? -Infinity) <
       outcome.effectiveNetFloorMilli
   ) {
     return false;

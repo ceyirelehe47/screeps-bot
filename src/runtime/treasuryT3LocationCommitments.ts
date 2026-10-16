@@ -1,3 +1,4 @@
+import { AUTHORITY_EXECUTOR_SHARD } from "@/config/deployment";
 import { BUILD_INFO } from "@/buildMeta";
 import { peekCarrierTasksByRoom } from "@/runtime/carrierTaskBoard";
 import type { ResourceTransferTask } from "@/runtime/logistics/resourceTransferTasks";
@@ -6,7 +7,7 @@ import type { TreasuryLocationCommitmentRequest } from "@/runtime/treasury/facad
 import { readTreasuryCoreStoreHealth } from "@/runtime/treasury/kernel/store";
 import { readTreasuryWorldSequence } from "@/runtime/treasury/observation";
 import { runtime } from "@/runtime/treasuryFirstLiveState";
-import { readTreasuryTerminalControl } from "@/runtime/treasuryTerminalControl";
+import { readTreasuryTerminalControl } from "@/runtime/treasuryTerminalControlReadModel";
 import { decodeTreasuryTerminalFacts } from "@/runtime/treasuryTerminalFacts";
 import { readTreasuryLaneQuota, readTreasuryLaneResponsibility } from "@/runtime/treasuryTerminalResponsibility";
 import { TREASURY_TERMINAL_LANES, treasuryLaneTaskMatches, treasuryLaneWorkKey } from "@/runtime/treasuryTerminalLane";
@@ -86,7 +87,7 @@ export function treasuryT3CommittedOutgoingForLocation(request: TreasuryLocation
     const now = Date.now();
     const state = runtime();
     const mode = (Memory.cfg as unknown as Record<string, { mode?: unknown }> | undefined)?.[lane.configKey]?.mode;
-    if (mode !== "canary" || Game.shard?.name !== "shard1" || BUILD_INFO.dirty || BUILD_INFO.bundleHash === "none" ||
+    if (mode !== "canary" || Game.shard?.name !== AUTHORITY_EXECUTOR_SHARD || BUILD_INFO.dirty || BUILD_INFO.bundleHash === "none" ||
         control.deployTag !== BUILD_INFO.tag || control.deployBundleHash !== BUILD_INFO.bundleHash ||
         state?.lastDeployTag !== control.deployTag || state?.lastDeployBundleHash !== control.deployBundleHash ||
         now < control.startedAtMs || now >= control.controlUntilMs || now >= control.deadlineMs ||

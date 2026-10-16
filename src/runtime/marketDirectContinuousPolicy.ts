@@ -1,3 +1,4 @@
+import { AUTHORITY_EXECUTOR_SHARD, AUTHORITY_ROOMS } from "@/config/deployment";
 import { DIRECT_ENGINE_ASSUMPTIONS } from "@/runtime/marketSaleDirectEngineAssumptions";
 
 /**
@@ -10,7 +11,7 @@ import { DIRECT_ENGINE_ASSUMPTIONS } from "@/runtime/marketSaleDirectEngineAssum
 export const MARKET_DIRECT_CONTINUOUS_CAPABILITY =
   "market-direct-continuous" as const;
 export const MARKET_DIRECT_CONTINUOUS_SCHEMA = 2 as const;
-export const MARKET_DIRECT_CONTINUOUS_EXECUTOR_SHARD = "shard1" as const;
+export const MARKET_DIRECT_CONTINUOUS_EXECUTOR_SHARD = AUTHORITY_EXECUTOR_SHARD;
 export const MARKET_DIRECT_CONTINUOUS_PERMIT_GENESIS =
   "market-direct-continuous:v2:permit-genesis" as const;
 export const MARKET_DIRECT_CONTINUOUS_HASH_REVISION =
@@ -281,7 +282,7 @@ const RAW_MARKET_DIRECT_CONTINUOUS_ENTRIES =
     {
       entryId: "base-x-e6n59-v1",
       resourceType: "X" as ResourceConstant,
-      allowedRoomNames: ["E6N59"],
+      allowedRoomNames: [AUTHORITY_ROOMS.legacyXSeller],
       requireNativeMineral: false,
       hardFloor: 600,
       economicFloor: 600,
@@ -302,7 +303,7 @@ const RAW_MARKET_DIRECT_CONTINUOUS_ENTRIES =
     {
       entryId: "base-h-e3n59-v1",
       resourceType: "H" as ResourceConstant,
-      allowedRoomNames: ["E3N59"],
+      allowedRoomNames: [AUTHORITY_ROOMS.hydrogenSource],
       requireNativeMineral: true,
       hardFloor: 428,
       economicFloor: 451,
@@ -323,7 +324,7 @@ const RAW_MARKET_DIRECT_CONTINUOUS_ENTRIES =
     {
       entryId: "base-z-e7n57-v1",
       resourceType: "Z" as ResourceConstant,
-      allowedRoomNames: ["E7N57"],
+      allowedRoomNames: [AUTHORITY_ROOMS.zSeller],
       requireNativeMineral: true,
       hardFloor: 43,
       economicFloor: 45,
@@ -451,9 +452,9 @@ export const LEGACY_REVIEWED_X_CANARY_OUTCOME_IDENTITY = deepFreeze({
   evidenceKey:
     "6a65f8e1656d080013d32210:6a65e025656d080013ccad03",
   evidenceSource: "automatic",
-  canaryRoomName: "E6N59",
+  canaryRoomName: AUTHORITY_ROOMS.legacyXSeller,
   resource: "X",
-  orderRoomName: "E21S49",
+  orderRoomName: AUTHORITY_ROOMS.legacyXBuyer,
   observedOrderPrice: 694.963,
   observedOrderPriceMilli: 694_963,
   submittedDealAmount: 1_000,
@@ -461,8 +462,8 @@ export const LEGACY_REVIEWED_X_CANARY_OUTCOME_IDENTITY = deepFreeze({
   actualOrderType: "buy",
   actualOrderPrice: 694.963,
   actualResource: "X",
-  actualFrom: "E6N59",
-  actualTo: "E21S49",
+  actualFrom: AUTHORITY_ROOMS.legacyXSeller,
+  actualTo: AUTHORITY_ROOMS.legacyXBuyer,
   actualAmount: 1_000,
   actualTransactionEnergy: 394,
   actualNetCreditsMilli: 682_331_360,

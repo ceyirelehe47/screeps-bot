@@ -32,39 +32,25 @@ import { getCreepAssignmentState } from "@/runtime/creepAssignmentState";
 import { inspectTreasuryContinuousOHProcurement } from "@/runtime/treasuryContinuousOHControl";
 import { getReservedProductionAmountExcludingHolder } from "@/runtime/resourceReservation";
 import { getActivePowerBankBoostLabIds } from "@/runtime/powerBankBoostMemory";
-import { normalizeBoolean, normalizeNumber, normalizeRoomNameList } from "@/runtime/configNormalize";
+import { normalizeNumber } from "@/runtime/configNormalize";
 import { getProductReagents, roundUpReactionAmount } from "@/runtime/reactionMap";
-import { isTargetSatisfiedByReactionGranularity, markLoadingStart, isLoadingTimedOut } from "@/runtime/productionStateMachine";
+import {
+  isTargetSatisfiedByReactionGranularity,
+  markLoadingStart,
+  isLoadingTimedOut,
+} from "@/runtime/productionStateMachine";
 import { resolveTerminalStorageTarget, terminalStorageKind } from "@/runtime/carrierTaskHelpers";
 import {
   beginSynthesisShadowEpochCapture,
   isResourceControlFullPlanningTick,
   type SynthesisShadowEpochCaptureSession,
-} from "@/runtime/resourceControl";
+} from "@/runtime/resourceControlReadModel";
+import { roomResourceAmount, DEFAULT_BATCH_SIZE, normalizeConfig } from "@/runtime/synthesisReadModel";
+import type { SynthesisReactionPlan, SynthesisRoomConfig, SynthesisControlConfig } from "@/runtime/synthesisReadModel";
+export { inspectConfiguredSynthesisTransferDemand, inspectSynthesisTransferNeed } from "@/runtime/synthesisReadModel";
+
 
 type SynthesisStage = "idle" | "acquiring" | "loading" | "synthesizing" | "unloading" | "blocked";
-
-interface SynthesisReactionPlan {
-  product: ResourceConstant;
-  targetAmount: number;
-  batchSize: number;
-  donorRoomNames: string[];
-}
-
-interface SynthesisRoomConfig {
-  enabled: boolean;
-  batchSize: number;
-  donorRoomNames: string[];
-  reagentLabIds: string[];
-  reactions: SynthesisReactionPlan[];
-}
-
-interface SynthesisControlConfig {
-  enabled: boolean;
-  sampleInterval: number;
-  defaultBatchSize: number;
-  rooms: Record<string, SynthesisRoomConfig>;
-}
 
 interface SynthesisBinding {
   fromRoomName: string;
@@ -278,13 +264,6 @@ function createSynthesisTransferTaskIndex(
   };
 }
 
-const DEFAULT_SAMPLE_INTERVAL = 10;
-const DEFAULT_BATCH_SIZE = 500;
-const MIN_SAMPLE_INTERVAL = 5;
-const MAX_SAMPLE_INTERVAL = 100;
-const MIN_BATCH_SIZE = LAB_REACTION_AMOUNT;
-const MAX_BATCH_SIZE = 3000;
-
 const SYNTHESIS_BINDING_LEASE_TICKS = 200;
 const SYNTHESIS_BINDING_STICKY_BONUS = 5;
 const SYNTHESIS_BINDING_SWITCH_ADVANTAGE_RATIO = 1.2;
@@ -383,82 +362,6 @@ function withdrawSynthesisLogisticsShadow(): void {
   );
 }
 
-function normalizeReactionPlan(raw: unknown, roomCfg: SynthesisRoomConfig, defaultBatchSize: number): SynthesisReactionPlan | null {
-  if (!raw || typeof raw !== "object") {
-    return null;
-  }
-
-  const record = raw as Record<string, unknown>;
-  const product = typeof record.product === "string" ? (record.product as ResourceConstant) : null;
-  if (!product || !getProductReagents(product)) {
-    return null;
-  }
-
-  const targetAmount = normalizeNumber(record.targetAmount, 0, 0, 500_000);
-  if (targetAmount <= 0) {
-    return null;
-  }
-
-  const batchSize = normalizeNumber(record.batchSize, roomCfg.batchSize || defaultBatchSize, MIN_BATCH_SIZE, MAX_BATCH_SIZE);
-  const donorRoomNames = normalizeRoomNameList(record.donorRoomNames);
-  return {
-    product,
-    targetAmount,
-    batchSize,
-    donorRoomNames,
-  };
-}
-
-function normalizeRoomConfig(
-  _roomName: string,
-  raw: unknown,
-  defaultBatchSize: number,
-): SynthesisRoomConfig {
-  const record = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
-  const roomCfg: SynthesisRoomConfig = {
-    enabled: normalizeBoolean(record.enabled, true),
-    batchSize: normalizeNumber(record.batchSize, defaultBatchSize, MIN_BATCH_SIZE, MAX_BATCH_SIZE),
-    donorRoomNames: normalizeRoomNameList(record.donorRoomNames),
-    reagentLabIds: normalizeRoomNameList(record.reagentLabIds),
-    reactions: [],
-  };
-
-  if (roomCfg.reagentLabIds.length > 2) {
-    roomCfg.reagentLabIds = roomCfg.reagentLabIds.slice(0, 2);
-  }
-
-  const reactionsRaw = Array.isArray(record.reactions) ? record.reactions : [];
-  roomCfg.reactions = reactionsRaw
-    .map((entry) => normalizeReactionPlan(entry, roomCfg, defaultBatchSize))
-    .filter((entry): entry is SynthesisReactionPlan => !!entry);
-
-  if (roomCfg.reagentLabIds.length > 0 && roomCfg.reagentLabIds.length < 2) {
-    roomCfg.enabled = false;
-  }
-
-  return roomCfg;
-}
-
-function normalizeConfig(): SynthesisControlConfig {
-  const raw = Memory.cfg?.synthesisControl;
-  const enabled = normalizeBoolean(raw?.enabled, false);
-  const sampleInterval = normalizeNumber(raw?.sampleInterval, DEFAULT_SAMPLE_INTERVAL, MIN_SAMPLE_INTERVAL, MAX_SAMPLE_INTERVAL);
-  const defaultBatchSize = normalizeNumber(raw?.defaultBatchSize, DEFAULT_BATCH_SIZE, MIN_BATCH_SIZE, MAX_BATCH_SIZE);
-
-  const roomsRaw = raw?.rooms && typeof raw.rooms === "object" ? (raw.rooms as Record<string, unknown>) : {};
-  const rooms: Record<string, SynthesisRoomConfig> = {};
-  for (const [roomName, roomCfg] of Object.entries(roomsRaw)) {
-    rooms[roomName] = normalizeRoomConfig(roomName, roomCfg, defaultBatchSize);
-  }
-
-  return {
-    enabled,
-    sampleInterval,
-    defaultBatchSize,
-    rooms,
-  };
-}
-
 function getRuntimeState(): SynthesisRuntimeState {
   const runtime = getMemoryService().ensureRuntime();
   runtime.synthesisControl = runtime.synthesisControl || {
@@ -474,98 +377,6 @@ function getRuntimeState(): SynthesisRuntimeState {
   runtime.synthesisControl.rooms = runtime.synthesisControl.rooms || {};
   runtime.synthesisControl.bindings = runtime.synthesisControl.bindings || {};
   return runtime.synthesisControl;
-}
-
-function roomResourceAmount(room: Room, resource: ResourceConstant): number {
-  let total = 0;
-  if (room.storage) {
-    total += room.storage.store.getUsedCapacity(resource);
-  }
-  if (room.terminal) {
-    total += room.terminal.store.getUsedCapacity(resource);
-  }
-
-  const structures = room.find(FIND_MY_STRUCTURES, {
-    filter: (structure) =>
-      structure.structureType === STRUCTURE_LAB ||
-      structure.structureType === STRUCTURE_FACTORY ||
-      structure.structureType === STRUCTURE_POWER_SPAWN,
-  }) as AnyStoreStructure[];
-  for (const structure of structures) {
-    total += structure.store.getUsedCapacity(resource);
-  }
-
-  return total;
-}
-
-function roomSynthesisProductAmount(room: Room, product: ResourceConstant): number {
-  let amount = roomResourceAmount(room, product);
-  for (const creep of Object.values(Game.creeps)) {
-    const assignment = getCreepAssignmentState(creep.name);
-    if (assignment?.synthesisCarrierPendingResource !== product || !assignment.synthesisCarrierPendingToId) continue;
-    const target = Game.getObjectById(assignment.synthesisCarrierPendingToId as Id<AnyStoreStructure>);
-    // 只承认已接受、本房 Storage/Terminal 目的地的产物卸货；路过或外运产品不覆盖本房目标。
-    if (!target || target.room?.name !== room.name ||
-        target.id !== room.storage?.id && target.id !== room.terminal?.id) continue;
-    amount += creep.store.getUsedCapacity(product);
-  }
-  return amount;
-}
-
-/** 普通自动补料的已启用配方边界；完成后保留配方事实，避免旧整批余量继续发送。 */
-export function inspectConfiguredSynthesisTransferDemand(
-  roomName: string, resource: ResourceConstant, product: ResourceConstant, excludeTaskId: string,
-): { status: "unmanaged" } | { status: "held"; reason: string } | { status: "bounded"; amount: number; reason: string } {
-  try {
-    const cfg = normalizeConfig();
-    const roomCfg = cfg.rooms[roomName];
-    const room = Game.rooms[roomName];
-    const plans = roomCfg?.reactions.filter((entry) => entry.product === product) || [];
-    if (!cfg.enabled || !roomCfg?.enabled || !room?.controller?.my || plans.length === 0 ||
-        !getProductReagents(product)?.includes(resource)) return { status: "unmanaged" };
-    // Task reason 不含 target/batch 身份；只有唯一已启用配方才能在 idle 后证明完成。
-    if (plans.length === 1 && roomSynthesisProductAmount(room, product) >= plans[0].targetAmount) {
-      return { status: "bounded", amount: 0, reason: "synthesis_target_satisfied" };
-    }
-    const need = inspectSynthesisTransferNeed(roomName, resource, product, excludeTaskId);
-    if (need.ok || need.reason === "synthesis_need_already_covered") {
-      return { status: "bounded", amount: need.amount, reason: need.reason };
-    }
-    return { status: "held", reason: need.reason };
-  } catch { return { status: "held", reason: "synthesis_demand_unreadable" }; }
-}
-
-/** 只读复用真实合成目标：跨房补料不能仍按已被产品现货覆盖的整batch授权。 */
-export function inspectSynthesisTransferNeed(roomName: string, resource: ResourceConstant, product: ResourceConstant, excludeTaskId: string): {ok: boolean; amount: number; reason: string} {
-  try {
-    const cfg = normalizeConfig(); const roomCfg = cfg.rooms[roomName];
-    const room = Game.rooms[roomName]; const state = Memory.runtime?.synthesisControl?.rooms?.[roomName];
-    if (!cfg.enabled || !roomCfg?.enabled || !room?.controller?.my || !state || state.activeProduct !== product ||
-        !["acquiring","loading","synthesizing"].includes(state.stage) || state.boostPause !== undefined) {
-      return {ok:false,amount:0,reason:"synthesis_demand_inactive"};
-    }
-    const plan = roomCfg.reactions.find((entry) => entry.product === product && entry.targetAmount === state.targetAmount && entry.batchSize === state.batchSize);
-    const active = plan;
-    if (!active || !Number.isSafeInteger(active.targetAmount) || !Number.isSafeInteger(active.batchSize) ||
-        active.targetAmount !== state.targetAmount || active.batchSize !== state.batchSize || active.batchSize < 1 ||
-        !getProductReagents(product)?.includes(resource)) return {ok:false,amount:0,reason:"synthesis_plan_identity_changed"};
-    const productDeficit = Math.max(0, active.targetAmount - roomSynthesisProductAmount(room, product));
-    const required = Math.min(active.batchSize, roundUpReactionAmount(productDeficit));
-    let covered = roomResourceAmount(room, resource);
-    for (const creep of Object.values(Game.creeps)) {
-      const cargo = creep.memory as unknown as {room?: string; home?: string; synthesisCarrierPendingResource?: ResourceConstant; synthesisCarrierPendingToId?: string};
-      const assignment = getCreepAssignmentState(creep.name);
-      const targetId = assignment?.synthesisCarrierPendingToId ?? cargo.synthesisCarrierPendingToId;
-      const target = targetId ? Game.getObjectById(targetId as Id<AnyStoreStructure>) : null;
-      if (creep.room?.name === roomName || target?.room?.name === roomName) covered += creep.store.getUsedCapacity(resource);
-    }
-    for (const task of Object.values(Memory.data?.resourceControl?.tasks ?? {})) {
-      if (task.id !== excludeTaskId && task.toRoomName === roomName && task.resource === resource &&
-          countsResourceTransferTaskTowardDemand(task as ResourceTransferTask, resolveResourceTransferTaskHealthOptions())) covered += task.remainingAmount;
-    }
-    const amount = Math.max(0, required - covered);
-    return {ok:amount > 0,amount,reason:amount > 0 ? "synthesis_need_confirmed" : "synthesis_need_already_covered"};
-  } catch { return {ok:false,amount:0,reason:"synthesis_demand_unreadable"}; }
 }
 
 function roomTransferableAmount(room: Room, resource: ResourceConstant): number {
@@ -805,7 +616,7 @@ function isLabContaminatedForExpected(lab: StructureLab, expectedMineral: Resour
     return false;
   }
 
-  if (lab.store.getUsedCapacity(mineralType) <= 0) {
+  if ((lab.store.getUsedCapacity(mineralType) ?? 0) <= 0) {
     return false;
   }
 
@@ -818,7 +629,7 @@ function isReagentReady(lab: StructureLab, reagent: ResourceConstant): boolean {
     return false;
   }
 
-  return lab.store.getUsedCapacity(reagent) >= LAB_REACTION_AMOUNT;
+  return (lab.store.getUsedCapacity(reagent) ?? 0) >= LAB_REACTION_AMOUNT;
 }
 
 function canAcceptProduct(lab: StructureLab, product: ResourceConstant): boolean {
@@ -827,7 +638,7 @@ function canAcceptProduct(lab: StructureLab, product: ResourceConstant): boolean
     return false;
   }
 
-  const used = mineralType ? lab.store.getUsedCapacity(mineralType) : 0;
+  const used = mineralType ? (lab.store.getUsedCapacity(mineralType) ?? 0) : 0;
   return used < LAB_MINERAL_CAPACITY;
 }
 
@@ -836,7 +647,7 @@ function reagentAssignmentPenalty(lab: StructureLab, reagent: ResourceConstant):
   if (!mineralType) {
     return 0;
   }
-  if (mineralType === reagent || lab.store.getUsedCapacity(mineralType) <= 0) {
+  if (mineralType === reagent || (lab.store.getUsedCapacity(mineralType) ?? 0) <= 0) {
     return 0;
   }
   return 100;
@@ -974,14 +785,15 @@ function generateCleanupTask(
       continue;
     }
 
-    const amount = lab.store.getUsedCapacity(mineralType);
+    const amount = (lab.store.getUsedCapacity(mineralType) ?? 0);
     if (amount <= 0) {
       continue;
     }
 
     const target = resolveCleanupTargetStructure(room, mineralType);
     if (!target) {
-      if (Memory.cfg.hub?.hubRoomName === room.name) {
+      if (Memory.cfg?.hub?.hubRoomName === room.name) {
+        Memory.runtime ??= {};
         if (!Memory.runtime.hub) Memory.runtime.hub = {};
         Memory.runtime.hub.lastError = "lab_cleanup_destination_full";
       }
@@ -1032,14 +844,15 @@ function generateProductUnloadTask(
     if (lab.mineralType !== product) {
       continue;
     }
-    const amount = lab.store.getUsedCapacity(product);
+    const amount = (lab.store.getUsedCapacity(product) ?? 0);
     if (amount < minLabAmount) {
       continue;
     }
 
     const target = resolveProductUnloadTargetStructure(room, product);
     if (!target) {
-      if (Memory.cfg.hub?.hubRoomName === room.name) {
+      if (Memory.cfg?.hub?.hubRoomName === room.name) {
+        Memory.runtime ??= {};
         if (!Memory.runtime.hub) Memory.runtime.hub = {};
         Memory.runtime.hub.lastError = "lab_product_unload_destination_full";
       }
@@ -1082,7 +895,7 @@ function generateStrandedProductUnloadTask(
   for (const lab of productLabs) {
     const mineralType = lab.mineralType;
     if (!mineralType) continue;
-    const amount = lab.store.getUsedCapacity(mineralType);
+    const amount = (lab.store.getUsedCapacity(mineralType) ?? 0);
     if (amount < minLabAmount) continue;
 
     const target = resolveProductUnloadTargetStructure(room, mineralType);
@@ -1141,7 +954,7 @@ function generateReagentCleanupTask(
     if (excludedLabIds.has(lab.id)) continue;
     const mineralType = lab.mineralType;
     if (!mineralType) continue;
-    const amount = lab.store.getUsedCapacity(mineralType);
+    const amount = (lab.store.getUsedCapacity(mineralType) ?? 0);
     if (amount <= 0) continue;
 
     const target = resolveProductUnloadTargetStructure(room, mineralType);
@@ -1187,11 +1000,11 @@ function generateSupplyTask(
     const lab = orderedReagentLabs[index];
     const reagent = reagents[index];
     const mineralType = lab.mineralType as ResourceConstant | undefined;
-    if (mineralType && mineralType !== reagent && lab.store.getUsedCapacity(mineralType) > 0) {
+    if (mineralType && mineralType !== reagent && (lab.store.getUsedCapacity(mineralType) ?? 0) > 0) {
       continue;
     }
 
-    const currentAmount = mineralType === reagent ? lab.store.getUsedCapacity(reagent) : 0;
+    const currentAmount = mineralType === reagent ? (lab.store.getUsedCapacity(reagent) ?? 0) : 0;
     const inFlightAmount = countInFlightSynthesisCargo(lab.id, reagent);
     const effectiveCurrentAmount = currentAmount + inFlightAmount;
     if (effectiveCurrentAmount > 2200) continue;
@@ -1301,7 +1114,7 @@ function maybeGenerateSupplyTasks(
         return sum;
       }
 
-      return sum + lab.store.getUsedCapacity(reagent);
+      return sum + (lab.store.getUsedCapacity(reagent) ?? 0);
     }, 0);
     const current = roomTransferableAmount(room, reagent) + bufferedInLabs;
     const incoming = transferTasks.getIncomingAmount(room.name, reagent);
@@ -1591,7 +1404,7 @@ function signalHubNeedsPlan(roomName: string): void {
     if (Game.time - lastPlanTick < planInterval) return;
   }
 
-  if (!Memory.runtime) Memory.runtime = {} as any;
+  if (!Memory.runtime) Memory.runtime = {};
   if (!Memory.runtime.hub) {
     Memory.runtime.hub = { needsPlan: true, updatedAt: Game.time };
   } else {

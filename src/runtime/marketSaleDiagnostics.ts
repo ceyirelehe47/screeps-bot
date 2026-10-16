@@ -114,16 +114,15 @@ export function measureMarketSubPhase<T>(phase: string, fn: () => T): T {
     const delta = Math.max(0, getUsed.call(Game.cpu) - startedAt);
     const pending = ensurePendingTickPhases();
     let stats = pending.phases.get(phase);
-    if (!stats) {
-      if (pending.phases.size >= MAX_PHASE_COUNT) {
-        return;
-      }
+    if (!stats && pending.phases.size < MAX_PHASE_COUNT) {
       stats = { total: 0, max: 0, calls: 0 };
       pending.phases.set(phase, stats);
     }
-    stats.total += delta;
-    if (delta > stats.max) stats.max = delta;
-    stats.calls += 1;
+    if (stats) {
+      stats.total += delta;
+      if (delta > stats.max) stats.max = delta;
+      stats.calls += 1;
+    }
   }
 }
 

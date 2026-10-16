@@ -222,8 +222,8 @@ function scanStructureStore(structure: AnyStoreStructure): StoreScanResult {
   counters().storeObjectsScanned += 1;
   return {
     amounts: scanStoreKeys(structure.store),
-    usedCapacity: structure.store.getUsedCapacity(),
-    freeCapacity: structure.store.getFreeCapacity(),
+    usedCapacity: (structure.store.getUsedCapacity() ?? 0),
+    freeCapacity: (structure.store.getFreeCapacity() ?? 0),
   };
 }
 

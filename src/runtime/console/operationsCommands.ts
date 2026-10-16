@@ -121,7 +121,7 @@ function removeConfig(configName: string): number {
   return 1;
 }
 
-function getCrossShardTaskConfigNames(task: NonNullable<Memory["data"]>["crossShardColonization"] extends Record<string, infer T> ? T : never): string[] {
+function getCrossShardTaskConfigNames(task: NonNullable<NonNullable<Memory["data"]>["crossShardColonization"]> extends Record<string, infer T> ? T : never): string[] {
   const names = new Set<string>();
 
   if (task.claimerConfigName) {

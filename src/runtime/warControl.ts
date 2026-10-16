@@ -2053,7 +2053,7 @@ function getWarRebuildEvidence(room: Room, enemyUsername: string): string[] {
     ...room.find(FIND_HOSTILE_CREEPS).filter(c => c.owner.username === enemyUsername).map(c => `creep:${c.id}`),
     ...room.find(FIND_HOSTILE_CONSTRUCTION_SITES).filter(s => s.owner.username === enemyUsername).map(s => `site:${s.id}`),
     ...room.find(FIND_HOSTILE_STRUCTURES).filter(s => s.structureType !== STRUCTURE_CONTROLLER
-      && s.structureType !== STRUCTURE_KEEPER_LAIR && "owner" in s && (s as OwnedStructure).owner.username === enemyUsername).map(s => `structure:${s.id}`),
+      && s.structureType !== STRUCTURE_KEEPER_LAIR && "owner" in s && (s as OwnedStructure).owner?.username === enemyUsername).map(s => `structure:${s.id}`),
   ].sort();
 }
 

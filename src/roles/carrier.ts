@@ -40,11 +40,19 @@ import {
   type CarrierDispatchRef,
 } from "@/runtime/dispatchOwnership/ref";
 import { hasSharedStorageControllerLinkCluster, isStorageReceiverLink } from "@/runtime/linkControl";
-import { getPlannedStoragePos, getPlannedControllerLinkPos, getProtoStorageContainer, getProtoControllerLinkContainer } from "@/runtime/roomPlannerConstruction";
+import {
+  getPlannedStoragePos,
+  getPlannedControllerLinkPos,
+  getProtoStorageContainer,
+  getProtoControllerLinkContainer,
+} from "@/runtime/roomPlannerConstruction";
 import { getCreepConfigService, getTickContextService } from "@/runtime/runtimeServices";
 import { isPositionAllowedForCreep, shouldRestrictToSafeZone } from "@/runtime/safeZoneHelpers";
 import { hasTerminalActionClaim } from "@/runtime/marketActionArbiter";
-import { isTerminalCargoBlocked as terminalHeldForTreasuryT1, executeTreasuryFencedTerminalCargo } from "@/runtime/treasuryTerminalCargo";
+import {
+  isTerminalCargoBlocked as terminalHeldForTreasuryT1,
+  executeTreasuryFencedTerminalCargo,
+} from "@/runtime/treasuryTerminalCargo";
 import {
   claimTerminalAmountOutsideMarketSaleExposure,
   getTerminalAmountOutsideMarketSaleExposure,
@@ -152,7 +160,7 @@ function getBestStoredResource(target: DeadStorePickupTarget): ResourceConstant 
   let best: ResourceConstant | null = null;
   let bestAmount = 0;
   for (const resource of Object.keys(target.store) as ResourceConstant[]) {
-    const amount = target.store.getUsedCapacity(resource);
+    const amount = (target.store.getUsedCapacity(resource) ?? 0);
     if (amount > bestAmount) {
       best = resource;
       bestAmount = amount;
@@ -176,7 +184,7 @@ function isControllerAdjacentLink(link: StructureLink): boolean {
 
 function isDroppedAtPlannedStoragePos(resource: Resource): boolean {
   const room = resource.room;
-  if (room.storage) return false;
+  if (!room || room.storage) return false;
   const plannedPos = getPlannedStoragePos(room);
   return !!plannedPos && resource.pos.isEqualTo(plannedPos);
 }
@@ -461,10 +469,11 @@ function pickupEnergyForCarrier(creep: Creep, options?: CarrierPickupOptions): {
           roomName,
         ) || undefined;
         if (!exposureClaim) return ERR_NOT_ENOUGH_RESOURCES;
+        const claimedAmount = exposureClaim.amount;
         return executeTreasuryFencedTerminalCargo(sourceTarget, () => creep.withdraw(
           sourceTarget,
           RESOURCE_ENERGY,
-          exposureClaim.amount,
+          claimedAmount,
         ));
       }
       return creep.withdraw(sourceTarget, RESOURCE_ENERGY);
@@ -608,6 +617,7 @@ function hasNewerLiveReplacement(creep: Creep): boolean {
     (candidate) =>
       candidate.name !== creep.name &&
       candidate.memory.configName === configName &&
+      typeof candidate.ticksToLive === "number" && typeof creep.ticksToLive === "number" &&
       candidate.ticksToLive > creep.ticksToLive,
   );
 }
@@ -733,7 +743,7 @@ function getCarrierTaskStepSourceAmount(
       from.room?.name || from.pos?.roomName || fallbackRoomName,
     );
   }
-  return from.store.getUsedCapacity(step.resource);
+  return (from.store.getUsedCapacity(step.resource) ?? 0);
 }
 
 function isCarrierTaskStepRunnable(
@@ -752,7 +762,7 @@ function isCarrierTaskStepRunnable(
   }
   const targetFree = taskType === "terminal_offload"
     ? getLocalCarrierDestinationAvailableAmount(to, step.resource)
-    : to.store.getFreeCapacity(step.resource);
+    : (to.store.getFreeCapacity(step.resource) ?? 0);
   if (targetFree <= 0) {
     return false;
   }
@@ -789,7 +799,7 @@ function selectDeliveryStep(task: CarrierTask, creep: Creep): CarrierTaskStep | 
       continue;
     }
     const to = resolveTaskStructure(step.toId);
-    if (!to || to.store.getFreeCapacity(step.resource) <= 0) {
+    if (!to || (to.store.getFreeCapacity(step.resource) ?? 0) <= 0) {
       continue;
     }
     const range = creep.pos.getRangeTo(to.pos);
@@ -1133,7 +1143,7 @@ function pickupSynthesisCarrierResource(
   }
 
   const from = resolveTaskStructure(assignment.step.fromId);
-  if (!from || from.store.getUsedCapacity(assignment.step.resource) <= 0) {
+  if (!from || (from.store.getUsedCapacity(assignment.step.resource) ?? 0) <= 0) {
     clearSynthesisCarrierTaskPlan(creep);
     return { picked: false, outOfRange: false };
   }
@@ -1162,7 +1172,7 @@ function pickupSynthesisCarrierResource(
   } else {
     withdrawAmount = Math.min(
       requestedAmount,
-      from.store.getUsedCapacity(assignment.step.resource),
+      (from.store.getUsedCapacity(assignment.step.resource) ?? 0),
     );
   }
   if (withdrawAmount <= 0) {
@@ -1497,13 +1507,13 @@ function deliverBoundedTerminalFeedCargo(
   const carried = creep.store.getUsedCapacity(resource);
   if (ensureCreepAssignmentState(creep.name).synthesisCarrierPendingReturnToId) return returnBoundedTerminalFeedCargo(creep, resource);
   const currentTarget = revalidateTerminalFeedSnapshotTarget(target, resource, frozenTargetAmount, boundTaskId, boundTaskIdentity);
-  const allowance = Math.min(carried, target.store.getFreeCapacity(resource),
+  const allowance = Math.min(carried, (target.store.getFreeCapacity(resource) ?? 0),
     getTerminalFeedRemainingTarget(target, resource, currentTarget, creep.name));
   // 已取货的责任保留在原 snapshot；过量/满库不落入 generic Terminal cleanup。
   if (allowance <= 0) return returnBoundedTerminalFeedCargo(creep, resource);
   const capacityClaim = claimLocalCarrierDestinationCapacity({ claimantId: creep.name, target, resource, requestedAmount: allowance });
   if (!capacityClaim) return true;
-  const beforeAmount = target.store.getUsedCapacity(resource);
+  const beforeAmount = (target.store.getUsedCapacity(resource) ?? 0);
   let transfer: CarrierTransferResult;
   try { transfer = transferCarrierResource(creep, target, resource, capacityClaim.amount); }
   catch (error) { capacityClaim.release(); throw error; }
@@ -1572,7 +1582,7 @@ function deliverSynthesisCarrierResource(creep: Creep): boolean {
         state.synthesisCarrierPendingDestinationTargetAmount, state.synthesisCarrierPendingBoundResourceTransferTaskId,
         state.synthesisCarrierPendingBoundResourceTransferTaskIdentity);
     }
-    if (_cdTarget && _cdTarget.store.getFreeCapacity(_cdResource) > 0) {
+    if (_cdTarget && (_cdTarget.store.getFreeCapacity(_cdResource) ?? 0) > 0) {
       const _cdTransfer = transferCarrierResource(
         creep,
         _cdTarget,
@@ -1765,7 +1775,7 @@ function deliverSynthesisCarrierResource(creep: Creep): boolean {
   }
 
   const assignedTarget = assignedStep ? resolveTaskStructure(assignedStep.toId) : null;
-  const target = assignedTarget && assignedTarget.store.getFreeCapacity(resource) > 0
+  const target = assignedTarget && (assignedTarget.store.getFreeCapacity(resource) ?? 0) > 0
     ? assignedTarget
     : assignedResource
       ? null

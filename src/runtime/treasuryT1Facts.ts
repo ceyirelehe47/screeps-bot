@@ -1,9 +1,10 @@
+import { AUTHORITY_ROOMS } from "@/config/deployment";
 import { hashTreasuryCanonicalString } from "@/runtime/treasury/transactionId";
 
 export const TREASURY_T1_RUN_ID = "treasury-production-T1-2026-09-24";
 export const TREASURY_T1_ACTION_KIND = "production.terminal-transfer.slice0";
-export const TREASURY_T1_SOURCE_ROOM = "E3N59";
-export const TREASURY_T1_TARGET_ROOM = "E4N58";
+export const TREASURY_T1_SOURCE_ROOM = AUTHORITY_ROOMS.hydrogenSource;
+export const TREASURY_T1_TARGET_ROOM = AUTHORITY_ROOMS.reagentSource;
 export const TREASURY_T1_WORK_KEY_PREFIX = `biz:${TREASURY_T1_RUN_ID}:`;
 export const treasuryT1WorkKey = (taskId: string): string =>
   `${TREASURY_T1_WORK_KEY_PREFIX}${hashTreasuryCanonicalString(taskId)}`;

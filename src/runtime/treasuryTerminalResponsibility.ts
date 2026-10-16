@@ -1,7 +1,17 @@
 import { detectLegacyTreasuryStores, readTreasuryCoreStoreHealth } from "@/runtime/treasury/kernel/store";
-import { TREASURY_TERMINAL_LANES, treasuryLaneWorkKey, type TreasuryTerminalLane } from "@/runtime/treasuryTerminalLane";
-import { readTreasuryContinuousOHQuota, readTreasuryContinuousOHClosedWorkSet } from "@/runtime/treasuryContinuousOHControl";
-import { readTreasuryContinuousOHFenceQuota, continuousFenceClosedWorkAcknowledged } from "@/runtime/treasuryContinuousOHFence";
+import {
+  TREASURY_TERMINAL_LANES,
+  treasuryLaneWorkKey,
+  type TreasuryTerminalLane,
+} from "@/runtime/treasuryTerminalLane";
+import {
+  readTreasuryContinuousOHQuota,
+  readTreasuryContinuousOHClosedWorkSet,
+} from "@/runtime/treasuryContinuousOHReadModel";
+import {
+  readTreasuryContinuousOHFenceQuota,
+  continuousFenceClosedWorkAcknowledged,
+} from "@/runtime/treasuryContinuousOHFence";
 import type { TreasuryContinuousOHFenceProjection } from "@/runtime/treasuryContinuousOHFence";
 
 export interface TreasuryT1Quota {

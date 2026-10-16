@@ -1,0 +1,197 @@
+{
+  "date": "2026-10-16T12:54:14.549814+00:00",
+  "baseline": "e723bdbe4372a0ef66790a74f5908f4d074fe6a6",
+  "branch": "codex/architecture-strict-config-20261016",
+  "deployed": false,
+  "server": {
+    "host": "VM-0-7-ubuntu",
+    "root": "/root/codex-jobs/20261016-architecture",
+    "node": "22.22.1",
+    "dependencies": "隔离目录内物理副本；与前置检查相同的已锁定依赖"
+  },
+  "typecheck": {
+    "productionStrict": true,
+    "productionDiagnostics": 0,
+    "buildAndTestPassed": true
+  },
+  "cycles": {
+    "rollupBefore": 26,
+    "runtimeStronglyConnectedComponentsAfter": 0,
+    "rollupRejectsCycles": true
+  },
+  "source": {
+    "checkedFiles": 619,
+    "match": true,
+    "manifestSha256": "855b01f2e76030e92c3a5092155b3db02b7885312ace6ef3c7d091858165ea8b",
+    "fullRunIdentity": {
+      "commit": "f30b83c30843297b481e95dd93fb40ae722c36f3",
+      "workspaceSha256": "d2181e779eb907a8c6f416ac35c7ec4f980ca7452c26d87892202da8f78157aa"
+    }
+  },
+  "tests": {
+    "numTotalTestSuites": 262,
+    "numPassedTestSuites": 262,
+    "numFailedTestSuites": 0,
+    "numTotalTests": 1983,
+    "numPassedTests": 1983,
+    "numFailedTests": 0,
+    "numPendingTests": 0,
+    "numTodoTests": 0
+  },
+  "testIntegrityPassed": true,
+  "testExit": {
+    "status": 0,
+    "signal": null
+  },
+  "stagesBeforeTestOracleFix": [
+    {
+      "stage": "typecheck",
+      "command": [
+        "npm",
+        "run",
+        "typecheck"
+      ],
+      "exit": 0,
+      "seconds": 53.517
+    },
+    {
+      "stage": "spawn-exit",
+      "command": [
+        "node",
+        "node_modules/jest/bin/jest.js",
+        "--config",
+        "jest.config.cjs",
+        "--runInBand",
+        "--runTestsByPath",
+        "src/mount/mountSpawn.test.ts"
+      ],
+      "exit": 0,
+      "seconds": 4.501
+    },
+    {
+      "stage": "build",
+      "command": [
+        "npm",
+        "run",
+        "build"
+      ],
+      "exit": 0,
+      "seconds": 51.216
+    },
+    {
+      "stage": "artifact",
+      "command": [
+        "node",
+        "artifact-check.cjs"
+      ],
+      "exit": 0,
+      "seconds": 1.796
+    },
+    {
+      "stage": "full",
+      "command": [
+        "node",
+        "scripts/verify-jest-budget.mjs",
+        "--output-dir",
+        "/root/codex-jobs/20261016-architecture/full"
+      ],
+      "exit": 1,
+      "seconds": 539.99
+    }
+  ],
+  "stagesFinal": [
+    {
+      "stage": "typecheck-test",
+      "command": [
+        "npm",
+        "run",
+        "typecheck:test"
+      ],
+      "exit": 0,
+      "seconds": 30.077
+    },
+    {
+      "stage": "architecture",
+      "command": [
+        "node",
+        "node_modules/jest/bin/jest.js",
+        "--config",
+        "jest.config.cjs",
+        "--runInBand",
+        "--runTestsByPath",
+        "test/taskSystemArchitectureBoundaries.test.ts",
+        "test/roleIdentityCatalogBoundaries.test.ts"
+      ],
+      "exit": 0,
+      "seconds": 13.119
+    },
+    {
+      "stage": "full",
+      "command": [
+        "node",
+        "scripts/verify-jest-budget.mjs",
+        "--output-dir",
+        "/root/codex-jobs/20261016-architecture/full-corrected"
+      ],
+      "exit": 0,
+      "seconds": 527.815
+    }
+  ],
+  "artifact": {
+    "result": {
+      "mainBytes": 3430901,
+      "mapBytes": 1147740,
+      "totalBytes": 4578641,
+      "indexEntries": 364894,
+      "blocks": 357,
+      "oracleChecks": 64,
+      "mainSyntaxValid": true,
+      "firstMappingMilliseconds": 4.931622999999945,
+      "cachedMappingMilliseconds": 0.01396100000010847,
+      "mappedLog": "<text style=\"color:#ef9a9a\">[artifact] Error: artifact smoke\n    at phase (../src/main.ts:67:9)</text>"
+    },
+    "files": {
+      "main.js": {
+        "bytes": 3430901,
+        "sha256": "9ecc93763126540ac731b5461d5f5d64020ae65bc5bc558a4f8c91ae30145f8d"
+      },
+      "main.js.map.js": {
+        "bytes": 1147740,
+        "sha256": "9c6e62d6e6b44e08fd846c213a666c32a070b085fb5c4fdf6b0cea43382ed1ea"
+      }
+    },
+    "correctedTarget": {
+      "exit": 0,
+      "repo": "/root/codex-jobs/20261016-architecture/repo",
+      "reason": "修正临时检查脚本的上轮绝对路径；本次实际产物重新校验"
+    },
+    "initialMisroutedResultExcluded": true,
+    "productionIdentity": false
+  },
+  "lineCounts": {
+    "marketSaleAutomation": 4748,
+    "marketSaleOperators": 4977,
+    "marketSaleDataState": 999,
+    "marketSaleReconciliation": 762,
+    "marketBaseResourceActivation": 1037,
+    "marketBaseResourceAutomation": 5021,
+    "marketBaseResourcePlanning": 2593,
+    "marketBaseResourceReadiness": 2668,
+    "resourceControl": 3838,
+    "resourceControlReadModel": 1981,
+    "resourceTerminalLogistics": 2485,
+    "resourceMarketOperations": 765,
+    "synthesisReadModel": 207,
+    "treasuryTerminalControlReadModel": 12,
+    "treasuryContinuousOHReadModel": 60
+  },
+  "notes": [
+    "首轮全量 259 套件通过、3 套件失败；保留全部架构正向控制后修正 JS 解析与依赖物理路径并完整重跑。",
+    "构建后的源码改动仅为 test/taskSystemArchitectureBoundaries.test.ts 的 oracle；生产代码未再修改。",
+    "离线构建不具有生产发布身份；线上仍单独记录 45571702 的发布。"
+  ],
+  "evidence": {
+    "archive": "final-evidence.tar.gz",
+    "sha256": "5cc2be05bb07f106f5bee139c29c99163478d2e6428258dad6f5b5e27bf336a8"
+  }
+}

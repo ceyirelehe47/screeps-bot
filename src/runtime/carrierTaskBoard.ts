@@ -138,7 +138,7 @@ function readRoomStructureFingerprint(
 function isRoomOrderCacheEntryUsable(
   cached: RoomOrderCacheEntry | undefined,
   roomStore: CarrierTaskRoomStore,
-): boolean {
+): cached is RoomOrderCacheEntry {
   if (!cached) return false;
   if (cached.revision !== ownDataProperty(roomStore, "revision")) return false;
   const fingerprint = readRoomStructureFingerprint(roomStore);

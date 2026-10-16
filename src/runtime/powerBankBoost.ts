@@ -210,7 +210,7 @@ function selectAvailableLabs(
     if (reservedLabIds.has(lab.id)) return false;
     const mineralType = lab.mineralType as ResourceConstant | undefined;
     if (!mineralType) return true;
-    if (lab.store.getUsedCapacity(mineralType) <= 0) return true;
+    if ((lab.store.getUsedCapacity(mineralType) ?? 0) <= 0) return true;
     return false;
   });
   const pool = preferred.length >= compounds.length ? preferred : labs.filter((lab) => !reservedLabIds.has(lab.id));
@@ -275,7 +275,7 @@ export function prepareBoosts(
     const needed = requiredAmounts.get(compound) ?? LAB_BOOST_MINERAL;
     const loadedMineral = lab.mineralType as ResourceConstant | undefined;
     if (loadedMineral && loadedMineral !== compound) {
-      const loadedAmount = lab.store.getUsedCapacity(loadedMineral);
+      const loadedAmount = (lab.store.getUsedCapacity(loadedMineral) ?? 0);
       const target = resolveBoostCleanupTarget(room, loadedMineral);
       const targetFree = Math.max(target?.store.getFreeCapacity(loadedMineral) ?? 0, target?.store.getFreeCapacity() ?? 0);
       const cleanupAmount = Math.min(loadedAmount, targetFree);
@@ -300,7 +300,7 @@ export function prepareBoosts(
       continue;
     }
 
-    const labHas = lab.store.getUsedCapacity(compound);
+    const labHas = (lab.store.getUsedCapacity(compound) ?? 0);
     const localStock = getLocalStock(room, compound);
 
     const deficit = Math.max(0, needed - labHas);
@@ -443,7 +443,7 @@ export function checkBoostReadiness(
     const lab = Game.getObjectById(assignment.labId as Id<StructureLab>);
     if (!lab) return false;
 
-    const labAmount = lab.store.getUsedCapacity(compound);
+    const labAmount = (lab.store.getUsedCapacity(compound) ?? 0);
     const requiredAmount = requiredAmounts?.get(compound) ?? LAB_BOOST_MINERAL;
     if (labAmount < requiredAmount) return false;
     if (options.requireLabEnergy) {

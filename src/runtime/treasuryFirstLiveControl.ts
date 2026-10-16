@@ -1,12 +1,20 @@
+import { AUTHORITY_EXECUTOR_SHARD } from "@/config/deployment";
 import { BUILD_INFO } from "@/buildMeta";
 import { createTreasuryFirstLiveState, runtime, finiteNonNegative, treasuryT1SerializedBytes,
   type Control, type Payload } from "@/runtime/treasuryFirstLiveState";
-import { TREASURY_TERMINAL_LANES, treasuryLaneTaskMatches, type TreasuryTerminalLane } from "@/runtime/treasuryTerminalLane";
+import {
+  TREASURY_TERMINAL_LANES,
+  treasuryLaneTaskMatches,
+  type TreasuryTerminalLane,
+} from "@/runtime/treasuryTerminalLane";
 import { readTreasuryLaneResponsibility } from "@/runtime/treasuryTerminalResponsibility";
-import { inspectTreasuryResourceTransferReadiness, inspectTreasuryResourceTransferPreparation } from "@/runtime/resourceControl";
+import {
+  inspectTreasuryResourceTransferReadiness,
+  inspectTreasuryResourceTransferPreparation,
+} from "@/runtime/resourceControlReadModel";
 import type { ResourceTransferTask } from "@/runtime/logistics/resourceTransferTasks";
 import { resolveTreasuryTerminalSliceAmount } from "@/runtime/treasuryTerminalAmount";
-import { readTreasuryTerminalControl } from "@/runtime/treasuryTerminalControl";
+import { readTreasuryTerminalControl } from "@/runtime/treasuryTerminalControlReadModel";
 import {
   hasTerminalActionClaim,
   hasTerminalSendEffectThisTick,
@@ -87,7 +95,7 @@ function endpointAlreadyTouchedThisTick(): boolean {
 
 function deploymentMatches(): boolean {
   const state = runtime();
-  return Game.shard?.name === "shard1" && !BUILD_INFO.dirty &&
+  return Game.shard?.name === AUTHORITY_EXECUTOR_SHARD && !BUILD_INFO.dirty &&
     BUILD_INFO.bundleHash !== "none" &&
     state?.lastDeployTag === BUILD_INFO.tag &&
     state?.lastDeployBundleHash === BUILD_INFO.bundleHash;

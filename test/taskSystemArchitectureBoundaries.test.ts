@@ -294,7 +294,12 @@ function moduleReferences(sourceFile: ts.SourceFile): ModuleReference[] {
   return references;
 }
 
-function resolveModule(sourceFile: ts.SourceFile, specifier: string): string | undefined {
+function resolveModule(sourceFile: ts.SourceFile, specifier: string, runtime = false): string | undefined {
+  // TS 优先选择同名 .d.ts；运行时图仍必须跟踪 Rollup 实际加载的 JS。
+  if (runtime && specifier.startsWith(".") && isProductionJavaScriptFileName(specifier)) {
+    const javascript = resolve(dirname(sourceFile.fileName), specifier);
+    if (ts.sys.fileExists(javascript)) return repositoryPath(javascript);
+  }
   const resolved = ts.resolveModuleName(
     specifier,
     sourceFile.fileName,
@@ -311,7 +316,7 @@ interface ResolvedModuleReference extends ModuleReference {
 function resolvedModuleReferences(sourceFile: ts.SourceFile): ResolvedModuleReference[] {
   return moduleReferences(sourceFile).map((reference) => ({
     ...reference,
-    target: resolveModule(sourceFile, reference.specifier),
+    target: resolveModule(sourceFile, reference.specifier, reference.runtime),
   }));
 }
 
@@ -527,6 +532,15 @@ describe("unified task system architecture boundaries", () => {
       "lodash",
       "./MinCut",
     ]);
+    expect(resolvedModuleReferences(productionSourceFile("src/modules/autoplanner/index.ts"))).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          specifier: "./planner.js",
+          runtime: true,
+          target: "src/modules/autoplanner/planner.js",
+        }),
+      ]),
+    );
   });
 
   test("production modules outside taskSystem cannot import, re-export, or require projection internals", () => {

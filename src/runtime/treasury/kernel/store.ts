@@ -462,6 +462,7 @@ function validateSafetyCore(root: Record<string, unknown>): string | null {
 function validateRingLayer(root: Record<string, unknown>): string | null {
   if (!Array.isArray(root.ring)) return "ring 非数组";
   if (root.ring.length > TREASURY_CORE_RING_LIMIT) return `ring 超限（${String(root.ring.length)} > ${String(TREASURY_CORE_RING_LIMIT)}）`;
+  if (!isPlainObject(root.active)) return "active 非法";
   const seen = new Set<string>();
   for (const entry of root.ring) {
     const problem = validateRingEntry(entry);

@@ -1,5 +1,16 @@
-import { predictPowerBankRecovery, predictPowerBankFinishTicks, powerBankAttackSustainable } from "@/runtime/powerBankCapability";
-import { POWER_BANK_STATUS, POWER_BANK_BODY_TIERS, POWER_BANK_BOOST_REQUIREMENTS, POWER_BANK_MAX_ROUTE_ROOMS, getPowerBankConfigName, isPowerBankSearchRoom } from "@/runtime/powerBankConstants";
+import {
+  predictPowerBankRecovery,
+  predictPowerBankFinishTicks,
+  powerBankAttackSustainable,
+} from "@/runtime/powerBankCapability";
+import {
+  POWER_BANK_STATUS,
+  POWER_BANK_BODY_TIERS,
+  POWER_BANK_BOOST_REQUIREMENTS,
+  POWER_BANK_MAX_ROUTE_ROOMS,
+  getPowerBankConfigName,
+  isPowerBankSearchRoom,
+} from "@/runtime/powerBankConstants";
 import {
   ATTACK_POWER,
   POWER_BANK_ROOM_TRAVEL_TICKS,
@@ -17,7 +28,11 @@ import {
   getPowerBankBoostPrep,
 } from "@/runtime/powerBankBoostMemory";
 import { cleanupStaleDiscoveries, ensureDiscoveryStore } from "@/runtime/powerBankDiscovery";
-import { getPowerBankRoomThreat, hasPowerBankObserverCoverage, requestPowerBankObservation } from "@/runtime/powerBankObserver";
+import {
+  getPowerBankRoomThreat,
+  hasPowerBankObserverCoverage,
+  requestPowerBankObservation,
+} from "@/runtime/powerBankObserver";
 import { canMeasurePowerBankTravelThisTick, measurePowerBankTravel } from "@/runtime/powerBankPathDistance";
 import { getPowerBankSearchRooms } from "@/runtime/powerBankSearch";
 import { isDefenseMode } from "@/runtime/defenseMode";
@@ -479,7 +494,7 @@ function getLocalCompoundStockImpl(
   if (room.terminal) total += room.terminal.store.getUsedCapacity(resource);
   const reservedLabIds = measureSampledCpuPhase("resources.reservedLabs", () => getActivePowerBankBoostLabIds(room.name, ownerId));
   for (const lab of measureSampledCpuPhase("context.labs", () => getTickContextService().getRoomContext(room)!.getLabs())) {
-    if (!reservedLabIds.has(lab.id)) total += lab.store.getUsedCapacity(resource);
+    if (!reservedLabIds.has(lab.id)) total += (lab.store.getUsedCapacity(resource) ?? 0);
   }
   return total;
 }
@@ -536,7 +551,7 @@ function hasCompoundSupplyImpl(
   return measureSampledCpuPhase("resources.donor", () => findBestDonorRoom(resource, deficit, [room.name])) !== null;
 }
 
-function getStructurePowerHeadroom(structure: StructureStorage | StructureTerminal | null): number {
+function getStructurePowerHeadroom(structure: StructureStorage | StructureTerminal | null | undefined): number {
   if (!structure) return 0;
   return Math.max(
     structure.store.getFreeCapacity(RESOURCE_POWER) ?? 0,

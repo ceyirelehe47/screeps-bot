@@ -1,3 +1,4 @@
+import { AUTHORITY_EXECUTOR_SHARD } from "@/config/deployment";
 /**
  * 基础矿物 Direct V3 permit chain。
  *
@@ -815,7 +816,7 @@ export interface MarketBaseResourcePermit {
   readonly selfHash: string;
   readonly permitHead: string;
   readonly accountIdentity: string;
-  readonly executorShard: "shard1";
+  readonly executorShard: typeof AUTHORITY_EXECUTOR_SHARD;
   readonly sharedPolicy: MarketBaseSharedPolicy;
   readonly resourcePolicies: readonly MarketBaseResourcePolicy[];
   readonly ratchetHighWater: readonly MarketBaseResourceRatchetHighWater[];
@@ -1228,7 +1229,7 @@ function mintMarketBaseResourcePermit(
     hashRevision: MARKET_BASE_RESOURCE_PERMIT_HASH_REVISION,
     epoch: input.epoch,
     accountIdentity: input.accountIdentity,
-    executorShard: "shard1",
+    executorShard: AUTHORITY_EXECUTOR_SHARD,
     sharedPolicy: clone(input.sharedPolicy),
     resourcePolicies,
     ratchetHighWater,
@@ -1878,7 +1879,7 @@ function validV3PermitSelfIdentity(permit: MarketBaseResourcePermit): boolean {
     permit.schemaVersion !== 3 ||
     permit.capability !== MARKET_BASE_RESOURCE_PERMIT_CAPABILITY ||
     permit.hashRevision !== MARKET_BASE_RESOURCE_PERMIT_HASH_REVISION ||
-    permit.executorShard !== "shard1"
+    permit.executorShard !== AUTHORITY_EXECUTOR_SHARD
   ) {
     return false;
   }
@@ -2232,7 +2233,7 @@ function currentPermitRuntimeAuthorityCommitment(
       permit.schemaVersion !== 3 ||
       permit.capability !== MARKET_BASE_RESOURCE_PERMIT_CAPABILITY ||
       permit.hashRevision !== MARKET_BASE_RESOURCE_PERMIT_HASH_REVISION ||
-      permit.executorShard !== "shard1" ||
+      permit.executorShard !== AUTHORITY_EXECUTOR_SHARD ||
       !isPositiveSafeInteger(permit.epoch) ||
       !isSafeTick(permit.createdAt) ||
       typeof permit.accountIdentity !== "string" ||
@@ -3435,7 +3436,7 @@ export function appendMarketBaseResourcePermit(
     };
   }
   if (
-    input.currentShard !== "shard1" ||
+    input.currentShard !== AUTHORITY_EXECUTOR_SHARD ||
     permit.executorShard !== input.currentShard ||
     permit.epoch !== state.permitEpochHighWater + 1 ||
     permit.previousPermitId !== state.currentPermitId ||
@@ -3681,7 +3682,7 @@ function marketBaseResourcePermitAllowsNewDealCore(
   skipFullValidation: boolean,
 ): boolean {
   if (
-    input.shard !== "shard1" ||
+    input.shard !== AUTHORITY_EXECUTOR_SHARD ||
     (skipFullValidation
       ? !(
           state.v2EventCutoverCheckpoint &&
@@ -3887,7 +3888,7 @@ function buildMarketBaseResourceReadinessAuthorizationCore(
       !marketBaseResourcePermitAllowsNewDealCore(
         state,
         {
-          shard: "shard1",
+          shard: AUTHORITY_EXECUTOR_SHARD,
           lane,
         },
         skipFullValidation,

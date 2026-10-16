@@ -337,10 +337,10 @@ function shouldPreSpawnCarrier(spawn: StructureSpawn, configName: string, contex
 
   const threshold = getSpawnTime(spawn, configName, context) + CARRIER_PRESPAWN_BUFFER_TICKS;
   const soonestDying = creeps.reduce((minCreep, creep) =>
-    creep.ticksToLive < minCreep.ticksToLive ? creep : minCreep,
+    (creep.ticksToLive ?? Infinity) < (minCreep.ticksToLive ?? Infinity) ? creep : minCreep,
   );
 
-  return soonestDying.ticksToLive <= threshold;
+  return (soonestDying.ticksToLive ?? Infinity) <= threshold;
 }
 
 function shouldPreSpawnUpgrader(spawn: StructureSpawn, configName: string, context?: SpawnPlanningContext): boolean {
@@ -354,7 +354,7 @@ function shouldPreSpawnUpgrader(spawn: StructureSpawn, configName: string, conte
   }
 
   const threshold = getSpawnTime(spawn, configName, context) + UPGRADER_PRESPAWN_BUFFER_TICKS;
-  return creeps[0].ticksToLive <= threshold;
+  return (creeps[0].ticksToLive ?? Infinity) <= threshold;
 }
 
 function shouldPreSpawnSourceWorker(
@@ -383,10 +383,10 @@ function shouldPreSpawnSourceWorker(
     (config.role !== "colonizerHarvester" && !spawn.room.storage && isNewRoomMiningRecovery(spawn.room.name)
       ? LOCAL_SOURCE_RECOVERY_BUFFER_TICKS : 0);
   const soonestDying = creeps.reduce((minCreep, creep) =>
-    creep.ticksToLive < minCreep.ticksToLive ? creep : minCreep,
+    (creep.ticksToLive ?? Infinity) < (minCreep.ticksToLive ?? Infinity) ? creep : minCreep,
   );
 
-  return soonestDying.ticksToLive <= threshold;
+  return (soonestDying.ticksToLive ?? Infinity) <= threshold;
 }
 
 function shouldPreSpawnReserver(
@@ -405,10 +405,10 @@ function shouldPreSpawnReserver(
 
   const threshold = getSpawnTime(spawn, configName, context) + RESERVER_PRESPAWN_BUFFER_TICKS;
   const soonestDying = creeps.reduce((minCreep, creep) =>
-    creep.ticksToLive < minCreep.ticksToLive ? creep : minCreep,
+    (creep.ticksToLive ?? Infinity) < (minCreep.ticksToLive ?? Infinity) ? creep : minCreep,
   );
 
-  return soonestDying.ticksToLive <= threshold;
+  return (soonestDying.ticksToLive ?? Infinity) <= threshold;
 }
 
 const POWER_BANK_COMBAT_RETIRED_STATUSES: ReadonlySet<string> = new Set([

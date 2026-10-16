@@ -54,7 +54,7 @@ import {
   type HubRuntimeProtectionExtension,
 } from "@/runtime/hubProtectionSnapshot";
 
-export function getDefaultHubConfig(): NonNullable<Memory["cfg"]>["hub"] {
+export function getDefaultHubConfig(): NonNullable<NonNullable<Memory["cfg"]>["hub"]> {
   return {
     enabled: false,
     hubRoomName: "",
@@ -70,7 +70,7 @@ export function getDefaultHubConfig(): NonNullable<Memory["cfg"]>["hub"] {
   };
 }
 
-export function getDefaultHubRuntime(): NonNullable<Memory["runtime"]>["hub"] {
+export function getDefaultHubRuntime(): NonNullable<NonNullable<Memory["runtime"]>["hub"]> {
   return {
     status: "idle",
     updatedAt: 0,
@@ -93,7 +93,7 @@ const PRE_OH_DEFAULT_TARGET_COMPOUNDS = new Set(
   HUB_TARGET_COMPOUNDS.filter(resource => !isHubOnlyReserveCompound(resource)),
 );
 
-export function normalizeHubConfig(cfg: NonNullable<Memory["cfg"]>["hub"]): NonNullable<Memory["cfg"]>["hub"] {
+export function normalizeHubConfig(cfg: NonNullable<NonNullable<Memory["cfg"]>["hub"]>): NonNullable<NonNullable<Memory["cfg"]>["hub"]> {
   let migrated = { ...cfg };
 
   const compounds = cfg?.targetCompounds;
@@ -529,7 +529,7 @@ function isReagentInChain(product: string, resource: string): boolean {
     if (visited.has(current)) continue;
     visited.add(current);
 
-    const reagents = getProductReagentMap()[current];
+    const reagents = getProductReagentMap()[current as ResourceConstant];
     if (!reagents) continue;
 
     if (reagents[0] === resource || reagents[1] === resource) return true;
@@ -540,7 +540,7 @@ function isReagentInChain(product: string, resource: string): boolean {
 }
 
 export function planHubImports(
-  cfg: NonNullable<Memory["cfg"]>["hub"],
+  cfg: NonNullable<NonNullable<Memory["cfg"]>["hub"]>,
   transferAmounts: ResourceTransferTaskAmountIndex = createResourceTransferTaskAmountIndex(),
   hubInventory?: Record<string, number>,
 ): string[] {
@@ -666,7 +666,7 @@ export function planHubImports(
   return actions;
 }
 
-export function planHubDistribution(cfg: NonNullable<Memory["cfg"]>["hub"]): string[] {
+export function planHubDistribution(cfg: NonNullable<NonNullable<Memory["cfg"]>["hub"]>): string[] {
   if (!cfg?.hubRoomName) return [];
 
   const hubRoom = Game.rooms[cfg.hubRoomName];
@@ -894,7 +894,7 @@ export function clearHubSynthesisReactions(hubRoomName: string): void {
 }
 
 function computeTotalSatelliteDeficit(
-  cfg: NonNullable<Memory["cfg"]>["hub"],
+  cfg: NonNullable<NonNullable<Memory["cfg"]>["hub"]>,
   targetCompounds: ResourceConstant[],
   transferAmounts: ResourceTransferTaskAmountIndex,
 ): number {
@@ -1699,7 +1699,7 @@ function getHubPlannerOwnershipHighWater(hubRoomName?: string): number {
     const ownership = roomCfg.plannerOwnership;
     if (!isStructurallyValidHubPlannerOwnership(ownership)) continue;
     if (hubRoomName !== undefined && ownership.hubRoomName !== hubRoomName) continue;
-    highWater = Math.max(highWater, Math.floor(roomCfg.plannerOwnership.revision));
+    highWater = Math.max(highWater, Math.floor(ownership.revision));
   }
   return highWater;
 }
@@ -2403,7 +2403,7 @@ export function wireDistributedSynthesis(
   return true;
 }
 
-type HubRuntimeState = NonNullable<Memory["runtime"]>["hub"];
+type HubRuntimeState = NonNullable<NonNullable<Memory["runtime"]>["hub"]>;
 
 type HubPlanningAttemptResult =
   | {
@@ -2545,7 +2545,7 @@ export function runHubPlanner(): void {
   let failureReason = "hub_planning_incomplete";
 
   try {
-    const result = runHubPlanningAttempt(cfg, rt, attempt.attemptRevision);
+    const result = runHubPlanningAttempt({ ...cfg, hubRoomName: cfg.hubRoomName }, rt, attempt.attemptRevision);
     if ("reason" in result) {
       failureStatus = "blocked";
       failureReason = result.reason;
@@ -2598,7 +2598,7 @@ export function runHubPlanner(): void {
 }
 
 function blockHubPlanningAttempt(
-  cfg: NonNullable<Memory["cfg"]>["hub"],
+  cfg: NonNullable<NonNullable<Memory["cfg"]>["hub"]> & { hubRoomName: string },
   rt: HubRuntimeState,
   attemptRevision: number,
   reason: string,
@@ -2617,7 +2617,7 @@ function blockHubPlanningAttempt(
 }
 
 function runHubPlanningAttempt(
-  cfg: NonNullable<Memory["cfg"]>["hub"],
+  cfg: NonNullable<NonNullable<Memory["cfg"]>["hub"]> & { hubRoomName: string },
   rt: HubRuntimeState,
   attemptRevision: number,
 ): HubPlanningAttemptResult {

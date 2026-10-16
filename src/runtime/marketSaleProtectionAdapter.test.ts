@@ -1,4 +1,4 @@
-jest.mock("@/runtime/resourceControl", () => ({
+jest.mock("@/runtime/resourceControlReadModel", () => ({
   collectResourceControlSnapshots: jest.fn(),
 }));
 jest.mock("@/runtime/resourceControlRoomConfig", () => ({

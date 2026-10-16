@@ -66,6 +66,18 @@ describe("marketSaleDiagnostics", () => {
     expect(memory!.window.until).toBe(Game.time + 50);
   });
 
+  it("记录满额后仍保留回调返回值并传播异常", () => {
+    Memory.cfg = { marketSaleDiagnostics: { enabled: true } };
+    for (let index = 0; index < 48; index += 1) {
+      measureMarketSubPhase(`phase-${index}`, () => index);
+    }
+    expect(measureMarketSubPhase("overflow", () => 73)).toBe(73);
+    const failure = new Error("业务异常");
+    expect(() => measureMarketSubPhase("overflow-error", () => { throw failure; })).toThrow(failure);
+    flushMarketSaleDiagnostics();
+    expect(Object.keys(readMarketSaleDiagnosticsForTest()!.phases)).toHaveLength(48);
+  });
+
   it("marks planning ticks and counts them separately", () => {
     Memory.cfg = { marketSaleDiagnostics: { enabled: true } };
     markMarketSaleDiagnosticsPlanningTick();

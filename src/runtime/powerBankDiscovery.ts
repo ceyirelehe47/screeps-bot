@@ -3,7 +3,7 @@ import { updatePowerBankObservation } from "@/runtime/powerBankTaskState";
 
 export function ensureDiscoveryStore(): Record<string, PowerBankHarvestTask> {
   if (!Memory.data) {
-    (Memory as any).data = {};
+    Memory.data = {};
   }
   if (!Memory.data.powerBankHarvest) {
     Memory.data.powerBankHarvest = {};

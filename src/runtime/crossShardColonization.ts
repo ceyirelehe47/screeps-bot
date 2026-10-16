@@ -72,7 +72,7 @@ interface RemoteTargetState {
   hasSpawn: boolean;
 }
 
-type InterShardPortalEntry = NonNullable<Memory["data"]>["interShardPortals"] extends Record<string, infer T>
+type InterShardPortalEntry = NonNullable<NonNullable<Memory["data"]>["interShardPortals"]> extends Record<string, infer T>
   ? T
   : never;
 
@@ -369,13 +369,14 @@ function generateTravelerName(
   task: CrossShardColonizationTask,
   index: number,
 ): string {
+  if (!task.portalRoom) throw new Error("跨 shard 旅客缺少 portalRoom");
   const nonce = `${index.toString(36)}${Game.time.toString(36)}${Math.floor(Math.random() * 1296)
     .toString(36)
     .padStart(2, "0")}`;
   return encodeCrossShardTravelerName(kind, {
     targetShard: task.targetShard,
     targetRoom: task.targetRoom,
-    portalRoom: task.portalRoom || "W0N0",
+    portalRoom: task.portalRoom,
     destinationRoom: task.destinationRoom,
     nonce,
   });

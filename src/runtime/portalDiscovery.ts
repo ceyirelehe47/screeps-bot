@@ -8,7 +8,7 @@ interface InterShardDestination {
   room: string;
 }
 
-function ensurePortalStore(): NonNullable<Memory["data"]>["interShardPortals"] {
+function ensurePortalStore(): NonNullable<NonNullable<Memory["data"]>["interShardPortals"]> {
   const data = getMemoryService().ensureData();
   if (!data.interShardPortals) {
     data.interShardPortals = {};
@@ -22,7 +22,7 @@ function isInterShardDestination(
   return typeof (destination as InterShardDestination).shard === "string";
 }
 
-function updatePortalEntriesFromVisibleRooms(store: NonNullable<Memory["data"]>["interShardPortals"]): void {
+function updatePortalEntriesFromVisibleRooms(store: NonNullable<NonNullable<Memory["data"]>["interShardPortals"]>): void {
   const now = Game.time;
 
   for (const room of Object.values(Game.rooms)) {
@@ -50,7 +50,7 @@ function updatePortalEntriesFromVisibleRooms(store: NonNullable<Memory["data"]>[
   }
 }
 
-function cleanupStalePortalEntries(store: NonNullable<Memory["data"]>["interShardPortals"]): void {
+function cleanupStalePortalEntries(store: NonNullable<NonNullable<Memory["data"]>["interShardPortals"]>): void {
   const now = Game.time;
   for (const [portalId, entry] of Object.entries(store)) {
     const staleByTime = now - entry.lastSeenAt > PORTAL_STALE_TTL;

@@ -7,7 +7,7 @@ const NPC_USERS = new Set(["Invader", "TooAngel"]);
 export function isNpcWarTarget(room: Room): boolean {
   const owners = [room.controller?.owner?.username, room.controller?.reservation?.username,
     ...room.find(FIND_HOSTILE_CREEPS).map(actor => actor.owner.username),
-    ...room.find(FIND_HOSTILE_STRUCTURES).map(structure => "owner" in structure ? (structure as OwnedStructure).owner.username : undefined)].filter((name): name is string => !!name);
+    ...room.find(FIND_HOSTILE_STRUCTURES).map(structure => "owner" in structure ? (structure as OwnedStructure).owner?.username : undefined)].filter((name): name is string => !!name);
   return owners.length > 0 && owners.every(name => NPC_USERS.has(name));
 }
 

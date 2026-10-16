@@ -1,3 +1,4 @@
+import { readSpawnExitDirections } from "@/config/deployment";
 import { issueMove } from "@/movement/traffic";
 import { isSpawnActive } from "@/runtime/tickContext";
 import { getHarvesterBody, spawnProfiles } from "@/config/spawnProfiles";
@@ -64,12 +65,7 @@ function getCreepNamePrefix(role: RoleName): string {
 }
 
 function getSpawnExitDirections(spawn: StructureSpawn): DirectionConstant[] | undefined {
-  if (spawn.room.name === "E5N59" && spawn.name === "Spawn20") {
-    // Spawn20 的南侧出口通向永久封闭的双格空间，只允许从北侧落地。
-    return [TOP];
-  }
-
-  return undefined;
+  return readSpawnExitDirections(spawn.room.name, spawn.name);
 }
 
 const EXIT_DIRECTION_DELTAS: Readonly<Record<DirectionConstant, readonly [number, number]>> = {
@@ -112,8 +108,10 @@ function isClearExitTile(room: Room, x: number, y: number): boolean {
 }
 
 function getSpawnBirthPositions(spawn: StructureSpawn): RoomPosition[] {
-  const exits = getSpawnExitDirections(spawn);
-  if (!exits) {
+  // 配置更新只影响后续孵化；已在孵化的 creep 以引擎保存的出口为准。
+  const nativeExits = spawn.spawning?.directions;
+  const exits = Array.isArray(nativeExits) ? nativeExits : getSpawnExitDirections(spawn);
+  if (!exits || exits.length === 0) {
     // 无 directions 约束时新生儿由引擎放置在 spawn 相邻的可用格
     // （spawn 自身格不可落 creep），出生位集合取全部 8 邻格；挡位
     // creep 只会出现在可走格上，无需在此预过滤地形。
@@ -170,7 +168,7 @@ function directBlockingCreepsOffSpawn(spawn: StructureSpawn): void {
       const [dx, dy] = EXIT_DIRECTION_DELTAS[direction];
       const x = blocker.pos.x + dx;
       const y = blocker.pos.y + dy;
-      return !birthKeys.has(`${x}:${y}`) && isClearExitTile(blocker.room, x, y);
+      return !birthKeys.has(`${x}:${y}`) && isClearExitTile(spawn.room, x, y);
     });
     if (exit) {
       blocker.memory._spawnYield = { dir: exit, tick: Game.time };

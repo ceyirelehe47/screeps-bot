@@ -6,7 +6,7 @@ jest.mock("@/runtime/safeZone", () => ({
   getSafeZone: jest.fn(() => new Set<number>()),
 }));
 
-jest.mock("@/runtime/resourceControl", () => ({
+jest.mock("@/runtime/resourceControlReadModel", () => ({
   collectResourceControlSnapshots: jest.fn(() => []),
 }));
 

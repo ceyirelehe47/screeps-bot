@@ -1,16 +1,21 @@
 import { getTreasuryService } from "@/runtime/runtimeServices";
 import { ensureReservationSchemaActivated } from "@/runtime/resourceReservation";
 import type { TreasuryService } from "@/runtime/treasury/facade";
-import { createTreasuryTerminalControl, readTreasuryTerminalControl } from "@/runtime/treasuryTerminalControl";
-import { continuousSessionOwnsActivity } from "@/runtime/treasuryContinuousOHControl";
+import { readTreasuryTerminalControl } from "@/runtime/treasuryTerminalControlReadModel";
+import { createTreasuryTerminalControl } from "@/runtime/treasuryTerminalControl";
+import { continuousSessionOwnsActivity } from "@/runtime/treasuryContinuousOHReadModel";
 import { registerTreasuryPolicyResolver, type TreasuryPolicyResolver } from "@/runtime/treasury/policyAuthority";
 import { createTreasuryTerminalTransferLane } from "@/runtime/treasuryTerminalTransferLane";
-import { TREASURY_TERMINAL_LANES, treasuryLaneTaskMatches, type TreasuryTerminalLane } from "@/runtime/treasuryTerminalLane";
+import {
+  TREASURY_TERMINAL_LANES,
+  treasuryLaneTaskMatches,
+  type TreasuryTerminalLane,
+} from "@/runtime/treasuryTerminalLane";
 import { readTreasuryLaneQuota } from "@/runtime/treasuryTerminalResponsibility";
 import type { ResourceTransferTask } from "@/runtime/logistics/resourceTransferTasks";
 import type { ReceiverCapacityLedger } from "@/runtime/logistics/receiverCapacityLedger";
 export { TREASURY_T1_SOURCE_ROOM, TREASURY_T1_TARGET_ROOM } from "@/runtime/treasuryT1Facts";
-const productionPolicy: TreasuryPolicyResolver = Object.freeze({
+const productionPolicy = Object.freeze<TreasuryPolicyResolver>({
   policyId: "treasury.production-terminal-slices-T1-T2-T3-T4", policyVersion: 4,
   evaluate(context) {
     const lane = TREASURY_TERMINAL_LANES.find((entry) => entry.actionKind === context.actionKind);
