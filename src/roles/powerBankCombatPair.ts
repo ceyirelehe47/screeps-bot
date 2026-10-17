@@ -302,7 +302,8 @@ function movePairFollowerToAttacker(pair: PowerBankPairContext): void {
   // 只退向更近的同房内格，不踏出口、不抢占第三方意图，也不覆盖其他系统的移动。
   const distance = pair.attacker.pos.getRangeTo(pair.healer);
   const destination = PAIR_DIRECTIONS.map(direction => getMoveIntentDestination(pair.attacker.pos, direction))
-    .filter((pos): pos is NonNullable<typeof pos> => !!pos && pos.roomName === pair.attacker.room.name && !isExitTile(pos) &&
+    .filter((pos): pos is NonNullable<typeof pos> => !!pos && pos.roomName === pair.attacker.room.name &&
+      pos.x > 0 && pos.x < 49 && pos.y > 0 && pos.y < 49 &&
       Math.max(Math.abs(pos.x - pair.healer.pos.x), Math.abs(pos.y - pair.healer.pos.y)) < distance && isPairTileOpen(pos, pair))
     .sort((a, b) => Math.max(Math.abs(a.x - pair.healer.pos.x), Math.abs(a.y - pair.healer.pos.y)) -
       Math.max(Math.abs(b.x - pair.healer.pos.x), Math.abs(b.y - pair.healer.pos.y)))[0];

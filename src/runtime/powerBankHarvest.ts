@@ -373,7 +373,7 @@ function cleanupTaskConfigs(task: PowerBankHarvestTask): void {
 
 function neutralizeTaskCreeps(task: PowerBankHarvestTask): void {
   const retireCombat = (creep: Creep): void => {
-    if (task.sourceRoom && ["powerBankAttacker", "powerBankHealer"].includes(creep.memory.role)) {
+    if (task.sourceRoom && (creep.memory.role === "powerBankAttacker" || creep.memory.role === "powerBankHealer")) {
       creep.memory._recycleToRoom = task.sourceRoom;
       clearMovementState(creep);
     }
