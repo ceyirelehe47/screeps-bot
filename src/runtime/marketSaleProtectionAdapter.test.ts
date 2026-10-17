@@ -129,6 +129,12 @@ function mockFloors(
   );
 }
 
+function catalystConfig(): MarketSaleAutomationConfig {
+  const resolved = config({ X: 0 });
+  resolved.sellResources = [RESOURCE_CATALYST];
+  return resolved;
+}
+
 function commitCurrentHubProtection(
   planMode: "distributed" | "fallback" | "blocked" = "distributed",
 ): void {
@@ -187,7 +193,7 @@ describe("collectLiveMarketSaleProtectionLedger", () => {
 
   it("PB 未准入发现目录不阻塞原矿出售，已分配 Boost 仍完整保护", () => {
     Game.rooms[ROOM] = createRoom(ROOM, { X: 30_000 }, { X: 1_000 });
-    mockFloors({ [ROOM]: {} });
+    mockFloors({ [ROOM]: { X: 0 } });
     Memory.data!.powerBankHarvest = {
       discovery: { id: "discovery", status: "discovered", sourceRoom: "", targetRoom: "W0N1" } as PowerBankHarvestTask,
     };
@@ -195,7 +201,7 @@ describe("collectLiveMarketSaleProtectionLedger", () => {
       existing: { taskId: "existing", sourceRoomName: ROOM,
         labs: { tough: { labId: "boost-lab", compound: RESOURCE_CATALYZED_GHODIUM_ALKALIDE } } },
     };
-    const ledger = collectLiveMarketSaleProtectionLedger(config({ X: 0 }), undefined, {
+    const ledger = collectLiveMarketSaleProtectionLedger(catalystConfig(), undefined, {
       candidates: [{ roomName: ROOM, resource: RESOURCE_CATALYST }],
     });
     const entry = ledger.entries[getMarketProtectionEntryKey(ROOM, RESOURCE_CATALYST)];
@@ -205,11 +211,11 @@ describe("collectLiveMarketSaleProtectionLedger", () => {
 
   it("PB 准入后的来源和 tier 立即进入原矿保护", () => {
     Game.rooms[ROOM] = createRoom(ROOM, { X: 30_000 }, { X: 1_000 });
-    mockFloors({ [ROOM]: {} });
+    mockFloors({ [ROOM]: { X: 0 } });
     Memory.data!.powerBankHarvest = {
       admitted: { id: "admitted", status: "preparing_boosts", sourceRoom: ROOM, targetRoom: "W0N1", tier: 8 } as PowerBankHarvestTask,
     };
-    const ledger = collectLiveMarketSaleProtectionLedger(config({ X: 0 }), undefined, {
+    const ledger = collectLiveMarketSaleProtectionLedger(catalystConfig(), undefined, {
       candidates: [{ roomName: ROOM, resource: RESOURCE_CATALYST }],
     });
     const entry = ledger.entries[getMarketProtectionEntryKey(ROOM, RESOURCE_CATALYST)];
@@ -224,9 +230,9 @@ describe("collectLiveMarketSaleProtectionLedger", () => {
     { status: "discovered", sourceRoom: "", targetRoom: "W0N1", tier: 8 },
   ])("PB 半填或损坏任务仍阻止出售：%p", partial => {
     Game.rooms[ROOM] = createRoom(ROOM, { X: 30_000 }, { X: 1_000 });
-    mockFloors({ [ROOM]: {} });
+    mockFloors({ [ROOM]: { X: 0 } });
     Memory.data!.powerBankHarvest = { invalid: { id: "invalid", ...partial } as PowerBankHarvestTask };
-    const ledger = collectLiveMarketSaleProtectionLedger(config({ X: 0 }), undefined, {
+    const ledger = collectLiveMarketSaleProtectionLedger(catalystConfig(), undefined, {
       candidates: [{ roomName: ROOM, resource: RESOURCE_CATALYST }],
     });
     expect(ledger.entries[getMarketProtectionEntryKey(ROOM, RESOURCE_CATALYST)].issues)

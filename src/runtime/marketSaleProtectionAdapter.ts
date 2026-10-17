@@ -29,7 +29,7 @@ import { getProductReagents } from "@/runtime/reactionMap";
 import {
   resolveRoomConfig,
 } from "@/runtime/resourceControlRoomConfig";
-import { POWER_BANK_BOOST_REQUIREMENTS } from "@/runtime/powerBankConstants";
+import { POWER_BANK_BOOST_REQUIREMENTS, isPowerBankSearchRoom } from "@/runtime/powerBankConstants";
 import {
   readFreshCommittedHubProtectionSnapshot,
 } from "@/runtime/hubProtectionSnapshot";
@@ -1406,7 +1406,7 @@ function appendPowerBankHarvestDemand(
     if (
       task.status === "discovered" &&
       typeof task.id === "string" && task.id.length > 0 &&
-      validRoomName(task.targetRoom) &&
+      typeof task.targetRoom === "string" && isPowerBankSearchRoom(task.targetRoom) &&
       task.sourceRoom === "" && task.tier === undefined
     ) continue;
     if (
