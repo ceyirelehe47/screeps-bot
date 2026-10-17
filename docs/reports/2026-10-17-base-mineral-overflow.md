@@ -24,6 +24,6 @@
 
 2026.10.17-6 单独调整签名 policy：默认安全缓冲改为 inventoryReferenceAmount × 2，H/X 为 16000，其余基础矿物为 10000；实际生产需求仍由账本每次动态叠加。当前没有可靠的逐矿物实际消耗率历史，因此使用设计规定的默认缓冲，不把库存净变动误当作生产消耗率。
 
-迁移白名单只接受明确旧 revision 与 laneReserve=100000，并逐字段核对其余策略；保留 lane 身份、continuous/review 证据、WAL receipt head 与额度历史。部署后顺序为更新 canonical cfg（r8 与新 forecastBuffer）、提出策略迁移、签收同一提案，再核对原 continuous lane 仍可写。失败时恢复发布前配置及完整模块，禁止直接清空许可链。
+迁移白名单只接受明确旧 revision 与 laneReserve=100000，并逐字段核对其余策略；保留 lane 身份、continuous/review 证据、WAL receipt head 与额度历史。部署后顺序为更新 canonical cfg（r8 与新 forecastBuffer）、提出策略迁移、签收同一提案，再核对原 continuous lane 仍可写。失败时恢复发布前配置及完整模块，禁止直接清空许可链或倒退 WAL。若新许可已经签收，回滚旧代码后市场保守停卖，保留最新许可与成交历史供修复版恢复；不能用发布前 Memory 覆盖已经发生的成交。
 
 所有测试、构建和完整回归在服务器隔离目录执行。最终发布由干净 main 提交构建，并核对 origin/main、完整模块读回、实际 shard1 执行身份和有界健康窗口。
