@@ -1,3 +1,5 @@
+import { utf8ByteLength } from "@/util/utf8";
+
 export interface MemoryAuditBranch {
   path: string;
   bytes: number;
@@ -7,6 +9,8 @@ export interface MemoryAuditSnapshot {
   totalBytes: number;
   branches: MemoryAuditBranch[];
   top: MemoryAuditBranch[];
+  persistedBytes?: number;
+  creepFields?: MemoryAuditBranch[];
 }
 
 export interface MemoryAuditOptions {
@@ -23,7 +27,8 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 
 function measureBytes(value: unknown): number {
   try {
-    return JSON.stringify(value)?.length ?? 0;
+    const json = JSON.stringify(value);
+    return json === undefined ? 0 : utf8ByteLength(json);
   } catch {
     return 0;
   }
@@ -70,8 +75,8 @@ function collectBranches(
 }
 
 export function buildMemoryAuditSnapshot(memory: unknown, options?: MemoryAuditOptions): MemoryAuditSnapshot {
-  const maxDepth = options?.maxDepth ?? DEFAULT_MAX_DEPTH;
-  const topN = options?.topN ?? DEFAULT_TOP_N;
+  const maxDepth = Math.max(1, Math.min(6, Math.floor(options?.maxDepth ?? DEFAULT_MAX_DEPTH) || DEFAULT_MAX_DEPTH));
+  const topN = Math.max(1, Math.min(100, Math.floor(options?.topN ?? DEFAULT_TOP_N) || DEFAULT_TOP_N));
 
   if (memory == null || typeof memory !== "object") {
     return { totalBytes: 0, branches: [], top: [] };
@@ -87,4 +92,15 @@ export function buildMemoryAuditSnapshot(memory: unknown, options?: MemoryAuditO
   const top = branches.slice(0, topN);
 
   return { totalBytes, branches, top };
+}
+
+/** 按字段汇总 creep 内存；仅由显式只读 console 查询调用。 */
+export function measureCreepMemoryFields(creeps: Memory["creeps"]): MemoryAuditBranch[] {
+  const fields = new Map<string, number>();
+  for (const creep of Object.values(creeps ?? {})) {
+    for (const [key, value] of Object.entries(creep)) {
+      fields.set(key, (fields.get(key) ?? 0) + measureBytes({ [key]: value }) - 2);
+    }
+  }
+  return [...fields].map(([path, bytes]) => ({ path, bytes })).sort((a, b) => b.bytes - a.bytes);
 }

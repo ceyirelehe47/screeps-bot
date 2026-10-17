@@ -133,6 +133,18 @@ describe("runMemoryCleanup", () => {
     Memory.data = undefined;
   });
 
+  it("清理旧 moduleCpu 和非自有房防御投影，保留当前 CPU 健康与自有房快照", () => {
+    Memory.analytics = { moduleCpu: { old: true }, cpuMonitor: { health: { lastCompletedAt: 16 } } } as unknown as ScreepsMemoryAnalytics;
+    const owned = { updatedAt: 16, structureHits: {} } as unknown as NonNullable<RoomMemory["coreDefenseSnapshot"]>;
+    Memory.rooms = { W1N1: { coreDefenseSnapshot: owned }, W9N9: { coreDefenseSnapshot: owned }, W8N8: { coreDefenseSnapshot: owned, workerConstructionTier: 1 } } as Memory["rooms"];
+    runMemoryCleanup();
+    expect(Memory.analytics).not.toHaveProperty("moduleCpu");
+    expect(Memory.analytics.cpuMonitor?.health?.lastCompletedAt).toBe(16);
+    expect(Memory.rooms.W1N1.coreDefenseSnapshot).toBe(owned);
+    expect(Memory.rooms.W9N9).toBeUndefined();
+    expect(Memory.rooms.W8N8).toBeUndefined();
+  });
+
   it("does not prune link-network cache outside the 17-tick cadence", () => {
     Game.time = 18;
     Memory.runtime = {

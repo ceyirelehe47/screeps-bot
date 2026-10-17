@@ -1,3 +1,4 @@
+import { utf8ByteLength } from "@/util/utf8";
 import {
   cpuMonitorCommand,
   cpuMonitorRaw,
@@ -75,7 +76,7 @@ import {
 } from "@/runtime/console/remoteDefenseCommands";
 import { clearHubSynthesisReactions } from "@/runtime/hubPlanner";
 import { collectHubProgressSnapshot } from "@/runtime/hubProgress";
-import { buildMemoryAuditSnapshot, MemoryAuditSnapshot } from "@/runtime/memoryAudit";
+import { buildMemoryAuditSnapshot, measureCreepMemoryFields, MemoryAuditSnapshot } from "@/runtime/memoryAudit";
 import { powerBankStatusCommand, powerBankStatusRaw } from "@/runtime/powerBankStatus";
 import {
   armTreasuryT1FirstLive,
@@ -169,7 +170,11 @@ export function hubProgressCommand(): string {
 }
 
 export function memoryAuditRaw(): MemoryAuditSnapshot {
-  return buildMemoryAuditSnapshot(Memory);
+  return {
+    ...buildMemoryAuditSnapshot(Memory, { maxDepth: 2 }),
+    persistedBytes: utf8ByteLength(RawMemory.get()),
+    creepFields: measureCreepMemoryFields(Memory.creeps),
+  };
 }
 
 export function memoryAudit(): string {

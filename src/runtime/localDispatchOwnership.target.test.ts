@@ -14,7 +14,7 @@ import {
   clearCarrierTaskBoardForTest,
   claimCarrierTaskStepAmount,
   listCarrierTasksByRoom,
-  peekCarrierTaskBoard,
+  listCarrierDispatchEntriesByRoom,
   replaceCarrierTasksForProducerRoom,
   type CarrierTaskDraft,
 } from "@/runtime/carrierTaskBoard";
@@ -32,7 +32,6 @@ import {
   createCarrierDispatchRef,
   encodeCarrierDispatchStepKey,
 } from "@/runtime/dispatchOwnership/ref";
-import carrierLogisticsAdapter from "@/runtime/taskSystem/adapters/carrierLogistics";
 import { collectLiveMarketSaleProtectionLedger } from "@/runtime/marketSaleProtectionAdapter";
 import { getMarketProtectionEntryKey } from "@/runtime/marketSaleProtection";
 import { resolveMarketSaleAutomationConfig } from "@/runtime/marketSaleConfig";
@@ -222,7 +221,7 @@ describe("local dispatch full-ref target behavior", () => {
     });
   });
 
-  test("Carrier refs isolate board, amount, projection, and downstream protection by producer", () => {
+  test("Carrier refs isolate board, amount, read entries, and downstream protection by producer", () => {
     replaceCarrierTasksForProducerRoom(
       "producer:a",
       "W1N1",
@@ -272,11 +271,8 @@ describe("local dispatch full-ref target behavior", () => {
       [carrierDraft(500)],
     );
 
-    const projection = carrierLogisticsAdapter.snapshot({
-      board: peekCarrierTaskBoard(),
-    });
-
-    expect(projection.entries.map((entry) => entry.ref)).toEqual([
+    const entries = listCarrierDispatchEntriesByRoom("W1N1");
+    expect(entries.map(entry => entry.ref)).toEqual([
       {
         system: "carrier-logistics",
         namespace: "producer:a",
@@ -290,9 +286,6 @@ describe("local dispatch full-ref target behavior", () => {
         localId: "shared-local-id",
       },
     ]);
-    expect(projection.issues).not.toContainEqual(expect.objectContaining({
-      code: "carrier-task-id-collision-risk",
-    }));
 
     resetFixtures();
 

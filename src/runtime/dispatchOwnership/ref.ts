@@ -1,4 +1,10 @@
-import type { WorkRef } from "@/runtime/taskSystem/model";
+/** 本地派发引用只支持当前正在使用的两种系统和房间作用域。 */
+interface WorkRef {
+  readonly system: "worker-work" | "carrier-logistics";
+  readonly namespace: string;
+  readonly scope: { readonly kind: "room"; readonly roomName: string };
+  readonly localId: string;
+}
 
 export type WorkerDispatchRef = WorkRef & {
   readonly system: "worker-work";
@@ -176,15 +182,6 @@ function compareText(left: string, right: string): number {
   if (left < right) return -1;
   if (left > right) return 1;
   return 0;
-}
-
-/** Orders validated refs by structured fields without parsing any identity string. */
-export function compareDispatchRefs(left: DispatchRef, right: DispatchRef): number {
-  return compareText(left.system, right.system)
-    || compareText(left.namespace, right.namespace)
-    || compareText(left.scope.kind, right.scope.kind)
-    || compareText(left.scope.roomName, right.scope.roomName)
-    || compareText(left.localId, right.localId);
 }
 
 /**

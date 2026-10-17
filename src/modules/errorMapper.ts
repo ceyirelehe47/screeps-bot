@@ -1,5 +1,4 @@
-import { SourceMapConsumer } from "source-map";
-import { unzlibSync, strFromU8 } from "fflate";
+import { unzlibSync } from "fflate";
 
 function decodeBase64(value: string): Uint8Array {
   const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -97,12 +96,8 @@ function getConsumer(): StackMapConsumer | null {
   if (consumer === null) {
     try {
       const loaded = require("main.js.map");
-      if (loaded.encoding === "positions-zlib-blocks-v1") consumer = indexedConsumer(loaded);
-      else {
-        const map = loaded.encoding === "zlib-base64-v1"
-          ? JSON.parse(strFromU8(unzlibSync(decodeBase64(loaded.data)))) : loaded;
-        consumer = new SourceMapConsumer(map);
-      }
+      if (loaded.encoding !== "positions-zlib-blocks-v1") throw new Error("不支持的 source map 编码");
+      consumer = indexedConsumer(loaded);
     } catch {
       sourceMapDisabled = true;
       return null;

@@ -786,7 +786,3 @@ export function getAssignedWorkerTaskId(creepName: string): string | undefined {
   const taskId = ownDataValue<unknown>(getCreepAssignmentState(creepName), "taskId");
   return typeof taskId === "string" ? taskId : undefined;
 }
-
-export function getAssignedWorkerTaskRef(creepName: string): WorkerDispatchRef | undefined {
-  return readWorkerDispatchBinding(creepName);
-}

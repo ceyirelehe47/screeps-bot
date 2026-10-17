@@ -1,34 +1,21 @@
-import { TASK_SYSTEM_CATALOG } from "@/runtime/taskSystem/catalog";
-import type { WorkRef } from "@/runtime/taskSystem/model";
 import {
   createCarrierDispatchRef,
   createWorkerDispatchRef,
   isValidDispatchRoomName,
 } from "@/runtime/dispatchOwnership/ref";
 
-const workerAssignableToWorkRef: WorkRef = createWorkerDispatchRef("W1N1", "build:1")!;
-const carrierAssignableToWorkRef: WorkRef = createCarrierDispatchRef(
-  "resourceControl",
-  "W1N1",
-  "transfer:1",
-)!;
-void workerAssignableToWorkRef;
-void carrierAssignableToWorkRef;
-
-
 describe("local dispatch structured refs", () => {
-  test("uses the catalog-canonical system and namespace literals", () => {
+  test("保留本地派发系统和 namespace 字面量", () => {
     const worker = createWorkerDispatchRef("W1N1", "build:1");
     const carrier = createCarrierDispatchRef("producer:a", "W1N1", "haul:1");
 
     expect(worker).toEqual({
       system: "worker-work",
-      namespace: TASK_SYSTEM_CATALOG["worker-work"].domainOwner,
+      namespace: "workerTaskPool",
       scope: { kind: "room", roomName: "W1N1" },
       localId: "build:1",
     });
     expect(carrier?.system).toBe("carrier-logistics");
-    expect(TASK_SYSTEM_CATALOG["carrier-logistics"].domainOwner).toBe("carrierTaskBoard");
   });
 
   test("accepts Screeps room names and rejects empty and prototype-like outer scopes", () => {

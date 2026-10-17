@@ -273,25 +273,6 @@ export function computeTimeToKill(
   return Math.ceil(bankHits / (dpsPerAttacker * activeAttackers));
 }
 
-export function computeTimeBudget(params: {
-  routeDistance: number;
-  spawnTime: number;
-  boostPrepTime: number;
-  renewalBuffer: number;
-  ttk: number;
-  haulTime: number;
-}): number {
-  const routeTravel = params.routeDistance * POWER_BANK_ROOM_TRAVEL_TICKS;
-  return (
-    params.spawnTime +
-    params.boostPrepTime +
-    params.renewalBuffer +
-    routeTravel +
-    params.ttk +
-    params.haulTime
-  );
-}
-
 export function computeHaulerCount(power: number, haulerCapacity: number): number {
   if (power <= 0) return 0;
   if (haulerCapacity <= 0) return Infinity;

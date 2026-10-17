@@ -1,5 +1,4 @@
 import clear from "rollup-plugin-clear";
-import copy from "rollup-plugin-copy";
 import typescript from "rollup-plugin-typescript2";
 import resolve from "@rollup/plugin-node-resolve";
 import commonjs from "@rollup/plugin-commonjs";
@@ -8,7 +7,7 @@ import replace from "@rollup/plugin-replace";
 import { createRequire } from "node:module";
 import { execSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { createRuntimeSourceMapModule, assertModuleSize } from "./scripts/lib/runtimeSourceMap.cjs";
 import { assertDeployableGitState, diffRemoteModules } from "./scripts/lib/deployGuard.cjs";
@@ -118,6 +117,16 @@ function createAwaitedScreepsPlugin(deployConfig) {
       }
       console.log(`[deploy] runtime modules: ${assertModuleSize(modules)} bytes (including source map)`);
       if (!deployConfig) return;
+      if (deployConfig.copyPath) {
+        // 私服与生产复用同一个位置索引、内容指纹和体积守卫。
+        mkdirSync(deployConfig.copyPath, { recursive: true });
+        for (const file of readdirSync(outputDirectory)) {
+          if (file.endsWith(".js") || file.endsWith(".wasm")) {
+            copyFileSync(path.join(outputDirectory, file), path.join(deployConfig.copyPath, file));
+          }
+        }
+        return;
+      }
       const api = new ScreepsAPI(deployConfig);
       if (!deployConfig.token) {
         await api.auth();
@@ -160,25 +169,7 @@ function createAwaitedScreepsPlugin(deployConfig) {
   };
 }
 
-const deployPlugin =
-  config && config.copyPath
-    ? copy({
-        targets: [
-          {
-            src: "dist/main.js",
-            dest: config.copyPath,
-          },
-          {
-            src: "dist/main.js.map",
-            dest: config.copyPath,
-            rename: (name) => `${name}.map.js`,
-            transform: (contents) => `module.exports = ${contents.toString()};`,
-          },
-        ],
-        hook: "writeBundle",
-        verbose: true,
-      })
-    : createAwaitedScreepsPlugin(config);
+const deployPlugin = createAwaitedScreepsPlugin(config);
 
 export default {
   input: "src/main.ts",
@@ -195,6 +186,12 @@ export default {
   },
   plugins: [
     clear({ targets: ["dist"] }),
+    // 旧规划器使用 Screeps 提供的 lodash 3.10.1；不把整包重复打进产物。
+    {
+      name: "screeps-global-lodash",
+      resolveId(id) { if (id === "lodash") return "\0screeps-global-lodash"; },
+      load(id) { if (id === "\0screeps-global-lodash") return "export default _;"; },
+    },
     resolve(),
     typescript({ tsconfig: "./tsconfig.build.json" }),
     replace({
@@ -212,8 +209,8 @@ export default {
       },
     }),
     commonjs(),
-    // 保留名称便于诊断；使用默认安全压缩，不开启 unsafe 系列变换。
-    terser({ compress: { passes: 2 }, mangle: false, format: { comments: "some" } }),
+    // 只压缩标识符，不改属性名；异常按 source map 的位置恢复到源码。
+    terser({ compress: { passes: 2 }, mangle: { toplevel: true }, format: { comments: "some" } }),
     deployPlugin,
   ],
 };

@@ -42,3 +42,10 @@ describe("buildMemoryAuditSnapshot", () => {
     expect(paths).not.toContain("a.b.c.d.e.f");
   });
 });
+
+it("按 UTF-8 计算中文及 emoji，不把 code unit 数当字节数", () => {
+  const memory = { cfg: { label: "中文🚀" } };
+  const result = buildMemoryAuditSnapshot(memory, { maxDepth: 2 });
+  expect(result.totalBytes).toBe(Buffer.byteLength(JSON.stringify(memory)));
+  expect(result.branches).toContainEqual({ path: "cfg", bytes: Buffer.byteLength(JSON.stringify(memory.cfg)) });
+});

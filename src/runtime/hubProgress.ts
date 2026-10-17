@@ -1379,23 +1379,6 @@ export function runHubProgressAnalytics(): void {
   analytics.hub = snapshot;
 }
 
-export function buildHubOverlayLines(snapshot: HubProgressSnapshot): string[] {
-  if (!snapshot.enabled) return [];
-
-  const lines: string[] = [];
-  const model = buildHubVisualModel(snapshot);
-
-  lines.push(`[hub] ${model.healthLabel} ${model.status}${model.stage ? `/${model.stage}` : ""}`);
-  for (const alert of model.alerts) lines.push(`alert: ${alert}`);
-  if (model.alertOverflow > 0) lines.push(`alerts: +${model.alertOverflow}`);
-  lines.push(`progress: ${model.progressText}`);
-  lines.push(`tasks: ${model.logistics.totalTasks} (in ${model.logistics.imports + model.logistics.reclaims}, out ${model.logistics.exports})`);
-  for (const row of model.logistics.rows) lines.push(formatLogisticsRow(row));
-  if (model.logistics.overflow > 0) lines.push(`tasks: +${model.logistics.overflow}`);
-
-  return lines.slice(0, MAX_OVERLAY_LINES);
-}
-
 const MAX_LINK_LABELS = 2;
 /**
  * 为主面板与最多 24 个卫星面板预留绘图预算。

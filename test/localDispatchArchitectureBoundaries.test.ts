@@ -7,12 +7,6 @@ const SRC_ROOT = resolve(REPO_ROOT, "src");
 const BUILD_CONFIG_PATH = resolve(REPO_ROOT, "tsconfig.build.json");
 
 const DISPATCH_ROOT = "src/runtime/dispatchOwnership";
-const TASK_SYSTEM_ROOT = "src/runtime/taskSystem";
-const TASK_SYSTEM_MODEL = `${TASK_SYSTEM_ROOT}/model.ts`;
-const TASK_SYSTEM_CATALOG = `${TASK_SYSTEM_ROOT}/catalog.ts`;
-const TASK_SYSTEM_REGISTRY = `${TASK_SYSTEM_ROOT}/registry.ts`;
-const TASK_SYSTEM_SNAPSHOT = `${TASK_SYSTEM_ROOT}/snapshot.ts`;
-const TASK_SYSTEM_ADAPTER_ROOT = `${TASK_SYSTEM_ROOT}/adapters`;
 const CREEP_ASSIGNMENT_STATE = "src/runtime/creepAssignmentState.ts";
 const WORKER_TASK_POOL = "src/runtime/workerTaskPool.ts";
 const CARRIER_TASK_BOARD = "src/runtime/carrierTaskBoard.ts";
@@ -344,49 +338,6 @@ function dependencyLabel(sourcePath: string, reference: ResolvedModuleReference)
     (reference.target ? ` -> ${reference.target}` : " (unresolved)");
 }
 
-function dispatchDependencyViolations(
-  sourcePath: string,
-  references: readonly ResolvedModuleReference[],
-): string[] {
-  const violations: string[] = [];
-  for (const reference of references) {
-    const target = reference.target;
-    if (!target || !isWithin(target, TASK_SYSTEM_ROOT)) continue;
-    const importsOnlyWorkRef =
-      reference.kind === "import" || reference.kind === "import-type";
-    const bindings = reference.bindings;
-    if (
-      target !== TASK_SYSTEM_MODEL ||
-      reference.runtime ||
-      !importsOnlyWorkRef ||
-      !bindings ||
-      bindings.length === 0 ||
-      bindings.some((binding) => !binding.typeOnly || binding.imported !== "WorkRef")
-    ) {
-      violations.push(`dispatch may only type-import WorkRef: ${dependencyLabel(sourcePath, reference)}`);
-    }
-  }
-  return violations;
-}
-
-function isTaskSystemCore(path: string): boolean {
-  return path === TASK_SYSTEM_CATALOG ||
-    path === TASK_SYSTEM_MODEL ||
-    path === TASK_SYSTEM_REGISTRY ||
-    path === TASK_SYSTEM_SNAPSHOT;
-}
-
-function reverseDependencyViolations(
-  sourcePath: string,
-  references: readonly ResolvedModuleReference[],
-): string[] {
-  if (!isTaskSystemCore(sourcePath)) return [];
-  return references
-    .filter((reference) => reference.target && isWithin(reference.target, DISPATCH_ROOT))
-    .map((reference) =>
-      `taskSystem core must not depend on dispatch: ${dependencyLabel(sourcePath, reference)}`);
-}
-
 function isLocalDispatchDomainModule(path: string): boolean {
   return isWithin(path, DISPATCH_ROOT) ||
     path === CREEP_ASSIGNMENT_STATE ||
@@ -394,52 +345,6 @@ function isLocalDispatchDomainModule(path: string): boolean {
     path === CARRIER_TASK_BOARD;
 }
 
-function isDispatchReadModule(path: string): boolean {
-  if (!isWithin(path, DISPATCH_ROOT)) return true;
-  const baseName = path.slice(path.lastIndexOf("/") + 1).replace(/\.[^.]+$/, "").toLowerCase();
-  return /(?:^|[-_.])(read|dto|snapshot)(?:$|[-_.])/.test(baseName) ||
-    baseName === "read" ||
-    baseName.endsWith("read") ||
-    baseName.endsWith("dto") ||
-    baseName.endsWith("snapshot");
-}
-
-function isReadBinding(binding: ImportedBinding): boolean {
-  if (binding.typeOnly) return true;
-  return /^(?:peek|read|list.*(?:Entr|Snapshot)|snapshot)/.test(binding.imported) &&
-    !/(?:ensure|bind|release|acquire|reconcile|replace|prune|cleanup|clear|claim|commit|mutat|write|delete|assign|upsert|refresh)/i
-      .test(binding.imported);
-}
-
-function adapterDependencyViolations(
-  sourcePath: string,
-  references: readonly ResolvedModuleReference[],
-): string[] {
-  if (!isWithin(sourcePath, TASK_SYSTEM_ADAPTER_ROOT)) return [];
-  const violations: string[] = [];
-  for (const reference of references) {
-    const target = reference.target;
-    if (!target || !isLocalDispatchDomainModule(target)) continue;
-    if (!reference.bindings || reference.bindings.length === 0) {
-      violations.push(`adapter local-dispatch dependency must use named read DTO imports: ${dependencyLabel(sourcePath, reference)}`);
-      continue;
-    }
-    if (reference.bindings.some((binding) => !isReadBinding(binding))) {
-      violations.push(`adapter may only import local-dispatch read DTO bindings: ${dependencyLabel(sourcePath, reference)}`);
-    }
-    if (isWithin(target, DISPATCH_ROOT) && !isDispatchReadModule(target)) {
-      const isRefTypeOnlyImport =
-        target === `${DISPATCH_ROOT}/ref.ts` &&
-        !reference.runtime &&
-        reference.bindings.every((binding) =>
-          binding.typeOnly && /DispatchRef$/.test(binding.imported));
-      if (!isRefTypeOnlyImport) {
-        violations.push(`adapter must not import dispatch command/kernel/mutator modules: ${dependencyLabel(sourcePath, reference)}`);
-      }
-    }
-  }
-  return violations;
-}
 
 function declarationContainerName(declaration: ts.Declaration): string | undefined {
   let current: ts.Node | undefined = declaration.parent;
@@ -870,26 +775,12 @@ describe("local dispatch ownership architecture boundaries", () => {
     ]);
   });
 
-  test("dispatch only type-imports TaskSystem WorkRef and TaskSystem core never depends back", () => {
-    const violations = productionSources().flatMap((sourceFile) => {
-      const sourcePath = repositoryPath(sourceFile.fileName);
-      const references = resolvedModuleReferences(sourceFile);
-      return [
-        ...(isWithin(sourcePath, DISPATCH_ROOT)
-          ? dispatchDependencyViolations(sourcePath, references)
-          : []),
-        ...reverseDependencyViolations(sourcePath, references),
-      ];
-    });
-    expect(violations.sort()).toEqual([]);
-  });
-
-  test("TaskSystem adapters can consume local-dispatch read DTOs but not commands or kernels", () => {
-    const violations = productionSources().flatMap((sourceFile) => {
-      const sourcePath = repositoryPath(sourceFile.fileName);
-      return adapterDependencyViolations(sourcePath, resolvedModuleReferences(sourceFile));
-    });
-    expect(violations.sort()).toEqual([]);
+  test("dispatch 不再依赖已删除的 TaskSystem 观察层", () => {
+    const references = productionSources()
+      .filter(source => isWithin(repositoryPath(source.fileName), DISPATCH_ROOT))
+      .flatMap(source => moduleReferences(source))
+      .filter(reference => reference.specifier.includes("taskSystem/"));
+    expect(references).toEqual([]);
   });
 
   test("canonical identity, Worker assignees, and Carrier identity have only approved writers", () => {
@@ -938,35 +829,6 @@ describe("local dispatch ownership architecture boundaries", () => {
       runtime,
       bindings: [{ imported, local: imported, typeOnly: !runtime }],
     });
-
-    expect(dispatchDependencyViolations(`${DISPATCH_ROOT}/ref.ts`, [
-      edge(TASK_SYSTEM_MODEL, false, "WorkRef"),
-    ])).toEqual([]);
-    expect(dispatchDependencyViolations(`${DISPATCH_ROOT}/ref.ts`, [
-      edge(TASK_SYSTEM_MODEL, true, "WorkRef"),
-      edge(TASK_SYSTEM_MODEL, false, "TaskSystemAdapter"),
-      edge(TASK_SYSTEM_CATALOG, false, "TaskSystemId"),
-    ])).toHaveLength(3);
-    expect(reverseDependencyViolations(TASK_SYSTEM_MODEL, [
-      edge(`${DISPATCH_ROOT}/ref.ts`, false, "CarrierDispatchRef"),
-    ])).toHaveLength(1);
-
-    const commandImport = edge(`${DISPATCH_ROOT}/actorBinding.ts`, true, "bindActorDispatch");
-    expect(adapterDependencyViolations(`${TASK_SYSTEM_ADAPTER_ROOT}/workerWork.ts`, [commandImport]))
-      .toHaveLength(2);
-    const commandTypeImport = edge(
-      `${DISPATCH_ROOT}/actorBinding.ts`,
-      false,
-      "LegacyWorkerDispatchResolver",
-    );
-    expect(adapterDependencyViolations(`${TASK_SYSTEM_ADAPTER_ROOT}/workerWork.ts`, [commandTypeImport]))
-      .toHaveLength(1);
-    const refTypeImport = edge(`${DISPATCH_ROOT}/ref.ts`, false, "WorkerDispatchRef");
-    expect(adapterDependencyViolations(`${TASK_SYSTEM_ADAPTER_ROOT}/workerWork.ts`, [refTypeImport]))
-      .toEqual([]);
-    const readImport = edge(`${DISPATCH_ROOT}/read.ts`, true, "peekWorkerDispatchBoard");
-    expect(adapterDependencyViolations(`${TASK_SYSTEM_ADAPTER_ROOT}/workerWork.ts`, [readImport]))
-      .toEqual([]);
 
     const forbidden = sampleSource(`
       import type { TransferContractStore } from "domain/contracts";

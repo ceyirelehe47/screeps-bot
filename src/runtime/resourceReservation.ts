@@ -53,11 +53,6 @@ function coercePersistedOwner(raw: unknown): TreasuryOwnerIdentity | undefined {
   return isValidTreasuryOwnerIdentity(raw) ? raw : undefined;
 }
 
-/** reservation entry 的有效 typed owner：持久字段合法则用之，否则按 holderId 分类。 */
-export function getReservationEntryOwner(holderId: string, persistedOwner: unknown): TreasuryOwnerIdentity {
-  return coercePersistedOwner(persistedOwner) ?? classifyTreasuryHolderIdAsOwner(holderId);
-}
-
 type ReservationStore = Record<string, ReservationEntry>;
 interface ReservationRuntimeMetadata {
   resourceReservations?: ReservationStore;
@@ -97,11 +92,6 @@ const reservationEvents = {
  * activation/corrupted 标志置位与清除）时递增——revision 变化即旧授权失效。
  */
 let reservationStoreRevision = 0;
-
-/** store 变更序号只读出口（授权 token 绑定；零写）。 */
-export function readReservationStoreRevision(): number {
-  return reservationStoreRevision;
-}
 
 function bumpReservationStoreRevision(): void {
   reservationStoreRevision += 1;
@@ -441,20 +431,6 @@ export function releaseProductionReservation(
   if (mode === "legacy") return legacyRelease(roomName, resource, holderId);
   if (mode === "blocked") return rejected("schema_not_ready", "unknown reservation owner version; refusing to mix legacy keys");
   return releaseProductionReservationForOwner(roomName, resource, classifyTreasuryHolderIdAsOwner(holderId));
-}
-
-/** @deprecated 兼容 adapter：见 reserveProductionResource。 */
-export function renewProductionReservation(
-  roomName: string,
-  resource: ResourceConstant,
-  amount: number,
-  holderId: string,
-  ttl: number = DEFAULT_TTL,
-): ReservationMutationResult {
-  const mode = reservationAdapterMode();
-  if (mode === "legacy") return legacyRenew(roomName, resource, amount, holderId, ttl);
-  if (mode === "blocked") return rejected("schema_not_ready", "unknown reservation owner version; refusing to mix legacy keys");
-  return renewProductionReservationForOwner(roomName, resource, amount, classifyTreasuryHolderIdAsOwner(holderId), ttl);
 }
 
 function isActive(entry: ReservationEntry): boolean {
@@ -859,39 +835,4 @@ export function validateReservationStoreHealth(): ReservationStoreHealth {
   }
   reservationHealthCache = { revision: reservationStoreRevision, healthy: true, detail: null, entryCount: entries.length, liveKeyCount };
   return { healthy: true, detail: null, entryCount: entries.length };
-}
-
-/**
- * reservation store 损坏标志（第七轮）：GC/验证发现 malformed entry 时置
- * 位（entry 原样保留）——存在期间一切 mutation 拒绝、授权 fail closed，
- * 只有显式 repair 可清除。只读零写。
- */
-export function isReservationStoreCorrupted(): boolean {
-  return (Memory.runtime as { resourceReservationsCorrupted?: unknown } | undefined)?.resourceReservationsCorrupted !== undefined;
-}
-
-/**
- * 显式 repair（仅供测试/管理修复路径调用，生产 tick 禁用——架构测试守护）：
- * 验证全 store entry 形状合法后清除持久 corrupted 标志。任何 malformed
- * entry → 拒绝（原数据不动，人工处理）。
- */
-export function repairReservationStoreCorruptionForRepair(): { status: "repaired" | "rejected"; detail: string } {
-  const runtime = Memory.runtime as (NonNullable<typeof Memory.runtime> & { resourceReservationsCorrupted?: string }) | undefined;
-  if (runtime?.resourceReservationsCorrupted === undefined) {
-    return { status: "rejected", detail: "无 corrupted 标志（无需 repair）" };
-  }
-  const store = runtime?.resourceReservations;
-  if (!store || typeof store !== "object") {
-    return { status: "rejected", detail: "resourceReservations store 非对象（人工处理）" };
-  }
-  for (const [key, entry] of Object.entries(store)) {
-    const shapeError = validateReservationEntryShape(entry, key);
-    if (shapeError !== null) {
-      return { status: "rejected", detail: shapeError };
-    }
-  }
-  delete runtime.resourceReservationsCorrupted;
-  bumpReservationStoreRevision();
-  reservationHealthCache = null;
-  return { status: "repaired", detail: "corrupted 标志已清除（全部 entry 验证通过）" };
 }

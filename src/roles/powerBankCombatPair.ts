@@ -146,13 +146,6 @@ export function pairReadyForCombat(pair: PowerBankPairContext): boolean {
   return powerBankAttackSustainable(pair.attacker, pair.healer);
 }
 
-export function getPowerBankEncodedRoute(task: RuntimePowerBankTask, fallback?: string): string | undefined {
-  const routeRooms = task.routeRooms;
-  if (!Array.isArray(routeRooms) || routeRooms.length === 0) return fallback;
-  const validRooms = routeRooms.filter((roomName): roomName is string => typeof roomName === "string" && roomName.length > 0);
-  return validRooms.length > 0 ? validRooms.join("|") : fallback;
-}
-
 export function getPowerBankEncodedRouteBetween(
   task: Pick<RuntimePowerBankTask, "routeRooms"> | null | undefined,
   fromRoom: string,
@@ -179,14 +172,6 @@ export function getPowerBankEncodedRouteBetween(
   // A creep outside the snapshot must recover dynamically toward the requested
   // room; replaying the whole forward route can send a follower farther away.
   return undefined;
-}
-
-export function getPowerBankNextRouteRoom(task: RuntimePowerBankTask, currentRoom: string): string {
-  const routeRooms = task.routeRooms;
-  if (!Array.isArray(routeRooms) || routeRooms.length === 0) return task.targetRoom;
-  const currentIndex = routeRooms.lastIndexOf(currentRoom);
-  if (currentIndex < 0 || currentIndex + 1 >= routeRooms.length) return task.targetRoom;
-  return routeRooms[currentIndex + 1];
 }
 
 export function getPowerBankAvoidRooms(task: RuntimePowerBankTask): string[] {

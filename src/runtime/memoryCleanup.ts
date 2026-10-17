@@ -1,3 +1,4 @@
+import { cleanupPowerBankRoomIntel } from "@/runtime/powerBankIntelCleanup";
 import { pruneDeadCreepMovementState } from "@/movement/creepState";
 import { pruneDeadCreepAssignmentState } from "@/runtime/creepAssignmentState";
 import { getCreepConfigService, getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
@@ -655,6 +656,7 @@ function cleanupNonOwnedRoomMemory(ownedRooms: Set<string>): number {
 
     delete roomMemory.workerConstructionTier;
     delete roomMemory.coreRampartHits;
+    delete roomMemory.coreDefenseSnapshot;
 
     if (Object.keys(roomMemory).length === 0) {
       delete Memory.rooms[roomName];
@@ -670,6 +672,8 @@ export function runMemoryCleanup(): void {
     return;
   }
 
+  // 旧 CPU profiler 已无写入方；保留 cpuMonitor.health 及当前遥测投影。
+  if (Memory.analytics) delete (Memory.analytics as ScreepsMemoryAnalytics & { moduleCpu?: unknown }).moduleCpu;
   const creepConfigReferences = createCreepConfigReferenceSnapshot();
   cleanupDeadCreepMemory(creepConfigReferences.spawningCreepNames);
   pruneDeadCreepAssignmentState();
@@ -689,6 +693,7 @@ export function runMemoryCleanup(): void {
   cleanupResourceControlMemory(ownedRooms);
   cleanupSynthesisControlMemory(ownedRooms);
   cleanupPowerBankBoostMemory();
+  cleanupPowerBankRoomIntel();
   cleanupPickupReservationStore(ownedRooms);
   cleanupTerminalBootstrapRecoveryRuntime();
   gcProductionReservations();

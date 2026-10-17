@@ -463,10 +463,6 @@ export function promoteLegacyCarrierDispatchBinding(
   return promoteLegacyBinding(actorName, "carrier", expectedRoomName, resolveCandidates);
 }
 
-export function clearLegacyWorkerDispatchBinding(actorName: string): boolean {
-  return clearUnboundLegacyMirror(actorName, "worker");
-}
-
 export function clearLegacyCarrierDispatchBinding(actorName: string): boolean {
   return clearUnboundLegacyMirror(actorName, "carrier");
 }

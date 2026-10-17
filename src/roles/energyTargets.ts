@@ -230,11 +230,6 @@ function getPreferredEnergyPickupCandidates(creep: Creep): EnergyPickupTarget[] 
   });
 }
 
-export function getPreferredEnergyPickupTarget(creep: Creep): EnergyPickupTarget | null {
-  const candidates = getPreferredEnergyPickupCandidates(creep);
-  return candidates.length > 0 ? candidates[0] : null;
-}
-
 export function pickupEnergyFromPreferredTarget(
   creep: Creep,
   moveOptions: MoveToTargetOptions = {},
