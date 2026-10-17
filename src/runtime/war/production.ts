@@ -1,3 +1,4 @@
+import { canStartOutboundMission } from "@/runtime/outboundMissionPolicy";
 import { cancelSpawning, invalidateWarSpawnQueues, queuedSpawns, spawningForConfig } from "./spawnIndex";
 import { getSquadPolicy } from "./squadPolicy/index";
 import { getCreepConfigService, getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
@@ -105,6 +106,7 @@ export function isConfigSpawning(configName: string): boolean {
 }
 
 export function enqueueConfig(spawn: StructureSpawn, configName: string, toFront: boolean): void {
+  if (!canStartOutboundMission(spawn.room.name)) return;
   const queue = spawn.memory.spawnList || [];
   const config = ensureConfigStore()[configName];
   if (toFront) {
@@ -547,6 +549,7 @@ export function prepareCombatSquad(task: WarTask): boolean {
 
   const generation = ensureActiveGeneration(task);
   if (generation.phase === "deployed") return true;
+  if (!canStartOutboundMission(task.sourceRoom)) return false;
   if (generation.boostGateOpenedAt !== undefined) {
     const remainingAmounts = getGenerationRemainingBoostAmounts(task, generation);
     const result = prepareBoosts(

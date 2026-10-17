@@ -10,6 +10,8 @@ import {
   isWalkableStructure,
 } from "@/movement/common";
 import { measureCreepIntent } from "@/runtime/cpuPhaseProfiler";
+import { isPositionAllowedForCreep } from "@/runtime/safeZoneHelpers";
+import { isDefenseMode } from "@/runtime/defenseMode";
 
 const ALL_DIRECTIONS: DirectionConstant[] = [TOP, TOP_RIGHT, RIGHT, BOTTOM_RIGHT, BOTTOM, BOTTOM_LEFT, LEFT, TOP_LEFT];
 
@@ -71,6 +73,7 @@ export function isBlockerActivelyMoving(blocker: AnyCreep): boolean {
  * Returns true if the blocker was successfully moved.
  */
 export function pushBlockingCreep(pusher: AnyCreep, blocker: AnyCreep): boolean {
+  if (isStandardCreep(blocker) && blocker.memory.role === "homeDefender" && isDefenseMode(blocker.room.name)) return false;
   for (const candidate of getYieldCandidatePositions(pusher, blocker)) {
     const occupant = findMyOwnedUnitAt(candidate, blocker);
     if (occupant && occupant !== pusher) {
@@ -302,7 +305,8 @@ function getYieldCandidatePositions(pusher: AnyCreep, blocker: AnyCreep): RoomPo
 
   for (const direction of ALL_DIRECTIONS) {
     const pos = getPositionAtDirection(blocker.pos, direction);
-    if (!pos || !isYieldTileWalkable(pos, blocker) || hasMoveDestinationConflict(pos, [blocker])) {
+    if (!pos || !isYieldTileWalkable(pos, blocker) ||
+        (isStandardCreep(blocker) && !isPositionAllowedForCreep(blocker, pos)) || hasMoveDestinationConflict(pos, [blocker])) {
       continue;
     }
     if (haulerPair && pos.x === pusher.pos.x && pos.y === pusher.pos.y) {

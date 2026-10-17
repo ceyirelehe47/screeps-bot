@@ -1,3 +1,4 @@
+import { issueMove } from "@/movement/traffic";
 import { executeTreasuryFencedTerminalCargo } from "@/runtime/treasuryTerminalCargo";
 import { moveToTarget, moveToTargetRoom } from "@/roles/shared";
 import { POWER_BANK_STATUS, isPowerBankSearchRoom } from "@/runtime/powerBankConstants";
@@ -187,7 +188,7 @@ function waitAwayFromBank(creep: Creep, bankPos: { x: number; y: number }): void
 
   if (!isPowerBankHaulerAt(targetPos, creep.name)) {
     // Tactical directional move — not destination pathfinding
-    measureCreepIntent(() => creep.move(dir!));
+    issueMove(creep, dir!);
     return;
   }
 
@@ -195,14 +196,14 @@ function waitAwayFromBank(creep: Creep, bankPos: { x: number; y: number }): void
   const sideAPos = getPositionAtDirection(creep.pos, sideA);
   if (sideAPos && isWalkableTile(sideAPos) && !isPowerBankHaulerAt(sideAPos, creep.name)) {
     // Tactical directional move — not destination pathfinding
-    measureCreepIntent(() => creep.move(sideA));
+    issueMove(creep, sideA);
     return;
   }
 
   const sideBPos = getPositionAtDirection(creep.pos, sideB);
   if (sideBPos && isWalkableTile(sideBPos) && !isPowerBankHaulerAt(sideBPos, creep.name)) {
     // Tactical directional move — not destination pathfinding
-    measureCreepIntent(() => creep.move(sideB));
+    issueMove(creep, sideB);
     return;
   }
 }

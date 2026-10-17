@@ -9,6 +9,7 @@ import { getTickContextService } from "@/runtime/runtimeServices";
 
 function setupRoomContext(creeps: Creep[] = []) {
   (getTickContextService as jest.Mock).mockReturnValue({
+    getMyRooms: () => [],
     getRoomContext: jest.fn(() => ({
       room: { name: "W1N1", controller: undefined },
       getMyCreeps: jest.fn(() => creeps),

@@ -16,12 +16,13 @@ function setup() {
     maxDealEnergyCostRatio: 1, minSellPrice: {}, maxBuyPrice: { energy: 0.2, H: 1, O: 1 }, buyResources: [RESOURCE_HYDROGEN, RESOURCE_OXYGEN], sellResources: [],
     creditReserve: 100_000, energyShadowPrice: 0.5 };
   const incoming = new Map<string, number>();
-  const context = { healthyIncomingByRoomResource: incoming } as ResourceControlTransferContext;
+  const context = { healthyIncomingByRoomResource: incoming, taskById: new Map(), healthyOutgoingByRoomResource: new Map(),
+    reservedProductionByRoomResource: new Map(), carrierProductionByRoomResource: new Map() } as ResourceControlTransferContext;
   function snapshot(name = "W1N1", resources: Record<string, number> = { energy: 20000 }): ResourceControlSnapshot {
     const room = { name, controller: { my: true }, storage: { store: createMockStore({ energy: 20000 }) },
       terminal: { id: `${name}-terminal`, cooldown: 0, store: createMockStore(resources, 300000) }, find: () => [] } as unknown as Room;
     room.terminal!.room = room; Game.rooms[name] = room;
-    return { roomName: name, terminal: room.terminal, state: "balanced", storageEnergy: 20000,
+    return { roomName: name, storage: room.storage, terminal: room.terminal, mineralFloor: {}, state: "balanced", storageEnergy: 20000,
       terminalEnergy: resources.energy ?? 0, energyTarget: 40000, terminalEnergyReserve: 10000, terminalFreeCapacity: 250000 } as ResourceControlSnapshot;
   }
   return { market, config, context, incoming, snapshot };
@@ -40,6 +41,7 @@ it("未配置时低于十万 credit 仍可应急购买，显式底线继续生�
   w.market.credits = 10_050;
   applyMarketOps([s], w.config, new Set(), w.context);
   expect(w.market.deal).not.toHaveBeenCalled();
+  Game.time++; clearMarketActionArbiterForTest();
   w.market.credits = 50_000;
   w.config.creditReserve = 50_000;
   applyMarketOps([s], w.config, new Set(), w.context);
@@ -62,6 +64,7 @@ it("有效能量价格按净收到能量计算，矿物按费用估值计算", (
 it("购买保留 credit 和终端能量底线，矿物成交后本房立即停止", () => {
   const w = setup(); const s = w.snapshot(); w.market.credits = 100050;
   applyMarketOps([s], w.config, new Set(), w.context); expect(w.market.deal).not.toHaveBeenCalled();
+  Game.time++; clearMarketActionArbiterForTest();
   w.market.credits = 100150; s.terminalEnergy = 10000; w.market.calcTransactionCost.mockReturnValue(1);
   applyMarketOps([s], w.config, new Set(), w.context); expect(w.market.deal).not.toHaveBeenCalled();
   w.market.calcTransactionCost.mockReturnValue(0); const other = w.snapshot("W2N2");
@@ -81,4 +84,19 @@ it("旧合成 missing 不得重复覆盖已到货和 donor 在途", () => {
   s.terminal.store = createMockStore({ energy: 20000, H: 500 });
   Game.time += 10; clearMarketActionArbiterForTest();
   applyMarketOps([s], w.config, new Set(), w.context); expect(w.market.deal).not.toHaveBeenCalled();
+});
+
+it("自有房间可动矿足够时等待内部调拨，避免在缺口房重新买入", () => {
+  const w = setup();
+  const receiver = w.snapshot("W1N1"), donor = w.snapshot("W2N2", { energy: 20000, H: 5000 });
+  w.config.buyResources = [RESOURCE_HYDROGEN];
+  applyMarketOps([receiver, donor], w.config, new Set(), w.context);
+  expect(w.market.deal).not.toHaveBeenCalled();
+});
+it("当前授权 V3 在卖的资源禁止旧买入路径再次采购", () => {
+  const w = setup(), receiver = w.snapshot();
+  w.config.buyResources = [RESOURCE_HYDROGEN];
+  w.context.marketSellingResources = new Set([RESOURCE_HYDROGEN]);
+  applyMarketOps([receiver], w.config, new Set(), w.context);
+  expect(w.market.deal).not.toHaveBeenCalled();
 });

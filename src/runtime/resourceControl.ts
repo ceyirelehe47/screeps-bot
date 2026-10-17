@@ -1,3 +1,6 @@
+import { resolveMarketCreditReserve, getAvailableMarketCredits } from "@/runtime/marketActionArbiter";
+import { isDefenseMode } from "@/runtime/defenseMode";
+import { planAuthorizedMarketCargoTargets } from "@/runtime/resourceTerminalLogistics";
 import {
   listCarrierTasksForProducer,
   peekCarrierTasksByRoom,
@@ -519,7 +522,7 @@ function normalizeMarketConfig(value: unknown): ResourceControlMarketConfig {
       raw.emergencyBuyEnabled,
       DEFAULT_MARKET_CONFIG.emergencyBuyEnabled,
     ),
-    creditReserve: normalizeNumber(raw.creditReserve, DEFAULT_MARKET_CONFIG.creditReserve!, 0, Number.MAX_SAFE_INTEGER),
+    creditReserve: resolveMarketCreditReserve(raw.creditReserve),
     energyShadowPrice: normalizeNumber(raw.energyShadowPrice, 0.12, 0, 1_000),
     nativeMineralAutoSellThreshold: normalizeNumber(
       raw.nativeMineralAutoSellThreshold,
@@ -2843,6 +2846,8 @@ function executeTransferTasks(
       continue;
     }
 
+    if (task.origin === "automatic" && task.resource === RESOURCE_CATALYZED_UTRIUM_ACID &&
+        task.reason?.startsWith("hub:export:") && isDefenseMode(task.fromRoomName)) continue;
     const treasuryLaneLabel = (TREASURY_TERMINAL_LANES.find((lane) =>
       task.treasurySlice?.runId === lane.runId || treasuryLaneTaskMatches(lane, task))?.name ?? "T1").toLowerCase();
     const treasuryDisposition = runTreasuryTerminalTransferTask(
@@ -3689,6 +3694,8 @@ export function runResourceControl(): void {
     capacityConfig,
     capacityIndexBuildCounter,
   );
+  context.marketCargoTargets = planAuthorizedMarketCargoTargets(snapshots, readinessAuthorization);
+  context.marketSellingResources = new Set(readinessAuthorization.ok ? readinessAuthorization.cargoLanes?.map(lane => lane.resource) : []);
   const producerCpuBeforeConsumer = peekLogisticsShadowCpuSnapshot("producer");
   const nonShadowZeroCpuAttribution: LogisticsShadowCpuSnapshotV2 = {
     attributionVersion: 2,

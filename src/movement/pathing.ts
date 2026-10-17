@@ -3,7 +3,8 @@ import { clearCreepMovementState, ensureCreepMovementState } from "@/movement/cr
 import { recordMovementMetric } from "@/movement/metrics";
 import { getTickContextService } from "@/runtime/runtimeServices";
 import { getRoomTopologyRevision } from "@/movement/roomTopologyRevision";
-import { isPositionAllowedForCreep, shouldRestrictToSafeZone } from "@/runtime/safeZoneHelpers";
+import { createSafeZoneCostCallback, getCreepDefenseRoomName, isPositionAllowedForCreep, shouldRestrictToSafeZone } from "@/runtime/safeZoneHelpers";
+import { getSafeZone } from "@/runtime/safeZone";
 import { getPosKey, getTargetPos, isExitTile, isStandardCreep } from "@/movement/common";
 import { getMoveIntentDestination, moveOffExit, moveToAdjacentPosition } from "@/movement/traffic";
 import { buildStaticRoomCostMatrix, collectStaticRoomMatrixSources } from "@/movement/staticRoomMatrix";
@@ -65,6 +66,13 @@ export function moveToTarget(
   }
 
   movementState.pathingRequestedAt = Game.time;
+  if (isStandardCreep(creep) && shouldRestrictToSafeZone(creep)) {
+    const original = options;
+    const restrict = createSafeZoneCostCallback(getSafeZone(getCreepDefenseRoomName(creep)));
+    options = { ...original, cacheKey: undefined,
+      costCallback: (name, matrix) => restrict(name, original.costCallback?.(name, matrix) || matrix),
+      canMoveStep: pos => isPositionAllowedForCreep(creep, pos) && (original.canMoveStep?.(pos) ?? true) };
+  }
 
   if (sameRoomNonEdgeMoveNeedsExitRecovery(creep, targetPos)) {
     recordMovementMetric("exitRecoveries", room.name);

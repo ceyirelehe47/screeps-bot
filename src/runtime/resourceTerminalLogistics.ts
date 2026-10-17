@@ -1,3 +1,4 @@
+import { getMarketSaleTerminalExposure } from "@/runtime/marketSaleExposure";
 /** 从 resourceControl.ts 分离的独立职责模块；共享状态仅由此处持有。 */
 import { terminalFeedBoundTaskIdentity } from "@/runtime/terminalFeedTarget";
 import {
@@ -560,7 +561,11 @@ export function getMovableResourceAmount(
     location === "terminal"
       ? getTerminalResourceAmount(snapshot, resource)
       : getStorageResourceAmount(snapshot, resource);
-  return Math.min(structureStock, movableTotal);
+  const exposure = getMarketSaleTerminalExposure(snapshot.roomName, resource);
+  const cargo = context.marketCargoTargets?.get(snapshot.roomName);
+  const terminalProtected = exposure.blocked ? structureStock : Math.max(exposure.reservedAmount,
+    cargo?.resource === resource ? cargo.targetStock : 0);
+  return Math.min(Math.max(0, structureStock - (location === "terminal" ? terminalProtected : 0)), movableTotal);
 }
 
 export function getCapacityReliefRecoveryGap(
@@ -965,8 +970,8 @@ function appendTerminalOverflowDrafts(
       !offloadedResources.has(resource),
   );
   allResources.sort((a, b) => {
-    if (a === RESOURCE_ENERGY && b !== RESOURCE_ENERGY) return 1;
-    if (a !== RESOURCE_ENERGY && b === RESOURCE_ENERGY) return -1;
+    if (a === RESOURCE_ENERGY && b !== RESOURCE_ENERGY) return -1;
+    if (a !== RESOURCE_ENERGY && b === RESOURCE_ENERGY) return 1;
     return 0;
   });
 
@@ -1199,10 +1204,15 @@ function mergeMarketTerminalEnergyReadinessDraft(
 
   const energyFeedId = `resourceControl:terminal_feed:${snapshot.roomName}:${RESOURCE_ENERGY}`;
   const energyOffloadId = `resourceControl:terminal_offload:${snapshot.roomName}:${RESOURCE_ENERGY}`;
-  const energyFeedIndex = drafts.findIndex(
-    (draft) => draft.id === energyFeedId,
-  );
-  const energyOffload = drafts.some((draft) => draft.id === energyOffloadId);
+  const energyOffload = drafts.find(draft => draft.id === energyOffloadId);
+  if (energyOffload) {
+    const limit = Math.max(0, snapshot.terminalEnergy - observation.marketTerminalEnergyTarget);
+    const replacement = limitCarrierTaskDraftAmount(energyOffload, limit);
+    const index = drafts.indexOf(energyOffload);
+    if (replacement) drafts[index] = replacement;
+    else drafts.splice(index, 1);
+  }
+  const energyFeedIndex = drafts.findIndex(draft => draft.id === energyFeedId);
   const ordinaryFeedAmount =
     energyFeedIndex >= 0
       ? getCarrierDraftAmount(drafts[energyFeedIndex], RESOURCE_ENERGY)
@@ -1214,10 +1224,6 @@ function mergeMarketTerminalEnergyReadinessDraft(
 
   if (terminalClaimed) {
     blockMarketTerminalEnergyReadiness(observation, "terminal_claimed");
-    return true;
-  }
-  if (energyOffload) {
-    blockMarketTerminalEnergyReadiness(observation, "energy_offload_conflict");
     return true;
   }
 
@@ -1944,7 +1950,7 @@ interface AuthorizedMarketCargoTarget {
  * 仅为当前 V3 permit 允许的新成交搬运一批货。可售量仍由原保护账本
  * 扣除生产、在途与其他 exposure；这里不签发市场写权限。
  */
-function planAuthorizedMarketCargoTargets(
+export function planAuthorizedMarketCargoTargets(
   snapshots: ResourceControlSnapshot[],
   authorization: MarketTerminalEnergyAuthorizationRead,
 ): Map<string, AuthorizedMarketCargoTarget> {
@@ -1978,8 +1984,7 @@ function planAuthorizedMarketCargoTargets(
       snapshot?.terminal?.id === lane.terminalId &&
       snapshot.storage !== undefined &&
       lane.maxDealAmount === MARKET_BASE_RESOURCE_POLICY_BY_RESOURCE[lane.resource].maxDealAmount &&
-      getTerminalResourceAmount(snapshot, lane.resource) < lane.maxDealAmount &&
-      snapshot.storage.store.getUsedCapacity(lane.resource) > 0;
+      getStock(snapshot, lane.resource) > 0;
   });
   if (lanes.length === 0) return targets;
   const protection = collectLiveMarketSaleProtectionLedger(config, [], {
@@ -2039,10 +2044,8 @@ export function syncTerminalFeedTasks(
   }
 
   const stagingBatchByRoom = new Map<string, TerminalStagingBatch>();
-  const marketCargoTargets = planAuthorizedMarketCargoTargets(
-    snapshots,
-    authorization,
-  );
+  const marketCargoTargets = context.marketCargoTargets ?? planAuthorizedMarketCargoTargets(snapshots, authorization);
+  context.marketCargoTargets = marketCargoTargets;
   const planningEnergyNeedByRoom = new Map(remainingEnergyNeedByRoom);
   const snapshotByRoom = new Map(
     snapshots.map((snapshot) => [snapshot.roomName, snapshot] as const),
@@ -2246,6 +2249,7 @@ export function syncTerminalFeedTasks(
     }
     const drafts: CarrierTaskDraft[] = [];
     const stagingBatch = stagingBatchByRoom.get(snapshot.roomName);
+    const protectedMarketCargoTarget = marketCargoTargets.get(snapshot.roomName);
     const marketCargoTarget = !stagingBatch && !terminalBusy.has(snapshot.roomName)
       ? marketCargoTargets.get(snapshot.roomName)
       : undefined;
@@ -2322,6 +2326,8 @@ export function syncTerminalFeedTasks(
           Math.min(
             stored,
             (stagingBatch?.resource === resource ? stagingBatch.amount : 0) +
+              (protectedMarketCargoTarget?.resource === resource ? protectedMarketCargoTarget.targetStock : 0) +
+              (getMarketSaleTerminalExposure(snapshot.roomName, resource).blocked ? stored : getMarketSaleTerminalExposure(snapshot.roomName, resource).reservedAmount) +
               getProductionCommitmentAmount(
                 snapshot.roomName,
                 resource,

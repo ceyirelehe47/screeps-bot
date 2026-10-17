@@ -20,9 +20,10 @@ export function runAutoReserveFlags(): void {
 
     const flagName = getAutoReserveFlagName(room.name);
     const flag = Game.flags[flagName];
-    const policy = resolveRoomEnergyPolicy(
-      Memory.cfg?.resourceControl?.rooms?.[room.name],
-    );
+    const raw = Memory.cfg?.resourceControl?.rooms?.[room.name];
+    const level = room.controller?.level ?? 0;
+    const scale = level >= 8 ? 1 : level >= 7 ? 0.5 : level >= 6 ? 0.25 : 0.1;
+    const policy = resolveRoomEnergyPolicy({ energyFloor: 120_000 * scale, energyTarget: 200_000 * scale, ...raw });
     const storageEnergy = room.storage.store.getUsedCapacity(RESOURCE_ENERGY);
     const hasCriticalConstruction = room.find(FIND_MY_CONSTRUCTION_SITES).some(site =>
       site.structureType === STRUCTURE_SPAWN || site.structureType === STRUCTURE_STORAGE ||

@@ -1,3 +1,6 @@
+import { resolveMarketCreditReserve } from "@/runtime/marketActionArbiter";
+import { resolveRoomEnergyPolicyForRoom } from "@/runtime/roomEnergyPolicy";
+import { isRoomInReserveMode } from "@/runtime/roomReserve";
 /**
  * Factory target queue planning, carrier logistics, production state machine,
  * and guarded purchase of missing regional raw resources.
@@ -112,6 +115,7 @@ interface FactoryControlRuntime {
     tick: number;
     purpose: "buy";
     credits?: number;
+    date?: string;
   }>;
 }
 
@@ -252,7 +256,7 @@ function normalizeMarketConfig(raw: unknown): MarketConfig {
       maxBuyPrice: {},
       buyMaxBatch: 5000,
       dailyBudget: 0,
-      creditReserve: 10000,
+      creditReserve: resolveMarketCreditReserve(),
       buyResources: [],
     };
   }
@@ -273,7 +277,7 @@ function normalizeMarketConfig(raw: unknown): MarketConfig {
     maxBuyPrice: normalizeSellPriceMap(m.maxBuyPrice),
     buyMaxBatch: normalizeNumber(m.buyMaxBatch, 5000, 1, 300000),
     dailyBudget: normalizeNumber(m.dailyBudget, 0, 0, 1e9),
-    creditReserve: normalizeNumber(m.creditReserve, 10000, 0, 1e9),
+    creditReserve: normalizeNumber(m.creditReserve, resolveMarketCreditReserve(), 0, 1e9),
     buyResources: normalizeResourceList(m.buyResources),
   };
 }
@@ -369,7 +373,14 @@ function computeSurplus(
 ): number {
   const stock = getRoomStock(room, resource);
   const reserved = getReservedProductionAmountExcludingHolder(room.name, resource, holderId);
-  return Math.max(0, stock - floor - reserved);
+  const surplus = Math.max(0, stock - floor - reserved);
+  if (resource !== RESOURCE_ENERGY) return surplus;
+  const policy = resolveRoomEnergyPolicyForRoom(room.name);
+  const available = (isRoomInReserveMode(room.name) ? 0 :
+    Math.max(0, (room.storage?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0) - policy.energyFloor) +
+    Math.max(0, (room.terminal ? getTerminalAmountOutsideMarketSaleExposure(room.terminal, RESOURCE_ENERGY, room.name) : 0) - policy.terminalEnergyReserve)) +
+    (findFactoryInRoom(room)?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0);
+  return Math.min(surplus, Math.max(0, available - reserved));
 }
 
 // ---------------------------------------------------------------------------
@@ -683,12 +694,20 @@ function getRoomState(runtime: FactoryControlRuntime, roomName: string): RoomRun
   return runtime.rooms[roomName];
 }
 
+function getFactorySupplyAmount(room: Room, source: StructureTerminal | StructureStorage, resource: ResourceConstant): number {
+  const amount = source.structureType === STRUCTURE_TERMINAL ? getTerminalAmountOutsideMarketSaleExposure(source as StructureTerminal, resource, room.name) : source.store.getUsedCapacity(resource);
+  if (resource !== RESOURCE_ENERGY) return amount;
+  if (isRoomInReserveMode(room.name)) return 0;
+  const policy = resolveRoomEnergyPolicyForRoom(room.name);
+  return Math.max(0, amount - (source.structureType === STRUCTURE_TERMINAL ? policy.terminalEnergyReserve : policy.energyFloor));
+}
+
 function resolveSupplySourceStructure(
   room: Room,
   resource: ResourceConstant,
 ): StructureTerminal | StructureStorage | null {
-  const terminalAmount = room.terminal ? getTerminalAmountOutsideMarketSaleExposure(room.terminal, resource, room.name) : 0;
-  const storageAmount = room.storage?.store.getUsedCapacity(resource) ?? 0;
+  const terminalAmount = room.terminal ? getFactorySupplyAmount(room, room.terminal, resource) : 0;
+  const storageAmount = room.storage ? getFactorySupplyAmount(room, room.storage, resource) : 0;
   if (terminalAmount <= 0 && storageAmount <= 0) return null;
   if (terminalAmount >= storageAmount && room.terminal && terminalAmount > 0) {
     return room.terminal;
@@ -717,8 +736,7 @@ function generateFactorySupplyDrafts(
     const source = resolveSupplySourceStructure(room, comp);
     if (!source) continue;
 
-    const sourceAmount = source.structureType === STRUCTURE_TERMINAL
-      ? getTerminalAmountOutsideMarketSaleExposure(source, comp, room.name) : source.store.getUsedCapacity(comp) ?? 0;
+    const sourceAmount = getFactorySupplyAmount(room, source, comp);
     if (sourceAmount <= 0) continue;
 
     const fromKind = source.structureType === STRUCTURE_TERMINAL ? "terminal" : "storage";
@@ -946,6 +964,13 @@ function executeProductionCycle(
     return;
   }
 
+  if (product !== RESOURCE_ENERGY && recipe.components[RESOURCE_ENERGY] && isRoomInReserveMode(room.name)) {
+    state.stage = "blocked";
+    state.sleepReason = "room_energy_reserve";
+    replaceCarrierTasksForProducerRoom(FACTORY_CARRIER_TASK_PRODUCER, roomName, []);
+    return;
+  }
+
   const productInFactory = factory.store.getUsedCapacity(product) ?? 0;
   const hasProduct = productInFactory > 0;
 
@@ -1065,7 +1090,9 @@ function claimOrder(
   if (!runtime.claimedOrders) {
     runtime.claimedOrders = [];
   }
-  runtime.claimedOrders.push({ orderId, roomName, tick: currentTick, purpose: "buy", credits });
+  const date = new Date().toISOString().slice(0, 10);
+  runtime.claimedOrders = runtime.claimedOrders.filter(c => c.date === date || c.date === undefined && c.tick <= currentTick && currentTick - c.tick < 30_000);
+  runtime.claimedOrders.push({ orderId, roomName, tick: currentTick, purpose: "buy", credits, date });
 }
 
 function findSafeSellOrder(
@@ -1091,11 +1118,12 @@ function findSafeSellOrder(
   const orders = Game.market.getAllOrders({ type: ORDER_SELL, resourceType: resource });
   let best: SafeOrderSelection | null = null;
 
-  const spentThisTick = (runtime.claimedOrders ?? [])
-    .filter(c => c.tick === currentTick && c.purpose === "buy" && c.credits)
+  const today = new Date().toISOString().slice(0, 10);
+  const spentToday = (runtime.claimedOrders ?? [])
+    .filter(c => (c.date === today || c.date === undefined && c.tick <= currentTick && currentTick - c.tick < 30_000) && c.purpose === "buy" && c.credits)
     .reduce((sum, c) => sum + (c.credits ?? 0), 0);
 
-  const budgetRemaining = Math.max(0, marketCfg.dailyBudget - spentThisTick);
+  const budgetRemaining = Math.max(0, marketCfg.dailyBudget - spentToday);
 
   const creditAfterReserve = Math.max(0, availableCredits - marketCfg.creditReserve);
   const effectiveCreditLimit = Math.min(creditAfterReserve, budgetRemaining);
@@ -1195,7 +1223,7 @@ function attemptRegionalRawPurchase(
       res,
       amount,
       terminalEnergy,
-      config.terminalEnergyReserve,
+      Math.max(config.terminalEnergyReserve, resolveRoomEnergyPolicyForRoom(room.name).terminalEnergyReserve),
       terminalFreeCapacity,
       roomName,
       marketCfg,
@@ -1263,6 +1291,7 @@ function attemptRegionalRawPurchase(
         orderType: ORDER_SELL,
         resourceType: res,
         orderRoomName: selection.order.roomName,
+        price: selection.order.price, creditReserve: marketCfg.creditReserve,
       },
     );
     if (code !== OK) {

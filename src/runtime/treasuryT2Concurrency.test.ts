@@ -121,7 +121,7 @@ describe("T2 real endpoint send/deal and carrier concurrency", () => {
     Game.getObjectById = jest.fn((id: string) => extraObjects.get(id) ??
       Object.values(Game.rooms).flatMap((room) => [room.storage, room.terminal])
         .find((object) => object?.id === id) ?? null) as Game["getObjectById"];
-    Game.market = { calcTransactionCost: jest.fn(() => 10), getAllOrders: jest.fn(() => []),
+    Game.market = { credits: 1_000_000, calcTransactionCost: jest.fn(() => 10), getAllOrders: jest.fn(() => []),
       deal: jest.fn(() => OK), incomingTransactions: [], outgoingTransactions: [] } as unknown as Market;
     task = makeTask();
     Memory.rooms = {};
@@ -220,7 +220,7 @@ describe("T2 real endpoint send/deal and carrier concurrency", () => {
     }
     return executeMarketDeal("ordinary-order", 10, roomName, "resourceControl:ordinary", {
       orderType: action === "market-buy" ? ORDER_SELL : ORDER_BUY,
-      resourceType: RESOURCE_KEANIUM, orderRoomName: thirdName,
+      resourceType: RESOURCE_KEANIUM, orderRoomName: thirdName, price: 1,
     });
   }
 

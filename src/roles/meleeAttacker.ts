@@ -638,7 +638,7 @@ function runCounterstrikeApproach(creep: Creep): boolean {
       const direction = getDirectionToCoordinates(creep, state.approachX, state.approachY);
       if (direction) {
         clearMovementState(creep);
-        measureCreepIntent(() => creep.move(direction));
+        issueMove(creep, direction);
       }
       return true;
     }
@@ -670,7 +670,7 @@ function runCounterstrikeApproach(creep: Creep): boolean {
   const direction = getDirectionToCoordinates(creep, approach.x, approach.y);
   if (direction) {
     clearMovementState(creep);
-    measureCreepIntent(() => creep.move(direction));
+    issueMove(creep, direction);
   }
   return true;
 }
@@ -870,7 +870,7 @@ function moveToPartnerRoom(creep: Creep, roomName: string): void {
     exitDirection <= LEFT &&
     isOnExitDirection(creep.pos, exitDirection as DirectionConstant)
   ) {
-    measureCreepIntent(() => creep.move(exitDirection as DirectionConstant));
+    issueMove(creep, exitDirection as DirectionConstant);
     return;
   }
 
@@ -898,7 +898,7 @@ function moveAcrossExitToTargetRoom(creep: Creep, targetRoom: string): boolean {
   if (typeof exitDirection !== "number" || exitDirection < TOP || exitDirection > LEFT) return false;
   if (!isOnExitDirection(creep.pos, exitDirection as DirectionConstant)) return false;
 
-  measureCreepIntent(() => creep.move(exitDirection as DirectionConstant));
+  issueMove(creep, exitDirection as DirectionConstant);
   return true;
 }
 

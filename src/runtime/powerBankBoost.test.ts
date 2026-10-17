@@ -153,6 +153,34 @@ describe("powerBankBoost", () => {
 
   describe("prepareBoosts", () => {
 
+    it("重复失败不清空合成任务也不重置合成阶段", () => {
+      const compound = RESOURCE_CATALYZED_UTRIUM_ACID;
+      const lab = createLabWithCompound("empty-boost-lab", SOURCE_ROOM, null, 0, 2000);
+      Game.rooms[SOURCE_ROOM] = createRoomWithInfrastructure({ name: SOURCE_ROOM, labs: [lab] });
+      setActiveSynthesisPlan(SOURCE_ROOM);
+      replaceCarrierTasksForProducerRoom("synthesisControl", SOURCE_ROOM, [{
+        id: "synthesis-still-running", type: "lab_cleanup", priority: 200,
+        steps: [{ id: "keep", resource: RESOURCE_UTRIUM, fromId: lab.id, fromKind: "lab",
+          toId: `${SOURCE_ROOM}-storage`, toKind: "storage", amount: 60 }],
+      }]);
+      for (let i = 0; i < 3; i++) {
+        expect(prepareBoosts("failed-owner", SOURCE_ROOM, 0, new Map([[compound, 60]])).status).toBe("failed");
+        expect(isSynthesisPaused(SOURCE_ROOM)).toBe(false);
+        expect(Memory.runtime?.synthesisControl?.rooms[SOURCE_ROOM].activeProduct).toBe(RESOURCE_UTRIUM_HYDRIDE);
+        expect(listCarrierTasksByRoom(SOURCE_ROOM).map(task => task.id)).toContain("synthesis-still-running");
+        Game.time++;
+      }
+    });
+
+    it("防御专用 lab 不可被出征 Boost 占用", () => {
+      const compound = RESOURCE_CATALYZED_UTRIUM_ACID;
+      const lab = createLabWithCompound("defense-only", SOURCE_ROOM, compound, 60, 2000);
+      Game.rooms[SOURCE_ROOM] = createRoomWithInfrastructure({ name: SOURCE_ROOM, labs: [lab] });
+      Memory.cfg!.homeDefense = { rooms: { [SOURCE_ROOM]: { boostLabId: lab.id } } };
+      expect(prepareBoosts("war-owner", SOURCE_ROOM, 0, new Map([[compound, 60]]))).toMatchObject({ status: "failed", reason: "insufficient_labs" });
+      expect(listCarrierTasksByRoom(SOURCE_ROOM)).toHaveLength(0);
+    });
+
     it("withdraws old synthesis work as soon as boost preparation pauses production", () => {
       const compound = RESOURCE_CATALYZED_UTRIUM_ACID;
       const lab = createLabWithCompound("boost-lab", SOURCE_ROOM, compound, 60, 2000);

@@ -629,7 +629,7 @@ describe("carrierRole mineral hauling", () => {
     }
 
     // bootstrap-only grant 允许 Spawn 使用较低 reserve，却不能让 Tower
-    // 绕过 terminalPickupRooms=false，也不能让已允许的 Tower 继承低 reserve。
+    // 绕过 terminalPickupRooms=false；已允许的 Tower 使用显式房间储备，不领取 bootstrap grant。
     for (const terminalPickupEnabled of [false, true]) {
       resetCarrierFixture();
       const { room, creep } = installTerminalBootstrapEnergyScenario("W132N2", {
@@ -641,12 +641,13 @@ describe("carrierRole mineral hauling", () => {
       useActualEnergyPickupReservationsForTest();
 
       carrierRole().source(creep);
-      expect(creep.withdraw).not.toHaveBeenCalled();
+      if (terminalPickupEnabled) expect(creep.withdraw).toHaveBeenCalledWith(room.terminal, RESOURCE_ENERGY, 800);
+      else expect(creep.withdraw).not.toHaveBeenCalled();
       expect(Memory.runtime?.energyPickup?.terminalBootstrapRecovery?.[room.name]?.lastRecoveryPickupAt)
         .toBeUndefined();
     }
 
-    // 通用 Terminal 授权在默认 50,000 reserve 之外可补塔，不记为 bootstrap pickup。
+    // 通用 Terminal 授权按显式房间储备计算余量，不记为 bootstrap pickup。
     {
       resetCarrierFixture();
       const { room, terminal, creep } = installTerminalBootstrapEnergyScenario("W133N2", {
@@ -658,7 +659,7 @@ describe("carrierRole mineral hauling", () => {
       useActualEnergyPickupReservationsForTest();
 
       carrierRole().source(creep);
-      expect(creep.withdraw).toHaveBeenCalledWith(terminal, RESOURCE_ENERGY, 400);
+      expect(creep.withdraw).toHaveBeenCalledWith(terminal, RESOURCE_ENERGY, 800);
       expect(Memory.runtime?.energyPickup?.terminalBootstrapRecovery?.[room.name]?.lastRecoveryPickupAt)
         .toBeUndefined();
     }

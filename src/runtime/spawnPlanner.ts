@@ -13,6 +13,7 @@ import { canSpawnDepositConfig } from "@/runtime/depositHarvest";
 import { reconcileSpawnQueueOwnership } from "@/runtime/spawnQueueOwnership";
 import { colonizationHarvesterPreSpawnThreshold } from "@/runtime/colonizationHarvesterPreSpawn";
 import type { CreepConfig } from "@/types/system";
+import { fixedBodyExceedsCapacity, isSpawnConfigEconomicallyBlocked } from "@/runtime/outboundMissionPolicy";
 
 const CARRIER_PRESPAWN_BUFFER_TICKS = 30;
 const UPGRADER_PRESPAWN_BUFFER_TICKS = 30;
@@ -73,6 +74,7 @@ function getSpawnRolePriority(role: CreepConfig["role"] | undefined): number {
 
 function getSpawnConfigPriority(roomName: string, configName: string): number {
   const config = getCreepConfigService().get(configName);
+  if (config?.role === "homeDefender") return -3;
   if (configName.startsWith(`${roomName}:manual:bootstrapHarvester:`)) return -2;
   if (config?.roomName === roomName &&
       ((config.role === "harvester" && configName.startsWith(`${roomName}:harvester:`)) ||
@@ -87,6 +89,7 @@ function getSpawnConfigPriority(roomName: string, configName: string): number {
   if (config?.role === "carrier" && config.roomName === roomName) {
     return 1;
   }
+  if (config?.roomName === roomName && (config.role === "miner" || config.role === "harvester")) return 1.5;
   if (configName.includes(":war:")) {
     return 2;
   }
@@ -282,6 +285,16 @@ function getSpawnTime(spawn: StructureSpawn, configName: string, context?: Spawn
 }
 
 function estimateSourceWorkerPreSpawnThreshold(
+  spawn: StructureSpawn, configName: string, config: CreepConfig, context?: SpawnPlanningContext,
+): number {
+  const priority = getSpawnConfigPriority(spawn.room.name, configName);
+  const delay = (spawn.spawning?.remainingTime ?? 0) + (spawn.memory.spawnList ?? [])
+    .filter(name => name !== configName && getSpawnConfigPriority(spawn.room.name, name) <= priority)
+    .reduce((sum, name) => sum + getSpawnTime(spawn, name, context), 0);
+  return baseSourceWorkerPreSpawnThreshold(spawn, configName, config, context) + delay;
+}
+
+function baseSourceWorkerPreSpawnThreshold(
   spawn: StructureSpawn,
   configName: string,
   config: CreepConfig,
@@ -290,9 +303,7 @@ function estimateSourceWorkerPreSpawnThreshold(
   const supportThreshold = config.role === "colonizerHarvester"
     ? colonizationHarvesterPreSpawnThreshold(spawn, configName, config, getSpawnBody(spawn, configName)) : undefined;
   if (supportThreshold !== undefined) {
-    const queueDelay = (spawn.spawning?.remainingTime ?? 0) + (spawn.memory.spawnList ?? [])
-      .reduce((sum, name) => sum + getSpawnTime(spawn, name, context), 0);
-    return supportThreshold + queueDelay;
+    return supportThreshold;
   }
   const workPos = getSourceWorkerWorkPos(config);
   if (!workPos) {
@@ -509,6 +520,7 @@ function shouldQueueConfig(
   config: CreepConfig,
   context?: SpawnPlanningContext,
 ): boolean {
+  if (fixedBodyExceedsCapacity(config, estimateSpawn.room.energyCapacityAvailable) || isSpawnConfigEconomicallyBlocked(configName, config)) return false;
   if (isConfigQueuedInSpawns(spawns, configName) || isConfigSpawning(configName, context || createSpawnPlanningContext())) {
     return false;
   }

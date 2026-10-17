@@ -30,6 +30,7 @@ function installMarketMock(overrides: Partial<WritableMarketMock> = {}): Writabl
     cancelOrder: jest.fn(() => OK),
     ...overrides,
   };
+  Object.assign(market, { credits: 1_000_000, getOrderById: jest.fn(() => ({ price: 1 })) });
   (Game as unknown as { market: WritableMarketMock }).market = market;
   return market;
 }
@@ -74,6 +75,7 @@ function executeProductionBuy(
 describe("market action arbiter", () => {
   beforeEach(() => {
     Game.time = 100;
+    Memory.cfg = {};
     Memory.data = undefined;
     Memory.runtime = undefined;
     clearMarketActionArbiterForTest();
@@ -230,5 +232,33 @@ describe("market action arbiter", () => {
         RESOURCE_ENERGY,
       ),
     ).toBe(0);
+  });
+});
+
+
+describe("跨模块采购信用额度", () => {
+  beforeEach(() => {
+    clearMarketActionArbiterForTest();
+    clearMarketSaleExposureReservationsForTest();
+    Memory.cfg = {}; Memory.data = undefined; Memory.runtime = undefined;
+    Game.time = 800;
+    installTerminal("W1N1", { energy: 100_000 });
+    installTerminal("W2N2", { energy: 100_000 });
+  });
+  it("同 tick 第二间房不能重复花掉第一笔已承诺的信用，下一 tick 重新计量", () => {
+    const market = installMarketMock();
+    Object.assign(market, { credits: 15_000 });
+    expect(executeProductionBuy("first", 4_000, "W1N1", "boostControl")).toBe(OK);
+    expect(executeProductionBuy("second", 4_000, "W2N2", "factoryControl")).toBe(ERR_NOT_ENOUGH_RESOURCES);
+    expect(market.deal).toHaveBeenCalledTimes(1);
+    Game.time++;
+    expect(executeProductionBuy("next", 4_000, "W2N2", "factoryControl")).toBe(OK);
+  });
+  it("明确失败会释放额度供另一间房使用", () => {
+    const market = installMarketMock({ deal: jest.fn(() => ERR_TIRED) });
+    Object.assign(market, { credits: 15_000 });
+    expect(executeProductionBuy("first", 4_000, "W1N1", "boostControl")).toBe(ERR_TIRED);
+    market.deal.mockReturnValue(OK);
+    expect(executeProductionBuy("second", 4_000, "W2N2", "factoryControl")).toBe(OK);
   });
 });

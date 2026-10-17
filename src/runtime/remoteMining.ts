@@ -651,7 +651,7 @@ function processScoutLifecycle(store: Record<string, RemoteMiningTask>, config: 
 
 // ─── Remote road/container construction ─────────────────────────────
 
-const GLOBAL_SITE_SOFT_CAP = 95;
+const GLOBAL_SITE_SOFT_CAP = 75;
 const REMOTE_ROAD_PATH_MAX_OPS = 10000;
 const REMOTE_ROAD_PATH_MAX_ROOMS = 16;
 
@@ -908,6 +908,24 @@ export function processRemoteConstruction(
     return;
   }
 
+  const activePositions = new Set(Object.values(store).filter(task => task.status !== "abandoned").flatMap(task => [
+    ...(task.roadPlan?.positions ?? []), ...Object.values(task.containerPositions ?? {})
+  ]).map(pos => `${pos.roomName}:${pos.x}:${pos.y}`));
+  const sitesByPosition = new Map<string, ConstructionSite[]>();
+  for (const site of Object.values(Game.constructionSites ?? {})) {
+    const key = `${site.pos.roomName}:${site.pos.x}:${site.pos.y}`;
+    const entries = sitesByPosition.get(key) ?? [];
+    entries.push(site);
+    sitesByPosition.set(key, entries);
+  }
+  for (const task of Object.values(store).filter(task => task.status === "abandoned")) {
+    for (const pos of [...(task.roadPlan?.positions ?? []), ...Object.values(task.containerPositions ?? {})]) {
+      if (Game.rooms[pos.roomName]?.controller?.my || activePositions.has(`${pos.roomName}:${pos.x}:${pos.y}`)) continue;
+      for (const site of sitesByPosition.get(`${pos.roomName}:${pos.x}:${pos.y}`) ?? []) {
+        if (site.structureType === STRUCTURE_ROAD || site.structureType === STRUCTURE_CONTAINER) site.remove();
+      }
+    }
+  }
   const globalSiteCount = Object.keys(Game.constructionSites ?? {}).length;
   if (globalSiteCount >= GLOBAL_SITE_SOFT_CAP) {
     return;

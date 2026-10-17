@@ -1,5 +1,7 @@
 import {
   getSourceContainerPositionsForRoom,
+  getProtoControllerLinkContainer,
+  runRoomPlannerConstruction,
 } from "@/runtime/roomPlannerConstruction";
 
 type RuntimeGlobal = typeof global & {
@@ -245,6 +247,34 @@ describe("getSourceContainerPositionsForRoom", () => {
     Game.time = 100;
     Game.rooms = {} as Game["rooms"];
     Memory.data = {} as Memory["data"];
+  });
+
+  it("控制器容器保留至控制器 link 实际获得建设名额", () => {
+    const room = createRoom({ level: 4 });
+    Game.rooms[room.name] = room;
+    Game.constructionSites = {};
+    Game.map = { describeExits: () => ({}) } as unknown as Game["map"];
+    Memory.cfg = { roomPlannerBuild: { enabled: true } };
+    Memory.runtime = {};
+    const original = (global as RuntimeGlobal).RoomPosition;
+    Object.assign(global, { RoomPosition: MockRoomPosition });
+    const structure = (type: StructureConstant, x: number, y: number) => ({ id: `${type}:${x}:${y}`, my: true,
+      structureType: type, pos: new MockRoomPosition(x, y, room.name), room }) as unknown as MockStructure;
+    const container = structure(STRUCTURE_CONTAINER, 25, 24) as unknown as StructureContainer;
+    container.destroy = jest.fn(() => { room.__structures = room.__structures.filter(item => item !== container as unknown as MockStructure); return OK; });
+    const storage = structure(STRUCTURE_STORAGE, 10, 10) as unknown as StructureStorage;
+    room.storage = storage;
+    room.__structures.push(structure(STRUCTURE_SPAWN, 11, 10), storage as unknown as MockStructure, container as unknown as MockStructure);
+    setRoomPlannerLayout(room.name, { link: [{ x: 25, y: 24 }] });
+    try {
+      runRoomPlannerConstruction();
+      expect(container.destroy).not.toHaveBeenCalled();
+      expect(getProtoControllerLinkContainer(room)).toBe(container);
+      room.controller.level = 5; Game.time += 100; resetRuntimeServices();
+      runRoomPlannerConstruction();
+      expect(container.destroy).toHaveBeenCalledTimes(1);
+      expect(room.__siteAttempts).toContainEqual({ x: 25, y: 24, structureType: STRUCTURE_LINK });
+    } finally { Object.assign(global, { RoomPosition: original }); }
   });
 
   it("deduplicates remote mining container positions with planned source container positions", () => {

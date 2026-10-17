@@ -26,7 +26,7 @@ import {
   releaseProductionReservation,
   reserveProductionResource,
 } from "@/runtime/resourceReservation";
-import { resolveRoomEnergyPolicy } from "@/runtime/roomEnergyPolicy";
+import { resolveRoomEnergyPolicyForRoom } from "@/runtime/roomEnergyPolicy";
 import { isRoomInReserveMode } from "@/runtime/roomReserve";
 import { getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
 
@@ -271,9 +271,7 @@ function buildEnergyDraft(
   );
   const commitments = getOtherCarrierCommitments(room.name, RESOURCE_ENERGY);
   const holderId = getReservationHolderId(nuker, RESOURCE_ENERGY);
-  const policy = resolveRoomEnergyPolicy(
-    Memory.cfg?.resourceControl?.rooms?.[room.name],
-  );
+  const policy = resolveRoomEnergyPolicyForRoom(room.name);
   const outgoing = createResourceTransferTaskAmountIndex().getOutgoing(
     room.name,
     RESOURCE_ENERGY,

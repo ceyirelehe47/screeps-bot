@@ -1,10 +1,11 @@
+import { resolveRoomEnergyPolicyForRoom } from "@/runtime/roomEnergyPolicy";
 import {
   ensureCreepAssignmentState,
   getCreepAssignmentState,
 } from "@/runtime/creepAssignmentState";
 
 const RESERVATION_TTL = 12;
-export const TERMINAL_ENERGY_PICKUP_RESERVE = 50_000;
+export const TERMINAL_ENERGY_PICKUP_RESERVE = 25_000;
 
 type PickupTargetKind = "resource" | "structure";
 type PickupTarget = Resource | AnyStoreStructure | Tombstone | Ruin;
@@ -43,10 +44,10 @@ function ensurePickupReservationStore(): PickupReservationStore {
   return runtimeGlobal.__pickupReservations;
 }
 
-function getTerminalEnergyReserve(options?: PickupAvailabilityOptions): number {
+function getTerminalEnergyReserve(options?: PickupAvailabilityOptions, roomName?: string): number {
   const configured = options?.terminalEnergyReserve;
   if (configured === undefined || !Number.isFinite(configured)) {
-    return TERMINAL_ENERGY_PICKUP_RESERVE;
+    return roomName ? resolveRoomEnergyPolicyForRoom(roomName).terminalEnergyReserve : TERMINAL_ENERGY_PICKUP_RESERVE;
   }
   return Math.max(0, Math.floor(configured));
 }
@@ -62,7 +63,7 @@ export function getPickupTargetEnergyAmount(
   if ("store" in target) {
     const amount = target.store.getUsedCapacity(RESOURCE_ENERGY);
     if ((target as Structure).structureType === STRUCTURE_TERMINAL) {
-      return Math.max(0, amount - getTerminalEnergyReserve(options));
+      return Math.max(0, amount - getTerminalEnergyReserve(options, (target as StructureTerminal).room?.name));
     }
     return amount;
   }

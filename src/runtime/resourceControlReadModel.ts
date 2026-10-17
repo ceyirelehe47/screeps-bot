@@ -94,6 +94,8 @@ interface TerminalRecoveryObservation {
 }
 
 export interface ResourceControlTransferContext {
+  marketCargoTargets?: Map<string, { resource: ResourceConstant; targetStock: number }>;
+  marketSellingResources?: Set<ResourceConstant>;
   tasks: ResourceTransferTask[];
   taskById: Map<string, ResourceTransferTask>;
   snapshotByRoom: Map<string, ResourceControlSnapshot>;
@@ -132,6 +134,8 @@ export type ResourceControlCommitmentReadContext = Pick<
   | "carrierProductionByRoomResource"
 > & {
   receiverCapacityLedger: Pick<ReceiverCapacityLedger, "getAvailability">;
+  marketCargoTargets?: Map<string, { resource: ResourceConstant; targetStock: number }>;
+  marketSellingResources?: Set<ResourceConstant>;
 };
 
 interface SynthesisShadowCaptureContext
@@ -1253,13 +1257,22 @@ export function getProtectedResourceAmount(
   excludeTaskId?: string,
 ): number {
   let safetyFloor = snapshot.mineralFloor[resource] || 0;
+  const hub = Memory.cfg?.hub;
+  const transfer = excludeTaskId ? context.taskById.get(excludeTaskId) : undefined;
+  const isHubSupply = transfer?.reason?.startsWith("hub:export:") && !isHubOnlyReserveCompound(resource);
+  if (hub?.enabled && hub.hubRoomName === snapshot.roomName && !isHubSupply) {
+    if ((hub.targetCompounds ?? HUB_TARGET_COMPOUNDS).includes(resource)) safetyFloor = Math.max(safetyFloor,
+      isHubOnlyReserveCompound(resource) ? hub.hubOnlyReservePerCompound ?? 50_000 : hub.hubReservePerCompound ?? 20_000);
+    if (["H", "O", "U", "K", "L", "Z", "X", "G"].includes(resource)) safetyFloor = Math.max(safetyFloor, Memory.cfg?.factoryControl?.hub?.mineralFloor ?? 20_000);
+  }
   if (HUB_TARGET_COMPOUNDS.includes(resource) && !isHubOnlyReserveCompound(resource)) {
     safetyFloor = Math.max(safetyFloor, config.t3ReservePerRoom);
   }
-  return (
-    safetyFloor +
-    getProductionCommitmentAmount(snapshot.roomName, resource, context)
-  );
+  const exposure = getMarketSaleTerminalExposure(snapshot.roomName, resource);
+  if (exposure.blocked) return getStock(snapshot, resource);
+  const cargo = context.marketCargoTargets?.get(snapshot.roomName);
+  return safetyFloor + getProductionCommitmentAmount(snapshot.roomName, resource, context) +
+    Math.max(exposure.reservedAmount, cargo?.resource === resource ? cargo.targetStock : 0);
 }
 
 export function getTotalMovableResourceAmount(

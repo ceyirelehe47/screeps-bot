@@ -21,7 +21,7 @@ function setup(resources: Record<string, number> = { energy: 300000, X: 40000 })
   Game.time = 1000;
   (Game as any).rooms = { W1N1: hub.room };
   (Game as any).map = { getRoomLinearDistance: jest.fn(() => 1) };
-  Memory.cfg = { hub: { enabled: true, hubRoomName: "W1N1" }, factoryControl: { enabled: true } };
+  Memory.cfg = { hub: { enabled: true, hubRoomName: "W1N1" }, factoryControl: { enabled: true, hub: { energyFloor: 200_000, energyTarget: 250_000, energyCompressionStart: 400_000 } } };
   return hub;
 }
 

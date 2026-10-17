@@ -14,6 +14,7 @@ export interface DefenseFrontSummary {
 export interface RoomDefenseCoordination {
   fronts: DefenseFrontSummary[];
   towerFocusFrontId?: string;
+  towerBurstTarget?: { tick: number; id: string };
   defenderAssignments?: Record<string, string>;
   defenderRoles?: Record<string, "primary" | "secondary">;
 }
@@ -142,4 +143,13 @@ export function clearDefenseCoordination(roomName: string): void {
   if (Object.keys(Memory.runtime.defenseCoordination).length === 0) {
     delete Memory.runtime.defenseCoordination;
   }
+}
+
+export function setTowerBurstTarget(roomName: string, id?: string): void {
+  const state = ensureRoomCoordination(roomName);
+  state.towerBurstTarget = id ? { tick: Game.time, id } : undefined;
+}
+export function getTowerBurstTarget(roomName: string): string | undefined {
+  const target = getRoomDefenseCoordination(roomName)?.towerBurstTarget;
+  return target?.tick === Game.time ? target.id : undefined;
 }

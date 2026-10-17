@@ -40,7 +40,8 @@ const MEMORY_BRANCHES = {
   runtime: {
     declaration: "src/types/memory/runtime.d.ts",
     interfaceName: "ScreepsMemoryRuntime",
-    schemaFingerprint: "48a7e366efb5f2c37492a49bf0730bc0b698380733123ce47d0873c816a879db",
+    // 新增当 tick 塔协同目标，以及工厂日预算的 credits / date；顶层归属不变。
+    schemaFingerprint: "cca972833d518869e6586d0c90edb8764b0e1405224b860ab0a9876607bd220c",
     imports: [
       "@/runtime/hubPlanner:AllocationLedgerEntry",
       "@/runtime/hubPlanner:DirectRouteDecision",

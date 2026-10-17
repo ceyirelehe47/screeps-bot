@@ -224,7 +224,7 @@ describe("nukerControl", () => {
         reserveMode: false,
         ghodiumDeficit: 5_000,
         energyDeficit: 300_000,
-        safeEnergy: 78_171,
+        safeEnergy: 76_795,
         carrierTaskCount: 2,
       }),
     );

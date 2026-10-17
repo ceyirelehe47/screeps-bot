@@ -43,6 +43,15 @@ describe("runAutoReserveFlags", () => {
     Memory.cfg = {};
   });
 
+  it("RCL4 使用小房间储备，显式房间配置仍优先", () => {
+    const room = createRoom("W1N1", 15_000, 4);
+    runAutoReserveFlags();
+    expect(room.createFlag).not.toHaveBeenCalled();
+    setRoomPolicy(room.name, 75_000, 110_000);
+    runAutoReserveFlags();
+    expect(room.createFlag).toHaveBeenCalled();
+  });
+
   it("creates the auto reserve flag below the room's configured energyFloor", () => {
     const room = createRoom("W1N1", 74_999);
     setRoomPolicy(room.name, 75_000, 110_000);

@@ -1,3 +1,5 @@
+import { getMoveIntentReceipt } from "@/movement/traffic";
+import { issueMove } from "@/movement/traffic";
 import { getRefillableHostileTowers } from "@/runtime/combatTowerThreat";
 import { warPartner } from "@/roles/warPartner";
 import { clearMovementState, moveToTarget, moveToTargetRoom } from "@/roles/shared";
@@ -64,7 +66,7 @@ function moveToPartnerRoom(creep: Creep, roomName: string): void {
     exitDirection <= LEFT &&
     isOnExitDirection(creep.pos, exitDirection as DirectionConstant)
   ) {
-    measureCreepIntent(() => creep.move(exitDirection as DirectionConstant));
+    issueMove(creep, exitDirection as DirectionConstant);
     return;
   }
 
@@ -140,7 +142,7 @@ function coordinateCounterstrike(creep: Creep, attacker: Creep): boolean {
   const direction = creep.pos.getDirectionTo(attacker.pos);
   if (!direction) return false;
   clearMovementState(creep);
-  measureCreepIntent(() => creep.move(direction));
+  issueMove(creep, direction);
   return true;
 }
 
@@ -165,7 +167,10 @@ function moveWithWarAttackerFormation(creep: Creep, targetRoom: string, encodedR
 
   if (creep.room.name === targetRoom && attacker.room.name === targetRoom && isOnRoomExit(creep.pos)) {
     if (towerDrain) followMovingWarAttacker(creep, attacker);
-    else moveOffExit(creep);
+    else moveOffExit(creep, false, (_direction, pos) => {
+      const next = getMoveIntentReceipt(attacker)?.to ?? attacker.pos;
+      return pos.roomName === next.roomName && Math.max(Math.abs(pos.x - next.x), Math.abs(pos.y - next.y)) <= 1;
+    });
     return true;
   }
 

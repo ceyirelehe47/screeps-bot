@@ -47,6 +47,20 @@ describe("mountSpawn", () => {
     Game.spawns = {};
   });
 
+  it("超容量固定队首被移出并留下诊断，同 tick 后续可支付单位出生", () => {
+    const room = { name: "W1N1", energyAvailable: 300, energyCapacityAvailable: 300 } as Room;
+    const blocked = "W1N1:colonizationSupport:W2N2:upgrader", worker = "W1N1:worker:0";
+    Memory.data!.creepConfigs![blocked] = { role: "colonizerUpgrader", roomName: room.name, args: [], body: [HEAL, HEAL, MOVE] };
+    Memory.data!.creepConfigs![worker] = { role: "worker", roomName: room.name, args: [], body: [WORK, CARRY, MOVE] };
+    const spawn = createSpawn("Spawn1", room, [blocked, worker]);
+    Game.rooms = { W1N1: room }; Game.spawns = { Spawn1: spawn }; Game.flags = {};
+    Object.setPrototypeOf(spawn, prototype);
+    prototype.work.call(spawn);
+    expect(spawn.spawnCreep).toHaveBeenCalledWith([WORK, CARRY, MOVE], expect.any(String), expect.any(Object));
+    expect(spawn.memory.spawnList).toEqual([]);
+    expect(spawn.memory._lastSpawnFail).toMatchObject({ configName: blocked, bodyCost: 550, roomEnergyCapacityAvailable: 300 });
+  });
+
   it("战争孵化接受后同 tick 停止任务，尚未进入 Game.creeps 的 Memory 也会解绑", () => {
     const room = { name: "E1N57", controller: { my: true, level: 8 }, energyAvailable: 300, energyCapacityAvailable: 300 } as unknown as Room;
     const name = "E1N57:war:E3N57:meleeAttacker:0";

@@ -24,6 +24,8 @@ export function getPowerBankBoostPrep(taskId: string): BoostPrepMemory | undefin
 export function getActivePowerBankBoostLabIds(sourceRoomName: string, excludeTaskId?: string): Set<string> {
   const store = ensurePowerBankBoostPrepStore();
   const labIds = new Set<string>();
+  const defenseLab = Memory.cfg?.homeDefense?.rooms?.[sourceRoomName]?.boostLabId;
+  if (defenseLab) labIds.add(defenseLab);
   for (const prep of Object.values(store)) {
     if (prep.sourceRoomName !== sourceRoomName) continue;
     if (excludeTaskId && prep.taskId === excludeTaskId) continue;

@@ -1,3 +1,4 @@
+import { setTowerBurstTarget } from "@/runtime/defenseCoordination";
 import { recordFixedCpuAction } from "@/runtime/cpuPhaseProfiler";
 import { getRoomDefenseCoordination, getTowerFocusFront, setTowerFocusFront } from "@/runtime/defenseCoordination";
 import { chooseBoundaryBurstEngagement, chooseInsideBurstTarget } from "@/runtime/hostilePriorities";
@@ -7,7 +8,7 @@ import { getBoundaryRamparts } from "@/runtime/safeZoneHelpers";
 
 const TOWER_MIN_REPAIR_ENERGY = 400;
 const TOWER_MIN_EMERGENCY_REPAIR_ENERGY = 200;
-const RAMPART_EMERGENCY_TRIGGER_HITS = 3000;
+const RAMPART_EMERGENCY_TRIGGER_HITS = 6000;
 const RAMPART_EMERGENCY_TARGET_HITS = 6000;
 const TOWER_FOCUS_STALL_HITS_DELTA = 40;
 const TOWER_FOCUS_STALL_TICKS = 2;
@@ -353,7 +354,8 @@ function getHomeDefenders(room: Room): Creep[] {
 
 function getParticipatingDefenderBurstDamage(room: Room, target: Creep): number {
   return getHomeDefenders(room)
-    .filter((creep) => creep.pos.getRangeTo(target.pos) <= 1)
+    .filter((creep) => creep.pos.getRangeTo(target.pos) <= 1 && creep.room.find(FIND_MY_STRUCTURES,
+      { filter: structure => structure.structureType === STRUCTURE_RAMPART }).some(rampart => creep.pos.isEqualTo(rampart.pos)))
     .reduce((sum, creep) => sum + creep.getActiveBodyparts(ATTACK) * ATTACK_POWER, 0);
 }
 
@@ -465,7 +467,8 @@ function runTowerCombat(room: Room, towers: StructureTower[], hostiles: Creep[],
     state.spreadUntil = Game.time + TOWER_SPREAD_PROBE_DURATION;
   }
 
-  const useSpread = shouldForceSpread || shouldProbeSpread;
+  const useSpread = !coordinatedBurstTarget && (shouldForceSpread || shouldProbeSpread);
+  setTowerBurstTarget(room.name, useSpread ? undefined : focusTarget.id);
   if (useSpread) {
     const spreadAssignments = assignSpreadTargets(attackTowers, combatHostiles, analysis);
     for (const tower of attackTowers) {

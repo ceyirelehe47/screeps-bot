@@ -1,3 +1,4 @@
+import { issueMove } from "@/movement/traffic";
 import { warGeometry, warTerrain, warTerrainVersion } from "@/roles/warGeometry";
 import { warPartner } from "@/roles/warPartner";
 import {
@@ -301,7 +302,7 @@ export function moveTowerDrainBorderAttack(creep: Creep, target: RoomPosition, w
   const direction = creep.pos.getDirectionTo(new RoomPosition(selected.x, selected.y, state.targetRoom));
   if (!direction) return ERR_NO_PATH;
   clearMovementState(creep);
-  return measureCreepIntent(() => creep.move(direction));
+  return issueMove(creep, direction);
 }
 
 function walkable(roomName: string, tile: { x: number; y: number }, room: Room | undefined): boolean {
@@ -446,7 +447,7 @@ function move(creep: Creep, tile: { x: number; y: number }, roomName: string, av
 function moveAcross(creep: Creep, direction: DirectionConstant): void {
   if (creep.fatigue > 0 || creep.getActiveBodyparts(MOVE) <= 0) return;
   clearMovementState(creep);
-  measureCreepIntent(() => creep.move(direction));
+  issueMove(creep, direction);
 }
 
 /** Engine按hits从身体尾端回填；部分存活的HEAL/MOVE仍完整生效。 */

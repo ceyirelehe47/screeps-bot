@@ -61,7 +61,7 @@ export function processTask(task: WarTask): void {
     }
     if (task.failReason?.startsWith("npc_")) delete task.failReason;
   }
-  if (task.npcAuto) {
+  if (task.npcAuto || task.squad === "towerDrainDuo" || task.squad === "t3Duo" || task.tactic === "t3TowerDrainDuo") {
     const capacity = Game.rooms[task.sourceRoom]?.energyCapacityAvailable;
     const bodies = getSquadPolicy(task).parallel ? [TOWER_DRAIN_ATTACKER_BODY, TOWER_DRAIN_HEALER_BODY] : [T3_ATTACKER_BODY, T3_HEALER_BODY];
     if (capacity !== undefined && bodies.some(body => body.reduce((sum, part) => sum + BODYPART_COST[part], 0) > capacity)) {

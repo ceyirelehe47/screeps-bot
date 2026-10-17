@@ -235,6 +235,13 @@ function createResourceTransferTaskWithOrigin(
 
   const normalizedReason = normalizeTaskReason(reason);
   const store = ensureResourceTransferTaskStore();
+  const isBalancingReason = (value?: string): boolean => !!value &&
+    ["capacity:relief:", "hub:reclaim:", "hub:factory:"].some(prefix => value.startsWith(prefix));
+  if (origin === "automatic" && Object.values(store).some(task => task.fromRoomName === toRoomName &&
+      task.toRoomName === fromRoomName && task.resource === resource &&
+      (isBalancingReason(normalizedReason) || isBalancingReason(task.reason)) && countsResourceTransferTaskTowardDemand(task))) {
+    return "ERR_REVERSE_TRANSFER_ACTIVE";
+  }
   const mergeTarget = findMergeablePendingTask(store, fromRoomName, toRoomName, resource, origin, normalizedReason);
   if (mergeTarget) {
     mergeTarget.amount += normalizedAmount;

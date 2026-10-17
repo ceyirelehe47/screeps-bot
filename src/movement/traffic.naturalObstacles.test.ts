@@ -82,6 +82,7 @@ interface RoomContextSeed {
 
 function setupRoomContext(seed: RoomContextSeed = {}): void {
   (getTickContextService as jest.Mock).mockReturnValue({
+    getMyRooms: () => [],
     getRoomContext: jest.fn(() => ({
       room: {
         name: "W1N1",

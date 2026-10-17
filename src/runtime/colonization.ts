@@ -4,7 +4,7 @@ import { isRcl3ExtensionBuildoutComplete } from "@/runtime/roomPlannerConstructi
 import { getCreepConfigService, getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
 import { clearWarRoomTask, isWarRoomClearDone, requestWarRoomClear } from "@/runtime/warControl";
 import { isDefenseMode } from "@/runtime/defenseMode";
-import { canUseColonizationTransit, colonizationTransitKey, runColonizationSupport } from "@/runtime/colonizationSupport";
+import { canUseColonizationTransit, colonizationTransitKey, runColonizationSupport, readColonizationSupportPolicy } from "@/runtime/colonizationSupport";
 import {
   COLONIZATION_TRAVEL_PATH_RETRY_INTERVAL,
   getCachedStaticTravelMatrix,
@@ -1206,6 +1206,13 @@ function ensureClaimer(task: ColonizationTask): void {
 }
 
 function ensureBootstrapHarvester(task: ColonizationTask, sourceId: Id<Source>): void {
+  if (readColonizationSupportPolicy(task.targetRoom)) {
+    const name = getTaskConfigName(task, "harvester", sourceId);
+    const existing = ensureConfigStore()[name];
+    if (existing) existing.roomName = undefined;
+    for (const spawn of getSpawnsForRoom(task.sourceRoom)) if (spawn.memory.spawnList?.includes(name)) spawn.memory.spawnList = spawn.memory.spawnList.filter(item => item !== name);
+    return;
+  }
   const configName = getTaskConfigName(task, "harvester", sourceId);
   const encodedRouteRooms = task.scoutRouteRooms?.join("|") || "";
   upsertConfig(configName, {

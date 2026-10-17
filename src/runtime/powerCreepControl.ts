@@ -6,6 +6,7 @@ import type {
   PowerCreepTaskType,
 } from "@/runtime/powerCreepTypes";
 import { ensureCreepMovementState } from "@/movement/creepState";
+import { issueMove } from "@/movement/traffic";
 import { moveToTarget } from "@/movement/pathing";
 
 export const POWER_CREEP_RENEW_TTL = 200;
@@ -440,7 +441,8 @@ function movePowerCreepToTarget(
   range: 1 | 2 | 3,
 ): void {
   if (powerCreep.room?.name !== target.pos.roomName) {
-    powerCreep.moveTo(target, { reusePath: 5, range });
+    const step = powerCreep.pos.findPathTo(target.pos, { range, maxRooms: 16, ignoreCreeps: false })[0];
+    if (step) issueMove(powerCreep, step.direction);
     return;
   }
   moveToTarget(powerCreep, target, range, { reusePath: 5, ignoreCreeps: true });
@@ -583,7 +585,7 @@ function runPowerCreep(powerCreep: PowerCreep): void {
   if (spawnYield) {
     delete powerCreep.memory._spawnYield;
     if (Game.time - spawnYield.tick >= 0 && Game.time - spawnYield.tick <= 2) {
-      powerCreep.move(spawnYield.dir);
+      issueMove(powerCreep, spawnYield.dir);
       return;
     }
   }

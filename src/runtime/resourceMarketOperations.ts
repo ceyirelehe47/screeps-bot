@@ -1,3 +1,4 @@
+import { resolveMarketCreditReserve, getAvailableMarketCredits } from "@/runtime/marketActionArbiter";
 /** 从 resourceControl.ts 分离的独立职责模块；共享状态仅由此处持有。 */
 import { getProductReagents, roundUpReactionAmount } from "@/runtime/reactionMap";
 import { roomResourceAmount } from "@/runtime/synthesisReadModel";
@@ -10,6 +11,8 @@ import { declareMarketActionIntent, executeMarketDeal } from "@/runtime/marketAc
 import {
   roomResourceKey,
   getStock,
+  getTotalMovableResourceAmount,
+  resolveCapacityConfig,
   getTerminalResourceAmount,
   getResourceControlRoomStock,
 } from "@/runtime/resourceControlReadModel";
@@ -318,7 +321,7 @@ export function applyMarketOps(
 
   const actions: string[] = [];
   let dealsDone = 0;
-  let availableCredits = Math.max(0, (Game.market.credits || 0) - (marketCfg.creditReserve ?? 10_000));
+  let availableCredits = getAvailableMarketCredits(resolveMarketCreditReserve(marketCfg.creditReserve));
 
   // 永久闩与 Memory 配置无关。Emergency/production purchases 仍由
   // `emergencyBuyEnabled` 独立控制，不能因关闭旧卖家而移除生存购买。
@@ -451,6 +454,7 @@ export function applyMarketOps(
             orderType: ORDER_BUY,
             resourceType: resource,
             orderRoomName: order.roomName,
+        price: order.price,
           },
         );
         if (code !== OK) {
@@ -549,6 +553,7 @@ export function applyMarketOps(
               orderType: ORDER_BUY,
               resourceType: resource,
               orderRoomName: order.roomName,
+        price: order.price,
             },
           );
           if (code !== OK) {
@@ -648,6 +653,7 @@ export function applyMarketOps(
         orderType: ORDER_SELL,
         resourceType: RESOURCE_ENERGY,
         orderRoomName: order.roomName,
+        price: order.price,
       },
     );
     if (code !== OK) {
@@ -710,6 +716,12 @@ export function applyMarketOps(
         continue;
       }
 
+      if (context.marketSellingResources?.has(resource)) continue;
+      const capacityConfig = resolveCapacityConfig();
+      const internalSupply = snapshots.filter(donor => donor.roomName !== room.roomName && donor.capacityState !== "emergency")
+        .reduce((sum, donor) => sum + getTotalMovableResourceAmount(donor, resource, capacityConfig, context), 0);
+      if (internalSupply >= deficit) continue;
+
       const maxBuyPrice = marketCfg.maxBuyPrice[resource];
       if (
         typeof maxBuyPrice !== "number" ||
@@ -765,6 +777,7 @@ export function applyMarketOps(
           orderType: ORDER_SELL,
           resourceType: resource,
           orderRoomName: order.roomName,
+        price: order.price,
         },
       );
       if (code !== OK) {

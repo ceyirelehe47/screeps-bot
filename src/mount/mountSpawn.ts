@@ -1,3 +1,4 @@
+import { fixedBodyExceedsCapacity, isSpawnConfigEconomicallyBlocked } from "@/runtime/outboundMissionPolicy";
 import { readSpawnExitDirections } from "@/config/deployment";
 import { issueMove } from "@/movement/traffic";
 import { isSpawnActive } from "@/runtime/tickContext";
@@ -244,6 +245,8 @@ function hasWaitingWarSpawn(spawn: StructureSpawn): boolean {
 }
 
 function shouldYieldEnergyToWar(spawn: StructureSpawn, configName: string): boolean {
+  const config = getCreepConfigService().get(configName);
+  if (config?.role === "homeDefender" || config?.roomName === spawn.room.name && ["miner", "harvester"].includes(config.role)) return false;
   if (isWarConfigName(configName) || isSourceRoomCarrierConfig(spawn, configName)) {
     return false;
   }
@@ -294,6 +297,12 @@ export function mountSpawn(): void {
     if (config.role === "depositHarvester" && !canSpawnDepositConfig(configName, config)) return false;
 
     const body = chooseBody(this, configName);
+    if (body.reduce((sum, part) => sum + BODYPART_COST[part], 0) > this.room.energyCapacityAvailable) {
+      this.memory._lastSpawnFail = { tick: Game.time, spawnName: this.name, configName, role: config.role,
+        code: ERR_NOT_ENOUGH_ENERGY, bodyCost: body.reduce((sum, part) => sum + BODYPART_COST[part], 0),
+        bodyParts: body.length, roomEnergyAvailable: this.room.energyAvailable, roomEnergyCapacityAvailable: this.room.energyCapacityAvailable };
+      return true;
+    }
     const name = chooseCreepName(this, config);
     const options: SpawnOptions = {
       memory: {
@@ -349,6 +358,17 @@ export function mountSpawn(): void {
     }
 
     const queue = ensureQueue(this);
+    while (queue.length) {
+      const config = getCreepConfigService().get(queue[0]);
+      if (config && !fixedBodyExceedsCapacity(config, this.room.energyCapacityAvailable) && !isSpawnConfigEconomicallyBlocked(queue[0], config)) break;
+      if (config && fixedBodyExceedsCapacity(config, this.room.energyCapacityAvailable)) {
+        this.memory._lastSpawnFail = { tick: Game.time, spawnName: this.name, configName: queue[0], role: config.role,
+          code: ERR_NOT_ENOUGH_ENERGY, bodyCost: (config.body ?? []).reduce((sum, part) => sum + BODYPART_COST[part], 0),
+          bodyParts: config.body?.length ?? 0, roomEnergyAvailable: this.room.energyAvailable,
+          roomEnergyCapacityAvailable: this.room.energyCapacityAvailable };
+      }
+      queue.shift();
+    }
     if (queue.length === 0) {
       return;
     }
@@ -356,7 +376,7 @@ export function mountSpawn(): void {
     const currentTask = queue[0];
     const currentConfig = getCreepConfigService().get(currentTask);
     const isRcl8Maintenance = isRcl8MaintenanceUpgraderConfig(currentTask, currentConfig);
-    if (!isRcl8Maintenance && hasWaitingRcl8MaintenanceOnAnotherSpawn(this)) {
+    if (currentConfig?.role !== "homeDefender" && !isRcl8Maintenance && hasWaitingRcl8MaintenanceOnAnotherSpawn(this)) {
       return;
     }
     if (!isRcl8Maintenance && shouldYieldEnergyToWar(this, currentTask)) {

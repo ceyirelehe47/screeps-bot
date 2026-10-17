@@ -531,7 +531,6 @@ function getControllerLinkPosFromLayout(room: Room, layout: PlannedLayout): { x:
 }
 
 export function getPlannedControllerLinkPos(room: Room): RoomPosition | null {
-  if (room.storage) return null;
   const layout = Memory.data?.roomPlanner?.[room.name]?.layout;
   if (!layout) return null;
   const pos = getControllerLinkPosFromLayout(room, layout);
@@ -540,7 +539,6 @@ export function getPlannedControllerLinkPos(room: Room): RoomPosition | null {
 }
 
 export function getProtoControllerLinkContainer(room: Room): StructureContainer | null {
-  if (room.storage) return null;
   const layout = Memory.data?.roomPlanner?.[room.name]?.layout;
   if (!layout) return null;
   const pos = getControllerLinkPosFromLayout(room, layout);
@@ -580,8 +578,7 @@ function runProtoControllerLinkContainerManagement(room: Room, layout: PlannedLa
   const pos = getControllerLinkPosFromLayout(room, layout);
   if (!pos) return;
 
-  if (room.storage || canBuildAtControllerLevel(STRUCTURE_STORAGE, controllerLevel) ||
-      hasExactStructureOrSiteAt(room, pos.x, pos.y, STRUCTURE_LINK)) {
+  if (new RoomPosition(pos.x, pos.y, room.name).lookFor(LOOK_STRUCTURES).some(s => s.structureType === STRUCTURE_LINK)) {
     destroyContainerAt(room, pos);
     return;
   }
@@ -939,6 +936,14 @@ export function runRoomPlannerConstruction(): void {
           continue;
         }
 
+        // 只有控制器 link 已获得本轮配额且即将落工地时才交接，保留早期升级补给。
+        if (structureType === STRUCTURE_LINK) {
+          const controllerLink = getControllerLinkPosFromLayout(room, layout);
+          if (controllerLink?.x === pos.x && controllerLink.y === pos.y &&
+              !hasExactStructureOrSiteAt(room, pos.x, pos.y, STRUCTURE_LINK)) {
+            destroyContainerAt(room, pos);
+          }
+        }
         if (!hasStructureOrSiteAt(room, pos.x, pos.y, structureType)) {
           const code = tryPlaceSite(room, structureType, pos.x, pos.y);
           if (code === OK) {

@@ -107,6 +107,7 @@ declare global {
           threatScore: number;
         }>;
         towerFocusFrontId?: string;
+        towerBurstTarget?: { tick: number; id: string };
         defenderAssignments?: Record<string, string>;
         defenderRoles?: Record<string, "primary" | "secondary">;
       }
@@ -505,6 +506,8 @@ declare global {
         roomName: string;
         tick: number;
         purpose: "sell" | "buy";
+        credits?: number;
+        date?: string;
       }>;
     };
     synthesisControl?: {

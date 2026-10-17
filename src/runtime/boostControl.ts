@@ -1,3 +1,6 @@
+import { resolveMarketCreditReserve, getAvailableMarketCredits } from "@/runtime/marketActionArbiter";
+import { createResourceTransferTaskAmountIndex, ensureResourceTransferTaskStore, cancelResourceTransferTask, createAutomaticResourceTransferTask } from "@/runtime/logistics/resourceTransferTasks";
+import { isDefenseMode } from "@/runtime/defenseMode";
 import { replaceCarrierTasksForProducerRoom, type CarrierTaskDraft } from "@/runtime/carrierTaskBoard";
 import { recordFixedCpuAction } from "@/runtime/cpuPhaseProfiler";
 import {
@@ -6,7 +9,7 @@ import {
 } from "@/runtime/marketActionArbiter";
 import { getTickContextService } from "@/runtime/runtimeServices";
 import { getTerminalAmountOutsideMarketSaleExposure } from "@/runtime/marketSaleExposure";
-import { resolveRoomEnergyPolicy } from "@/runtime/roomEnergyPolicy";
+import { resolveRoomEnergyPolicyForRoom } from "@/runtime/roomEnergyPolicy";
 import { calcEffectiveDamage } from "@/runtime/towerControl";
 
 export const DEFENSE_BOOST_COMPOUND = RESOURCE_CATALYZED_UTRIUM_ACID;
@@ -40,7 +43,10 @@ function getBoostLabId(roomName: string): string | undefined {
 function getBoostStock(room: Room): number {
   const storageAmt = room.storage?.store.getUsedCapacity(DEFENSE_BOOST_COMPOUND) ?? 0;
   const terminalAmt = room.terminal?.store.getUsedCapacity(DEFENSE_BOOST_COMPOUND) ?? 0;
-  return storageAmt + terminalAmt;
+  const lab = getBoostLabId(room.name) ? Game.getObjectById(getBoostLabId(room.name) as Id<StructureLab>) : null;
+  const index = createResourceTransferTaskAmountIndex();
+  return Math.max(0, storageAmt + terminalAmt + (lab?.store.getUsedCapacity(DEFENSE_BOOST_COMPOUND) ?? 0) +
+    index.getIncoming(room.name, DEFENSE_BOOST_COMPOUND) - index.getOutgoing(room.name, DEFENSE_BOOST_COMPOUND));
 }
 
 function calcTowerAttackAtRange(range: number): number {
@@ -117,6 +123,10 @@ export function buyBoostIfNeeded(room: Room): void {
   if (room.terminal.cooldown !== 0) return;
   if (Game.time % 5 !== 0) return;
 
+  if (isDefenseMode(room.name)) for (const task of Object.values(ensureResourceTransferTaskStore())) {
+    if (task.origin === "automatic" && task.status === "pending" && task.fromRoomName === room.name &&
+        task.resource === DEFENSE_BOOST_COMPOUND && task.reason?.startsWith("hub:export:")) cancelResourceTransferTask(task.id);
+  }
   const stock = getBoostStock(room);
   const target = getBoostTarget();
   if (stock >= target) return;
@@ -124,16 +134,22 @@ export function buyBoostIfNeeded(room: Room): void {
   const amount = Math.min(target - stock, room.terminal.store.getFreeCapacity(DEFENSE_BOOST_COMPOUND));
   if (amount <= 0) return;
 
+  const donor = getTickContextService().getMyRooms().find(candidate => candidate.name !== room.name && candidate.terminal &&
+    !isDefenseMode(candidate.name) && getBoostStock(candidate) >= target + amount);
+  if (donor) {
+    const created = createAutomaticResourceTransferTask(donor.name, room.name, DEFENSE_BOOST_COMPOUND, amount, `boost:defense:${room.name}`);
+    if (typeof created !== "string" && created.ok) return;
+  }
   if (getMaxBuyPrice() <= 0) return;
 
   const order = findBestSellOrder(room.name, amount);
   if (!order?.roomName) return;
 
   const transferCost = Game.market.calcTransactionCost(amount, room.name, order.roomName);
-  const reserve = resolveRoomEnergyPolicy(Memory.cfg?.resourceControl?.rooms?.[room.name]).terminalEnergyReserve;
+  const reserve = resolveRoomEnergyPolicyForRoom(room.name).terminalEnergyReserve;
   if (transferCost > room.terminal.store.getUsedCapacity(RESOURCE_ENERGY) - reserve) return;
-  const creditReserve = Memory.cfg?.resourceControl?.market?.creditReserve ?? 100_000;
-  if (!Number.isFinite(Game.market.credits) || Game.market.credits - amount * order.price < creditReserve) return;
+  const creditReserve = resolveMarketCreditReserve();
+  if (!Number.isFinite(Game.market.credits) || amount * order.price > getAvailableMarketCredits(creditReserve)) return;
 
   declareMarketActionIntent(
     BOOST_CONTROL_PRODUCER,
@@ -149,6 +165,7 @@ export function buyBoostIfNeeded(room: Room): void {
       orderType: ORDER_SELL,
       resourceType: DEFENSE_BOOST_COMPOUND,
       orderRoomName: order.roomName,
+        price: order.price,
     },
   );
   if (code === OK) {
@@ -176,9 +193,20 @@ export function syncBoostLabTask(room: Room): void {
   const terminal = room.terminal;
   const drafts: CarrierTaskDraft[] = [];
 
+  if (lab.mineralType && lab.mineralType !== DEFENSE_BOOST_COMPOUND) {
+    const resource = lab.mineralType;
+    const target = storage && storage.store.getFreeCapacity(resource) > 0 ? storage : terminal;
+    if (target) drafts.push({ id: `boostControl:lab_cleanup:${room.name}:${lab.id}`, type: "lab_cleanup", priority: BOOST_TERMINAL_OFFLOAD_PRIORITY + 1,
+      steps: [{ id: `${resource}:${lab.id}->${target.id}`, resource, fromKind: "lab", toKind: target.structureType === STRUCTURE_STORAGE ? "storage" : "terminal",
+        fromId: lab.id, toId: target.id, amount: Math.min(lab.store.getUsedCapacity(resource), target.store.getFreeCapacity(resource)) }] });
+    replaceCarrierTasksForProducerRoom(BOOST_CONTROL_PRODUCER, room.name, drafts);
+    return;
+  }
+
   // Step 1: offload terminal → storage so storage becomes the supply source
   if (terminal && storage) {
-    const terminalHas = getTerminalAmountOutsideMarketSaleExposure(terminal, DEFENSE_BOOST_COMPOUND, room.name);
+    const outgoing = createResourceTransferTaskAmountIndex().getOutgoing(room.name, DEFENSE_BOOST_COMPOUND);
+    const terminalHas = Math.max(0, getTerminalAmountOutsideMarketSaleExposure(terminal, DEFENSE_BOOST_COMPOUND, room.name) - outgoing);
     const storageFree = storage.store.getFreeCapacity(DEFENSE_BOOST_COMPOUND);
     const offloadAmt = Math.min(terminalHas, storageFree);
     if (offloadAmt > 0) {

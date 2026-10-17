@@ -1,3 +1,4 @@
+import { canStartOutboundMission } from "@/runtime/outboundMissionPolicy";
 import { spawnProfiles } from "@/config/spawnProfiles";
 import { isDefenseMode } from "@/runtime/defenseMode";
 import { ensureDepositDiscoveryStore } from "@/runtime/depositDiscovery";
@@ -242,7 +243,7 @@ function admit(task: DepositHarvestTask, tasks: DepositHarvestTask[], config: De
   // 房间 route 只做廉价候选排序；每个来源仍须所有 active Spawn 完整 PF。
   const sources: Array<{ room: Room; route: string[]; destination: StructureStorage | StructureTerminal; spawns: StructureSpawn[] }> = [];
   for (const room of getTickContextService().getMyRooms()) {
-    if (room.energyCapacityAvailable < cost || room.energyAvailable < cost || isDefenseMode(room.name) ||
+    if (room.energyCapacityAvailable < cost || room.energyAvailable < cost || !canStartOutboundMission(room.name) ||
       hasPowerBankPriority(room.name) || tasks.some((t) => t.sourceRoom === room.name && !isDepositTerminal(t) && t.status !== "discovered")) continue;
     const route = findDepositSafeRoute(room.name, task.targetRoom);
     const destination = receiver(room);

@@ -40,6 +40,14 @@ describe("safeZoneHelpers", () => {
     expect(shouldRestrictToSafeZone(creep)).toBe(false);
   });
 
+  it.each(["remoteCarrier", "colonizerHarvester", "powerBankHauler", "depositHarvester", "meleeAttacker"] as CreepMemory["role"][])("老家防御时外房 %s 仍能移动回家", role => {
+    const creep = makeCreep(role);
+    creep.room = { name: "W2N2" } as Room;
+    (isDefenseMode as jest.Mock).mockReturnValue(true);
+    expect(shouldRestrictToSafeZone(creep)).toBe(false);
+    expect(isPositionAllowedForCreep(creep, makePos(10, 10, "W2N2"))).toBe(true);
+  });
+
   it("rejects cross-room positions for restricted creeps", () => {
     const creep = makeCreep("worker");
     (isDefenseMode as jest.Mock).mockReturnValue(true);

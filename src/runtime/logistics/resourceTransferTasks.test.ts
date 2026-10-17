@@ -87,6 +87,13 @@ describe("resource transfer task health v2", () => {
     Memory.runtime = undefined;
   });
 
+  it("健康同资源反向调拨阻止自动对冲，手动操作不受此策略阻挡", () => {
+    const create = resourceTransferTaskModule.createAutomaticResourceTransferTask;
+    expect(create("W1N1", "W2N2", RESOURCE_HYDROGEN, 1000, "capacity:relief:test")).toMatchObject({ ok: true });
+    expect(create("W2N2", "W1N1", RESOURCE_HYDROGEN, 1000, "hub:reclaim:test")).toBe("ERR_REVERSE_TRANSFER_ACTIVE");
+    expect(createResourceTransferTask("W2N2", "W1N1", RESOURCE_HYDROGEN, 1000, "operator")).toMatchObject({ ok: true });
+  });
+
   it("creates console-compatible manual tasks that retain demand coverage and normalizes receiver grace", () => {
     expect(resolveLogisticsControlConfig()).toEqual(expect.objectContaining({
       schemaVersion: 1,

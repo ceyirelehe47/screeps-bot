@@ -1,5 +1,5 @@
 import { homeDefenderRole } from "@/roles/homeDefender";
-import { getAssignedDefenseFront, getDefenderRole, getTowerFocusFront } from "@/runtime/defenseCoordination";
+import { getAssignedDefenseFront, getDefenderRole, getTowerFocusFront, getTowerBurstTarget } from "@/runtime/defenseCoordination";
 import { getPlayerHostiles } from "@/runtime/defenseMode";
 import { getSafeZone } from "@/runtime/safeZone";
 import { createSafeZoneCostCallback, getBoundaryRamparts } from "@/runtime/safeZoneHelpers";
@@ -17,6 +17,7 @@ jest.mock("@/runtime/defenseCoordination", () => ({
   getAssignedDefenseFront: jest.fn(),
   getDefenderRole: jest.fn(),
   getTowerFocusFront: jest.fn(),
+  getTowerBurstTarget: jest.fn(),
 }));
 
 jest.mock("@/runtime/defenseMode", () => ({
@@ -89,6 +90,20 @@ describe("homeDefenderRole", () => {
     (createSafeZoneCostCallback as jest.Mock).mockReturnValue(jest.fn());
     (getDefenderRole as jest.Mock).mockReturnValue("primary");
     (getTowerFocusFront as jest.Mock).mockReturnValue(null);
+    (getTowerBurstTarget as jest.Mock).mockReturnValue(undefined);
+  });
+
+  it("守在 rampart 的防御者优先攻击塔的当 tick 协同目标", () => {
+    const focus = createHostile("tower-focus", 11, 10), other = createHostile("other", 10, 11);
+    const rampart = createRampart(10, 10);
+    const defender = { name: "defender", memory: { role: "homeDefender" }, pos: new MockPos(10, 10, "W1N1"), attack: jest.fn(() => OK) } as unknown as Creep;
+    const room = createRoom([defender]);
+    Object.defineProperty(defender, "room", { value: room });
+    room.find = jest.fn((type: FindConstant) => type === FIND_MY_STRUCTURES ? [rampart] : []) as Room["find"];
+    (getPlayerHostiles as jest.Mock).mockReturnValue([other, focus]);
+    (getTowerBurstTarget as jest.Mock).mockReturnValue(focus.id);
+    homeDefenderRole(room.name, "0").target(defender);
+    expect(defender.attack).toHaveBeenCalledWith(focus);
   });
 
   it("attacks an adjacent hostile when the assigned boundary target retreats out of range", () => {

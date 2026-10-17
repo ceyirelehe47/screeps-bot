@@ -1,3 +1,4 @@
+import { canStartOutboundMission } from "@/runtime/outboundMissionPolicy";
 import { getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
 import { prepareBoosts, releaseBoostLabs } from "@/runtime/powerBankBoost";
 import { isDefenseMode } from "@/runtime/defenseMode";
@@ -147,7 +148,7 @@ export function runColonizationSupport(): void {
     state.updatedAt = Game.time;
     state.routeRooms = [...route];
     if (state.status === "complete" || raw.enabled !== true || !Game.rooms[sourceRoom]?.controller?.my ||
-        !controller?.my || isDefenseMode(sourceRoom)) {
+        !controller?.my || !canStartOutboundMission(sourceRoom)) {
       if (state.status !== "complete") state.status = raw.enabled && !controller?.my ? "waiting_claim" : "paused";
       stopConfig(configName, sourceRoom, boostOwner);
       for (const name of Object.keys(configs).filter(name => name.startsWith(`${sourceRoom}:colonizationSupport:${targetRoom}:harvester:`))) {
@@ -165,12 +166,18 @@ export function runColonizationSupport(): void {
       const miningName = `${miningPrefix}${source.id}`;
       validMiningNames.add(miningName);
       const supportMiners = service.getCreepsByConfigName(miningName).filter(creep => !creep.memory._colonizationRetiring);
-      const localMiners = service.getCreepsByRoom(targetRoom).filter(creep => {
+      const otherMiners = Object.values(Game.creeps).filter(creep => {
+        const existing = configs[creep.memory.configName ?? ""];
+        const args = existing?.args ?? creep.memory.roleArgs;
+        return creep.memory.role === "colonizerHarvester" && creep.memory.configName?.includes(":colonize:") &&
+          args?.[0] === targetRoom && args?.[1] === source.id && !creep.memory._colonizationRetiring;
+      });
+      const localMiners = [...otherMiners, ...service.getCreepsByRoom(targetRoom).filter(creep => {
         const config = configs[creep.memory.configName ?? ""];
         const args = config?.args ?? creep.memory.roleArgs;
         return creep.memory.role === "harvester" &&
           creep.memory.configName?.startsWith(`${targetRoom}:harvester:`) && args?.[0] === source.id;
-      });
+      })];
       const successor = [...localMiners.filter(creep => readySourceMiner(creep, source)),
         ...supportMiners.filter(creep => readySourceMiner(creep, source)).sort((left, right) => (right.ticksToLive ?? 0) - (left.ticksToLive ?? 0))][0];
       if (!successor) delete handoffs[source.id];
@@ -185,7 +192,7 @@ export function runColonizationSupport(): void {
       }
       // 本地可生产5WORK后停止外部补员；已有矿工等本地实际就位后回收。
       configs[miningName] = {
-        role: "colonizerHarvester", roomName: !localCanSpawnFiveWork || supportMiners.length > 0 ? sourceRoom : undefined,
+        role: "colonizerHarvester", roomName: otherMiners.length === 0 && (!localCanSpawnFiveWork || supportMiners.length > 0) ? sourceRoom : undefined,
         args: [targetRoom, source.id, route.join("|")],
         ...(localCanSpawnFiveWork ? { spawnOnce: { queuedAt: configs[miningName]?.spawnOnce?.queuedAt ?? Game.time } } : {}),
       };

@@ -75,7 +75,7 @@ function createRoom(options: {
       id: `${name}-terminal`,
       structureType: STRUCTURE_TERMINAL,
       store: {
-        getFreeCapacity: () => options.terminalFree ?? 10000,
+        getFreeCapacity: () => options.terminalFree ?? 100000,
       },
     } as unknown as StructureTerminal,
     storage: {
@@ -126,6 +126,15 @@ describe("runMineralExtraction", () => {
         ],
       },
     });
+  });
+
+  it("终端达到留白目标后改送 storage，避免采矿灌满终端", () => {
+    const room = createRoom({ terminalFree: 60_000 });
+    const mineral = createMineral(room, { containerAmount: 800 });
+    room.find = ((type: FindConstant) => type === FIND_MINERALS ? [mineral] : []) as Room["find"];
+    Game.rooms[room.name] = room;
+    runMineralExtraction();
+    expect(getCarrierTasksByRoom(room.name)[`mineral:mineral_haul:${room.name}:${mineral.id}`]).toMatchObject({ steps: [{ toKind: "storage", amount: 800 }] });
   });
 
   it("does not create a task when container stock is at or below threshold", () => {

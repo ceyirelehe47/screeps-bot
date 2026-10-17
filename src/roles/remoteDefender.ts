@@ -1,3 +1,4 @@
+import { issueMove } from "@/movement/traffic";
 import { moveToTarget, moveToTargetRoom } from "@/roles/shared";
 import { getPositionAtDirection, isExitTile } from "@/movement/common";
 import type { RoleFactory } from "@/types/system";
@@ -192,7 +193,7 @@ function moveInwardDuringBoundaryReady(creep: Creep, targetRoom: string): void {
   const targetRange = creep.pos.getRangeTo(target.pos);
   const fleeDir = getSafeFleeDirection(creep, target, targetRange);
   if (fleeDir !== null) {
-    creep.move(fleeDir);
+    issueMove(creep, fleeDir);
   }
 }
 
@@ -325,7 +326,7 @@ export const remoteDefenderRole: RoleFactory = (...args: string[]) => {
         const fleeDir = getSafeFleeDirection(creep, target, targetRange);
         // Tactical directional move — not destination pathfinding
         if (fleeDir !== null) {
-          creep.move(fleeDir);
+          issueMove(creep, fleeDir);
         }
       }
 

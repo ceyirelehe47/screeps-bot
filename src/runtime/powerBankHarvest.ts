@@ -1,3 +1,4 @@
+import { canStartOutboundMission } from "@/runtime/outboundMissionPolicy";
 import {
   predictPowerBankRecovery,
   predictPowerBankFinishTicks,
@@ -650,7 +651,7 @@ function evaluateSourceCandidatesImpl(task: PowerBankHarvestTask): {
   const sourceRoutes: Array<{ room: Room; routeRooms: string[]; avoidRooms: readonly string[] }> = [];
   measureSampledCpuPhase("source.routes", () => {
     for (const room of measureSampledCpuPhase("context.myRooms", () => getTickContextService().getMyRooms())) {
-      if (!room.controller || room.controller.level < 6 || isDefenseMode(room.name)) continue;
+      if (!room.controller || room.controller.level < 6 || !canStartOutboundMission(room.name)) continue;
       if (!measureSampledCpuPhase("context.spawns", () => getTickContextService().getSpawnsByRoom(room.name))
         .some(isSpawnActive)) continue;
       if (!hasPlanningCpuHeadroom()) {
@@ -687,7 +688,7 @@ function evaluateSourceCandidatesImpl(task: PowerBankHarvestTask): {
       break;
     }
     if (!room.controller || room.controller.level < 6) continue;
-    if (isDefenseMode(room.name)) continue;
+    if (!canStartOutboundMission(room.name)) continue;
 
     const spawnReadyIn = getSpawnReadyIn(room.name);
     if (spawnReadyIn.length === 0) continue;

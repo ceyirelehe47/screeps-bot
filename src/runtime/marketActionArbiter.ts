@@ -68,6 +68,8 @@ export interface PreparedDirectMarketDealRequest
  * ORDER_SELL 表示本方买入 resourceType。
  */
 export interface MarketDealExposureContext {
+  price?: number;
+  creditReserve?: number;
   orderType: ORDER_BUY | ORDER_SELL;
   resourceType: ResourceConstant;
   orderRoomName: string;
@@ -89,6 +91,20 @@ export interface TerminalSendRequest {
 function blockedByTreasuryT1(roomName: string, actor: string, destinationRoomName?: string): boolean {
   if (treasuryTerminalNativeGrantAllows(roomName, actor)) return false;
   return hasTreasuryTerminalFence(roomName) || destinationRoomName !== undefined && hasTreasuryTerminalFence(destinationRoomName);
+}
+
+let creditBaseline: number | undefined;
+let committedCredits = 0;
+export function resolveMarketCreditReserve(value?: unknown): number {
+  const globalValue = Memory.cfg?.resourceControl?.market?.creditReserve;
+  const shared = typeof globalValue === "number" && Number.isFinite(globalValue) && globalValue >= 0 ? globalValue : 10_000;
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? Math.max(shared, value) : shared;
+}
+export function getAvailableMarketCredits(reserve = resolveMarketCreditReserve()): number {
+  syncClaimTick();
+  const current = Number.isFinite(Game.market?.credits) ? Game.market.credits : 0;
+  creditBaseline ??= current;
+  return Math.max(0, Math.min(current, creditBaseline - committedCredits) - reserve);
 }
 
 let claimTick: number | undefined;
@@ -240,6 +256,8 @@ function syncClaimTick(): void {
   if (claimTick === Game.time && claimGame === Game) return;
   claimTick = Game.time;
   claimGame = Game;
+  creditBaseline = undefined;
+  committedCredits = 0;
   terminalClaims.clear();
   terminalActionsInFlight.clear();
   terminalSendAffectedRooms.clear();
@@ -611,6 +629,16 @@ export function executeMarketDeal(
     return ERR_NOT_ENOUGH_RESOURCES;
   }
 
+  let purchaseCost = 0;
+  if (exposureContext.orderType === ORDER_SELL) {
+    const price = exposureContext.price ?? Game.market.getOrderById?.(orderId)?.price;
+    if (typeof price !== "number" || !Number.isFinite(price) || price < 0) { exposureClaim.release(); return ERR_INVALID_ARGS; }
+    purchaseCost = amount * price;
+    if (!Number.isFinite(purchaseCost) || purchaseCost > getAvailableMarketCredits(resolveMarketCreditReserve(exposureContext.creditReserve))) {
+      exposureClaim.release(); return ERR_NOT_ENOUGH_RESOURCES;
+    }
+    committedCredits += purchaseCost;
+  }
   try {
     const code = executeTerminalAction(
       roomName,
@@ -628,6 +656,7 @@ export function executeMarketDeal(
     });
     if (code !== OK) {
       exposureClaim.release();
+      if (isExplicitMarketNonOkReturnCode(code)) committedCredits -= purchaseCost;
     }
     return code;
   } catch (error) {

@@ -10,7 +10,7 @@ import {
 import { createCarrierTaskStep } from "@/runtime/carrierTaskHelpers";
 import { getTerminalAmountOutsideMarketSaleExposure } from "@/runtime/marketSaleExposure";
 import { isRoomInReserveMode } from "@/runtime/roomReserve";
-import { resolveRoomEnergyPolicy } from "@/runtime/roomEnergyPolicy";
+import { resolveRoomEnergyPolicyForRoom } from "@/runtime/roomEnergyPolicy";
 import { runPowerDistribution } from "@/runtime/powerDistribution";
 
 export const POWER_SPAWN_CARRIER_TASK_PRODUCER = "powerSpawnControl";
@@ -47,7 +47,7 @@ function findSupplySource(
     if (!source) {
       continue;
     }
-    const policy = resolveRoomEnergyPolicy(Memory.cfg?.resourceControl?.rooms?.[room.name]);
+    const policy = resolveRoomEnergyPolicyForRoom(room.name);
     const reserve = resource === RESOURCE_ENERGY
       ? (source.structureType === STRUCTURE_STORAGE ? policy.energyFloor : policy.terminalEnergyReserve) : 0;
     const amount = Math.max(0, getSourceAmount(source, resource, room.name) - reserve);

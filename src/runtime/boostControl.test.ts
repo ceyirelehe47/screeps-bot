@@ -16,7 +16,7 @@ function createRoom(): Room {
     terminal: {
       cooldown: 0,
       store: createMockStore({
-        [RESOURCE_ENERGY]: 25000,
+        [RESOURCE_ENERGY]: 30000,
         [DEFENSE_BOOST_COMPOUND]: 0,
       }, 300000),
     } as StructureTerminal,

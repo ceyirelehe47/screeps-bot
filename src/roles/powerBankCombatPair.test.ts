@@ -117,7 +117,7 @@ beforeEach(() => {
     }) });
   }
   Game.creeps = { red: attacker, green: healer };
-  (getTickContextService as jest.Mock).mockReturnValue({ getRoomContext: (owner: Room | string) => {
+  (getTickContextService as jest.Mock).mockReturnValue({ getMyRooms: () => [], getRoomContext: (owner: Room | string) => {
     const name = typeof owner === "string" ? owner : owner.name;
     return {
     room: Game.rooms[name],

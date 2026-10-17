@@ -17,7 +17,7 @@ import {
   type CarrierTaskDraft,
 } from "@/runtime/carrierTaskBoard";
 import { getTickContextService } from "@/runtime/runtimeServices";
-import { TERMINAL_ENERGY_PICKUP_RESERVE } from "@/runtime/energyPickupReservation";
+import { resolveRoomEnergyPolicyForRoom } from "@/runtime/roomEnergyPolicy";
 import {
   ensurePowerBankBoostPrepStore,
   getActivePowerBankBoostLabIds,
@@ -192,7 +192,7 @@ function selectAvailableLabs(
 ): StructureLab[] {
   const labs = room.find(FIND_MY_STRUCTURES, {
     filter: (s): s is StructureLab => s.structureType === STRUCTURE_LAB,
-  });
+  }).filter(lab => lab.id !== Memory.cfg?.homeDefense?.rooms?.[sourceRoomName]?.boostLabId);
   const existingPrep = getPowerBankBoostPrep(taskId);
   if (existingPrep?.sourceRoomName === sourceRoomName) {
     const labsById = new Map<string, StructureLab>(labs.map((lab) => [lab.id, lab]));
@@ -253,10 +253,6 @@ export function prepareBoosts(
     return failBoostPreparation(taskId, sourceRoomName, "room_not_visible");
   }
 
-  if (!pauseSynthesisForBoost(sourceRoomName, taskId)) {
-    return failBoostPreparation(taskId, sourceRoomName, "synthesis_pause_failed");
-  }
-
   const labs = selectAvailableLabs(room, sourceRoomName, compounds, taskId);
   if (labs.length < compounds.length) {
     return failBoostPreparation(taskId, sourceRoomName, "insufficient_labs", labs);
@@ -275,6 +271,11 @@ export function prepareBoosts(
     const needed = requiredAmounts.get(compound) ?? LAB_BOOST_MINERAL;
     const loadedMineral = lab.mineralType as ResourceConstant | undefined;
     if (loadedMineral && loadedMineral !== compound) {
+      // 异物清理也会暂停合成，先证明清完后有补给，避免下一 tick 再失败恢复。
+      const missing = Math.max(0, needed - getLocalStock(room, compound) - getOwnedIncomingBoostAmount(taskId, sourceRoomName, compound));
+      if (missing > 0 && !findBestDonorRoom(compound, missing, [sourceRoomName])) {
+        return failBoostPreparation(taskId, sourceRoomName, "insufficient_boost_compound", labs);
+      }
       const loadedAmount = (lab.store.getUsedCapacity(loadedMineral) ?? 0);
       const target = resolveBoostCleanupTarget(room, loadedMineral);
       const targetFree = Math.max(target?.store.getFreeCapacity(loadedMineral) ?? 0, target?.store.getFreeCapacity() ?? 0);
@@ -385,6 +386,24 @@ export function prepareBoosts(
     }
   }
 
+  for (const request of transferRequests) {
+    const result = createAutomaticResourceTransferTask(
+      request.fromRoomName,
+      request.toRoomName,
+      request.resource,
+      request.amount,
+      getBoostTransferReason(taskId),
+    );
+    if (typeof result === "string") {
+      return failBoostPreparation(taskId, sourceRoomName, "boost_transfer_create_failed", labs);
+    }
+  }
+
+
+  // 先完成可行性检查，再暂停合成；失败重试不能反复清空合成任务。
+  if (!pauseSynthesisForBoost(sourceRoomName, taskId)) {
+    return failBoostPreparation(taskId, sourceRoomName, "synthesis_pause_failed");
+  }
   prepStore[taskId] = {
     labs: assignments,
     taskId,
@@ -399,18 +418,6 @@ export function prepareBoosts(
     drafts,
   );
 
-  for (const request of transferRequests) {
-    const result = createAutomaticResourceTransferTask(
-      request.fromRoomName,
-      request.toRoomName,
-      request.resource,
-      request.amount,
-      getBoostTransferReason(taskId),
-    );
-    if (typeof result === "string") {
-      return failBoostPreparation(taskId, sourceRoomName, "boost_transfer_create_failed", labs);
-    }
-  }
 
   if (checkBoostReadiness(taskId, compounds, requiredAmounts, options)) {
     return { status: "ready", labs: labs.map((l) => l.id) };
@@ -529,7 +536,7 @@ function getBoostSupplyAmount(
 ): number {
   const amount = structure.store.getUsedCapacity(resource);
   if (resource === RESOURCE_ENERGY && structure.structureType === STRUCTURE_TERMINAL) {
-    return Math.max(0, amount - TERMINAL_ENERGY_PICKUP_RESERVE);
+    return Math.max(0, amount - resolveRoomEnergyPolicyForRoom(structure.room?.name ?? structure.pos.roomName).terminalEnergyReserve);
   }
   return amount;
 }

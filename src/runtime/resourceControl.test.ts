@@ -312,6 +312,18 @@ describe("runResourceControl terminal feed tasks", () => {
     );
   });
 
+  it("终端已备足市场能量时回卸只取目标以上部分，状态保持 ready", () => {
+    const room = createRoom({ name: "E6N59", storageResources: { [RESOURCE_ENERGY]: 100_000 },
+      terminalResources: { [RESOURCE_ENERGY]: 50_000 } });
+    Game.rooms[room.name] = room;
+    authorizeMarketTerminalEnergyReadiness(room, 3);
+    runResourceControl();
+    expect(getMarketEnergyReadinessObservation(room.name)).toMatchObject({ status: "ready", plannedFeedAmount: 0 });
+    const offload = getCarrierTasksByRoom(room.name)[`resourceControl:terminal_offload:${room.name}:${RESOURCE_ENERGY}`];
+    expect(offload).toBeDefined();
+    expect(offload.steps.reduce((sum, step) => sum + step.amount, 0)).toBeLessThanOrEqual(24_000);
+  });
+
   it("creates the exact E6 2,347 Energy readiness feed above the ordinary used-cap", () => {
     const room = createRoom({
       name: "E6N59",
@@ -399,7 +411,7 @@ describe("runResourceControl terminal feed tasks", () => {
     const observation = getMarketEnergyReadinessObservation(room.name);
     expect(observation).toMatchObject({
       terminalScopedProductionEnergyCommitments: 10_000,
-      plannedFeedAmount: 7_347,
+      plannedFeedAmount: 12_347,
       status: "feed_planned",
     });
     const producerARef = createCarrierDispatchRef(
@@ -475,7 +487,7 @@ describe("runResourceControl terminal feed tasks", () => {
         task.id ===
           `resourceControl:terminal_feed:${room.name}:${RESOURCE_ENERGY}`,
     )?.task).toMatchObject({
-      steps: [expect.objectContaining({ amount: 7_347 })],
+      steps: [expect.objectContaining({ amount: 12_347 })],
     });
   });
 
@@ -614,6 +626,14 @@ describe("runResourceControl terminal feed tasks", () => {
       expect(getCarrierTasksByRoom(room.name)[
         `resourceControl:terminal_feed:${room.name}:${RESOURCE_CATALYST}`
       ]).toBeUndefined();
+      Game.time = 40;
+      Game.creeps = {};
+      const backedRoom = createRoom({ name: room.name, storageFreeCapacity: 800_000,
+        storageResources: { energy: 100_000, X: 200_000 },
+        terminalResources: { energy: 249_000, X: 1_000 } });
+      Game.rooms[room.name] = backedRoom;
+      runResourceControl();
+      expect(getCarrierTasksByRoom(room.name)[`resourceControl:terminal_offload:${room.name}:${RESOURCE_CATALYST}`]).toBeUndefined();
     } finally {
       protectionSpy.mockRestore();
     }

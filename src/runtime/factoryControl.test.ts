@@ -180,3 +180,29 @@ it("不支持的旧配方释放残留原料，仍保留下一个可生产配方�
   expect(steps).toContainEqual(expect.objectContaining({ fromId: factory.id, resource: "utrium_bar", amount: 100 }));
   expect(steps.some((step: any) => step.fromId === factory.id && step.resource === RESOURCE_ENERGY)).toBe(false);
 });
+
+
+it("储备模式阻止已备料的耗能配方，电池解压仍可补能", () => {
+  const { room, factory } = createFactoryRoom({ factoryOverrides: { level: 0, store: createMockStore({ energy: 600 }), cooldown: 0 } });
+  setupGameRooms({ W1N1: room });
+  Game.flags = { RESERVE_W1N1: { name: "RESERVE_W1N1", pos: { roomName: "W1N1" } } as Flag };
+  setConfig({ enabled: true, targets: [{ resource: "battery", targetAmount: 50 }] });
+  runFactoryControl();
+  expect(factory.produce).not.toHaveBeenCalled();
+  expect(Memory.runtime?.factoryControl?.rooms.W1N1.sleepReason).toBe("room_energy_reserve");
+});
+
+it("工厂日预算会扣除当天以前 tick 的采购，并在下一天恢复", () => {
+  const { findSafeSellOrder, parseConfig } = require("@/runtime/factoryControl");
+  Memory.cfg = { factoryControl: { market: { enabled: true, maxBuyPrice: { silicon: 5 }, dailyBudget: 5_000,
+    minOrderAmount: 100, maxBatch: 1_000 } } };
+  Game.market = {} as Market;
+  Game.market.getAllOrders = jest.fn(() => [{ id: "silicon-sell", price: 5, amount: 1_000, remainingAmount: 1_000, roomName: "W2N2", created: 1, type: ORDER_SELL, resourceType: RESOURCE_SILICON }]) as Market["getAllOrders"];
+  Game.market.calcTransactionCost = jest.fn(() => 0);
+  const date = new Date().toISOString().slice(0, 10);
+  const runtime = { rooms: {}, claimedOrders: [{ orderId: "earlier", roomName: "W1N1", purpose: "buy", tick: 100, credits: 5_000, date }] };
+  const market = parseConfig().market;
+  expect(findSafeSellOrder("silicon", 1000, 50_000, 25_000, 10_000, "W1N1", market, runtime, 200, 1_000_000)).toBeNull();
+  runtime.claimedOrders[0].date = "2000-01-01";
+  expect(findSafeSellOrder("silicon", 1000, 50_000, 25_000, 10_000, "W1N1", market, runtime, 200, 1_000_000)).toMatchObject({ dealAmount: 1000 });
+});

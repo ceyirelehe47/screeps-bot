@@ -70,9 +70,11 @@ export function planHubFactory(): void {
 
   const productTarget = normalizeNumber(config.hub?.productTarget, 5000, 100, 50000);
   const mineralFloor = normalizeNumber(config.hub?.mineralFloor, 20000, 0, 100000);
-  const energyFloor = Math.max(config.resourceFloors?.[RESOURCE_ENERGY] ?? 0, normalizeNumber(config.hub?.energyFloor, 200000, 0, 1000000));
-  const energyTarget = Math.max(energyFloor, normalizeNumber(config.hub?.energyTarget, 250000, 0, 2000000));
-  const compressionStart = Math.max(energyTarget + 600, normalizeNumber(config.hub?.energyCompressionStart, 400000, 0, 2000000));
+  const energyPolicy = resolveRoomConfig(hubName);
+  const energyFloor = Math.max(config.resourceFloors?.[RESOURCE_ENERGY] ?? 0, energyPolicy.energyFloor);
+  const energyTarget = Math.max(energyFloor, energyPolicy.energyTarget);
+  const compressionStart = Math.max(energyTarget + 600, normalizeNumber(config.hub?.energyCompressionStart,
+    Math.max(energyTarget + 600, energyPolicy.energyExportStart - 5_000), 0, 2000000));
   const floors: Partial<Record<ResourceConstant, number>> = { ...config.resourceFloors };
   floors[RESOURCE_ENERGY] = Math.max(floors[RESOURCE_ENERGY] ?? 0, energyFloor);
   for (const mineral of MINERALS) floors[mineral as ResourceConstant] = Math.max(floors[mineral as ResourceConstant] ?? 0, mineralFloor);

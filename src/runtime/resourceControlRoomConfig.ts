@@ -1,6 +1,7 @@
 import { normalizeNumber } from "@/runtime/configNormalize";
 import {
   resolveRoomEnergyPolicy,
+  resolveRoomEnergyPolicyForRoom,
   type RoomEnergyPolicy,
 } from "@/runtime/roomEnergyPolicy";
 
@@ -113,5 +114,5 @@ function normalizeRoomConfig(value: unknown): ResourceControlRoomConfig {
 export function resolveRoomConfig(roomName: string): ResourceControlRoomConfig {
   const cfg = Memory.cfg?.resourceControl;
   const roomConfigRaw = cfg?.rooms ? cfg.rooms[roomName] : undefined;
-  return normalizeRoomConfig(roomConfigRaw);
+  return { ...normalizeRoomConfig(roomConfigRaw), ...resolveRoomEnergyPolicyForRoom(roomName) };
 }

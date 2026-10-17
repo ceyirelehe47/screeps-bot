@@ -1,3 +1,4 @@
+import { getTowerBurstTarget } from "@/runtime/defenseCoordination";
 import { DEFENSE_BOOST_COMPOUND } from "@/runtime/boostControl";
 import { getSafeZone } from "@/runtime/safeZone";
 import { measureCreepDecision, measureCreepIntent } from "@/runtime/cpuPhaseProfiler";
@@ -70,6 +71,12 @@ export const homeDefenderRole: RoleFactory = (roomName: string, slot?: string) =
     if (safeZone.size === 0) return false;
 
     const allHostiles = measureCreepDecision(() => getPlayerHostiles(creep.room));
+    const focus = allHostiles.find(hostile => hostile.id === getTowerBurstTarget(roomName));
+    if (focus && creep.pos.getRangeTo(focus.pos) <= 1 && creep.room.find(FIND_MY_STRUCTURES,
+      { filter: structure => structure.structureType === STRUCTURE_RAMPART }).some(rampart => creep.pos.isEqualTo(rampart.pos))) {
+      measureCreepIntent(() => creep.attack(focus));
+      return false;
+    }
     const boostLabId = Memory.cfg?.homeDefense?.rooms?.[roomName]?.boostLabId;
     const lab = boostLabId ? Game.getObjectById(boostLabId as Id<StructureLab>) : null;
     if (lab?.my && lab.room.name === roomName && boostIntentTicks.get(lab) !== Game.time && !allHostiles.some(h => safeZone.has(h.pos.x * 50 + h.pos.y))) {

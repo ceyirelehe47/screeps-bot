@@ -1,3 +1,4 @@
+import { normalizeCapacityHeadroomPolicy } from "@/runtime/logistics/capacityHeadroom";
 import {
   pruneCarrierTasksForProducer,
   replaceCarrierTasksForProducerRoom,
@@ -28,7 +29,10 @@ function resolveMineralDeliveryTarget(
   room: Room,
   resource: ResourceConstant,
 ): StructureTerminal | StructureStorage | null {
-  if (room.terminal && room.terminal.store.getFreeCapacity(resource) > 0) {
+  const capacity = normalizeCapacityHeadroomPolicy(Memory.cfg?.resourceControl?.capacityBalancing);
+  const terminalFree = room.terminal?.store.getFreeCapacity() ?? 0;
+  const desiredFree = Math.max(60_000, capacity.receiverTerminalMinFreeCapacity);
+  if (room.terminal && terminalFree > desiredFree && room.terminal.store.getFreeCapacity(resource) > 0) {
     return room.terminal;
   }
 

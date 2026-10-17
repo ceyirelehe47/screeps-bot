@@ -59,6 +59,8 @@ export function shouldRestrictToSafeZone(creep: Creep): boolean {
   if (isOffensiveWarCreep(creep)) return false;
   if (DEFENSE_MODE_RUNTIME_EXEMPT_ROLES.has(creep.memory.role)) return false;
   const roomName = getCreepDefenseRoomName(creep);
+  // 老家受袭不能冻结仍在外房的回程单位；进入老家后再约束房内移动。
+  if (creep.room.name !== roomName) return false;
   if (!isDefenseMode(roomName)) return false;
   return getSafeZone(roomName).size > 0;
 }

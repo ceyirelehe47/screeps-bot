@@ -1,3 +1,4 @@
+import { getActivePowerBankBoostLabIds } from "@/runtime/powerBankBoostMemory";
 /**
  * Hub planner config schema, defaults, runtime state, and chain planning.
  *
@@ -550,7 +551,8 @@ export function planHubImports(
   if (!hubRoom?.storage) return [];
 
   const hubFreeCapacity = hubRoom.storage.store.getFreeCapacity();
-  if (hubFreeCapacity < (cfg.storagePauseFreeCapacity ?? HUB_STORAGE_PAUSE_FREE_CAPACITY)) return [];
+  if (hubFreeCapacity < Math.max(cfg.storagePauseFreeCapacity ?? HUB_STORAGE_PAUSE_FREE_CAPACITY,
+    normalizeCapacityHeadroomPolicy(Memory.cfg?.resourceControl?.capacityBalancing).storageReliefTargetFreeCapacity)) return [];
 
   const actions: string[] = [];
   const reservePerRoom = cfg.reservePerRoom ?? HUB_RESERVE_PER_ROOM;
@@ -946,14 +948,10 @@ export function getEligibleSynthesisRooms(): SynthesisRoomCapability[] {
   for (const room of myRooms) {
     if (!room.storage || !room.terminal) continue;
 
-    const labCount = countLabs(room);
+    const reserved = getActivePowerBankBoostLabIds(room.name);
+    const labCount = room.find(FIND_MY_STRUCTURES, { filter: structure => structure.structureType === STRUCTURE_LAB })
+      .filter(lab => !reserved.has(lab.id)).length;
     if (labCount < 3) continue;
-
-    // boostLabExclusive: a single boost lab is fine; only exclude when ALL labs are boost-reserved
-    const boostLabId = Memory.cfg?.homeDefense?.rooms?.[room.name]?.boostLabId;
-    const boostLabExclusive = labCount >= 1 && boostLabId != null && labCount <= 1;
-
-    if (boostLabExclusive) continue;
 
     const mineralInventory: Partial<Record<ResourceConstant, number>> = {};
 
