@@ -57,6 +57,18 @@ export function getPowerBankTaskForCreep(creep: Creep): RuntimePowerBankTask | n
   return (Memory.data?.powerBankHarvest?.[taskId] as RuntimePowerBankTask | undefined) ?? null;
 }
 
+/** 兼容旧终态清理已删任务/配置的成员，交给 mount 的共同回收流程。 */
+export function retireOrphanedPowerBankCombatCreep(creep: Creep, encodedRoute?: string): void {
+  const source = creep.memory.configName?.split(":")[0] || encodedRoute?.split("|")[0];
+  const sourceRoom = source && /^[WE]\d+[NS]\d+$/.test(source) ? source : creep.room.controller?.my ? creep.room.name : undefined;
+  if (!sourceRoom) return;
+  creep.memory._recycleToRoom = sourceRoom;
+  creep.memory.working = false;
+  delete (creep.memory as PowerBankCombatRuntimeMemory).taskId;
+  delete creep.memory.configName;
+  clearMovementState(creep);
+}
+
 function hasMatchingGeneration(creep: Creep, generation: number | undefined): boolean {
   if (generation === undefined) return true;
   return (creep.memory as PowerBankCombatRuntimeMemory).pairGeneration === generation;
@@ -279,8 +291,25 @@ function movePairFollowerToAttacker(pair: PowerBankPairContext): void {
   holdPairMember(pair.attacker);
   if (!canPairMemberMove(pair.healer)) return;
   const options = { ...PAIR_TRAVEL_OPTIONS, travelTargetRoom: pair.task.targetRoom, ignoreCreeps: false, reusePath: 0, maxRooms: 1 };
-  const result = moveToTarget(pair.healer, pair.attacker, 1, options);
-  if (result === ERR_NO_PATH) moveToTarget(pair.healer, pair.attacker, 1, { ...options, ignoreCreeps: true });
+  let result = moveToTarget(pair.healer, pair.attacker, 1, options);
+  if (result === ERR_NO_PATH) result = moveToTarget(pair.healer, pair.attacker, 1, { ...options, ignoreCreeps: true });
+  const state = ensureCreepMovementState(pair.healer);
+  if (result !== ERR_NO_PATH) { delete state.pairFollowFailure; return; }
+  const old = state.pairFollowFailure;
+  const count = old?.attackerId === pair.attacker.id && old.at === Game.time - 1 ? old.count + 1 : 1;
+  state.pairFollowFailure = { attackerId: pair.attacker.id, at: Game.time, count };
+  if (count < 2 || !canPairMemberMove(pair.attacker)) return;
+  // 只退向更近的同房内格，不踏出口、不抢占第三方意图，也不覆盖其他系统的移动。
+  const distance = pair.attacker.pos.getRangeTo(pair.healer);
+  const destination = PAIR_DIRECTIONS.map(direction => getMoveIntentDestination(pair.attacker.pos, direction))
+    .filter((pos): pos is NonNullable<typeof pos> => !!pos && pos.roomName === pair.attacker.room.name && !isExitTile(pos) &&
+      Math.max(Math.abs(pos.x - pair.healer.pos.x), Math.abs(pos.y - pair.healer.pos.y)) < distance && isPairTileOpen(pos, pair))
+    .sort((a, b) => Math.max(Math.abs(a.x - pair.healer.pos.x), Math.abs(a.y - pair.healer.pos.y)) -
+      Math.max(Math.abs(b.x - pair.healer.pos.x), Math.abs(b.y - pair.healer.pos.y)))[0];
+  if (destination) {
+    ensureCreepMovementState(pair.attacker).pathingRequestedAt = Game.time;
+    moveToAdjacentPosition(pair.attacker, new RoomPosition(destination.x, destination.y, destination.roomName));
+  }
 }
 
 function cancelPairAdvance(pair: PowerBankPairContext, receipt: MoveIntentReceipt): boolean {
@@ -518,6 +547,7 @@ export function coordinatePowerBankPairMovement(pair: PowerBankPairContext, fall
     movePairFollowerToAttacker(pair);
     return;
   }
+  delete ensureCreepMovementState(pair.healer).pairFollowFailure;
   if (!canPairMemberMove(pair.attacker) || !canPairMemberMove(pair.healer)) {
     holdPairMember(pair.attacker);
     holdPairMember(pair.healer);
@@ -534,9 +564,16 @@ export function coordinatePowerBankPairMovement(pair: PowerBankPairContext, fall
     // 共享候选排序只增加搭档可同步离入口的过滤，不在失败后反复尝试同一坏格。
     moveOffExit(pair.attacker, true, (direction, pos) => canPairLeaveExit(pair, direction, pos));
   } else if (travelling) {
-    moveToTargetRoom(pair.attacker, pair.task.targetRoom,
-      getPowerBankEncodedRouteBetween(pair.task, pair.attacker.room.name, pair.task.targetRoom, fallbackEncodedRoute),
-      powerBankTransitOptions(pair.attacker, { ...PAIR_TRAVEL_OPTIONS, avoidRooms: getPowerBankAvoidRooms(pair.task) }));
+    const route = getPowerBankEncodedRouteBetween(pair.task, pair.attacker.room.name, pair.task.targetRoom, fallbackEncodedRoute);
+    const options = powerBankTransitOptions(pair.attacker, { ...PAIR_TRAVEL_OPTIONS, avoidRooms: getPowerBankAvoidRooms(pair.task) });
+    const code = moveToTargetRoom(pair.attacker, pair.task.targetRoom, route, options);
+    if (code === ERR_NO_PATH && !getMoveIntentReceipt(pair.attacker)) {
+      // 房内无路尚未产生跨房回执：清掉本次出口退避，换动态占位策略只重试一次。
+      const state = ensureCreepMovementState(pair.attacker);
+      delete state.movePathState;
+      if (state.travelState) { delete state.travelState.exitTarget; delete state.travelState.rejectedTransitions; }
+      moveToTargetRoom(pair.attacker, pair.task.targetRoom, route, { ...options, ignoreCreeps: false, reusePath: 0 });
+    }
   } else if (pair.stage === "attacking" && pairReadyForCombat(pair)) {
     const bank = Game.getObjectById(pair.task.bankId as Id<StructurePowerBank>);
     if (bank && pair.attacker.pos.getRangeTo(bank) > 1) {

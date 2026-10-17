@@ -2,6 +2,7 @@ import {
   coordinatePowerBankPairMovement,
   getPowerBankTaskForCreep,
   resolvePowerBankPair,
+  retireOrphanedPowerBankCombatCreep,
 } from "@/roles/powerBankCombatPair";
 import { measureCreepIntent } from "@/runtime/cpuPhaseProfiler";
 import { powerBankAttackSustainable } from "@/runtime/powerBankCapability";
@@ -13,12 +14,6 @@ const RETIRE_STATUSES: ReadonlySet<string> = new Set([
   "failed",
   "aborted",
 ]);
-
-function retireIfOrphanedPowerBankCreep(creep: Creep): boolean {
-  if (!creep.memory.configName?.includes(":powerbank:")) return false;
-  creep.suicide();
-  return true;
-}
 
 function canHeal(creep: Creep): boolean {
   return creep.getActiveBodyparts(HEAL) > 0;
@@ -57,7 +52,7 @@ export const powerBankHealerRole: RoleFactory = (_targetRoomArg?: string, encode
   source: (creep): boolean => {
     const task = getPowerBankTaskForCreep(creep);
     if (!task) {
-      retireIfOrphanedPowerBankCreep(creep);
+      retireOrphanedPowerBankCombatCreep(creep, encodedRouteRooms);
       return false;
     }
     if (RETIRE_STATUSES.has(task.status)) {
@@ -83,7 +78,7 @@ export const powerBankHealerRole: RoleFactory = (_targetRoomArg?: string, encode
   target: (creep): boolean => {
     const task = getPowerBankTaskForCreep(creep);
     if (!task) {
-      retireIfOrphanedPowerBankCreep(creep);
+      retireOrphanedPowerBankCombatCreep(creep, encodedRouteRooms);
       return false;
     }
     if (RETIRE_STATUSES.has(task.status)) {

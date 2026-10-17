@@ -3,6 +3,7 @@ import {
   getPowerBankTaskForCreep,
   pairReadyForCombat,
   resolvePowerBankPair,
+  retireOrphanedPowerBankCombatCreep,
 } from "@/roles/powerBankCombatPair";
 import { measureCreepIntent } from "@/runtime/cpuPhaseProfiler";
 import type { RoleFactory } from "@/types/system";
@@ -14,17 +15,11 @@ const RETIRE_STATUSES: ReadonlySet<string> = new Set([
   "aborted",
 ]);
 
-function retireIfOrphanedPowerBankCreep(creep: Creep): boolean {
-  if (!creep.memory.configName?.includes(":powerbank:")) return false;
-  creep.suicide();
-  return true;
-}
-
 export const powerBankAttackerRole: RoleFactory = (targetRoomArg?: string, encodedRouteRooms?: string) => ({
   source: (creep): boolean => {
     const task = getPowerBankTaskForCreep(creep);
     if (!task) {
-      retireIfOrphanedPowerBankCreep(creep);
+      retireOrphanedPowerBankCombatCreep(creep, encodedRouteRooms);
       return false;
     }
     if (RETIRE_STATUSES.has(task.status)) {
@@ -47,7 +42,7 @@ export const powerBankAttackerRole: RoleFactory = (targetRoomArg?: string, encod
   target: (creep): boolean => {
     const task = getPowerBankTaskForCreep(creep);
     if (!task) {
-      retireIfOrphanedPowerBankCreep(creep);
+      retireOrphanedPowerBankCombatCreep(creep, encodedRouteRooms);
       return false;
     }
     if (RETIRE_STATUSES.has(task.status)) {

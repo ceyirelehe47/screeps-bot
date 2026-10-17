@@ -31,6 +31,8 @@ export interface MultiRoomTravelSegment {
 }
 
 export interface MoveToTargetOptions {
+  /** 仅战斗推进要求完整可达证明；普通旅行允许沿半截路径前进后重搜。 */
+  requireCompletePath?: boolean;
   /** 业务本 tick 已证明完整的房内路径；直接交给交通层，不再另做寻路。 */
   verifiedPath?: readonly StoredRoomPosition[];
   /** 业务安全策略检查实际下一步；寻路、缓存和交通仍由共用引擎执行。 */

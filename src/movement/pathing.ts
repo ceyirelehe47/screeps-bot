@@ -97,7 +97,7 @@ export function moveToTarget(
     ignoreCreeps ? 1 : 0
   }:s${options.swampCost ?? "d"}:p${options.plainCost ?? "d"}:m${options.maxRooms ?? "d"}:e${options.avoidExitTiles ? 1 : 0}:sc${
     options.allowSourceContainerTarget ? 1 : 0
-  }:pt${options.allowPortalTarget ? 1 : 0}:c${options.cacheKey ?? ""}`;
+  }:pt${options.allowPortalTarget ? 1 : 0}:full${options.requireCompletePath ? 1 : 0}:c${options.cacheKey ?? ""}`;
 
   {
     const currentPosKey = getPosKey(creep.pos);
@@ -137,20 +137,34 @@ export function moveToTarget(
 
     recordMovementMetric("pathRepaths", room.name);
 
-    const path = options.verifiedPath ?? measureCreepPathing(() =>
-      creep.pos.findPathTo(targetPos, {
+    const path = options.verifiedPath ?? measureCreepPathing(() => {
+      if (options.requireCompletePath) {
+        const search = (maxOps: number) => PathFinder.search(creep.pos, { pos: targetPos, range }, {
+          plainCost: options.plainCost ?? 2, swampCost: options.swampCost ?? 10,
+          maxRooms: options.maxRooms ?? 1, maxOps,
+          roomCallback: roomName => roomName === room.name
+            ? buildRoomMovementMatrix(creep, room, roomName, new PathFinder.CostMatrix(), { ...options, ignoreCreeps }, targetPos)
+            : false,
+        });
+        let result = search(8000);
+        // incomplete 既可能是物理无路，也可能是预算不足；只对耗尽 ops 有界重试一次。
+        if (result.incomplete && result.ops >= 8000) result = search(16000);
+        return result.incomplete ? [] : result.path;
+      }
+      return creep.pos.findPathTo(targetPos, {
         range,
         swampCost: options.swampCost,
         plainCost: options.plainCost,
         ignoreCreeps,
         maxRooms: options.maxRooms,
         costCallback: (roomName, matrix) => buildRoomMovementMatrix(creep, room, roomName, matrix, { ...options, ignoreCreeps }, targetPos),
-      }),
-    );
+      });
+    });
 
     const end = path[path.length - 1];
-    // findPathTo 超出预算会返回半截路径；不能把朝墙方向的局部进展当成可达。
-    if (!end || Math.max(Math.abs(end.x - targetPos.x), Math.abs(end.y - targetPos.y)) > range) {
+    // 普通旅行保留局部进展；只有显式战斗证明或已验证路径必须完整抵达 range。
+    if (!end || ((options.requireCompletePath || options.verifiedPath) &&
+        Math.max(Math.abs(end.x - targetPos.x), Math.abs(end.y - targetPos.y)) > range)) {
       delete movementState.movePathState;
       return ERR_NO_PATH;
     }

@@ -5,6 +5,7 @@ jest.mock("@/movement/routing", () => ({ getCachedStaticTravelMatrix: jest.fn(),
 jest.mock("@/runtime/runtimeServices", () => ({ getTickContextService: jest.fn() }));
 jest.mock("@/runtime/cpuPhaseProfiler", () => ({
   measureCreepIntent: (fn: () => unknown) => fn(),
+  measureCreepPathing: (fn: () => unknown) => fn(),
   measureSampledCpuPhase: (_label: string, fn: () => unknown) => fn(),
 }));
 jest.mock("@/runtime/powerBankObserver", () => ({ requestCombatObservation: jest.fn(() => true) }));
@@ -18,10 +19,12 @@ import { getCachedStaticTravelMatrix, getNextTravelRoom } from "@/movement/routi
 import { getTickContextService } from "@/runtime/runtimeServices";
 import { createMockPowerBankCreep, createMockPowerBank } from "@mock/powerBank";
 import { clearMovementState, moveToTarget, moveToTargetRoom } from "@/roles/shared";
+import { moveToTarget as moveActualTarget } from "@/movement/pathing";
 
 class PairPos {
   constructor(public x: number, public y: number, public roomName: string) {}
-  getRangeTo(target: RoomPosition | { pos: RoomPosition }): number {
+  getRangeTo(target: RoomPosition | { pos: RoomPosition } | number, y?: number): number {
+    if (typeof target === "number") return Math.max(Math.abs(this.x - target), Math.abs(this.y - y!));
     const pos = "pos" in target ? target.pos : target;
     return pos.roomName !== this.roomName ? Infinity : Math.max(Math.abs(this.x - pos.x), Math.abs(this.y - pos.y));
   }
@@ -140,6 +143,47 @@ beforeEach(() => {
 });
 
 describe("PowerBank same-frame pair movement", () => {
+  it.each(["attacker-first", "healer-first"] as const)("历史清理已删 taskId/configName 的双人组进入母房回收：%s", order => {
+    for (const actor of [attacker, healer]) { delete (actor.memory as any).taskId; delete actor.memory.configName; }
+    Memory.data!.powerBankHarvest = {};
+    calls(order);
+    expect(attacker.memory._recycleToRoom).toBe(SOURCE);
+    expect(healer.memory._recycleToRoom).toBe(SOURCE);
+    expect(attacker.suicide).not.toHaveBeenCalled(); expect(healer.suicide).not.toHaveBeenCalled();
+  });
+  it.each(["attacker-first", "healer-first"] as const)("半截 findPathTo 仍为出房双人组提交移动意图：%s", order => {
+    const find = jest.fn(() => [{ x: 11, y: 10, dx: 1, dy: 0, direction: RIGHT }]);
+    attacker.pos.findPathTo = find as RoomPosition["findPathTo"];
+    (moveToTargetRoom as jest.Mock).mockImplementation((creep: Creep) =>
+      moveActualTarget(creep, new RoomPosition(49, 10, SOURCE), 0));
+    calls(order);
+    expect(find).toHaveBeenCalledTimes(1);
+    expect(pending.get(attacker)).toBe(RIGHT); expect(pending.get(healer)).toBe(RIGHT);
+    expect(getMoveIntentReceipt(attacker)?.to).toMatchObject({ x: 11, y: 10, roomName: SOURCE });
+    expect(getMoveIntentReceipt(healer)?.to).toMatchObject({ x: 10, y: 10, roomName: SOURCE });
+  });
+
+  it("领队房内无路只换占位策略重试一次，成功后跟随同步提交", () => {
+    (moveToTargetRoom as jest.Mock).mockReturnValueOnce(ERR_NO_PATH).mockImplementation((creep: Creep) => issueMove(creep, RIGHT));
+    calls("attacker-first");
+    expect(moveToTargetRoom).toHaveBeenCalledTimes(2);
+    expect(moveToTargetRoom).toHaveBeenLastCalledWith(attacker, TARGET, expect.any(String), expect.objectContaining({ ignoreCreeps: false, reusePath: 0 }));
+    expect(pending.has(attacker)).toBe(true); expect(pending.has(healer)).toBe(true);
+  });
+
+  it("跟随连续两帧无路后领队回靠，第三帧重新聚拢", () => {
+    place(attacker, 12, 10); place(healer, 9, 10);
+    (moveToTarget as jest.Mock).mockReturnValue(ERR_NO_PATH);
+    calls("attacker-first");
+    expect(pending.size).toBe(0);
+    commitFrame(); calls("healer-first");
+    expect(pending.has(attacker)).toBe(true); expect(pending.has(healer)).toBe(false);
+    commitFrame();
+    expect(attacker.pos.getRangeTo(healer)).toBe(2);
+    (moveToTarget as jest.Mock).mockImplementation((creep: Creep) => issueMove(creep, creep.pos.getDirectionTo(attacker.pos)));
+    calls("attacker-first"); commitFrame();
+    expect(attacker.pos.isNearTo(healer)).toBe(true);
+  });
   it("越界斜步不保留任一位移分量，receipt 与原生原边界迁房坐标一致", () => {
     place(attacker, 0, 25, TARGET); place(healer, 0, 26, TARGET);
     expect(issueMove(attacker, TOP_LEFT)).toBe(OK);

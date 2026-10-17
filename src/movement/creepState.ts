@@ -10,6 +10,8 @@ export interface CreepMovementState {
   /** 业务下一步许可暂未满足；观察等待不等同于几何卡死。 */
   stepPolicyWaitAt?: number;
   workAnchor?: WorkAnchor;
+  /** PB 跟随连续无路时允许领队回靠；只保留 heap 状态，随单位清理。 */
+  pairFollowFailure?: { attackerId: string; at: number; count: number };
 }
 
 type MovementStateStore = Record<string, CreepMovementState>;

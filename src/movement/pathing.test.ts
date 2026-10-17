@@ -185,13 +185,16 @@ describe("moveToTarget baseline", () => {
 
 describe("房内路径完整性", () => {
   beforeEach(() => { resetRuntimeServices(); clearCreepMovementStateForTest(); advanceTick(); Game.rooms = {}; Game.creeps = {}; setupGlobals(); });
-  it("拒绝未抵达range的半截路径，也不缓存或提交向墙移动；完整已验证路径直接沿用", () => {
+  it("默认沿半截路径前进，严格模式不复用该缓存；完整已验证路径直接沿用", () => {
     const room = createRoom("W1N1");
     const creep = createCreep("partial-path", "worker", 10, 10, room);
     const find = jest.fn(() => [{ x: 11, y: 10, dx: 1, dy: 0, direction: RIGHT }]);
     creep.pos.findPathTo = find as RoomPosition["findPathTo"];
     const target = new MockRoomPosition(15, 10, room.name) as unknown as RoomPosition;
-    expect(moveToTarget(creep, target, 1)).toBe(ERR_NO_PATH);
+    expect(moveToTarget(creep, target, 1)).toBe(OK);
+    expect(creep.move).toHaveBeenCalledWith(RIGHT);
+    (creep.move as jest.Mock).mockClear();
+    expect(moveToTarget(creep, target, 1, { requireCompletePath: true })).toBe(ERR_NO_PATH);
     expect(creep.move).not.toHaveBeenCalled();
     expect(getCreepMovementState(creep)?.movePathState).toBeUndefined();
     find.mockClear();
@@ -199,5 +202,18 @@ describe("房内路径完整性", () => {
     expect(moveToTarget(creep, target, 1, { verifiedPath: path })).toBe(OK);
     expect(find).not.toHaveBeenCalled();
     expect(creep.move).toHaveBeenCalledWith(RIGHT);
+  });
+
+  it.each([100, 8000])("严格搜索使用 incomplete，只有耗尽 ops 才加倍重试一次：%s", (ops) => {
+    const room = createRoom("W1N1");
+    const creep = createCreep("strict-path", "meleeAttacker", 10, 10, room);
+    const target = new MockRoomPosition(15, 10, room.name) as unknown as RoomPosition;
+    const path = [11, 12, 13, 14].map(x => new RoomPosition(x, 10, room.name));
+    jest.mocked(PathFinder.search).mockReturnValueOnce({ path, incomplete: true, ops, cost: 8 })
+      .mockReturnValue({ path, incomplete: false, ops: 9000, cost: 8 });
+    expect(moveToTarget(creep, target, 1, { requireCompletePath: true })).toBe(ops === 8000 ? OK : ERR_NO_PATH);
+    expect(PathFinder.search).toHaveBeenCalledTimes(ops === 8000 ? 2 : 1);
+    if (ops === 8000) expect(PathFinder.search).toHaveBeenLastCalledWith(creep.pos, { pos: target, range: 1 }, expect.objectContaining({ maxOps: 16000 }));
+    expect(creep.move).toHaveBeenCalledTimes(ops === 8000 ? 1 : 0);
   });
 });

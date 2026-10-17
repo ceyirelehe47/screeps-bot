@@ -372,6 +372,12 @@ function cleanupTaskConfigs(task: PowerBankHarvestTask): void {
 }
 
 function neutralizeTaskCreeps(task: PowerBankHarvestTask): void {
+  const retireCombat = (creep: Creep): void => {
+    if (task.sourceRoom && ["powerBankAttacker", "powerBankHealer"].includes(creep.memory.role)) {
+      creep.memory._recycleToRoom = task.sourceRoom;
+      clearMovementState(creep);
+    }
+  };
   const seen = new Set<string>();
   const creepIds = [task.attackerId, task.healerId].filter(Boolean);
   for (const creepId of creepIds) {
@@ -383,6 +389,7 @@ function neutralizeTaskCreeps(task: PowerBankHarvestTask): void {
     delete mem.configName;
     delete mem.powerBankReinforcementStage;
     creep.memory.working = false;
+    retireCombat(creep);
   }
 
   for (const configName of getTaskConfigNames(task)) {
@@ -393,6 +400,7 @@ function neutralizeTaskCreeps(task: PowerBankHarvestTask): void {
       delete mem.configName;
       delete mem.powerBankReinforcementStage;
       creep.memory.working = false;
+      retireCombat(creep);
     }
   }
 }

@@ -435,7 +435,7 @@ describe("meleeAttackerRole 目标策略与移动请求安全边界", () => {
     expect(moveToTarget).not.toHaveBeenCalled();
     expect(attacker.move).not.toHaveBeenCalled();
     expect(attacker.memory._warBreachTargetId).toBeUndefined();
-    expect(PathFinder.search).toHaveBeenCalledTimes(2);
+    expect(PathFinder.search).toHaveBeenCalledTimes(ops === 8000 ? 3 : 2);
 
     // 另一单位拆掉屏障是实际世界变化；不靠单纯流逝一 tick 假称能够恢复。
     Game.time += 1;
@@ -446,7 +446,7 @@ describe("meleeAttackerRole 目标策略与移动请求安全边界", () => {
     expect(attacker.attack).toHaveBeenCalledWith(spawn);
     expect(moveToTarget).toHaveBeenCalledWith(attacker, spawn, 1, expect.any(Object));
     expect(attacker.attack).not.toHaveBeenCalledWith(wall);
-    expect(PathFinder.search).toHaveBeenCalledTimes(2);
+    expect(PathFinder.search).toHaveBeenCalledTimes(ops === 8000 ? 3 : 2);
   });
 
   it.each([undefined, TARGET_ROOM])("战争目标本帧失效后下一帧重选；普通角色同帧回退（targetRoom=%s）", (targetRoom) => {

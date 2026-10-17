@@ -35,7 +35,7 @@ function moveWarAttackerToTarget(
   const wasOutOfRange = creep.pos.getRangeTo(targetPos) > range;
   const previousIntent = getMoveIntentReceipt(creep);
   const drainMove = towerDrain ? moveTowerDrainBorderAttack(creep, targetPos, range) : undefined;
-  const code = drainMove === undefined ? moveToTarget(creep, target, range, options) : drainMove;
+  const code = drainMove === undefined ? moveToTarget(creep, target, range, { ...options, requireCompletePath: true }) : drainMove;
   if (code === OK && wasOutOfRange) {
     creep.memory._warMoveIntentAt = Game.time;
     const intent = getMoveIntentReceipt(creep);
@@ -262,10 +262,15 @@ function searchCombatApproach(creep: Creep, target: Creep | Structure, towerDrai
     }
   }
   if (towerDrain) constrainTowerDrainBreachPath(creep, creep.room.name, matrix);
-  const search = (costs: CostMatrix) => PathFinder.search(creep.pos, { pos: target.pos, range: 1 }, {
-    plainCost: 2, swampCost: 8, maxRooms: 1, maxOps: COMBAT_APPROACH_MAX_OPS,
-    roomCallback: (roomName) => roomName === creep.room.name ? costs : false,
-  });
+  const search = (costs: CostMatrix) => {
+    const run = (maxOps: number) => PathFinder.search(creep.pos, { pos: target.pos, range: 1 }, {
+      plainCost: 2, swampCost: 8, maxRooms: 1, maxOps,
+      roomCallback: (roomName) => roomName === creep.room.name ? costs.clone() : false,
+    });
+    let result = run(COMBAT_APPROACH_MAX_OPS);
+    if (result.incomplete && result.ops >= COMBAT_APPROACH_MAX_OPS) result = run(COMBAT_APPROACH_MAX_OPS * 2);
+    return result;
+  };
   const openPath = search(matrix);
   const end = openPath.path[openPath.path.length - 1];
   if (!openPath.incomplete && end && Math.max(Math.abs(end.x - target.pos.x), Math.abs(end.y - target.pos.y)) <= 1
@@ -735,7 +740,7 @@ function attackRouteBreachWhileTraveling(creep: Creep): boolean {
 
     const attackCode = measureCreepIntent(() => creep.attack(tracked));
     if (attackCode === ERR_NOT_IN_RANGE) {
-      moveToTarget(creep, tracked, 1, { plainCost: 2, swampCost: 8, reusePath: 3, maxRooms: 1 });
+      moveToTarget(creep, tracked, 1, { plainCost: 2, swampCost: 8, reusePath: 3, maxRooms: 1, requireCompletePath: true });
     }
     return true;
   }

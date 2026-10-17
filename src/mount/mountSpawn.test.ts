@@ -61,6 +61,20 @@ describe("mountSpawn", () => {
     expect(spawn.memory._lastSpawnFail).toMatchObject({ configName: blocked, bodyCost: 550, roomEnergyCapacityAvailable: 300 });
   });
 
+  it.each(["powerBankAttacker", "powerBankHealer", "powerBankHauler"] as const)("RESERVE 下已启动 PB 的 %s 不被队首清理丢弃", role => {
+    const room = { name: "W1N1", energyAvailable: 300, energyCapacityAvailable: 300 } as Room;
+    const name = `W1N1:powerbank:W2N2:${role}`;
+    Memory.data!.powerBankHarvest = { bank: { id: "bank", sourceRoom: room.name, targetRoom: "W2N2", status: "spawning" } as PowerBankHarvestTask };
+    Memory.data!.creepConfigs![name] = { role, roomName: room.name, args: ["W2N2"], taskId: "bank", body: [MOVE] };
+    Game.flags = { RESERVE: { name: "RESERVE", pos: { roomName: room.name } } as Flag };
+    const spawn = createSpawn("Spawn1", room, [name]);
+    Game.rooms = { W1N1: room }; Game.spawns = { Spawn1: spawn };
+    Object.setPrototypeOf(spawn, prototype);
+    prototype.work.call(spawn);
+    expect(spawn.spawnCreep).toHaveBeenCalledWith([MOVE], expect.any(String), expect.objectContaining({ memory: expect.objectContaining({ configName: name }) }));
+    expect(spawn.memory.spawnList).toEqual([]);
+  });
+
   it("战争孵化接受后同 tick 停止任务，尚未进入 Game.creeps 的 Memory 也会解绑", () => {
     const room = { name: "E1N57", controller: { my: true, level: 8 }, energyAvailable: 300, energyCapacityAvailable: 300 } as unknown as Room;
     const name = "E1N57:war:E3N57:meleeAttacker:0";

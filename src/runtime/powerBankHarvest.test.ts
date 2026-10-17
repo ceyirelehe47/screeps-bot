@@ -398,6 +398,21 @@ describe("powerBankHarvest", () => {
     resetPowerBankFixture();
   });
 
+  it("终态解绑战斗成员同时安排母房回收，不留下无任务原地站立的单位", () => {
+    setupSourceRoom(); setupTargetRoom();
+    const taskId = "pb-terminal-recycle";
+    const pair = setupOwnedCombatPair({ taskId, roomName: SOURCE_ROOM });
+    mockObjects(pair.attacker, pair.healer);
+    addTask(makeTask({ id: taskId, sourceRoom: SOURCE_ROOM, status: POWER_BANK_STATUS.FAILED,
+      attackerId: pair.attacker.id, healerId: pair.healer.id }));
+    runPowerBankHarvest();
+    for (const actor of [pair.attacker, pair.healer]) {
+      expect(actor.memory.taskId).toBeUndefined(); expect(actor.memory.configName).toBeUndefined();
+      expect(actor.memory._recycleToRoom).toBe(SOURCE_ROOM);
+      expect(actor.suicide).not.toHaveBeenCalled();
+    }
+  });
+
   it("重新发现同一 bank 不得认领已进入回收的旧成员", () => {
     setupSourceRoom(); setupTargetRoom();
     const taskId = "pb-recycled";

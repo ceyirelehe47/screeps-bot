@@ -136,7 +136,8 @@ describe("powerBankHealerRole", () => {
 
     powerBankHealerRole(TARGET_ROOM).source?.(healer);
 
-    expect(healer.suicide).toHaveBeenCalled();
+    expect(healer.memory._recycleToRoom).toBe("W1N1");
+    expect(healer.suicide).not.toHaveBeenCalled();
     expect(healer.heal).not.toHaveBeenCalled();
   });
 
