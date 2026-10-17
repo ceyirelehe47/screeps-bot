@@ -24,12 +24,17 @@ describe("原矿停采作为最后手段", () => {
     expect(shouldPauseNativeMineralHarvest(roomWithMineral(46_000), RESOURCE_CATALYST)).toBe(false);
   });
   it("仓储承压立即停止，原因可查；观测过期不能绕过停采滞回", () => {
+    const pressureRoom = roomWithMineral(200_000, 99_999);
+    Game.rooms[pressureRoom.name] = pressureRoom;
     noBid();
-    expect(shouldPauseNativeMineralHarvest(roomWithMineral(200_000, 99_999), RESOURCE_CATALYST)).toBe(true);
+    const before = JSON.stringify(Memory.runtime);
+    expect(shouldPauseNativeMineralHarvest(pressureRoom, RESOURCE_CATALYST)).toBe(true);
+    expect(JSON.stringify(Memory.runtime)).toBe(before);
     const observation = (Memory.runtime as unknown as { baseMineralOverflow: { entries: Record<string, BaseMineralOverflowObservation> } }).baseMineralOverflow.entries["E1N1:X"];
     expect(observation.paused).toBe("storage_full");
     Game.time += 201;
     expect(shouldPauseNativeMineralHarvest(roomWithMineral(200_000), RESOURCE_CATALYST)).toBe(true);
+    Game.rooms.E1N1 = roomWithMineral(46_000);
     noBid(46_000);
     expect(shouldPauseNativeMineralHarvest(roomWithMineral(46_000), RESOURCE_CATALYST)).toBe(false);
   });

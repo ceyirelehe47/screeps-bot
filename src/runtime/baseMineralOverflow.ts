@@ -144,6 +144,8 @@ export function recordBaseMineralOverflow(
     }
     observation.reason = !observation.complete ? "protection_incomplete" : attempt ?? "not_attempted";
     if ((!observation.complete || observation.tier !== "normal") && old?.paused) observation.paused = old.paused;
+    if (observation.complete && observation.tier === "liquidation" && observation.noBidRounds >= BASE_MINERAL_NO_BID_ROUNDS) observation.paused = "no_bid";
+    if (storageMineralPressure(Game.rooms?.[entry.roomName])) observation.paused = "storage_full";
     next[key] = observation;
   }
   state.baseMineralOverflow = { updatedAt: tick, entries: next };

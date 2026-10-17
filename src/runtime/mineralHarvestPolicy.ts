@@ -8,21 +8,16 @@ export function shouldPauseNativeMineralHarvest(room: Room | undefined, resource
   const terminal = room.terminal?.store.getUsedCapacity?.(resource) ?? 0;
   if (!Number.isSafeInteger(stored) || stored < 0 || !Number.isSafeInteger(terminal) || terminal < 0) return true;
   const observation = readBaseMineralOverflow(room.name, resource);
-  if (storageMineralPressure(room)) {
-    if (observation) observation.paused = "storage_full";
-    return true;
-  }
+  if (storageMineralPressure(room)) return true;
   const stock = stored + terminal;
   const current = observation?.complete && observation.observedAt <= Game.time && Game.time - observation.observedAt <= 200;
   if (observation?.paused && (!current || stock > observation.overflowThreshold)) return true;
   if (!current || !observation) return false;
   if (stock <= observation.overflowThreshold) {
-    delete observation.paused;
     return false;
   }
   if (observation.paused) return true;
   if (stock > observation.liquidationThreshold && observation.noBidRounds >= BASE_MINERAL_NO_BID_ROUNDS) {
-    observation.paused = "no_bid";
     return true;
   }
   return false;
