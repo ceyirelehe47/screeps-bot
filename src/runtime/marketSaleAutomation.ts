@@ -4120,6 +4120,18 @@ function buildMarketBasePolicyMigrationProposal(
       });
     }
   }
+  // permit 签收后可自动接纳新房间；这些未签名 lane 仍是 shadow。
+  // 迁移须覆盖完整当前 scope，但只能为它们补 suspended grant，不能晋级或扩权。
+  const existingGrantIds = new Set(activeGrants.map(grant => grant.laneId));
+  for (const lane of migration.lanes) {
+    if (existingGrantIds.has(lane.laneId)) continue;
+    if (lane.stage !== "shadow" || lane.status !== "suspended") {
+      throw new TypeError(`market_base_migration_ungranted_lane_requires_shadow:${lane.laneId}`);
+    }
+    activeGrants.push(buildMarketBaseResourceSignedLaneGrant({
+      lane, stage: "shadow", status: "active", newDealGrant: "suspended",
+    }));
+  }
   const permitChain = state.permitChain;
   const ledger = state.ledger;
   const permit = buildMarketBaseResourcePermit({

@@ -1757,6 +1757,7 @@ describe("Market Base policy migration 重合同（re-sign 常量升级）", () 
       qualifiedSuspended?: boolean;
       persistentBlocker?: string;
       retireFirstLane?: boolean;
+      unsignedShadowRoom?: boolean;
     } = {},
   ): {
     laneIds: string[];
@@ -1778,6 +1779,10 @@ describe("Market Base policy migration 重合同（re-sign 常量升级）", () 
     (Game as unknown as { shard?: { name: string } }).shard = {
       name: "shard1",
     };
+    if (options.unsignedShadowRoom) Game.rooms.W8N9 = {
+      name: "W8N9", controller: { my: true, owner: { username: V3_TEST_ACCOUNT } },
+      terminal: { id: "terminal:W8N9", my: true, owner: { username: V3_TEST_ACCOUNT } },
+    } as unknown as Room;
     const past = pastPolicySet();
     const reconciled = reconcileLiveMarketBaseResourceScope({
       tick: 100,
@@ -1792,6 +1797,8 @@ describe("Market Base policy migration 重合同（re-sign 常量升级）", () 
           terminalOwned: true,
           roomClass: "normal",
         },
+        ...(options.unsignedShadowRoom ? [{ roomName: "W8N9", visible: true, controllerMy: true,
+          controllerOwner: V3_TEST_ACCOUNT, terminalId: "terminal:W8N9", terminalOwned: true, roomClass: "normal" as const }] : []),
       ],
     });
     if (!reconciled.ok) throw new Error("fixture scope rejected");
@@ -1832,7 +1839,9 @@ describe("Market Base policy migration 重合同（re-sign 常量升级）", () 
     // 保留其 tombstone grant（迁移须省略而非 re-sign 的场景）。
     const retiredLane =
       options.retireFirstLane === true ? allPastLanes[0] : undefined;
-    const pastLanes = retiredLane ? allPastLanes.slice(1) : allPastLanes;
+    const oldSignedLanes = options.unsignedShadowRoom ? allPastLanes.filter(lane => lane.sellerRoomName === V3_TEST_ROOM) : allPastLanes;
+    const pastLanes = retiredLane ? oldSignedLanes.slice(1) : oldSignedLanes;
+    const presentLanes = options.unsignedShadowRoom ? allPastLanes : pastLanes;
     const rawLegacyPermit = buildMarketDirectContinuousPermit({
       epoch: 1,
       accountIdentity: V3_TEST_ACCOUNT,
@@ -2029,8 +2038,8 @@ describe("Market Base policy migration 重合同（re-sign 常量升级）", () 
       scope: {
         ...reconciled.state,
         sharedPolicyFingerprint: past.shared.fingerprint,
-        laneLifecycles: pastLanes,
-        laneSetFingerprint: marketBaseDerivedLaneSetFingerprint(pastLanes),
+        laneLifecycles: presentLanes,
+        laneSetFingerprint: marketBaseDerivedLaneSetFingerprint(presentLanes),
       },
       permitChain: chain,
       ledger: effectiveLedger,
@@ -2108,12 +2117,46 @@ describe("Market Base policy migration 重合同（re-sign 常量升级）", () 
       },
     } as unknown as Memory["data"];
     return {
-      laneIds: pastLanes.map((lane) => lane.laneId),
+      laneIds: presentLanes.map((lane) => lane.laneId),
       canaryLaneId: pastLanes.find((lane) => lane.stage === "canary")?.laneId,
       retiredLaneId: retiredLane?.laneId,
       data: Memory.data.marketSaleAutomation,
     };
   }
+
+  it("策略迁移覆盖新增房间的未签名shadow lane，保留WAL且不授予成交或晋级", () => {
+    installPastV3World({ unsignedShadowRoom: true });
+    const read = () => (Memory.data!.marketSaleAutomation as unknown as {
+      directAutomation: { baseResourceV3: MarketBaseResourceV3RuntimeState };
+    }).directAutomation.baseResourceV3;
+    const before = read();
+    const head = before.ledger!.receiptHeadHash;
+    const nextSeq = before.ledger!.nextAttemptSeq;
+    const prior = before.permitChain!.retainedPermits.at(-1)! as MarketBaseResourcePermit;
+    expect(prior.signedLaneGrants).toHaveLength(7);
+    expect(before.scope!.laneLifecycles).toHaveLength(14);
+    const proposal = proposeMarketBaseResourcePolicyMigration() as { ok: boolean; proposalId?: string; error?: string };
+    expect(proposal).toMatchObject({ ok: true });
+    expect(acceptMarketBaseResourcePermit(proposal.proposalId!)).toMatchObject({ ok: true });
+    const after = read();
+    const permit = after.permitChain!.retainedPermits.at(-1)! as MarketBaseResourcePermit;
+    expect(permit.signedLaneGrants).toHaveLength(14);
+    const newRoom = permit.signedLaneGrants.filter(grant => grant.sellerRoom === "W8N9");
+    expect(newRoom).toHaveLength(7);
+    expect(newRoom.every(grant => grant.stage === "shadow" && grant.status === "active" && grant.newDealGrant === "suspended")).toBe(true);
+    expect(after.ledger!.receiptHeadHash).toBe(head);
+    expect(after.ledger!.nextAttemptSeq).toBe(nextSeq);
+    expect(validateMarketBaseResourcePermitChain(after.permitChain!).ok).toBe(true);
+
+    installPastV3World({ unsignedShadowRoom: true });
+    const state = read();
+    const lane = state.scope!.laneLifecycles.find(value => value.sellerRoomName === "W8N9")!;
+    state.scope = { ...state.scope!, laneLifecycles: state.scope!.laneLifecycles.map(value => value !== lane ? value : {
+      ...value, stage: "qualified" as const, shadowEvidence: { ...value.shadowEvidence, completeCycles: 100 },
+    }) };
+    expect(proposeMarketBaseResourcePolicyMigration()).toMatchObject({ ok: false,
+      error: expect.stringContaining("market_base_migration_ungranted_lane_requires_shadow") });
+  });
 
   const scenarioMigrationRoundTrip = () => {
     const world = installPastV3World();

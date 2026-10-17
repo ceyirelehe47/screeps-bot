@@ -27,3 +27,8 @@
 迁移白名单只接受明确旧 revision 与 laneReserve=100000，并逐字段核对其余策略；保留 lane 身份、continuous/review 证据、WAL receipt head 与额度历史。部署后顺序为更新 canonical cfg（r8 与新 forecastBuffer）、提出策略迁移、签收同一提案，再核对原 continuous lane 仍可写。失败时恢复发布前配置及完整模块，禁止直接清空许可链或倒退 WAL。若新许可已经签收，回滚旧代码后市场保守停卖，保留最新许可与成交历史供修复版恢复；不能用发布前 Memory 覆盖已经发生的成交。
 
 所有测试、构建和完整回归在服务器隔离目录执行。最终发布由干净 main 提交构建，并核对 origin/main、完整模块读回、实际 shard1 执行身份和有界健康窗口。
+
+
+## 新房间兼容修复（2026.10.17-7）
+
+实服迁移发现 E3N54 在旧 permit 签收后新增了 7 条 shadow lane：当前 scope 为 63 条，旧 active grant 仅 56 条。旧迁移只重签历史 grant，因覆盖数不一致被完整校验拒绝，许可与 WAL 未改动。修复后仅为缺失的 shadow+suspended lane 补齐 suspended grant；未签名却已晋级的 lane 仍拒绝迁移，不授予新房间交易权限。已有 continuous/review 与成交历史照旧保留。
