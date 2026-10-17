@@ -250,7 +250,12 @@ function searchCombatApproach(creep: Creep, target: Creep | Structure, towerDrai
   if (!base) { base = geometryMatrix(); memo.matrices.set(geometryKey, base); }
   const matrix = base.clone();
   const healer = findPairedWarHealer(creep);
-  for (const other of [...creep.room.find(FIND_MY_CREEPS), ...getHostileCreeps(creep.room), ...creep.room.find(FIND_HOSTILE_POWER_CREEPS)]) {
+  for (const site of creep.room.find(FIND_CONSTRUCTION_SITES)) {
+    if (site.my && !isWalkableConstructionSite(site)) matrix.set(site.pos.x, site.pos.y, 0xff);
+  }
+  if (creep.room.controller) matrix.set(creep.room.controller.pos.x, creep.room.controller.pos.y, 0xff);
+  for (const other of [...creep.room.find(FIND_MY_CREEPS), ...getHostileCreeps(creep.room), ...creep.room.find(FIND_HOSTILE_POWER_CREEPS),
+    ...Object.values(Game.powerCreeps || {}).filter(unit => unit.ticksToLive != null && unit.room?.name === creep.room.name)]) {
     if (other.name !== creep.name && other.name !== healer?.name) matrix.set(other.pos.x, other.pos.y, 0xfe);
   }
   if (towerDrain) constrainTowerDrainBreachPath(creep, creep.room.name, matrix);
