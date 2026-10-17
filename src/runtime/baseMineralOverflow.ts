@@ -59,7 +59,8 @@ export function storageMineralPressure(room: Room | undefined): boolean {
 
 /** 生产、在途与 exposure 原样保护；分层只使用账本扣除这些承诺后的余量。 */
 export function classifyBaseMineralOverflow(entry: MarketProtectionEntry, tick: number, pressure = false): BaseMineralOverflowObservation {
-  const complete = isMarketBaseResource(entry.resource) && isMarketProtectionEntryFresh(entry, tick) && !entry.blocked;
+  const complete = isMarketBaseResource(entry.resource) && isMarketProtectionEntryFresh(entry, tick) && !entry.blocked &&
+    [entry.totalStock, entry.protectedAmount, entry.managedExposure, entry.forecastBuffer].every(value => Number.isSafeInteger(value) && value >= 0);
   const protectedAmount = entry.protectedAmount + entry.managedExposure;
   const overflowThreshold = protectedAmount + BASE_MINERAL_OVERFLOW_BAND;
   const liquidationThreshold = overflowThreshold + BASE_MINERAL_LIQUIDATION_BAND;
