@@ -351,6 +351,44 @@ describe("meleeAttackerRole 目标策略与移动请求安全边界", () => {
     expect(moveToTarget).toHaveBeenCalledWith(attacker, open, 1, expect.any(Object));
   });
 
+  it("连续三 tick 保持可达替代目标，邻接目标不受游标影响，目标失效后恢复轮询", () => {
+    Game.time += 20;
+    const wall = hostileStructure(STRUCTURE_WALL, "sticky-wall", 10, 10);
+    const preferred = hostileStructure(STRUCTURE_SPAWN, "sticky-preferred", 5, 5);
+    const open = hostileStructure(STRUCTURE_SPAWN, "sticky-open", 25, 25);
+    const closed = hostileStructure(STRUCTURE_SPAWN, "sticky-closed", 30, 30);
+    const structures = [wall, preferred, open, closed];
+    const attacker = createMockPowerBankCreep("meleeAttacker", { name: "sticky-red", roomName: TARGET_ROOM, x: 1, y: 1,
+      memory: { configName: ATTACKER_CONFIG } });
+    attacker.room.find = jest.fn(kind => kind === FIND_STRUCTURES ? structures : kind === FIND_HOSTILE_STRUCTURES
+      ? structures.filter(s => s !== wall) : []) as Room["find"];
+    attacker.pos.findInRange = jest.fn(() => []) as RoomPosition["findInRange"];
+    attacker.attack = jest.fn(() => ERR_NOT_IN_RANGE);
+    Game.creeps = { [attacker.name]: attacker };
+    (PathFinder.search as jest.Mock).mockImplementation((_origin, goal) => goal.pos === open.pos
+      ? { path: combatPathThrough([1, 1], [1, 24], [24, 24]), incomplete: false, ops: 100 }
+      : { path: [], incomplete: true, ops: 2000 });
+    const role = meleeAttackerRole(TARGET_ROOM);
+    for (let i = 0; i < 3; i++) {
+      (attacker.attack as jest.Mock).mockClear();
+      role.target(attacker);
+      expect(attacker.attack).toHaveBeenCalledWith(open);
+      Game.time++;
+    }
+    const adjacent = hostileStructure(STRUCTURE_EXTENSION, "sticky-adjacent", 2, 1);
+    structures.push(adjacent);
+    (attacker.attack as jest.Mock).mockClear();
+    role.target(attacker);
+    expect(attacker.attack).toHaveBeenCalledWith(adjacent);
+    structures.splice(structures.indexOf(adjacent), 1);
+    structures.splice(structures.indexOf(open), 1);
+    Game.time++;
+    (attacker.attack as jest.Mock).mockClear();
+    role.target(attacker);
+    expect(attacker.attack).not.toHaveBeenCalledWith(open);
+    expect((PathFinder.search as jest.Mock).mock.calls.some(([, goal]) => goal.pos === closed.pos)).toBe(true);
+  });
+
   it("耗塔队保留覆盖敌塔的rampart目标，不被相邻中立墙抢占", () => {
     const wall = hostileStructure(STRUCTURE_WALL, "incidental-wall", 2, 28, 1_800_000);
     const tower = hostileStructure(STRUCTURE_TOWER, "covered-tower", 25, 25, 3000);

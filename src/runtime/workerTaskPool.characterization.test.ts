@@ -17,6 +17,7 @@ import { getCreepConfigService } from "@/runtime/runtimeServices";
 import { getSafeZone } from "@/runtime/safeZone";
 import {
   assignWorkerTask,
+  deferUnreachableWorkerTask,
   cleanupWorkerTaskBoard,
   clearWorkerTaskBoardForTest,
   getAssignedWorkerTaskId,
@@ -205,6 +206,25 @@ describe("workerTaskPool legacy dispatch characterization", () => {
     objects[targetId] = createTarget(targetId, roomName, x, y);
     return publishTask(createTask(id, roomName, targetId, overrides));
   }
+
+  it("无路工地仅对失败工人暂停 50 tick，其它工人可接手且到期重试", () => {
+    Game.time = 100;
+    const worker = createCreep("blocked-worker", "W1N1");
+    const other = createCreep("other-worker", "W1N1");
+    Game.creeps = { [worker.name]: worker, [other.name]: other };
+    const task = addCandidate("W1N1", "build:blocked", "blocked", 20, 20);
+    expect(assignWorkerTask(worker)).toBe(task);
+    deferUnreachableWorkerTask(worker, task);
+    expect(task.assignedCreeps).not.toContain(worker.name);
+    for (const tick of [101, 120, 149]) {
+      Game.time = tick;
+      expect(assignWorkerTask(worker)).toBeNull();
+    }
+    expect(assignWorkerTask(other)).toBe(task);
+    releaseWorkerTask(other);
+    Game.time = 150;
+    expect(assignWorkerTask(worker)).toBe(task);
+  });
 
   it("routes ordinary workers to config home, colonizers to their physical room, and missing configs to the physical room", () => {
     configure("ordinary-config", "worker", "W1N1");

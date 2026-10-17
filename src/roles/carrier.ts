@@ -4,6 +4,7 @@ import {
   isDroppedResourceTarget,
 } from "@/roles/energyTargets";
 import { moveToTarget } from "@/roles/shared";
+import { isWalkableStructure } from "@/movement/common";
 import { measureCreepDecision, measureCreepIntent } from "@/runtime/cpuPhaseProfiler";
 import {
   ensureCreepAssignmentState,
@@ -1530,6 +1531,32 @@ function deliverBoundedTerminalFeedCargo(
   return true;
 }
 
+/** 杂物没有接收仓位时，优先放在非道路 container 或 storage 旁的空地。 */
+function dropUnassignedResource(creep: Creep, resource: ResourceConstant): void {
+  const structures = creep.room.find(FIND_STRUCTURES);
+  let terrain: RoomTerrain | undefined;
+  const safe = (pos: RoomPosition): boolean => pos.x > 0 && pos.x < 49 && pos.y > 0 && pos.y < 49
+    && !((terrain ??= creep.room.getTerrain()).get(pos.x, pos.y) & TERRAIN_MASK_WALL)
+    && isPositionAllowedForCreep(creep, pos)
+    && !structures.some(s => s.pos.x === pos.x && s.pos.y === pos.y
+      && (s.structureType === STRUCTURE_ROAD || !isWalkableStructure(s)));
+  const containers = structures.filter(s => s.structureType === STRUCTURE_CONTAINER && safe(s.pos));
+  let candidates = containers.map(s => s.pos);
+  if (!candidates.length && creep.room.storage) {
+    const storage = creep.room.storage.pos;
+    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) {
+      if (dx === 0 && dy === 0) continue;
+      const pos = new RoomPosition(storage.x + dx, storage.y + dy, creep.room.name);
+      if (safe(pos)) candidates.push(pos);
+    }
+  }
+  candidates = candidates.sort((a, b) => creep.pos.getRangeTo(a) - creep.pos.getRangeTo(b));
+  // 一帧只尝试一个搬运落点；不可达时仍允许释放杂物，避免永久占满 CARRY。
+  const target = candidates[0];
+  if (target && !creep.pos.isEqualTo(target) && moveToTarget(creep, target, 0) !== ERR_NO_PATH) return;
+  measureCreepIntent(() => creep.drop(resource));
+}
+
 function deliverSynthesisCarrierResource(creep: Creep): boolean {
   const assigned = getAssignedSynthesisCarrierTask(creep);
   const state = ensureCreepAssignmentState(creep.name);
@@ -1785,7 +1812,7 @@ function deliverSynthesisCarrierResource(creep: Creep): boolean {
     clearSynthesisCarrierTaskPlan(creep);
     // 无卸货空间时释放已有杂物，避免永久卡在非能量交付阶段。
     if (!assignedResource && fallbackResource) {
-      measureCreepIntent(() => creep.drop(fallbackResource));
+      dropUnassignedResource(creep, fallbackResource);
       return true;
     }
     return false;

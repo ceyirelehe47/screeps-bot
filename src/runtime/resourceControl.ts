@@ -411,7 +411,7 @@ const MARKET_TERMINAL_ENERGY_MAX_AUTHORIZED_ROOMS = 16;
 const DEFAULT_MARKET_CONFIG: ResourceControlMarketConfig = {
   enabled: false,
   emergencyBuyEnabled: true,
-  creditReserve: 100_000,
+  creditReserve: 10_000,
   energyShadowPrice: 0.12,
   nativeMineralAutoSellThreshold: 10_000,
   maxDealsPerRun: 1,
@@ -519,7 +519,7 @@ function normalizeMarketConfig(value: unknown): ResourceControlMarketConfig {
       raw.emergencyBuyEnabled,
       DEFAULT_MARKET_CONFIG.emergencyBuyEnabled,
     ),
-    creditReserve: normalizeNumber(raw.creditReserve, 100_000, 0, Number.MAX_SAFE_INTEGER),
+    creditReserve: normalizeNumber(raw.creditReserve, DEFAULT_MARKET_CONFIG.creditReserve!, 0, Number.MAX_SAFE_INTEGER),
     energyShadowPrice: normalizeNumber(raw.energyShadowPrice, 0.12, 0, 1_000),
     nativeMineralAutoSellThreshold: normalizeNumber(
       raw.nativeMineralAutoSellThreshold,

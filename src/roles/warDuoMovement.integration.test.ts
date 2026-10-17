@@ -2,6 +2,7 @@ import { appendFileSync } from "node:fs";
 import { healerRole } from "@/roles/healer";
 import { meleeAttackerRole } from "@/roles/meleeAttacker";
 import { towerDrainPairRange } from "@/roles/towerDrainPair";
+import { clearWarGeometryForTest } from "@/roles/warGeometry";
 import { clearCreepMovementStateForTest } from "@/movement/creepState";
 import { clearRoutingCachesForTest } from "@/movement/routing";
 import { clearRoomTopologyRevisionCacheForTest } from "@/movement/roomTopologyRevision";
@@ -185,6 +186,7 @@ class DuoWorld {
   }
 
   public constructor(public readonly order: Order, private readonly scenario?: DrainScenario) {
+    clearWarGeometryForTest();
     world = this; matrixConstructions = 0;
     Object.assign(global, { RoomPosition: GridPosition, PathFinder: { CostMatrix: CountingCostMatrix, search: (...args: Parameters<typeof gridSearch>) => { this.pathFinderCalls++; return gridSearch(...args); } } });
     Game.time = nextScenarioTick;

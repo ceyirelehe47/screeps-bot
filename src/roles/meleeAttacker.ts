@@ -192,7 +192,7 @@ function getCombatBreachCost(structure: StructureRampart | StructureWall, hostil
 function chooseWarApproach(creep: Creep, includeNeutralWalls: boolean) {
   return measureSampledCpuPhase("war.chooseWarApproach", () => measureCreepDecision(() => computeWarApproach(creep, includeNeutralWalls)));
 }
-const candidateCursors = new Map<string, number>();
+const candidateCursors = new Map<string, { cursor: number; targetId?: string }>();
 const approachFrames = new WeakMap<Game, { tick: number; matrices: Map<string, CostMatrix> }>();
 let lastApproachTick = -1;
 const approachResults = new Map<string, { tick: number; signature: string; x: number; y: number; open: boolean; breach?: string }>();
@@ -282,16 +282,29 @@ function computeWarApproach(creep: Creep, includeNeutralWalls: boolean): { targe
   const order: StructureConstant[] = [STRUCTURE_SPAWN, STRUCTURE_TOWER, STRUCTURE_STORAGE, STRUCTURE_TERMINAL, STRUCTURE_INVADER_CORE];
   const structures = getHostileStructures(creep.room, includeNeutralWalls, creep)
     .filter((structure) => structure.id !== preferred.id && !isBreachTarget(structure));
-  const candidates = [...structures.filter(s => creep.pos.getRangeTo(s.pos) <= 1),
-    ...order.flatMap(type => structures.filter(s => s.structureType === type).sort((a, b) => creep.pos.getRangeTo(a.pos) - creep.pos.getRangeTo(b.pos)))];
-  const unique = [...new Map(candidates.map(target => [target.id, target])).values()];
-  if (unique.length) {
-    const cursor = candidateCursors.get(creep.name) ?? 0;
-    const target = unique[cursor % unique.length];
-    if (candidateCursors.size >= 128) candidateCursors.delete(candidateCursors.keys().next().value!);
-    candidateCursors.set(creep.name, cursor + 1);
+  // 相邻目标无需寻路，不受远处候选的轮询预算影响；仍检查覆盖它的 rampart。
+  for (const target of structures.filter(s => creep.pos.getRangeTo(s.pos) <= 1)) {
     const approach = findCombatApproach(creep, target, includeNeutralWalls);
     if (approach.open) return { target, approach };
+  }
+  const candidates = order.flatMap(type => structures.filter(s => s.structureType === type && creep.pos.getRangeTo(s.pos) > 1)
+    .sort((a, b) => creep.pos.getRangeTo(a.pos) - creep.pos.getRangeTo(b.pos)));
+  const unique = [...new Map(candidates.map(target => [target.id, target])).values()];
+  if (unique.length) {
+    const state = candidateCursors.get(creep.name) ?? { cursor: 0 };
+    const selected = unique.find(target => target.id === state.targetId);
+    const index = selected ? unique.indexOf(selected) : state.cursor % unique.length;
+    const target = unique[index];
+    if (candidateCursors.size >= 128) candidateCursors.delete(candidateCursors.keys().next().value!);
+    candidateCursors.set(creep.name, state);
+    const approach = findCombatApproach(creep, target, includeNeutralWalls);
+    if (approach.open) {
+      state.targetId = target.id;
+      return { target, approach };
+    }
+    // 只有当前目标失效或被封住才轮转，避免在可达目标与拆墙之间来回切换。
+    delete state.targetId;
+    state.cursor = index + 1;
   }
   return { target: preferred, approach: first };
 }

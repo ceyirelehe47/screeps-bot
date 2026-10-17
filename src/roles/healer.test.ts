@@ -250,3 +250,15 @@ it("自己轻伤时不覆盖给搭档的治疗意图", () => {
   expect(healer.heal).toHaveBeenCalledTimes(1);
   expect(healer.heal).toHaveBeenCalledWith(ally);
 });
+
+it("自己重伤而搭档轻伤时优先自疗，仍保持跟随搭档", () => {
+  const healer = createMockPowerBankCreep("healer", { name: "self-priority-green", roomName: TARGET_ROOM, x: 19, y: 20 });
+  const ally = createMockPowerBankCreep("meleeAttacker", { name: "self-priority-red", roomName: TARGET_ROOM, x: 20, y: 20 });
+  healer.hits -= 200; ally.hits -= 1;
+  healer.room.find = jest.fn(() => [ally]) as Room["find"];
+  Game.creeps = { [healer.name]: healer, [ally.name]: ally };
+  healerRole().target(healer);
+  expect(healer.heal).toHaveBeenCalledTimes(1);
+  expect(healer.heal).toHaveBeenCalledWith(healer);
+  expect(healer.rangedHeal).not.toHaveBeenCalled();
+});

@@ -9,6 +9,7 @@ import { meleeAttackerRole } from "@/roles/meleeAttacker";
 import * as meleeModule from "@/roles/meleeAttacker";
 import { healerRole } from "@/roles/healer";
 import { createMockPowerBankCreep, createMockStore, MockPos } from "@mock/powerBank";
+import { clearWarGeometryForTest } from "@/roles/warGeometry";
 import { issueMove } from "@/movement/traffic";
 
 const TARGET = "E3N57";
@@ -106,6 +107,7 @@ function deferredBorderFrame(actors: Creep[]): () => void {
 
 describe("towerDrainDuo 公共战术门", () => {
   beforeEach(() => {
+    clearWarGeometryForTest();
     jest.clearAllMocks();
     moveToTarget.mockImplementation(() => OK);
     Object.assign(global, { RoomPosition: MockPos });
@@ -644,8 +646,8 @@ describe("towerDrainDuo 公共战术门", () => {
   it("空塔仍有载能补给时禁走无道路沼泽，不隐藏多轮MOVE疲劳", () => {
     const storage = { structureType: STRUCTURE_STORAGE, pos: new MockPos(20, 20, TARGET), store: createMockStore({ [RESOURCE_ENERGY]: 1000 }) } as unknown as StructureStorage;
     const { attacker } = pair(false, [tower("empty", 0), storage], [carrier(20, 24, 50)]);
-    runTowerDrainPair(attacker, TARGET, GREEN_CONFIG);
     Game.map.getRoomTerrain = jest.fn(() => ({ get: jest.fn((x: number, y: number) => x === 1 && y === 25 ? TERRAIN_MASK_SWAMP : 0) })) as unknown as GameMap["getRoomTerrain"];
+    runTowerDrainPair(attacker, TARGET, GREEN_CONFIG);
     const matrix = { set: jest.fn() } as unknown as CostMatrix;
     constrainTowerDrainBreachPath(attacker, TARGET, matrix);
     expect(matrix.set).toHaveBeenCalledWith(1, 25, 255);

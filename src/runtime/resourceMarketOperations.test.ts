@@ -34,6 +34,20 @@ it("应急能量缺口扣终端现货和在途调拨", () => {
   s.terminalEnergy = 19000; w.incoming.set("W1N1:energy", 1000);
   applyMarketOps([s], w.config, new Set(), w.context); expect(w.market.deal).not.toHaveBeenCalled();
 });
+it("未配置时低于十万 credit 仍可应急购买，显式底线继续生效", () => {
+  const w = setup(); const s = w.snapshot(); s.state = "survival"; s.energyTarget = 50000;
+  w.config.buyResources = []; delete w.config.creditReserve;
+  w.market.credits = 10_050;
+  applyMarketOps([s], w.config, new Set(), w.context);
+  expect(w.market.deal).not.toHaveBeenCalled();
+  w.market.credits = 50_000;
+  w.config.creditReserve = 50_000;
+  applyMarketOps([s], w.config, new Set(), w.context);
+  expect(w.market.deal).not.toHaveBeenCalled();
+  delete w.config.creditReserve;
+  applyMarketOps([s], w.config, new Set(), w.context);
+  expect(w.market.deal).toHaveBeenCalledTimes(1);
+});
 it("有效能量价格按净收到能量计算，矿物按费用估值计算", () => {
   const w = setup(); const s = w.snapshot(); s.state = "survival"; s.energyTarget = 50000;
   w.config.buyResources = []; w.market.calcTransactionCost.mockReturnValue(400);

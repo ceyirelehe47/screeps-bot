@@ -2,7 +2,7 @@ import type { RoleFactory } from "@/types/system";
 import { pickupEnergyFromPreferredTarget } from "@/roles/energyTargets";
 import { moveToRemoteWorkTarget, moveToTarget } from "@/roles/shared";
 import { measureCreepIntent } from "@/runtime/cpuPhaseProfiler";
-import { assignWorkerTask, completeWorkerTaskIfDone, getWorkerTaskTarget, isWorkerTaskSafeForCreep, releaseWorkerTask } from "@/runtime/workerTaskPool";
+import { assignWorkerTask, completeWorkerTaskIfDone, deferUnreachableWorkerTask, getWorkerTaskTarget, isWorkerTaskSafeForCreep, releaseWorkerTask } from "@/runtime/workerTaskPool";
 import { releasePickupReservation } from "@/runtime/energyPickupReservation";
 
 export const workerRole: RoleFactory = () => ({
@@ -40,7 +40,7 @@ export const workerRole: RoleFactory = () => ({
       const buildCode = measureCreepIntent(() => creep.build(target as ConstructionSite));
       const buildMoveCode = moveToRemoteWorkTarget(creep, target);
       if (buildCode === ERR_NOT_IN_RANGE && buildMoveCode === ERR_NO_PATH) {
-        releaseWorkerTask(creep);
+        deferUnreachableWorkerTask(creep, task);
         return false;
       }
 

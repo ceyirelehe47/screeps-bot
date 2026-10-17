@@ -1,8 +1,16 @@
 import { clearMovementState, moveToTarget, moveToTargetRoom } from "@/roles/shared";
+import { moveOffExit } from "@/movement/traffic";
 
 import type { RoleFactory } from "@/types/system";
 
 const TRAVEL_OPTS = { plainCost: 2, swampCost: 10, travelRange: 3 as const, reusePath: 10 };
+
+function idleInsideRoom(creep: Creep): void {
+  clearMovementState(creep);
+  if (creep.pos.x === 0 || creep.pos.x === 49 || creep.pos.y === 0 || creep.pos.y === 49) {
+    moveOffExit(creep);
+  }
+}
 
 function getCarriedEnergy(creep: Creep): number {
   return creep.store.getUsedCapacity(RESOURCE_ENERGY);
@@ -167,7 +175,7 @@ export const remoteWorkerRole: RoleFactory = (targetRoom: string) => {
         return false;
       }
 
-      clearMovementState(creep);
+      idleInsideRoom(creep);
       return false;
     },
 
@@ -231,7 +239,7 @@ export const remoteWorkerRole: RoleFactory = (targetRoom: string) => {
         return false;
       }
 
-      clearMovementState(creep);
+      idleInsideRoom(creep);
       return false;
     },
   };

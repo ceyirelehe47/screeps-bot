@@ -22,6 +22,20 @@ import {
 import { workerSlotClaimPort } from "@/runtime/dispatchOwnership/workerSlot";
 
 const TASK_REFRESH_INTERVAL = 3;
+const unreachableTasks = new Map<string, { roomName: string; retryAt: Map<string, number> }>();
+
+/** 无路是单个 worker 的短期事实，不阻止其它 worker 接手。 */
+export function deferUnreachableWorkerTask(creep: Creep, task: WorkerTask): void {
+  let entry = unreachableTasks.get(creep.name);
+  if (!entry || entry.roomName !== task.roomName) {
+    entry = { roomName: task.roomName, retryAt: new Map() };
+  }
+  if (entry.retryAt.size >= 16) entry.retryAt.delete(entry.retryAt.keys().next().value!);
+  entry.retryAt.set(task.id, Game.time + 50);
+  if (unreachableTasks.size >= 128) unreachableTasks.delete(unreachableTasks.keys().next().value!);
+  unreachableTasks.set(creep.name, entry);
+  releaseWorkerTask(creep);
+}
 const RAMPART_EMERGENCY_TARGET_HITS = 6000;
 const RAMPART_NORMAL_REPAIR_PRIORITY = 320;
 type PlannedLayout = { [structureType: string]: { x: number; y: number }[] };
@@ -609,6 +623,14 @@ export function releaseWorkerTask(creep: Creep): void {
 export function assignWorkerTask(creep: Creep): WorkerTask | null {
   return measureCreepDecision(() => {
     const assignedRoomName = getAssignedWorkerRoomName(creep);
+    const entry = unreachableTasks.get(creep.name);
+    const retryAt = entry?.roomName === assignedRoomName ? entry.retryAt : undefined;
+    if (retryAt) {
+      for (const [id, expiry] of retryAt) {
+        if (expiry <= Game.time || expiry > Game.time + 50) retryAt.delete(id);
+      }
+    }
+    if (!retryAt?.size) unreachableTasks.delete(creep.name);
     const roomTasks = peekWorkerTasksByRoom(assignedRoomName);
     if (Object.keys(roomTasks).length === 0) {
       releaseWorkerTask(creep);
@@ -633,7 +655,7 @@ export function assignWorkerTask(creep: Creep): WorkerTask | null {
 
     if (currentRef) {
       const current = ownDataValue<WorkerTask>(roomTasks, currentRef.localId);
-      if (current && current.status === "active") {
+      if (current && current.status === "active" && !retryAt?.has(current.id)) {
         const currentTarget = getTaskTarget(current);
         if (inDefenseMode && safeZone && safeZone.size > 0 && currentTarget && !isInsideSafeZone(currentTarget.pos, safeZone)) {
           releaseWorkerTask(creep);
@@ -655,7 +677,7 @@ export function assignWorkerTask(creep: Creep): WorkerTask | null {
     }
 
     const candidates = Object.values(roomTasks).filter((task) => {
-      if (task.status !== "active") {
+      if (task.status !== "active" || retryAt?.has(task.id)) {
         return false;
       }
 
@@ -757,6 +779,7 @@ export function cleanupWorkerTaskBoard(ownedRooms: Set<string>): number {
 
 export function clearWorkerTaskBoardForTest(): void {
   delete runtimeGlobal.__workerTaskBoard;
+  unreachableTasks.clear();
 }
 
 export function getAssignedWorkerTaskId(creepName: string): string | undefined {

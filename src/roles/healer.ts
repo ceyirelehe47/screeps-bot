@@ -253,10 +253,15 @@ export const healerRole: RoleFactory = (
       return false;
     }
 
-    let healed = false;
     const escortTarget = measureCreepDecision(() => getEscortTarget(creep, targetRoom));
+    const selfDamage = creep.hitsMax - creep.hits;
+    const allyDamage = escortTarget ? escortTarget.hitsMax - escortTarget.hits : 0;
+    let healed = false;
+    if (selfDamage > 0 && selfDamage >= allyDamage) {
+      healed = measureCreepIntent(() => creep.heal(creep)) === OK;
+    }
     if (escortTarget) {
-      if (escortTarget.hits < escortTarget.hitsMax) {
+      if (!healed && escortTarget.hits < escortTarget.hitsMax) {
         const healCode = measureCreepIntent(() => creep.heal(escortTarget));
         healed = healCode === OK;
         if (healCode === ERR_NOT_IN_RANGE) {

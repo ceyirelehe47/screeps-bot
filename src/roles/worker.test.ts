@@ -21,6 +21,7 @@ jest.mock("@/runtime/workerTaskPool", () => ({
   getWorkerTaskTarget: jest.fn(),
   isWorkerTaskSafeForCreep: jest.fn(),
   releaseWorkerTask: jest.fn(),
+  deferUnreachableWorkerTask: jest.fn(),
 }));
 
 import { pickupEnergyFromPreferredTarget } from "@/roles/energyTargets";
@@ -33,6 +34,7 @@ import {
   getWorkerTaskTarget,
   isWorkerTaskSafeForCreep,
   releaseWorkerTask,
+  deferUnreachableWorkerTask,
 } from "@/runtime/workerTaskPool";
 import type { WorkerTask, WorkerTaskType } from "@/types/system";
 
@@ -323,11 +325,11 @@ describe("workerRole", () => {
 });
 
 
-it("建造目标无路可达时释放任务", () => {
+it("建造目标无路可达时释放并暂缓重试", () => {
   const { creep } = createCreep(100, 100);
-  arrangeTask("build");
+  const task = arrangeTask("build");
   (creep.build as jest.Mock).mockReturnValue(ERR_NOT_IN_RANGE);
   mockedMoveToRemoteWorkTarget.mockReturnValue(ERR_NO_PATH);
   expect(workerRole().target(creep)).toBe(false);
-  expect(mockedReleaseWorkerTask).toHaveBeenCalledWith(creep);
+  expect(deferUnreachableWorkerTask).toHaveBeenCalledWith(creep, task);
 });

@@ -5,6 +5,7 @@ jest.mock("@/runtime/cpuPhaseProfiler", () => ({
 }));
 
 import { runTowerDrainPair, type TowerDrainPairState } from "@/roles/towerDrainPair";
+import { clearWarGeometryForTest } from "@/roles/warGeometry";
 import { createMockPowerBankCreep, createMockStore, MockPos } from "@mock/powerBank";
 
 const TARGET = "E3N57";
@@ -40,6 +41,7 @@ function targetTerrain(alternateRows: number[]): ReturnType<GameMap["getRoomTerr
 
 /** 只观察策略状态与原生 move 意图；坐标由各断言设置，不模拟帧末移动、碰撞或塔伤。 */
 function fixture(objective: "utility" | "hostile", sealed = true) {
+  clearWarGeometryForTest();
   const structures: Structure[] = objective === "utility" ? [structure(STRUCTURE_EXTENSION, 10, 10)] : [];
   const hostile = createMockPowerBankCreep("scout", { name: "enemy", roomName: TARGET, x: 10, y: 10 });
   Object.assign(hostile, { owner: { username: "enemy" }, my: false });
@@ -87,6 +89,8 @@ function fixture(objective: "utility" | "hostile", sealed = true) {
       member.room = Game.rooms[roomName];
     },
     replaceTerrain: (identity: "reader" | "map" | "Game"): void => {
+      // 同房名装载另一张测试地图；真实 Screeps 地形不随 reader 包装器变化。
+      clearWarGeometryForTest();
       terrain = targetTerrain([40, 41]);
       if (identity === "reader") Game.map.getRoomTerrain = (name: string) => reader(name);
       else if (identity === "map") Game.map = { ...Game.map };
@@ -139,7 +143,7 @@ describe("towerDrainDuo 死袋入口重选策略", () => {
     expect(world.healer.move).not.toHaveBeenCalled();
   });
 
-  it("核心和 utility 已清时仍为敌兵重选，并分别使同 tick 的 map 与 Game 地形缓存失效", () => {
+  it("核心和 utility 已清时仍为敌兵重选，显式重置测试地图后兼容 map 与 Game 包装器更换", () => {
     for (const identity of ["map", "Game"] as const) {
       const world = fixture("hostile");
       expect(runTowerDrainPair(world.attacker, TARGET, GREEN_CONFIG)).toBe(true);

@@ -318,7 +318,7 @@ export function applyMarketOps(
 
   const actions: string[] = [];
   let dealsDone = 0;
-  let availableCredits = Math.max(0, (Game.market.credits || 0) - (marketCfg.creditReserve ?? 100_000));
+  let availableCredits = Math.max(0, (Game.market.credits || 0) - (marketCfg.creditReserve ?? 10_000));
 
   // 永久闩与 Memory 配置无关。Emergency/production purchases 仍由
   // `emergencyBuyEnabled` 独立控制，不能因关闭旧卖家而移除生存购买。

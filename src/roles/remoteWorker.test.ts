@@ -1,5 +1,8 @@
 import { remoteWorkerRole } from "@/roles/remoteWorker";
 import { clearMovementState, moveToTarget, moveToTargetRoom } from "@/roles/shared";
+import { moveOffExit } from "@/movement/traffic";
+
+jest.mock("@/movement/traffic", () => ({ moveOffExit: jest.fn(() => OK) }));
 
 jest.mock("@/roles/shared", () => ({
   clearMovementState: jest.fn(),
@@ -143,6 +146,22 @@ function makeCreep(opts: {
 // ─── SOURCE PHASE ────────────────────────────────────────────────────
 
 describe("remoteWorkerRole - source phase", () => {
+
+  it.each([[0, 25], [49, 25], [25, 0], [25, 49]])("无资源或工作时从出口 (%i,%i) 退入房内", (x, y) => {
+    const room = makeRoom(TARGET_ROOM);
+    for (const energy of [0, 100]) {
+      const creep = makeCreep({ room, energy, pos: makePos(x, y, TARGET_ROOM) });
+      const role = remoteWorkerRole(TARGET_ROOM);
+      if (energy === 0) role.source!(creep);
+      else role.target(creep);
+      expect(moveOffExit).toHaveBeenLastCalledWith(creep);
+      expect(moveToTargetRoom).not.toHaveBeenCalled();
+    }
+    expect(moveOffExit).toHaveBeenCalledTimes(2);
+    (moveOffExit as jest.Mock).mockClear();
+    remoteWorkerRole(TARGET_ROOM).target(makeCreep({ room, energy: 100 }));
+    expect(moveOffExit).not.toHaveBeenCalled();
+  });
 
   it("clears stale movement state when no remote energy is available", () => {
     const remoteRoom = makeRoom(TARGET_ROOM);

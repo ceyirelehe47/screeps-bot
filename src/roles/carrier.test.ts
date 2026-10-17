@@ -14,6 +14,7 @@ import { clearLocalCarrierDestinationCapacityForTest } from "@/runtime/localCarr
 import { TREASURY_T1_RUN_ID, treasuryT1WorkKey } from "@/runtime/treasuryTaskCommitmentBridge";
 import { initializeTreasuryCoreStore } from "@/runtime/treasury/kernel/store";
 import { MockPos } from "@mock/powerBank";
+import { setupRoomPositionGlobal } from "@mock/movement";
 
 function installDrainedT1Fixture(): void {
   expect(initializeTreasuryCoreStore(Game.time).initialized).toBe(true);
@@ -144,6 +145,7 @@ function createCreep(room: Room): Creep {
 function createRoom(name = "W1N1", options: { level?: number; storage?: StructureStorage | null; terminal?: StructureTerminal | null } = {}): Room {
   const room = {
     name,
+    getTerrain: () => ({ get: () => 0 }),
     controller: { my: true, level: options.level ?? 6 } as StructureController,
     find: () => [],
     terminal: options.terminal === undefined ? {
@@ -1542,6 +1544,31 @@ describe("carrierRole mineral hauling", () => {
     expect(getCreepAssignmentState(creep.name)?.synthesisCarrierPendingTaskRef)
       .toBeUndefined();
   });
+
+it("杂物优先搬至非道路 container 上再放下，container 铺路后改用 storage 旁空地", () => {
+  setupRoomPositionGlobal();
+  const storage = { id: "full-storage", structureType: STRUCTURE_STORAGE, pos: new MockPos(25, 25, "W140N2"),
+    store: { getFreeCapacity: () => 0 } } as unknown as StructureStorage;
+  const room = createRoom("W140N2", { storage, terminal: null });
+  const creep = createCreep(room);
+  const container = createCarrierTaskTestContainer(room, "drop-container", 22, {}, 0);
+  const structures: Structure[] = [storage, container];
+  room.find = jest.fn((kind: FindConstant) => kind === FIND_STRUCTURES ? structures : []) as Room["find"];
+  Object.assign(creep, { pos: new MockPos(10, 10, room.name), store: { H: 50,
+    getUsedCapacity: (r?: ResourceConstant) => r === undefined || r === RESOURCE_HYDROGEN ? 50 : 0 }, drop: jest.fn(() => OK) });
+  carrierRole().target(creep);
+  expect(creep.drop).not.toHaveBeenCalled();
+  expect(moveToTarget).toHaveBeenLastCalledWith(creep, container.pos, 0);
+  Object.assign(creep, { pos: new MockPos(container.pos.x, container.pos.y, room.name) });
+  carrierRole().target(creep);
+  expect(creep.drop).toHaveBeenCalledWith(RESOURCE_HYDROGEN);
+  (creep.drop as jest.Mock).mockClear();
+  structures.push({ id: "container-road", structureType: STRUCTURE_ROAD, pos: container.pos } as unknown as StructureRoad);
+  carrierRole().target(creep);
+  expect(creep.drop).not.toHaveBeenCalled();
+  const destination = moveToTarget.mock.calls[moveToTarget.mock.calls.length - 1][1] as RoomPosition;
+  expect(storage.pos.getRangeTo(destination)).toBe(1);
+});
 
 it("没有杂物卸货空间时不从墓碑取矿物，已带矿物则放下恢复工作", () => {
   const room = createRoom("W140N1", { level: 3, storage: null, terminal: null });
