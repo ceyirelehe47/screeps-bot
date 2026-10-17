@@ -4350,12 +4350,13 @@ export function runMarketBaseResourceAutomation(
       const lane = runtimeSession.scopeContext?.snapshot.laneLifecycles.find(value => value.sellerRoomName === candidate.roomName && value.resource === candidate.resourceType);
       const terminal = Game.rooms?.[candidate.roomName]?.terminal;
       if (!lane || lane.stage !== "continuous" || !laneAllowsRuntimeWrite(runtimeSession, AUTHORITY_EXECUTOR_SHARD, lane) ||
-        !terminal || terminal.cooldown > 0 || (terminal.store[candidate.resourceType] ?? 0) < 1_000 ||
+        !terminal?.store || terminal.cooldown > 0 || (terminal.store[candidate.resourceType] ?? 0) < 1_000 ||
         (terminal.store[RESOURCE_ENERGY] ?? 0) < 26_000) { attempts[key] = "waiting"; continue; }
       const bid = plan.first.safeCandidates.some(value => value.roomName === candidate.roomName && value.resourceType === candidate.resourceType);
       const priceRejection = plan.first.rejections.some(value => value.roomName === candidate.roomName && value.resourceType === candidate.resourceType &&
         ["planned_net_below_floor", "worst_case_net_below_floor", "executable_notional_below_minimum"].includes(value.reason));
-      attempts[key] = bid ? "bid" : priceRejection || plan.rawOrderCount === 0 ? "no_bid" : "waiting";
+      const emptyBook = Array.isArray(plan.firstBookBestPrices) && !plan.firstBookBestPrices.some(value => value.resource === candidate.resourceType);
+      attempts[key] = bid ? "bid" : priceRejection || emptyBook ? "no_bid" : "waiting";
     }
     recordBaseMineralOverflow(observed.map(value => value.protectionEntry), input.tick, attempts,
       Object.fromEntries(observed.filter(value => value.overflowTier !== undefined).map(value => [`${value.roomName}:${value.resourceType}`, value.effectiveNetFloor])));
