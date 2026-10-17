@@ -2132,14 +2132,14 @@ describe("Market Base policy migration 重合同（re-sign 常量升级）", () 
     const before = read();
     const head = before.ledger!.receiptHeadHash;
     const nextSeq = before.ledger!.nextAttemptSeq;
-    const prior = before.permitChain!.retainedPermits.at(-1)! as MarketBaseResourcePermit;
+    const prior = before.permitChain!.retainedPermits.slice(-1)[0]! as MarketBaseResourcePermit;
     expect(prior.signedLaneGrants).toHaveLength(7);
     expect(before.scope!.laneLifecycles).toHaveLength(14);
     const proposal = proposeMarketBaseResourcePolicyMigration() as { ok: boolean; proposalId?: string; error?: string };
     expect(proposal).toMatchObject({ ok: true });
     expect(acceptMarketBaseResourcePermit(proposal.proposalId!)).toMatchObject({ ok: true });
     const after = read();
-    const permit = after.permitChain!.retainedPermits.at(-1)! as MarketBaseResourcePermit;
+    const permit = after.permitChain!.retainedPermits.slice(-1)[0]! as MarketBaseResourcePermit;
     expect(permit.signedLaneGrants).toHaveLength(14);
     const newRoom = permit.signedLaneGrants.filter(grant => grant.sellerRoom === "W8N9");
     expect(newRoom).toHaveLength(7);
@@ -2151,9 +2151,10 @@ describe("Market Base policy migration 重合同（re-sign 常量升级）", () 
     installPastV3World({ unsignedShadowRoom: true });
     const state = read();
     const lane = state.scope!.laneLifecycles.find(value => value.sellerRoomName === "W8N9")!;
-    state.scope = { ...state.scope!, laneLifecycles: state.scope!.laneLifecycles.map(value => value !== lane ? value : {
+    const lanes = state.scope!.laneLifecycles.map(value => value !== lane ? value : {
       ...value, stage: "qualified" as const, shadowEvidence: { ...value.shadowEvidence, completeCycles: 100 },
-    }) };
+    });
+    state.scope = { ...state.scope!, laneLifecycles: lanes, laneSetFingerprint: marketBaseDerivedLaneSetFingerprint(lanes) };
     expect(proposeMarketBaseResourcePolicyMigration()).toMatchObject({ ok: false,
       error: expect.stringContaining("market_base_migration_ungranted_lane_requires_shadow") });
   });
