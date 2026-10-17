@@ -1,3 +1,4 @@
+import { jsonCommand } from "@/runtime/console/jsonCommand";
 import {
   addFactoryTask,
   cancelFactoryTask,
@@ -15,37 +16,25 @@ export function addFactoryTaskRaw(
   return addFactoryTask(roomName, type, { amount });
 }
 
-export function addFactoryTaskCommand(
-  roomName: string,
-  type: "decompress_battery",
-  amount: number,
-): string {
-  return JSON.stringify(addFactoryTaskRaw(roomName, type, amount), null, 2);
-}
+export const addFactoryTaskCommand = jsonCommand((roomName: string, type: "decompress_battery", amount: number) => addFactoryTaskRaw(roomName, type, amount), 2);
 
 export function decompressBatteryRaw(roomName: string, amount: number): AddFactoryTaskResult | string {
   return addFactoryTaskRaw(roomName, "decompress_battery", amount);
 }
 
-export function decompressBatteryCommand(roomName: string, amount: number): string {
-  return JSON.stringify(decompressBatteryRaw(roomName, amount), null, 2);
-}
+export const decompressBatteryCommand = jsonCommand((roomName: string, amount: number) => decompressBatteryRaw(roomName, amount), 2);
 
 export function cancelFactoryTaskRaw(taskId: string): CancelFactoryTaskResult | string {
   return cancelFactoryTask(taskId);
 }
 
-export function cancelFactoryTaskCommand(taskId: string): string {
-  return JSON.stringify(cancelFactoryTaskRaw(taskId), null, 2);
-}
+export const cancelFactoryTaskCommand = jsonCommand((taskId: string) => cancelFactoryTaskRaw(taskId), 2);
 
 export function listFactoryTasksRaw(roomName?: string): FactoryTask[] {
   return listFactoryTasks(roomName);
 }
 
-export function listFactoryTasksCommand(roomName?: string): string {
-  return JSON.stringify(listFactoryTasksRaw(roomName), null, 2);
-}
+export const listFactoryTasksCommand = jsonCommand((roomName?: string) => listFactoryTasksRaw(roomName), 2);
 
 export function registerFactoryTaskConsoleCommands(): void {
   global.addFactoryTask = addFactoryTaskCommand;

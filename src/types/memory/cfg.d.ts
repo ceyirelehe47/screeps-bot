@@ -1,8 +1,11 @@
 import type { RoomType } from "@/types/system";
 import type { DepositHarvestConfig } from "@/runtime/depositHarvest";
+import type { CompactMarketConfig } from "@/runtime/market/policy";
 
 declare global {
   interface ScreepsMemoryConfig {
+    /** 新市场首发仅开启 dryRun；live 执行器尚未接入。 */
+    market?: CompactMarketConfig;
     depositHarvest?: Partial<DepositHarvestConfig>;
     /** 清剿全部完成后，由共用Observer周期复查指定对手的重建。 */
     warRebuildWatch?: Record<string, {

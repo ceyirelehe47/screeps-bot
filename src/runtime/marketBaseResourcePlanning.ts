@@ -1,3 +1,4 @@
+import { stageMarketComparisonPlan } from "@/runtime/market/comparison";
 /** 从 marketBaseResourceAutomation.ts 分离的独立职责模块；共享状态仅由此处持有。 */
 import {
   createMarketDirectContinuousDetachedBookSnapshot,
@@ -299,6 +300,8 @@ export interface MarketBaseResourceFullReadEvidence {
 }
 
 interface FullReadResult {
+  /** 观察者只读已经发生的成本计算，不能再次调用 production callback。 */
+  transactionEnergyCosts?: ReadonlyMap<string, number>;
   complete: boolean;
   blocker?: string;
   scope: MarketBaseResourcePlanningScopeSnapshot;
@@ -2098,6 +2101,7 @@ function collectFullRead(
     complete: true,
     scope,
     plannerInput,
+    transactionEnergyCosts: transactionEnergyMemo,
     sampledShadowLaneIds: shadow.selected,
     nextShadowCursor: shadow.nextCursor,
     shadowObservations,
@@ -2318,6 +2322,7 @@ export function planMarketBaseResourceTwoRead(
     };
   }
   const first = planMarketDirectContinuous(firstRead.plannerInput);
+  stageMarketComparisonPlan(firstRead.plannerInput, first, firstRead.transactionEnergyCosts);
   cpuObservation = observeMarketBaseResourcePlanningCpu(
     dependencies,
     cpuStartedAt,

@@ -1,3 +1,5 @@
+import { BASE_MINERAL_OVERFLOW_BAND, BASE_MINERAL_LIQUIDATION_BAND, BASE_MINERAL_NO_BID_ROUNDS, classifyProductionSurplus, type ProductionSurplusTier, type ProductionSurplusObservation } from "@/runtime/market/surplus";
+export { BASE_MINERAL_OVERFLOW_BAND, BASE_MINERAL_LIQUIDATION_BAND, BASE_MINERAL_NO_BID_ROUNDS } from "@/runtime/market/surplus";
 import {
   MARKET_BASE_BOOK_EMA_MAX_AGE_TICKS,
   MARKET_BASE_RESOURCE_POLICY_BY_RESOURCE,
@@ -5,37 +7,13 @@ import {
   isMarketBaseResource,
   type MarketBaseDynamicFloorState,
 } from "@/runtime/marketBaseResourcePolicy";
-import { isMarketProtectionEntryFresh, type MarketProtectionEntry } from "@/runtime/marketSaleProtection";
+import { type MarketProtectionEntry } from "@/runtime/marketSaleProtection";
 import { roundMarketPriceUp } from "@/runtime/marketSalePricing";
 import { normalizeCapacityHeadroomPolicy } from "@/runtime/logistics/capacityHeadroom";
 
-export const BASE_MINERAL_OVERFLOW_BAND = 30_000;
-export const BASE_MINERAL_LIQUIDATION_BAND = 50_000;
-export const BASE_MINERAL_NO_BID_ROUNDS = 5;
-export type BaseMineralOverflowTier = "normal" | "overflow" | "liquidation";
+export type BaseMineralOverflowTier = ProductionSurplusTier;
 
-export interface BaseMineralOverflowObservation {
-  roomName: string;
-  resource: string;
-  observedAt: number;
-  complete: boolean;
-  stock: number;
-  productionReserve: number;
-  safetyBuffer: number;
-  protectedAmount: number;
-  overflowThreshold: number;
-  liquidationThreshold: number;
-  overflowAmount: number;
-  tier: BaseMineralOverflowTier;
-  noBidRounds: number;
-  lastAttemptAt?: number;
-  reason?: string;
-  paused?: "no_bid" | "storage_full";
-  blockers?: string[];
-  priceFloor?: number;
-  priceDate?: string;
-  priceTier?: BaseMineralOverflowTier;
-}
+export type BaseMineralOverflowObservation = ProductionSurplusObservation;
 
 interface OverflowRuntime {
   updatedAt: number;
@@ -58,24 +36,7 @@ export function storageMineralPressure(room: Room | undefined): boolean {
 }
 
 /** 生产、在途与 exposure 原样保护；分层只使用账本扣除这些承诺后的余量。 */
-export function classifyBaseMineralOverflow(entry: MarketProtectionEntry, tick: number, pressure = false): BaseMineralOverflowObservation {
-  const complete = isMarketBaseResource(entry.resource) && isMarketProtectionEntryFresh(entry, tick) && !entry.blocked &&
-    [entry.totalStock, entry.protectedAmount, entry.managedExposure, entry.forecastBuffer].every(value => Number.isSafeInteger(value) && value >= 0);
-  const protectedAmount = entry.protectedAmount + entry.managedExposure;
-  const overflowThreshold = protectedAmount + BASE_MINERAL_OVERFLOW_BAND;
-  const liquidationThreshold = overflowThreshold + BASE_MINERAL_LIQUIDATION_BAND;
-  return {
-    roomName: entry.roomName, resource: entry.resource, observedAt: tick, complete,
-    stock: entry.totalStock,
-    productionReserve: Math.max(0, protectedAmount - entry.forecastBuffer),
-    safetyBuffer: entry.forecastBuffer, protectedAmount, overflowThreshold, liquidationThreshold,
-    overflowAmount: complete ? Math.max(0, entry.totalStock - overflowThreshold) : 0,
-    tier: !complete ? "normal" : pressure && entry.totalStock > protectedAmount ? "liquidation"
-      : entry.totalStock <= overflowThreshold ? "normal" : entry.totalStock > liquidationThreshold ? "liquidation" : "overflow",
-    noBidRounds: 0,
-    blockers: entry.issues?.slice(0, 8).map(issue => `${issue.code}:${issue.sourceKind ?? ""}`),
-  };
-}
+export function classifyBaseMineralOverflow(entry: MarketProtectionEntry, tick: number, pressure = false): BaseMineralOverflowObservation { return classifyProductionSurplus(entry, tick, pressure); }
 
 export function liveBaseMineralOverflow(entry: MarketProtectionEntry, tick: number): BaseMineralOverflowObservation {
   return classifyBaseMineralOverflow(entry, tick, storageMineralPressure(Game.rooms?.[entry.roomName]));

@@ -1,3 +1,4 @@
+import { beginMarketComparisonCycle, stageMarketComparisonProtection, flushMarketComparison } from "@/runtime/market/comparison";
 import { baseMineralOverflowNetFloor, recordBaseMineralOverflow, liveBaseMineralOverflow } from "@/runtime/baseMineralOverflow";
 import { bumpMarketPerformanceCounter, snapshotMarketPerformanceCounters } from "@/runtime/marketPerformanceCounters";
 import {
@@ -837,7 +838,7 @@ function continuousProtectionOptions(
  * exposure still gets a current-tick protection collection on every tick;
  * ResourceControl freshness remains a hard gate for new-order planning.
  */
-export function runLiveMarketSaleAutomation(
+function runMarketSaleRuntimeCycle(
   dependencies: MarketSaleRuntimeDependencies = {},
 ): MarketSaleAutomationResult {
   const collectProtection =
@@ -1024,6 +1025,7 @@ export function runLiveMarketSaleAutomation(
               : { candidates: exposureCandidates },
           );
         });
+    stageMarketComparisonProtection(protection);
     if (protection && resourceControlCurrent && config.directCapability === "continuous-v3") {
       recordBaseMineralOverflow(Object.values(protection.entries), Game.time);
     }
@@ -1116,6 +1118,7 @@ export function runLiveMarketSaleAutomation(
                   : undefined,
                 canonicalContinuousProtection,
               );
+            stageMarketComparisonProtection(freshProtection);
             return composeMarketSalePlanCandidates(
               config,
               freshProtection,
@@ -1174,4 +1177,13 @@ export function runLiveMarketSaleAutomation(
     // fail-closed 重试不带 planning 授权：只保留每 tick 安全语义。
     return runAutomation({ ...domainActivityInput, planningAuthorized: false });
   }
+}
+
+/** 首发观察在原交易编排结束后执行，异常不改变生产返回值。 */
+export function runLiveMarketSaleAutomation(
+  dependencies: MarketSaleRuntimeDependencies = {},
+): MarketSaleAutomationResult {
+  try { beginMarketComparisonCycle(); } catch { /* 观察不可用不影响生产。 */ }
+  try { return runMarketSaleRuntimeCycle(dependencies); }
+  finally { try { flushMarketComparison(); } catch { /* 观察失败不影响生产。 */ } }
 }

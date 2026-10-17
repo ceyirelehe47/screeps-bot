@@ -1,3 +1,4 @@
+import { selectLeastLoadedSpawn as selectSpawnByLoad } from "@/runtime/spawnHelpers";
 import { isSpawnActive } from "@/runtime/tickContext";
 
 export interface SpawnQueueOwnershipOptions {
@@ -59,13 +60,7 @@ function selectLeastLoadedSpawn(
   spawns: StructureSpawn[],
   plannedLoads: ReadonlyMap<StructureSpawn, number>,
 ): StructureSpawn {
-  return [...spawns].sort((left, right) => {
-    const loadDiff = (plannedLoads.get(left) ?? 0) - (plannedLoads.get(right) ?? 0);
-    if (loadDiff !== 0) {
-      return loadDiff;
-    }
-    return left.name.localeCompare(right.name);
-  })[0];
+  return selectSpawnByLoad(spawns, spawn => plannedLoads.get(spawn) ?? 0)!;
 }
 
 function rebuildQueues(

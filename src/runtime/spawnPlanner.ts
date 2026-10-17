@@ -1,3 +1,4 @@
+import { selectLeastLoadedSpawn as selectSpawnByLoad } from "@/runtime/spawnHelpers";
 import { isSpawnActive } from "@/runtime/tickContext";
 import { spawnProfiles } from "@/config/spawnProfiles";
 import { hasMatchingCreepBody } from "@/runtime/minerBodyPolicy";
@@ -704,21 +705,13 @@ function isConfigQueuedInSpawns(spawns: StructureSpawn[], configName: string): b
   return candidates.some((spawn) => isConfigQueued(spawn, configName));
 }
 
-function getSpawnQueueLoad(spawn: StructureSpawn): number {
-  return (spawn.spawning ? 1 : 0) + (spawn.memory.spawnList?.length ?? 0);
-}
-
 function selectLeastLoadedSpawn(spawns: StructureSpawn[]): StructureSpawn | undefined {
   if (spawns.length === 0) return undefined;
 
   const activeSpawns = spawns.filter(isSpawnActive);
   const candidates = activeSpawns.length > 0 ? activeSpawns : spawns;
 
-  return [...candidates].sort((left, right) => {
-    const loadDiff = getSpawnQueueLoad(left) - getSpawnQueueLoad(right);
-    if (loadDiff !== 0) return loadDiff;
-    return left.name.localeCompare(right.name);
-  })[0];
+  return selectSpawnByLoad(candidates);
 }
 
 function findQueuedEmergencyCarrierSpawn(spawns: StructureSpawn[], roomName: string): StructureSpawn | undefined {

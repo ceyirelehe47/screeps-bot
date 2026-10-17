@@ -1,3 +1,4 @@
+import { getBodyCost, getLiveCreepsByConfig, isConfigSpawning as hasSpawningConfig, removeQueuedSpawnConfig } from "@/runtime/spawnHelpers";
 import { isDefenseMode } from "@/runtime/defenseMode";
 import { buildStandardCarrierBody } from "@/runtime/carrierBodyPolicy";
 import { getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
@@ -31,10 +32,6 @@ const REMOTE_CARRIER_COUNT = 3;
 
 function isInvaderFlag(flagName: string): boolean {
   return /^HAUL_[WE]\d+[NS]\d+_INVADER_/.test(flagName);
-}
-
-function getBodyCost(body: BodyPartConstant[]): number {
-  return body.reduce((sum, part) => sum + BODYPART_COST[part], 0);
 }
 
 function getBodyCarryCapacity(body: BodyPartConstant[]): number {
@@ -203,35 +200,9 @@ function getConfigNames(task: FlagHaulTask): string[] {
   return names;
 }
 
-function getLiveCreepsByConfig(configName: string): Creep[] {
-  return getTickContextService().getCreepsByConfigName(configName);
-}
+function isConfigSpawning(configName: string): boolean { const context = getTickContextService(); return context.getMyRooms().some(room => hasSpawningConfig(configName, context.getSpawnsByRoom(room.name))); }
 
-function isConfigSpawning(configName: string): boolean {
-  const creepMemory = Memory.creeps || {};
-
-  for (const room of getTickContextService().getMyRooms()) {
-    for (const spawn of getTickContextService().getSpawnsByRoom(room.name)) {
-      if (!spawn.spawning) {
-        continue;
-      }
-
-      if (creepMemory[spawn.spawning.name]?.configName === configName) {
-        return true;
-      }
-    }
-  }
-
-  return false;
-}
-
-function removeQueuedConfig(task: FlagHaulTask, configName: string): void {
-  for (const spawn of getTickContextService().getSpawnsByRoom(task.sourceRoom)) {
-    if (spawn.memory.spawnList) {
-      spawn.memory.spawnList = spawn.memory.spawnList.filter((name) => name !== configName);
-    }
-  }
-}
+function removeQueuedConfig(task: FlagHaulTask, configName: string): void { removeQueuedSpawnConfig(getTickContextService().getSpawnsByRoom(task.sourceRoom), configName); }
 
 function retireEmptySalvageMember(task: FlagHaulTask, creep: Creep): void {
   creep.memory._recycleToRoom = task.sourceRoom;

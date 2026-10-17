@@ -1,3 +1,4 @@
+import { isConfigQueuedInSpawns, selectLeastLoadedSpawn } from "@/runtime/spawnHelpers";
 import { getCreepConfigService, getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
 import { getSafeZone } from "@/runtime/safeZone";
 import { clearBoostLabTasks, syncBoostLabTask, buyBoostIfNeeded, shouldBoostDefender } from "@/runtime/boostControl";
@@ -14,24 +15,6 @@ function getConfigName(roomName: string, index: number): string {
 
 function getSpawnsForRoom(roomName: string): StructureSpawn[] {
   return getTickContextService().getSpawnsByRoom(roomName);
-}
-
-function isConfigQueuedInSpawns(spawns: StructureSpawn[], configName: string): boolean {
-  return spawns.some((spawn) => spawn.memory.spawnList?.includes(configName) ?? false);
-}
-
-function getSpawnQueueLoad(spawn: StructureSpawn): number {
-  return (spawn.spawning ? 1 : 0) + (spawn.memory.spawnList?.length ?? 0);
-}
-
-function selectLeastLoadedSpawn(spawns: StructureSpawn[]): StructureSpawn | undefined {
-  if (spawns.length === 0) return undefined;
-
-  return [...spawns].sort((left, right) => {
-    const loadDiff = getSpawnQueueLoad(left) - getSpawnQueueLoad(right);
-    if (loadDiff !== 0) return loadDiff;
-    return left.name.localeCompare(right.name);
-  })[0];
 }
 
 function isLiveOrSpawning(configName: string): boolean {

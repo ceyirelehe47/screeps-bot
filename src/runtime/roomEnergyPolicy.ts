@@ -7,11 +7,13 @@ export interface RoomEnergyPolicy {
   terminalEnergyReserve: number;
 }
 
+export const DEFAULT_TERMINAL_ENERGY_RESERVE = 25_000;
+
 const DEFAULT_ROOM_ENERGY_POLICY: RoomEnergyPolicy = {
   energyFloor: 120_000,
   energyTarget: 200_000,
   energyExportStart: 250_000,
-  terminalEnergyReserve: 25_000,
+  terminalEnergyReserve: DEFAULT_TERMINAL_ENERGY_RESERVE,
 };
 
 export function resolveRoomEnergyPolicy(value: unknown): RoomEnergyPolicy {

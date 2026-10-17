@@ -1,3 +1,4 @@
+import { jsonCommand } from "@/runtime/console/jsonCommand";
 import {
   cancelResourceTransferTask,
   type CreateResourceTransferTaskResult,
@@ -35,15 +36,7 @@ export function addResourceTransferTaskRaw(
   return createResourceTransferTask(fromRoomName, toRoomName, resource, amount, reason);
 }
 
-export function addResourceTransferTaskCommand(
-  fromRoomName: string,
-  toRoomName: string,
-  resource: ResourceConstant,
-  amount: number,
-  reason?: string,
-): string {
-  return JSON.stringify(addResourceTransferTaskRaw(fromRoomName, toRoomName, resource, amount, reason));
-}
+export const addResourceTransferTaskCommand = jsonCommand((fromRoomName: string, toRoomName: string, resource: ResourceConstant, amount: number, reason?: string) => addResourceTransferTaskRaw(fromRoomName, toRoomName, resource, amount, reason));
 
 function normalizeManualTransferRequest(
   request: ManualResourceTransferRequest,
@@ -107,29 +100,19 @@ export function addResourceTransferTasksRaw(
   return result;
 }
 
-export function addResourceTransferTasksCommand(
-  fromRoomName: string,
-  requests: ManualResourceTransferRequest[],
-  reason?: string,
-): string {
-  return JSON.stringify(addResourceTransferTasksRaw(fromRoomName, requests, reason));
-}
+export const addResourceTransferTasksCommand = jsonCommand((fromRoomName: string, requests: ManualResourceTransferRequest[], reason?: string) => addResourceTransferTasksRaw(fromRoomName, requests, reason));
 
 export function cancelResourceTransferTaskRaw(taskId: string): ReturnType<typeof cancelResourceTransferTask> {
   return cancelResourceTransferTask(taskId);
 }
 
-export function cancelResourceTransferTaskCommand(taskId: string): string {
-  return JSON.stringify(cancelResourceTransferTaskRaw(taskId));
-}
+export const cancelResourceTransferTaskCommand = jsonCommand((taskId: string) => cancelResourceTransferTaskRaw(taskId));
 
 export function listResourceTransferTasksRaw(): ReturnType<typeof listResourceTransferTasks> {
   return listResourceTransferTasks();
 }
 
-export function listResourceTransferTasksCommand(): string {
-  return JSON.stringify(listResourceTransferTasksRaw());
-}
+export const listResourceTransferTasksCommand = jsonCommand(() => listResourceTransferTasksRaw());
 
 export function registerResourceTransferConsoleCommands(): void {
   global.addResourceTransferTask = addResourceTransferTaskCommand;

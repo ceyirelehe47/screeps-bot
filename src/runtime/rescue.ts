@@ -1,3 +1,4 @@
+import { ensureConfigStore, getBodyCost, getLiveCreepsByConfig, isConfigSpawning as hasSpawningConfig, removeQueuedSpawnConfig } from "@/runtime/spawnHelpers";
 import { spawnProfiles } from "@/config/spawnProfiles";
 import { getCreepConfigService, getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
 import { isDefenseMode } from "@/runtime/defenseMode";
@@ -16,10 +17,6 @@ interface RescueTask {
 
 const RESCUE_WORKER_COUNT = 3;
 
-function getBodyCost(body: BodyPartConstant[]): number {
-  return body.reduce((sum, part) => sum + BODYPART_COST[part], 0);
-}
-
 function hasRescueProductionCapability(spawn: StructureSpawn): boolean {
   const minimumRequiredEnergyCapacity = Math.max(
     getBodyCost(spawnProfiles.colonizerHarvester(spawn.room)),
@@ -34,10 +31,6 @@ function ensureRescueStore(): Record<string, RescueTask> {
     data.rescue = {};
   }
   return data.rescue;
-}
-
-function ensureConfigStore(): Record<string, import("@/types/system").CreepConfig> {
-  return getMemoryService().getCreepConfigStore();
 }
 
 function getOwnedSpawnRooms(): string[] {
@@ -99,33 +92,13 @@ function getTaskConfigNames(task: RescueTask): string[] {
   return Object.keys(getCreepConfigService().list(prefix));
 }
 
-function getLiveCreepsByConfig(configName: string): Creep[] {
-  return getTickContextService().getCreepsByConfigName(configName);
-}
-
-function isConfigSpawning(configName: string): boolean {
-  const creepMemory = Memory.creeps || {};
-  const tickContext = getTickContextService();
-  for (const room of tickContext.getMyRooms()) {
-    for (const spawn of tickContext.getSpawnsByRoom(room.name)) {
-      if (!spawn.spawning) continue;
-      if (creepMemory[spawn.spawning.name]?.configName === configName) return true;
-    }
-  }
-  return false;
-}
+function isConfigSpawning(configName: string): boolean { const context = getTickContextService(); return context.getMyRooms().some(room => hasSpawningConfig(configName, context.getSpawnsByRoom(room.name))); }
 
 function upsertConfig(configName: string, config: import("@/types/system").CreepConfig): void {
   ensureConfigStore()[configName] = config;
 }
 
-function removeQueuedConfig(task: RescueTask, configName: string): void {
-  for (const spawn of getTickContextService().getSpawnsByRoom(task.sourceRoom)) {
-    if (spawn.memory.spawnList) {
-      spawn.memory.spawnList = spawn.memory.spawnList.filter((name) => name !== configName);
-    }
-  }
-}
+function removeQueuedConfig(task: RescueTask, configName: string): void { removeQueuedSpawnConfig(getTickContextService().getSpawnsByRoom(task.sourceRoom), configName); }
 
 function ensureRescueHarvester(task: RescueTask, sourceId: Id<Source>): void {
   const configName = getTaskConfigName(task, "harvester", sourceId);

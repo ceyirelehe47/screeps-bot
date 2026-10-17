@@ -1,3 +1,4 @@
+import { jsonCommand } from "@/runtime/console/jsonCommand";
 interface TelemetryControlResult {
   ok: true;
   enabled: boolean;
@@ -113,29 +114,17 @@ export function stopTelemetryExport(): TelemetryControlResult {
   };
 }
 
-function formatTelemetryControlResult(result: TelemetryControlResult | string): string {
-  if (typeof result === "string") {
-    return result;
-  }
-
-  return JSON.stringify(result);
-}
-
 export function startTelemetryRaw(sampleInterval?: number, segmentId?: number): TelemetryControlResult | string {
   return startTelemetry(sampleInterval, segmentId);
 }
 
-export function startTelemetryCommand(sampleInterval?: number, segmentId?: number): string {
-  return formatTelemetryControlResult(startTelemetry(sampleInterval, segmentId));
-}
+export const startTelemetryCommand = jsonCommand((sampleInterval?: number, segmentId?: number) => startTelemetry(sampleInterval, segmentId), undefined, true);
 
 export function stopTelemetryRaw(): TelemetryControlResult {
   return stopTelemetryExport();
 }
 
-export function stopTelemetryCommand(): string {
-  return formatTelemetryControlResult(stopTelemetryExport());
-}
+export const stopTelemetryCommand = jsonCommand(() => stopTelemetryExport(), undefined, true);
 
 export function statusTelemetryRaw(): TelemetryControlResult {
   const cfg = ensureTelemetryConfig();
@@ -148,9 +137,7 @@ export function statusTelemetryRaw(): TelemetryControlResult {
   };
 }
 
-export function statusTelemetryCommand(): string {
-  return formatTelemetryControlResult(statusTelemetryRaw());
-}
+export const statusTelemetryCommand = jsonCommand(() => statusTelemetryRaw(), undefined, true);
 
 export function registerTelemetryConsoleCommands(): void {
   global.startTelemetry = startTelemetryCommand;

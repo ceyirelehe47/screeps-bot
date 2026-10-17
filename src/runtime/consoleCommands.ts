@@ -1,3 +1,4 @@
+import { jsonCommand } from "@/runtime/console/jsonCommand";
 import { utf8ByteLength } from "@/util/utf8";
 import {
   cpuMonitorCommand,
@@ -120,9 +121,7 @@ export function statusSynthesisControlRaw(): SynthesisControlStatusResult {
   };
 }
 
-export function statusSynthesisControlCommand(): string {
-  return JSON.stringify(statusSynthesisControlRaw());
-}
+export const statusSynthesisControlCommand = jsonCommand(() => statusSynthesisControlRaw());
 
 export function statusHubRaw(): Record<string, unknown> {
   const hub = Memory.cfg?.hub;
@@ -142,9 +141,7 @@ export function statusHubRaw(): Record<string, unknown> {
   };
 }
 
-export function statusHubCommand(): string {
-  return JSON.stringify(statusHubRaw(), null, 2);
-}
+export const statusHubCommand = jsonCommand(() => statusHubRaw(), 2);
 
 export function stopHubRaw(): Record<string, unknown> {
   const hub = Memory.cfg?.hub;
@@ -157,17 +154,13 @@ export function stopHubRaw(): Record<string, unknown> {
   return { ok: true, hubRoomName, enabled: false, reactionsCleared: true };
 }
 
-export function stopHubCommand(): string {
-  return JSON.stringify(stopHubRaw(), null, 2);
-}
+export const stopHubCommand = jsonCommand(() => stopHubRaw(), 2);
 
 export function hubProgressRaw(): ReturnType<typeof collectHubProgressSnapshot> {
   return collectHubProgressSnapshot();
 }
 
-export function hubProgressCommand(): string {
-  return JSON.stringify(hubProgressRaw(), null, 2);
-}
+export const hubProgressCommand = jsonCommand(() => hubProgressRaw(), 2);
 
 export function memoryAuditRaw(): MemoryAuditSnapshot {
   return {
@@ -177,9 +170,7 @@ export function memoryAuditRaw(): MemoryAuditSnapshot {
   };
 }
 
-export function memoryAudit(): string {
-  return JSON.stringify(memoryAuditRaw(), null, 2);
-}
+export const memoryAudit = jsonCommand(() => memoryAuditRaw(), 2);
 
 export function registerConsoleCommands(): void {
   global.depositStatus = depositStatusCommand;

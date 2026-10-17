@@ -1,7 +1,8 @@
+import { ensureConfigStore } from "@/runtime/spawnHelpers";
 import { isSpawnActive } from "@/runtime/tickContext";
 import { buildStandardCarrierBody } from "@/runtime/carrierBodyPolicy";
-import { getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
-import type { CreepConfig } from "@/types/system";
+import { getTickContextService } from "@/runtime/runtimeServices";
+
 
 export interface SpawnMaxCarrierResult {
   ok: true;
@@ -12,10 +13,6 @@ export interface SpawnMaxCarrierResult {
   bodyParts: number;
   pairCount: number;
   queueTop: string[];
-}
-
-function ensureConfigStore(): Record<string, CreepConfig> {
-  return getMemoryService().getCreepConfigStore();
 }
 
 function resolveSpawnByRoom(roomName: string): StructureSpawn | null {

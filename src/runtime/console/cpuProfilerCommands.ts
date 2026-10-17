@@ -1,3 +1,4 @@
+import { jsonCommand } from "@/runtime/console/jsonCommand";
 import {
   normalizeCpuMonitorConfig,
   getCpuMonitorHistory,
@@ -99,14 +100,6 @@ export function stopCpuProfilerExport(): CpuProfilerControlResult {
     sampleInterval: resolved.sampleInterval,
     historyLimit: resolved.historyLimit,
   };
-}
-
-function formatCpuProfilerControlResult(result: CpuProfilerControlResult | string): string {
-  if (typeof result === "string") {
-    return result;
-  }
-
-  return JSON.stringify(result);
 }
 
 function formatCpuMonitorNumber(value: number): string {
@@ -214,17 +207,13 @@ export function startCpuProfilerRaw(sampleInterval?: number, historyLimit?: numb
   return startCpuProfiler(sampleInterval, historyLimit);
 }
 
-export function startCpuProfilerCommand(sampleInterval?: number, historyLimit?: number): string {
-  return formatCpuProfilerControlResult(startCpuProfiler(sampleInterval, historyLimit));
-}
+export const startCpuProfilerCommand = jsonCommand((sampleInterval?: number, historyLimit?: number) => startCpuProfiler(sampleInterval, historyLimit), undefined, true);
 
 export function stopCpuProfilerRaw(): CpuProfilerControlResult {
   return stopCpuProfilerExport();
 }
 
-export function stopCpuProfilerCommand(): string {
-  return formatCpuProfilerControlResult(stopCpuProfilerExport());
-}
+export const stopCpuProfilerCommand = jsonCommand(() => stopCpuProfilerExport(), undefined, true);
 
 export function statusCpuProfilerRaw(): CpuProfilerControlResult {
   const config = getConfig();
@@ -237,9 +226,7 @@ export function statusCpuProfilerRaw(): CpuProfilerControlResult {
   };
 }
 
-export function statusCpuProfilerCommand(): string {
-  return formatCpuProfilerControlResult(statusCpuProfilerRaw());
-}
+export const statusCpuProfilerCommand = jsonCommand(() => statusCpuProfilerRaw(), undefined, true);
 
 function computeSummaryFromHistory(recentHistory: CpuMonitorSnapshotV2[]): CpuMonitorSummaryV2 | null {
   if (recentHistory.length === 0) return null;

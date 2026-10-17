@@ -1,3 +1,4 @@
+import { enqueueConfig, ensureConfigStore, getBodyCost, getLiveCreepsByConfig, isConfigQueuedInSpawns, isConfigSpawning as hasSpawningConfig, removeQueuedSpawnConfig, selectLeastLoadedSpawn } from "@/runtime/spawnHelpers";
 import { runPlannerForRoom, savePlannerForRoom } from "@/modules/autoplanner";
 import { spawnProfiles } from "@/config/spawnProfiles";
 import { isRcl3ExtensionBuildoutComplete } from "@/runtime/roomPlannerConstruction";
@@ -62,10 +63,6 @@ const roomStatusCache = new Map<string, boolean>();
 let visibleDangerCacheTick = -1;
 const visibleDangerCache = new Map<string, boolean>();
 
-function getBodyCost(body: BodyPartConstant[]): number {
-  return body.reduce((sum, part) => sum + BODYPART_COST[part], 0);
-}
-
 function hasColonizationSquadProductionCapability(spawn: StructureSpawn): boolean {
   const minimumRequiredEnergyCapacity = Math.max(
     getBodyCost(SCOUT_BODY),
@@ -84,10 +81,6 @@ function ensureColonizationStore(): Record<string, ColonizationTask> {
   }
 
   return data.colonization;
-}
-
-function ensureConfigStore(): Record<string, import("@/types/system").CreepConfig> {
-  return getMemoryService().getCreepConfigStore();
 }
 
 function getOwnedSpawnRooms(): string[] {
@@ -168,65 +161,15 @@ function parseColonizationConfigName(configName: string): ParsedColonizationConf
   };
 }
 
-function getLiveCreepsByConfig(configName: string): Creep[] {
-  return getTickContextService().getCreepsByConfigName(configName);
-}
-
 function getSpawnsForRoom(roomName: string): StructureSpawn[] {
   return getTickContextService().getSpawnsByRoom(roomName);
-}
-
-function isConfigQueuedInSpawns(spawns: StructureSpawn[], configName: string): boolean {
-  return spawns.some((spawn) => spawn.memory.spawnList?.includes(configName) ?? false);
-}
-
-function getSpawnQueueLoad(spawn: StructureSpawn): number {
-  return (spawn.spawning ? 1 : 0) + (spawn.memory.spawnList?.length ?? 0);
-}
-
-function selectLeastLoadedSpawn(spawns: StructureSpawn[]): StructureSpawn | undefined {
-  if (spawns.length === 0) return undefined;
-
-  return [...spawns].sort((left, right) => {
-    const loadDiff = getSpawnQueueLoad(left) - getSpawnQueueLoad(right);
-    if (loadDiff !== 0) return loadDiff;
-    return left.name.localeCompare(right.name);
-  })[0];
 }
 
 function getSpawnForRoom(roomName: string): StructureSpawn | null {
   return getTickContextService().getPrimarySpawnByRoom(roomName) || null;
 }
 
-function enqueueConfig(spawn: StructureSpawn, configName: string, toFront: boolean): void {
-  const queue = spawn.memory.spawnList || [];
-  if (toFront) {
-    spawn.memory.spawnList = [configName, ...queue.filter((name) => name !== configName)];
-    return;
-  }
-
-  if (!queue.includes(configName)) {
-    spawn.addTask(configName);
-  }
-}
-
-function isConfigSpawning(configName: string): boolean {
-  const creepMemory = Memory.creeps || {};
-  const tickContext = getTickContextService();
-  for (const room of tickContext.getMyRooms()) {
-    for (const spawn of tickContext.getSpawnsByRoom(room.name)) {
-      if (!spawn.spawning) {
-        continue;
-      }
-
-      if (creepMemory[spawn.spawning.name]?.configName === configName) {
-        return true;
-      }
-    }
-  }
-
-  return false;
-}
+function isConfigSpawning(configName: string): boolean { const context = getTickContextService(); return context.getMyRooms().some(room => hasSpawningConfig(configName, context.getSpawnsByRoom(room.name))); }
 
 function upsertConfig(
   configName: string,
@@ -248,13 +191,7 @@ function removeConfigWhenIdle(configName: string): void {
   }
 }
 
-function removeQueuedConfigFromSourceRoom(sourceRoom: string, configName: string): void {
-  for (const spawn of getTickContextService().getSpawnsByRoom(sourceRoom)) {
-    if (spawn.memory.spawnList) {
-      spawn.memory.spawnList = spawn.memory.spawnList.filter((name) => name !== configName);
-    }
-  }
-}
+function removeQueuedConfigFromSourceRoom(sourceRoom: string, configName: string): void { removeQueuedSpawnConfig(getSpawnsForRoom(sourceRoom), configName); }
 
 function removeQueuedConfig(task: ColonizationTask, configName: string): void {
   removeQueuedConfigFromSourceRoom(task.sourceRoom, configName);

@@ -1,14 +1,16 @@
+import { selectLeastLoadedSpawn } from "@/runtime/spawnHelpers";
+export { getSpawnQueueLoad, selectLeastLoadedSpawn } from "@/runtime/spawnHelpers";
 import { canStartOutboundMission } from "@/runtime/outboundMissionPolicy";
 import { cancelSpawning, invalidateWarSpawnQueues, queuedSpawns, spawningForConfig } from "./spawnIndex";
 import { getSquadPolicy } from "./squadPolicy/index";
-import { getCreepConfigService, getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
+import { getTickContextService } from "@/runtime/runtimeServices";
 import { prepareBoosts, releaseBoostLabs } from "@/runtime/powerBankBoost";
 import { clearMovementState } from "@/roles/shared";
 import type { CreepConfig } from "@/types/system";
 import { CONTROLLER_ATTACKER_QUEUE_INTERVAL, T3_ATTACKER_BOOSTS, T3_BOOST_PARTS, T3_DUO_BOOST_AMOUNTS, T3_HEALER_BOOSTS } from "./constants";
 import type { WarGenerationState, WarRole, WarStatus, WarTask, WarTaskAssetReleaseOptions, WarTaskAssetReleaseResult } from "./store";
 import { ensureConfigStore, getConfigName, getControllerAttackConfigName, getGenerationBoostTaskId, getGenerationConfigName, getLegacyWarBoostTaskId, getLiveCreepsByConfig, getTaskConfigNames, isPatrolTask, sameArray } from "./store";
-import { getHealerCount, getMeleeCount, getRoleArgs, getRoleBody, isDuoTask, isT3DuoTask, isTowerDrainDuoTask } from "./squadPolicy/index";
+import { getHealerCount, getMeleeCount, getRoleArgs, getRoleBody } from "./squadPolicy/index";
 import { onWarEntry, setTaskStatus } from "./fsm";
 
 export function upsertWarConfig(store: Record<string, CreepConfig>, name: string, next: CreepConfig): void {
@@ -25,20 +27,6 @@ export function getSpawnsForRoom(roomName: string): StructureSpawn[] {
 
 export function isConfigQueuedInSpawns(spawns: StructureSpawn[], configName: string): boolean {
   return queuedSpawns(configName).some(spawn => spawns.includes(spawn));
-}
-
-export function getSpawnQueueLoad(spawn: StructureSpawn): number {
-  return (spawn.spawning ? 1 : 0) + (spawn.memory.spawnList?.length ?? 0);
-}
-
-export function selectLeastLoadedSpawn(spawns: StructureSpawn[]): StructureSpawn | undefined {
-  if (spawns.length === 0) return undefined;
-
-  return [...spawns].sort((left, right) => {
-    const loadDiff = getSpawnQueueLoad(left) - getSpawnQueueLoad(right);
-    if (loadDiff !== 0) return loadDiff;
-    return left.name.localeCompare(right.name);
-  })[0];
 }
 
 export function getCombatPartnerConfigName(task: WarTask, role: WarRole, index: number): string {

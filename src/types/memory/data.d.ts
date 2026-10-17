@@ -18,9 +18,11 @@ import type {
 import type { RemoteMiningTask } from "@/runtime/remoteMining";
 import type { DepositHarvestTask } from "@/runtime/depositHarvest";
 import type { PermitChainStorageMemory } from "@/runtime/permitChainSegments";
+import type { CompactMarketState } from "@/runtime/market/state";
 
 declare global {
   interface ScreepsMemoryData {
+    market?: CompactMarketState;
     permitChainSegments?: PermitChainStorageMemory;
     depositHarvest?: Record<string, DepositHarvestTask>;
     creepConfigs?: Record<string, CreepConfig>;

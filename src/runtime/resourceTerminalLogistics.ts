@@ -1,4 +1,5 @@
 import { getMarketSaleTerminalExposure } from "@/runtime/marketSaleExposure";
+import { DEFAULT_TERMINAL_ENERGY_RESERVE } from "@/runtime/roomEnergyPolicy";
 /** 从 resourceControl.ts 分离的独立职责模块；共享状态仅由此处持有。 */
 import { terminalFeedBoundTaskIdentity } from "@/runtime/terminalFeedTarget";
 import {
@@ -103,7 +104,7 @@ const RESOURCE_CONTROL_TERMINAL_FEED_PRIORITY = 80;
 const RESOURCE_CONTROL_TERMINAL_OFFLOAD_PRIORITY = 90;
 const MARKET_TERMINAL_ENERGY_SCHEMA_VERSION = 3;
 const MARKET_TERMINAL_ENERGY_MAX_TRANSACTION_ENERGY = 1_000;
-const MARKET_TERMINAL_ENERGY_BASE_RESERVE = 25_000;
+const MARKET_TERMINAL_ENERGY_BASE_RESERVE = DEFAULT_TERMINAL_ENERGY_RESERVE;
 const MARKET_TERMINAL_ENERGY_MIN_FREE_CAPACITY = 40_000;
 const MARKET_TERMINAL_ENERGY_EVIDENCE_TTL = 1;
 const MARKET_TERMINAL_ENERGY_MAX_CONTRIBUTIONS = 64;
@@ -854,7 +855,7 @@ function getProtectedTerminalEnergy(
   options: TerminalEnergyPlanOptions = {},
 ): number {
   const protectedEnergy = Math.max(
-    25_000,
+    DEFAULT_TERMINAL_ENERGY_RESERVE,
     snapshot.terminalEnergyReserve +
       getReservedTerminalEnergyForPendingSends(
         snapshot,

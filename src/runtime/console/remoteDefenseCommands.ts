@@ -1,3 +1,4 @@
+import { jsonCommand } from "@/runtime/console/jsonCommand";
 import type { CreepConfig } from "@/types/system";
 import type { DamageSnapshot, RemoteDefenseReason, RemoteMiningTask } from "@/runtime/remoteMining";
 
@@ -396,9 +397,7 @@ export function remoteDefenseStatusRaw(targetRoom: string): RemoteDefenseStatusS
   };
 }
 
-export function remoteDefenseStatusCommand(targetRoom: string): string {
-  return JSON.stringify(remoteDefenseStatusRaw(targetRoom), null, 2);
-}
+export const remoteDefenseStatusCommand = jsonCommand((targetRoom: string) => remoteDefenseStatusRaw(targetRoom), 2);
 
 export function registerRemoteDefenseConsoleCommands(): void {
   global.remoteDefenseStatus = remoteDefenseStatusCommand;

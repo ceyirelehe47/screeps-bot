@@ -1,3 +1,5 @@
+import { jsonCommand } from "@/runtime/console/jsonCommand";
+import { ensureConfigStore } from "@/runtime/spawnHelpers";
 import {
   spawnMaxCarrier as spawnMaxCarrierCore,
   spawnMaxCarrierRaw as spawnMaxCarrierRawCore,
@@ -8,7 +10,7 @@ import {
   startUpgrader,
   stopUpgrader,
 } from "@/runtime/hubUpgradeControl";
-import { getCreepConfigService, getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
+import { getCreepConfigService, getTickContextService } from "@/runtime/runtimeServices";
 import {
   getWarStatus,
   configureWarRebuildWatch,
@@ -26,7 +28,7 @@ import {
   type WarSquad,
   type WarStatusSnapshot,
 } from "@/runtime/warControl";
-import type { CreepConfig } from "@/types/system";
+
 
 interface StopColonizationResult {
   ok: true;
@@ -39,10 +41,6 @@ interface StopColonizationResult {
   removedQueuedTasks: number;
   cancelledSpawns: number;
   suicidedCreeps: number;
-}
-
-function ensureConfigStore(): Record<string, CreepConfig> {
-  return getMemoryService().getCreepConfigStore();
 }
 
 function collectConfigNamesByPrefix(prefix: string): string[] {
@@ -225,21 +223,11 @@ export function stopColonization(targetRoom?: string): StopColonizationResult | 
   };
 }
 
-function formatStopColonizationResult(result: StopColonizationResult | string): string {
-  if (typeof result === "string") {
-    return result;
-  }
-
-  return JSON.stringify(result);
-}
-
 export function stopColonizationRaw(targetRoom?: string): StopColonizationResult | string {
   return stopColonization(targetRoom);
 }
 
-export function stopColonizationCommand(targetRoom?: string): string {
-  return formatStopColonizationResult(stopColonization(targetRoom));
-}
+export const stopColonizationCommand = jsonCommand((targetRoom?: string) => stopColonization(targetRoom), undefined, true);
 
 function formatWarResult(result: StartWarResult | StartWarPatrolResult | StopWarResult | WarStatusSnapshot | string): string {
   if (typeof result === "string") {
@@ -310,57 +298,35 @@ export function warStatusRaw(targetRoom?: string): WarStatusSnapshot {
   return getWarStatus(targetRoom);
 }
 
-export function warStatusCommand(targetRoom?: string): string {
-  return formatWarResult(warStatusRaw(targetRoom));
-}
+export const warStatusCommand = jsonCommand((targetRoom?: string) => warStatusRaw(targetRoom), 2, true);
 
 export function spawnMaxCarrier(roomName: string): SpawnMaxCarrierResult | string {
   return spawnMaxCarrierCore(roomName);
-}
-
-function formatSpawnMaxCarrierResult(result: SpawnMaxCarrierResult | string): string {
-  if (typeof result === "string") {
-    return result;
-  }
-
-  return JSON.stringify(result);
 }
 
 export function spawnMaxCarrierRaw(roomName: string): SpawnMaxCarrierResult | string {
   return spawnMaxCarrierRawCore(roomName);
 }
 
-export function spawnMaxCarrierCommand(roomName: string): string {
-  return formatSpawnMaxCarrierResult(spawnMaxCarrier(roomName));
-}
-
-function formatUpgraderResult(result: ReturnType<typeof startUpgrader> | ReturnType<typeof stopUpgrader> | ReturnType<typeof getUpgraderStatus>): string {
-  return typeof result === "string" ? result : JSON.stringify(result);
-}
+export const spawnMaxCarrierCommand = jsonCommand((roomName: string) => spawnMaxCarrier(roomName), undefined, true);
 
 export function startUpgraderRaw(roomName: string): ReturnType<typeof startUpgrader> {
   return startUpgrader(roomName);
 }
 
-export function startUpgraderCommand(roomName: string): string {
-  return formatUpgraderResult(startUpgraderRaw(roomName));
-}
+export const startUpgraderCommand = jsonCommand((roomName: string) => startUpgraderRaw(roomName), undefined, true);
 
 export function stopUpgraderRaw(roomName: string): ReturnType<typeof stopUpgrader> {
   return stopUpgrader(roomName);
 }
 
-export function stopUpgraderCommand(roomName: string): string {
-  return formatUpgraderResult(stopUpgraderRaw(roomName));
-}
+export const stopUpgraderCommand = jsonCommand((roomName: string) => stopUpgraderRaw(roomName), undefined, true);
 
 export function upgraderStatusRaw(roomName?: string): ReturnType<typeof getUpgraderStatus> {
   return getUpgraderStatus(roomName);
 }
 
-export function upgraderStatusCommand(roomName?: string): string {
-  return formatUpgraderResult(upgraderStatusRaw(roomName));
-}
+export const upgraderStatusCommand = jsonCommand((roomName?: string) => upgraderStatusRaw(roomName), undefined, true);
 
 export function registerOperationsConsoleCommands(): void {
   global.spawnMaxCarrier = spawnMaxCarrierCommand;

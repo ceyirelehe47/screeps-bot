@@ -1,7 +1,8 @@
+import { enqueueConfig, ensureConfigStore, getBodyCost, isConfigSpawning as hasSpawningConfig, removeQueuedSpawnConfig, selectLeastLoadedSpawn } from "@/runtime/spawnHelpers";
 import { spawnProfiles } from "@/config/spawnProfiles";
 import { encodeCrossShardTravelerName } from "@/runtime/crossShardNaming";
 import { getMemoryService } from "@/runtime/runtimeServices";
-import type { CreepConfig } from "@/types/system";
+
 import { isDefenseMode } from "@/runtime/defenseMode";
 
 type CrossShardColonizationStatus =
@@ -94,16 +95,8 @@ function ensureTaskStore(): Record<string, CrossShardColonizationTask> {
   return data.crossShardColonization;
 }
 
-function ensureConfigStore(): Record<string, CreepConfig> {
-  return getMemoryService().getCreepConfigStore();
-}
-
 function getInterShardPortals(): Record<string, InterShardPortalEntry> {
   return Memory.data?.interShardPortals || {};
-}
-
-function getBodyCost(body: BodyPartConstant[]): number {
-  return body.reduce((sum, part) => sum + BODYPART_COST[part], 0);
 }
 
 function hasColonizationSquadProductionCapability(spawn: StructureSpawn): boolean {
@@ -197,60 +190,13 @@ function getSpawnsForRoom(roomName: string): StructureSpawn[] {
   return Object.values(Game.spawns).filter((spawn) => spawn.room.name === roomName);
 }
 
-function getSpawnQueueLoad(spawn: StructureSpawn): number {
-  return (spawn.spawning ? 1 : 0) + (spawn.memory.spawnList?.length ?? 0);
-}
-
-function selectLeastLoadedSpawn(spawns: StructureSpawn[]): StructureSpawn | undefined {
-  if (spawns.length === 0) return undefined;
-
-  return [...spawns].sort((left, right) => {
-    const loadDiff = getSpawnQueueLoad(left) - getSpawnQueueLoad(right);
-    if (loadDiff !== 0) return loadDiff;
-    return left.name.localeCompare(right.name);
-  })[0];
-}
-
 function getLiveCreepsByConfig(configName: string): Creep[] {
   return Object.values(Game.creeps).filter((creep) => creep.memory.configName === configName);
 }
 
-function isConfigSpawning(configName: string): boolean {
-  const creepMemory = Memory.creeps || {};
-  return Object.values(Game.spawns).some((spawn) => {
-    if (!spawn.spawning) {
-      return false;
-    }
+function isConfigSpawning(configName: string): boolean { return hasSpawningConfig(configName, Object.values(Game.spawns)); }
 
-    return creepMemory[spawn.spawning.name]?.configName === configName;
-  });
-}
-
-function enqueueConfig(spawn: StructureSpawn, configName: string, toFront: boolean): void {
-  const queue = spawn.memory.spawnList || [];
-  if (toFront) {
-    spawn.memory.spawnList = [configName, ...queue.filter((name) => name !== configName)];
-    return;
-  }
-
-  if (!queue.includes(configName)) {
-    spawn.addTask(configName);
-  }
-}
-
-function removeQueuedConfig(task: CrossShardColonizationTask, configName: string): void {
-  if (!task.sourceRoom) {
-    return;
-  }
-
-  for (const spawn of getSpawnsForRoom(task.sourceRoom)) {
-    if (!spawn.memory.spawnList) {
-      continue;
-    }
-
-    spawn.memory.spawnList = spawn.memory.spawnList.filter((name) => name !== configName);
-  }
-}
+function removeQueuedConfig(task: CrossShardColonizationTask, configName: string): void { if (!task.sourceRoom) return; removeQueuedSpawnConfig(getSpawnsForRoom(task.sourceRoom), configName); }
 
 function isConfigQueued(task: CrossShardColonizationTask, configName: string): boolean {
   if (!task.sourceRoom) {
