@@ -290,6 +290,16 @@ test("the real r6 operator snapshot proposes and accepts an r7 policy successor 
     })).toMatchObject({
       action: "blocked", blockerCode: "quota_or_global_cooldown",
     });
+    // 常态分层直接使用已签收 continuous grant，不依赖单次 R2 控制租约。
+    const overflowInput = { ...nextInput(Game.time + 100), trialCooldownNotBefore: undefined,
+      trialPermitId: undefined, overflowCooldownNotBefore: Game.time + 100, overflowTier: "overflow" as const };
+    expect(prepareMarketBaseResourceAttempt(settled.state, overflowInput).action).toBe("prepared");
+    expect(prepareMarketBaseResourceAttempt(settled.state, { ...overflowInput,
+      executionPolicy: "canary" })).toMatchObject({ action: "blocked", blockerCode: "prepare_input_invalid" });
+    expect(prepareMarketBaseResourceAttempt(settled.state, { ...overflowInput,
+      overflowCooldownNotBefore: Game.time + 99 })).toMatchObject({ action: "blocked", blockerCode: "prepare_input_invalid" });
+    expect(settled.state.confirmedCooldownNotBefore).toBe(Game.time + 1_000);
+
   } finally {
     Memory.cfg = oldCfg;
     Memory.data = oldData;
