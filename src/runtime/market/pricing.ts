@@ -23,7 +23,7 @@ export function quoteNetDeal(
     const required = floorMilli * amount;
     const netCreditsMilli = gross - feeCost;
     if (![gross, feeCost, worstCost, required, netCreditsMilli].every(Number.isSafeInteger)) return undefined;
-    if (gross < priceToMilliUp(minNotional) || netCreditsMilli < required || grossPriceMilli - worstCost < floorMilli) return undefined;
+    if (gross < (minNotional === 0 ? 0 : priceToMilliUp(minNotional)) || netCreditsMilli < required || grossPriceMilli - worstCost < floorMilli) return undefined;
     return { grossPriceMilli, netCreditsMilli, floorMilli };
   } catch { return undefined; }
 }

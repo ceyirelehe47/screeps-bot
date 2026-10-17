@@ -7,7 +7,8 @@ describe("市场同源 dryRun 对照", () => {
   beforeEach(() => {
     Memory.cfg = { market: { mode: "dryRun", minBucket: 0 } }; Memory.data = {};
     Memory.runtime = { lastDeployCommit: "test-commit" };
-    Game.cpu.getUsed = jest.fn(() => 1); Game.cpu.limit = 100; Game.cpu.bucket = 10000;
+    Game.cpu = { getUsed: jest.fn(() => 1), limit: 100, bucket: 10000 } as any;
+    Game.shard = { name: "shard1" } as any; Game.market = {} as any;
   });
   function observe(mutate?: (fixture: ReturnType<typeof legacyMarketFixture>) => void): void {
     const fixture = legacyMarketFixture(); mutate?.(fixture);
@@ -42,6 +43,10 @@ describe("市场同源 dryRun 对照", () => {
     stageMarketComparisonPlan(fixture.input, result, new Map()); flushMarketComparison();
     expect(Memory.data.market!.comparison).toMatchObject({ comparable: 0, incomplete: 1,
       latest: { complete: false, reason: "cost_evidence_missing" } });
+  });
+  it("等待诊断不锁死采样相位，下一 tick 的完整读取仍能捕获", () => {
+    beginMarketComparisonCycle(); flushMarketComparison(); Game.time++;
+    observe(); expect(Memory.data.market!.comparison).toMatchObject({ attempts: 2, comparable: 1, incomplete: 1 });
   });
   it("无完整读取和 bucket 不足分别记录，不能算成一致", () => {
     beginMarketComparisonCycle(); flushMarketComparison();

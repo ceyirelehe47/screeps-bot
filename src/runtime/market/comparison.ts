@@ -27,7 +27,7 @@ export function beginMarketComparisonCycle(): void {
   cycle = undefined;
   const cfg = Memory.cfg?.market;
   if (cfg?.mode !== "dryRun") return;
-  const last = Memory.data?.market?.comparison?.lastAttemptAt;
+  const last = Memory.data?.market?.comparison?.lastFullReadAttemptAt;
   const interval = positive(cfg.sampleIntervalTicks, 50, 5, 10_000);
   if (Number.isSafeInteger(last) && last! <= Game.time && Game.time - last! < interval) return;
   cycle = { game: Game, tick: Game.time, cfg };
@@ -57,11 +57,15 @@ const same = (left: MarketComparisonSelection | undefined, right: MarketComparis
 export function flushMarketComparison(): void {
   const current = cycle; cycle = undefined;
   if (!current || current.game !== Game || current.tick !== Game.time || Memory.cfg?.market?.mode !== "dryRun") return;
+  // 等待期间只节流诊断，不能节流捕捉完整读取，否则会与旧规划周期永久错相。
+  const last = Memory.data?.market?.comparison?.lastAttemptAt;
+  if (!current.staged && Number.isSafeInteger(last) && last! <= Game.time &&
+      Game.time - last! < positive(current.cfg.sampleIntervalTicks, 50, 5, 10000)) return;
   const started = Game.cpu.getUsed();
   const sample: MarketComparisonSample = {
     tick: Game.time, atMs: Date.now(), shard: Game.shard.name,
     sourceCommit: Memory.runtime?.lastDeployCommit ?? "development",
-    configuration: JSON.stringify(current.cfg.overrides ?? {}), complete: false, lanes: [], cpu: 0,
+    configuration: JSON.stringify(current.cfg.overrides ?? {}), complete: false, lanes: [], cpu: 0, fullRead: !!current.staged,
   };
   try {
     if (sample.configuration.length > 4000) { sample.configuration = "invalid"; throw new Error("configuration_too_large"); }

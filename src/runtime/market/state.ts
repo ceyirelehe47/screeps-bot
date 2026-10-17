@@ -25,6 +25,7 @@ export interface MarketComparisonSample {
   legacySelected?: MarketComparisonSelection;
   legacyAdmitted?: MarketComparisonSelection;
   cpu: number;
+  fullRead?: boolean;
 }
 
 export interface CompactMarketComparison {
@@ -34,6 +35,7 @@ export interface CompactMarketComparison {
   startedAtTick: number;
   startedAtMs: number;
   lastAttemptAt: number;
+  lastFullReadAttemptAt?: number;
   attempts: number;
   comparable: number;
   mismatches: number;
@@ -65,6 +67,7 @@ const finiteCount = (value: unknown): value is number => Number.isSafeInteger(va
 function validComparison(value: CompactMarketComparison | undefined): value is CompactMarketComparison {
   return !!value && typeof value === "object" && [value.startedAtTick, value.lastAttemptAt, value.attempts,
     value.comparable, value.incomplete, value.mismatches].every(finiteCount) &&
+    (value.lastFullReadAttemptAt === undefined || finiteCount(value.lastFullReadAttemptAt)) &&
     Number.isFinite(value.startedAtMs) && !!value.cpu && Object.values(value.cpu).every(x => Number.isFinite(x) && x >= 0) &&
     !!value.lanes && typeof value.lanes === "object" && !Array.isArray(value.lanes) && Object.keys(value.lanes).length <= MAX_LANES &&
     Object.values(value.lanes).every(row => !!row && Object.values(row).every(finiteCount)) &&
@@ -89,6 +92,7 @@ export function recordCompactMarketComparison(state: CompactMarketState, sample:
     state.comparison = comparison;
   }
   comparison.lastAttemptAt = sample.tick;
+  if (sample.fullRead) comparison.lastFullReadAttemptAt = sample.tick;
   comparison.attempts = count(comparison.attempts);
   comparison.cpu = { last: sample.cpu, max: Math.max(comparison.cpu.max, sample.cpu), total: comparison.cpu.total + sample.cpu };
   const date = new Date(sample.atMs).toISOString().slice(0, 10);

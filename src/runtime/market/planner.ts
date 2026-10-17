@@ -113,7 +113,8 @@ export function planCompactMarket(input: CompactMarketPlanInput): CompactMarketP
       try {
         const notional = priceToMilliDown(order.price) * amount;
         if (!Number.isSafeInteger(notional)) return incomplete("unsafe_arithmetic");
-        if (notional < priceToMilliUp(Math.max(lane.minNotional, policy.minNotional))) continue;
+        const minimumNotional = Math.max(lane.minNotional, policy.minNotional);
+        if (notional < (minimumNotional === 0 ? 0 : priceToMilliUp(minimumNotional))) continue;
       } catch { return incomplete("unsafe_arithmetic"); }
       // 对照时 callback 只读 memo，缺失绝不重跑原 V3 的成本回调。
       const fee = input.transactionEnergy(amount, lane.roomName, order.roomName!);
