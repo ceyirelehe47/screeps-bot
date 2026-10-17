@@ -1,4 +1,5 @@
 import { searchRoomExitPath } from "@/movement/exitPath";
+import { resolveTerrainCosts } from "@/movement/terrainCosts";
 import { measureCreepPathing } from "@/runtime/cpuPhaseProfiler";
 import { ensureCreepMovementState } from "@/movement/creepState";
 import { getTickContextService } from "@/runtime/runtimeServices";
@@ -193,6 +194,7 @@ export function moveToTargetRoom(
   // 跨房仅选择下一房与出口；房内步骤统一交给常驻 creep 的 pathing/traffic。
   const moveOptions: MoveToTargetOptions = {
     ...options,
+    ...resolveTerrainCosts(options),
     travelTargetRoom: targetRoom,
     maxRooms: 1,
     ignoreCreeps: travelState.stuckTicks >= 2 ? false : options.ignoreCreeps,
@@ -232,12 +234,13 @@ export function moveToTargetRoom(
   const revision = getRoomTopologyRevision(creep.room.name);
   const policy = resolveMovementPolicy(creep, moveOptions);
   const key = JSON.stringify([creep.room.name, nextRoom, revision, moveOptions.ignoreCreeps ?? true,
-    options.plainCost, options.swampCost, options.cacheKey]);
+    moveOptions.plainCost, moveOptions.swampCost, options.cacheKey]);
   let exit = travelState.exitTarget;
   const needsSelection = !exit || exit.key !== key || exit.expiresAt <= Game.time || !!policy.costCallback && !policy.cacheKey;
   let result: ScreepsReturnCode = ERR_NO_PATH;
   if (!needsSelection && exit) {
-    result = moveToTarget(creep, new RoomPosition(exit.x, exit.y, creep.room.name), 0, moveOptions);
+    result = moveToTarget(creep, new RoomPosition(exit.x, exit.y, creep.room.name), 0, { ...moveOptions, requireCompletePath: true });
+    if (result === ERR_NO_PATH) recordMovementMetric("exitCachedReplans", creep.room.name);
   }
   // 失效的缓存出口也用相同矩阵重选一次，避免原地重复同一失败目标。
   if (needsSelection || result === ERR_NO_PATH) {
@@ -256,8 +259,11 @@ export function moveToTargetRoom(
       exit = { key, x: end.x, y: end.y, expiresAt: Game.time + 20 };
       travelState.exitTarget = exit;
     }
-    result = moveToTarget(creep, end, 0, { ...moveOptions, verifiedPath: selected.path });
-    if (result === ERR_NO_PATH) delete travelState.exitTarget;
+    result = moveToTarget(creep, end, 0, { ...moveOptions, requireCompletePath: selected.complete || moveOptions.requireCompletePath, verifiedPath: selected.path });
+    if (result === ERR_NO_PATH) {
+      recordMovementMetric("exitExecutionFailures", creep.room.name);
+      delete travelState.exitTarget;
+    }
   }
   updateTravelState(creep, travelState);
   return result;

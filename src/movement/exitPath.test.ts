@@ -5,6 +5,7 @@ import { createCreep, createRoom, resetRuntimeServices, setupPathFinderGlobal, s
 import { searchSingleRoom } from "@mock/roomPathFinder";
 import * as safeZoneHelpers from "@/runtime/safeZoneHelpers";
 import * as safeZone from "@/runtime/safeZone";
+import { clearMovementAnalyticsForTest, getMovementAnalyticsForTest } from "@/movement/metrics";
 
 jest.mock("@/runtime/roomPlannerConstruction", () => ({ getSourceContainerPositionsForRoom: jest.fn(() => []) }));
 
@@ -13,6 +14,7 @@ describe("出口搜索的引擎语义边界", () => {
     Game.time++; Game.rooms = {}; Game.creeps = {}; Game.spawns = {}; Game.powerCreeps = {};
     Memory.cfg = undefined; Memory.data = undefined; Memory.runtime = {};
     resetRuntimeServices(); clearRoutingCachesForTest(); clearCreepMovementStateForTest();
+    clearMovementAnalyticsForTest();
     setupRoomPositionGlobal(); setupPathFinderGlobal(); setDefaultMapMocks();
     (PathFinder.search as jest.Mock).mockImplementation(searchSingleRoom);
     Game.map.describeExits = jest.fn(() => ({ [RIGHT]: "W0N1" }));
@@ -62,7 +64,7 @@ describe("出口搜索的引擎语义边界", () => {
     expect(creep.move).not.toHaveBeenCalled();
     expect(getCreepMovementState(creep)!.travelState!.rejectedTransitions?.["W1N1->W0N1"]).toBe(Game.time + 20);
   });
-  it("预算耗尽有界重试；半截路径继续推进，不缓存伪出口或排除跳转", () => {
+  it("搜索器报告预算耗尽时有界重试；半截路径继续推进，不缓存伪出口或排除跳转", () => {
     const creep = unit();
     (PathFinder.search as jest.Mock).mockImplementation((origin, goals, opts) => {
       const partial = searchSingleRoom(origin, goals, { ...opts, maxOps: 3 });
@@ -76,6 +78,35 @@ describe("出口搜索的引擎语义边界", () => {
     expect(getCreepMovementState(creep)!.travelState).toMatchObject({ targetRoom: "W0N1" });
     expect(getCreepMovementState(creep)!.travelState!.exitTarget).toBeUndefined();
     expect(getCreepMovementState(creep)!.travelState!.rejectedTransitions).toBeUndefined();
+  });
+  it("静态穷尽的真实非空 partial 立即拒绝出口，不走向墙边也不逐 tick 重搜", () => {
+    const creep = unit();
+    const options = { costCallback: (_room: string, matrix: CostMatrix) => {
+      for (let y = 0; y < 50; y++) matrix.set(30, y, 255);
+      return matrix;
+    } };
+    expect(moveToTargetRoom(creep, "W0N1", "W1N1|W0N1", options)).toBe(ERR_NO_PATH);
+    const returned = (PathFinder.search as jest.Mock).mock.results[0].value as PathFinderPath;
+    expect(returned.incomplete).toBe(true);
+    expect(returned.ops).toBeLessThan(8000);
+    expect(returned.path.length).toBeGreaterThan(0);
+    expect(returned.path[returned.path.length - 1].x).toBe(29);
+    expect(creep.move).not.toHaveBeenCalled();
+    expect(getCreepMovementState(creep)!.travelState!.rejectedTransitions?.["W1N1->W0N1"]).toBe(Game.time + 20);
+    Game.time++;
+    expect(moveToTargetRoom(creep, "W0N1", "W1N1|W0N1", options)).toBe(ERR_NO_PATH);
+    expect(PathFinder.search).toHaveBeenCalledTimes(1);
+    expect(getMovementAnalyticsForTest().totals).toMatchObject({ exitExhaustedStatic: 1, exitPartialPaths: 0 });
+  });
+  it("考虑动态 creep 的穷尽 partial 保留进展，不把暂时阻挡当成静态断路", () => {
+    const creep = unit();
+    const selected = searchRoomExitPath(creep, RIGHT, { ignoreCreeps: false, costCallback: (_room, matrix) => {
+      for (let y = 0; y < 50; y++) matrix.set(30, y, 255);
+      return matrix;
+    } });
+    expect(selected.complete).toBe(false); expect(selected.rejectTransition).toBe(false);
+    expect(selected.path.length).toBeGreaterThan(0);
+    expect(getMovementAnalyticsForTest().totals).toMatchObject({ exitExhaustedStatic: 0, exitPartialPaths: 1 });
   });
   it("空的预算失败和考虑 creep 的临时阻挡不封禁房间", () => {
     const creep = unit();

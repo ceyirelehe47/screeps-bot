@@ -26,6 +26,7 @@ import {
   setupRoomPositionGlobal,
 } from "@mock/movement";
 import { getSourceContainerPositionsForRoom } from "@/runtime/roomPlannerConstruction";
+import { searchSingleRoom } from "@mock/roomPathFinder";
 
 jest.mock("@/runtime/roomPlannerConstruction", () => ({
   getSourceContainerPositionsForRoom: jest.fn(() => []),
@@ -185,6 +186,42 @@ describe("moveToTarget baseline", () => {
 
 describe("房内路径完整性", () => {
   beforeEach(() => { resetRuntimeServices(); clearCreepMovementStateForTest(); advanceTick(); Game.rooms = {}; Game.creeps = {}; setupGlobals(); });
+  it("真实静态断路的非空 partial 在严格搜索中不产生移动", () => {
+    const room = createRoom("W1N1"), creep = createCreep("strict-static", "meleeAttacker", 10, 10, room);
+    jest.mocked(PathFinder.search).mockImplementation(searchSingleRoom);
+    const costCallback = (_name: string, matrix: CostMatrix) => {
+      for (let y = 0; y < 50; y++) matrix.set(13, y, 255);
+      return matrix;
+    };
+    expect(moveToTarget(creep, new RoomPosition(15, 10, room.name), 0, { requireCompletePath: true, costCallback })).toBe(ERR_NO_PATH);
+    const result = jest.mocked(PathFinder.search).mock.results[0].value as PathFinderPath;
+    expect(result.incomplete).toBe(true); expect(result.path.length).toBeGreaterThan(0); expect(result.ops).toBeLessThan(8000);
+    expect(creep.move).not.toHaveBeenCalled();
+  });
+  it("普通与严格搜索显式使用相同的道路地形成本，缓存键记录解析后的成本", () => {
+    const room = createRoom("W1N1"), normal = createCreep("normal-road", "worker", 10, 10, room);
+    const target = new RoomPosition(15, 10, room.name);
+    const costCallback = (_name: string, matrix: CostMatrix) => {
+      for (const [x, y] of [[10, 11], [11, 12], [12, 12], [13, 12], [14, 11], [15, 10]]) matrix.set(x, y, 1);
+      return matrix;
+    };
+    const find = jest.spyOn(normal.pos, "findPathTo").mockImplementation((goal, opts) =>
+      searchSingleRoom(normal.pos, { pos: target, range: 0 }, {
+        plainCost: opts?.plainCost, swampCost: opts?.swampCost,
+        roomCallback: name => opts!.costCallback!(name, new PathFinder.CostMatrix()) as CostMatrix,
+      }).path as unknown as PathStep[]);
+    expect(moveToTarget(normal, target, 0, { costCallback, cacheKey: "roads-v1" })).toBe(OK);
+    expect(find).toHaveBeenCalledWith(target, expect.objectContaining({ plainCost: 2, swampCost: 10 }));
+    const normalState = getCreepMovementState(normal)!.movePathState!;
+    expect(normalState.key).toContain(":s10:p2:");
+    expect(normalState.steps.some(step => step.y === 12)).toBe(true);
+    advanceTick();
+    const strict = createCreep("strict-road", "meleeAttacker", 10, 10, room);
+    jest.mocked(PathFinder.search).mockImplementation(searchSingleRoom);
+    expect(moveToTarget(strict, target, 0, { requireCompletePath: true, costCallback, cacheKey: "roads-v1" })).toBe(OK);
+    expect(PathFinder.search).toHaveBeenCalledWith(strict.pos, { pos: target, range: 0 }, expect.objectContaining({ plainCost: 2, swampCost: 10 }));
+    expect(getCreepMovementState(strict)!.movePathState!.steps).toEqual(normalState.steps);
+  });
   it("默认沿半截路径前进，严格模式不复用该缓存；完整已验证路径直接沿用", () => {
     const room = createRoom("W1N1");
     const creep = createCreep("partial-path", "worker", 10, 10, room);

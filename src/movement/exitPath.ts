@@ -3,6 +3,7 @@ import { isExitTile } from "@/movement/common";
 import { recordMovementMetric } from "@/movement/metrics";
 import { measureCreepPathing } from "@/runtime/cpuPhaseProfiler";
 import type { MoveToTargetOptions } from "@/movement/types";
+import { resolveTerrainCosts } from "@/movement/terrainCosts";
 
 export interface ExitPathResult {
   path: RoomPosition[];
@@ -38,18 +39,20 @@ export function searchRoomExitPath(creep: Creep, direction: ExitConstant, option
   const blocked = (budgetExhausted: boolean): ExitPathResult => ({ path: [], complete: false,
     rejectTransition: !budgetExhausted && (policy.ignoreCreeps ?? true) });
   if (!goals.length) {
+    recordMovementMetric("exitNoGoals", roomName);
     recordMovementMetric("exitSelectFailures", roomName);
     return blocked(false);
   }
   const result = measureCreepPathing(() => {
     const search = (maxOps: number) => {
       const found = PathFinder.search(creep.pos, goals, {
-        maxRooms: 1, maxOps, plainCost: policy.plainCost ?? 2, swampCost: policy.swampCost ?? 10,
+        maxRooms: 1, maxOps, ...resolveTerrainCosts(policy),
         roomCallback: name => name === roomName ? matrix.clone() : false,
       });
       recordMovementMetric("exitSearchOps", roomName, found.ops);
       return found;
     };
+    // 单房通常先穷尽候选节点；仍保留真实预算不足的有界兜底，不能把两者混淆。
     const first = search(8000);
     if (!first.incomplete || first.ops < 8000) return { found: first, budgetExhausted: false };
     recordMovementMetric("exitBudgetRetries", roomName);
@@ -62,18 +65,27 @@ export function searchRoomExitPath(creep: Creep, direction: ExitConstant, option
     if (step.roomName !== roomName || previous.getRangeTo(step) !== 1 || matrix.get(step.x, step.y) >= 255 ||
         (terrain.get(step.x, step.y) & TERRAIN_MASK_WALL) || (isExitTile(step) && index !== result.found.path.length - 1)) {
       recordMovementMetric("exitPathFailures", roomName);
+      recordMovementMetric("exitInvalidPaths", roomName);
       return blocked(true); // 非法返回值不能作为物理无路证据。
     }
     previous = step;
   }
   const end = result.found.path[result.found.path.length - 1];
+  if (result.found.incomplete && !result.budgetExhausted && (policy.ignoreCreeps ?? true)) {
+    // 静态搜索已穷尽：非空 partial 只是距离出口最近的死胡同，不是可达证明。
+    recordMovementMetric("exitSelectFailures", roomName);
+    recordMovementMetric("exitExhaustedStatic", roomName);
+    return blocked(false);
+  }
   const complete = !result.found.incomplete && !!end && goals.some(goal => goal.pos.isEqualTo(end));
   if (!complete && !result.found.incomplete) {
     recordMovementMetric("exitPathFailures", roomName);
+    recordMovementMetric("exitInvalidPaths", roomName);
     return blocked(true);
   }
   if (!end || (!complete && options.requireCompletePath)) {
     recordMovementMetric("exitPathFailures", roomName);
+    recordMovementMetric("exitIncompleteRejected", roomName);
     return blocked(result.budgetExhausted);
   }
   // 保留半截路径的有效进展；局部终点仅用于本次执行，不能缓存为出口。

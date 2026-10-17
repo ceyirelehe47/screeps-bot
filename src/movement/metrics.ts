@@ -4,6 +4,15 @@ type MovementMetricName =
   | "exitSearchOps"
   | "exitBudgetRetries"
   | "exitPartialPaths"
+  | "exitNoGoals"
+  | "exitInvalidPaths"
+  | "exitExhaustedStatic"
+  | "exitIncompleteRejected"
+  | "exitCachedReplans"
+  | "exitExecutionFailures"
+  | "pathSearchOps"
+  | "pathBudgetRetries"
+  | "pathPartialPaths"
   | "pathRequests"
   | "pathCacheHits"
   | "pathRepaths"
@@ -38,6 +47,16 @@ type MovementMetricName =
 type MovementGaugeName = "roleLifecycleCacheSize";
 
 export interface MovementMetricBucket {
+  exitNoGoals: number;
+  exitInvalidPaths: number;
+  exitExhaustedStatic: number;
+  exitIncompleteRejected: number;
+  exitCachedReplans: number;
+  exitExecutionFailures: number;
+  pathSearchOps: number;
+  pathBudgetRetries: number;
+  pathPartialPaths: number;
+
   exitSelectFailures: number;
   exitPathFailures: number;
   exitSearchOps: number;
@@ -236,6 +255,15 @@ function recordMovementMetricIntoSnapshot(
 
 function createEmptyBucket(): MovementMetricBucket {
   return {
+    exitNoGoals: 0,
+    exitInvalidPaths: 0,
+    exitExhaustedStatic: 0,
+    exitIncompleteRejected: 0,
+    exitCachedReplans: 0,
+    exitExecutionFailures: 0,
+    pathSearchOps: 0,
+    pathBudgetRetries: 0,
+    pathPartialPaths: 0,
     exitSelectFailures: 0,
     exitPathFailures: 0,
     exitSearchOps: 0,

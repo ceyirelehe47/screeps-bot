@@ -139,6 +139,40 @@ describe("runTowerControl", () => {
     jest.clearAllMocks();
     Game.time = 1;
     Memory.runtime = {};
+    Memory.cfg = { cpuProfiler: { enabled: false } };
+  });
+
+  it.each(["attack", "heal", "repair", "range"] as const)("同房首塔 %s 抛错后其余塔继续，并独立于 profiler 记录摘要", (fault) => {
+    const roomName = "W3N3";
+    const broken = createTower(roomName, "broken", 25, 25), healthy = createTower(roomName, "healthy", 26, 25);
+    const target = { id: "rampart", structureType: STRUCTURE_RAMPART, hits: 1000, hitsMax: 10000,
+      pos: new MockPos(24, 25, roomName) } as unknown as StructureRampart;
+    const wounded = { hits: 80, hitsMax: 100, pos: new MockPos(24, 25, roomName) } as unknown as Creep;
+    const action = fault === "range" ? "attack" : fault;
+    if (fault === "range") broken.pos.getRangeTo = jest.fn(() => { throw new Error("bad range"); });
+    else (broken[action] as jest.Mock).mockImplementation(() => { throw new Error(`bad ${fault}`); });
+    const room = createRoom(roomName, {
+      towers: [broken, healthy],
+      hostiles: fault === "repair" ? [] : [createHostile(roomName, "enemy", 24, 24)],
+      myCreeps: fault === "heal" ? [wounded] : [],
+      structures: fault === "repair" ? [broken, healthy, target] : [broken, healthy],
+    });
+    if (fault === "repair") {
+      const find = room.find.bind(room);
+      room.find = jest.fn(type => type === FIND_MY_STRUCTURES ? [broken, healthy, target] : find(type)) as Room["find"];
+    }
+    Game.rooms = { [roomName]: room };
+    const log = jest.spyOn(console, "log").mockImplementation(() => undefined);
+    try {
+      runTowerControl(); Game.time++; resetRuntimeServices(); runTowerControl();
+      expect(healthy[action]).toHaveBeenCalledTimes(2);
+      if (fault === "range") expect(broken.attack).not.toHaveBeenCalled();
+      else expect(broken[action]).toHaveBeenCalledTimes(2);
+      expect(Memory.runtime?.defenseFaults?.faults).toEqual([expect.objectContaining({
+        scope: `towerControl:${roomName}:broken`, failures: 2, suppressed: 1,
+      })]);
+      expect(log).toHaveBeenCalledTimes(1);
+    } finally { log.mockRestore(); }
   });
 
   it("首房塔异常后其余房间继续攻击，下 tick 仍重试首房", () => {

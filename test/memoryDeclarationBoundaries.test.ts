@@ -42,8 +42,8 @@ const MEMORY_BRANCHES = {
   runtime: {
     declaration: "src/types/memory/runtime.d.ts",
     interfaceName: "ScreepsMemoryRuntime",
-    // 新增当 tick 塔协同目标，以及工厂日预算的 credits / date；顶层归属不变。
-    schemaFingerprint: "cca972833d518869e6586d0c90edb8764b0e1405224b860ab0a9876607bd220c",
+    // 新增 runtimeIsolation 单写的有界防御故障摘要，profiler 关闭时仍可见。
+    schemaFingerprint: "1772b6d08e24df5e12ec8ce29be237cb90c71cf5c450d1419955bbf37db396f6",
     imports: [
       "@/runtime/hubPlanner:AllocationLedgerEntry",
       "@/runtime/hubPlanner:DirectRouteDecision",
@@ -53,8 +53,10 @@ const MEMORY_BRANCHES = {
       "@/runtime/hubProtectionSnapshot:HubCommittedProtectionSnapshot",
       "@/runtime/hubProtectionSnapshot:HubProtectionAttempt",
       "@/runtime/resourceControl:MarketTerminalEnergyReadinessObservation",
+      "@/runtime/runtimeIsolation:DefenseFaultSummary",
     ],
     fields: [
+      "defenseFaults",
       "colonizationSupport",
       "warRebuildWatch",
       "lastDeployTag",

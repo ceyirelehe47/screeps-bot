@@ -1,4 +1,4 @@
-import { forEachIsolatedRoom } from "@/runtime/runtimeIsolation";
+import { forEachIsolatedRoom, runIsolatedTowerOperation } from "@/runtime/runtimeIsolation";
 import { setTowerBurstTarget } from "@/runtime/defenseCoordination";
 import { recordFixedCpuAction } from "@/runtime/cpuPhaseProfiler";
 import { getRoomDefenseCoordination, getTowerFocusFront, setTowerFocusFront } from "@/runtime/defenseCoordination";
@@ -121,18 +121,19 @@ export function calcEffectiveDamage(creep: Creep, rawDamage: number): number {
   return rawDamage - Math.round(damageReduce);
 }
 
-function createTowerCombatAnalysis(towers: StructureTower[], hostiles: Creep[]): TowerCombatAnalysis {
+function createTowerCombatAnalysis(roomName: string, towers: StructureTower[], hostiles: Creep[]): TowerCombatAnalysis {
   const totalTowerAttackByHostileId = new Map<Id<Creep>, number>();
   const incomingHealByHostileId = new Map<Id<Creep>, number>();
   const towerAttackByTowerId = new Map<Id<StructureTower>, Map<Id<Creep>, number>>();
 
   for (const tower of towers) {
-    const damageByHostileId = new Map<Id<Creep>, number>();
-    for (const hostile of hostiles) {
-      const damage = getTowerAttackPowerByRange(tower.pos.getRangeTo(hostile.pos));
-      damageByHostileId.set(hostile.id, damage);
-      totalTowerAttackByHostileId.set(hostile.id, (totalTowerAttackByHostileId.get(hostile.id) || 0) + damage);
-    }
+    const damageByHostileId = runIsolatedTowerOperation(roomName, tower.id, () => {
+      const damage = new Map<Id<Creep>, number>();
+      for (const hostile of hostiles) damage.set(hostile.id, getTowerAttackPowerByRange(tower.pos.getRangeTo(hostile.pos)));
+      return damage;
+    });
+    if (!damageByHostileId) continue;
+    for (const [id, damage] of damageByHostileId) totalTowerAttackByHostileId.set(id, (totalTowerAttackByHostileId.get(id) || 0) + damage);
     towerAttackByTowerId.set(tower.id, damageByHostileId);
   }
 
@@ -189,6 +190,7 @@ function chooseFocusTarget(hostiles: Creep[], analysis: TowerCombatAnalysis): Cr
 }
 
 function assignSpreadTargets(
+  roomName: string,
   towers: StructureTower[],
   hostiles: Creep[],
   analysis: TowerCombatAnalysis,
@@ -199,34 +201,37 @@ function assignSpreadTargets(
 
   const sortedTowers = [...towers].sort((left, right) => left.id.localeCompare(right.id));
   for (const tower of sortedTowers) {
-    let best: Creep | null = null;
-    let bestScore = Number.NEGATIVE_INFINITY;
-    const candidatePool = hostiles.filter((hostile) => !assignedTargetIds.has(hostile.id));
-    const candidates = candidatePool.length > 0 ? candidatePool : hostiles;
-    const towerDamageByHostileId = analysis.towerAttackByTowerId.get(tower.id);
+    const selected = runIsolatedTowerOperation(roomName, tower.id, () => {
+      let best: Creep | null = null;
+      let bestScore = Number.NEGATIVE_INFINITY;
+      const candidatePool = hostiles.filter((hostile) => !assignedTargetIds.has(hostile.id));
+      const candidates = candidatePool.length > 0 ? candidatePool : hostiles;
+      const towerDamageByHostileId = analysis.towerAttackByTowerId.get(tower.id);
 
-    for (const hostile of candidates) {
-      const range = tower.pos.getRangeTo(hostile.pos);
-      const damage = towerDamageByHostileId?.get(hostile.id) || 0;
-      const heal = analysis.incomingHealByHostileId.get(hostile.id) || 0;
-      const currentPressure = appliedPressure[hostile.id] || 0;
-      const projectedNet = damage - Math.max(0, heal - currentPressure);
-      const finishingBonus = hostile.hits <= damage * 1.2 ? 120 : 0;
-      const score = projectedNet * 1000 + finishingBonus - range * 2 - hostile.hits * 0.02;
+      for (const hostile of candidates) {
+        const range = tower.pos.getRangeTo(hostile.pos);
+        const damage = towerDamageByHostileId?.get(hostile.id) || 0;
+        const heal = analysis.incomingHealByHostileId.get(hostile.id) || 0;
+        const currentPressure = appliedPressure[hostile.id] || 0;
+        const projectedNet = damage - Math.max(0, heal - currentPressure);
+        const finishingBonus = hostile.hits <= damage * 1.2 ? 120 : 0;
+        const score = projectedNet * 1000 + finishingBonus - range * 2 - hostile.hits * 0.02;
 
-      if (score > bestScore) {
-        best = hostile;
-        bestScore = score;
+        if (score > bestScore) {
+          best = hostile;
+          bestScore = score;
+        }
       }
-    }
 
-    if (!best) {
-      continue;
-    }
-
-    assignments.set(tower.id, best);
-    assignedTargetIds.add(best.id);
-    appliedPressure[best.id] = (appliedPressure[best.id] || 0) + (towerDamageByHostileId?.get(best.id) || 0);
+      if (!best) {
+        return undefined;
+      }
+      return { best, damage: towerDamageByHostileId?.get(best.id) || 0 };
+    });
+    if (!selected) continue;
+    assignments.set(tower.id, selected.best);
+    assignedTargetIds.add(selected.best.id);
+    appliedPressure[selected.best.id] = (appliedPressure[selected.best.id] || 0) + selected.damage;
   }
 
   return assignments;
@@ -318,13 +323,13 @@ export function canTowersHandleHostiles(room: Room, hostiles: Creep[]): boolean 
   }
 
   const towers = (getTickContextService().getRoomContext(room)?.getTowers() || []).filter(
-    (tower) => tower.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
+    (tower) => runIsolatedTowerOperation(room.name, tower.id, () => tower.store.getUsedCapacity(RESOURCE_ENERGY) > 0),
   );
   if (towers.length === 0) {
     return false;
   }
 
-  const analysis = createTowerCombatAnalysis(towers, hostiles);
+  const analysis = createTowerCombatAnalysis(room.name, towers, hostiles);
   return hostiles.every(
     (hostile) =>
       (analysis.totalTowerAttackByHostileId.get(hostile.id) || 0) >
@@ -398,18 +403,21 @@ function runTowerCombat(room: Room, towers: StructureTower[], hostiles: Creep[],
   const attackTowers: StructureTower[] = [];
   let healed = false;
   for (const tower of towers) {
-    if (!healed && woundedCreeps.length > 0) {
-      const target = tower.pos.findClosestByRange(woundedCreeps);
-      if (target) {
-        const code = tower.heal(target);
-        if (code === OK) {
-          healed = true;
-          recordFixedCpuAction("towerControl");
-          continue;
+    const needsAttack = runIsolatedTowerOperation(room.name, tower.id, () => {
+      if (!healed && woundedCreeps.length > 0) {
+        const target = tower.pos.findClosestByRange(woundedCreeps);
+        if (target) {
+          const code = tower.heal(target);
+          if (code === OK) {
+            healed = true;
+            recordFixedCpuAction("towerControl");
+            return false;
+          }
         }
       }
-    }
-    attackTowers.push(tower);
+      return true;
+    });
+    if (needsAttack) attackTowers.push(tower);
   }
 
   if (attackTowers.length === 0) {
@@ -426,11 +434,12 @@ function runTowerCombat(room: Room, towers: StructureTower[], hostiles: Creep[],
   setTowerFocusFront(room.name, activeFront?.id);
 
   const state = ensureTowerCombatRoomState(room.name);
-  const analysis = createTowerCombatAnalysis(attackTowers, hostiles);
+  const analysis = createTowerCombatAnalysis(room.name, attackTowers, hostiles);
+  const readyTowers = attackTowers.filter(tower => analysis.towerAttackByTowerId.has(tower.id));
   const coordinatedBurstTarget = chooseCoordinatedBurstTarget(room, combatHostiles, analysis);
 
   if (!coordinatedBurstTarget && isAllHostilesImmune(analysis, combatHostiles)) {
-    for (const tower of attackTowers) runTowerPeaceFlow(tower, emergencyRamparts, [], []);
+    for (const tower of readyTowers) runIsolatedTowerOperation(room.name, tower.id, () => runTowerPeaceFlow(tower, emergencyRamparts, [], []));
     delete state.focusTargetId;
     delete state.lastFocusHits;
     delete state.stalledTicks;
@@ -471,22 +480,26 @@ function runTowerCombat(room: Room, towers: StructureTower[], hostiles: Creep[],
   const useSpread = !coordinatedBurstTarget && (shouldForceSpread || shouldProbeSpread);
   setTowerBurstTarget(room.name, useSpread ? undefined : focusTarget.id);
   if (useSpread) {
-    const spreadAssignments = assignSpreadTargets(attackTowers, combatHostiles, analysis);
-    for (const tower of attackTowers) {
-      const target = spreadAssignments.get(tower.id);
-      if (target) {
-        const code = tower.attack(target);
+    const spreadAssignments = assignSpreadTargets(room.name, readyTowers, combatHostiles, analysis);
+    for (const tower of readyTowers) {
+      runIsolatedTowerOperation(room.name, tower.id, () => {
+        const target = spreadAssignments.get(tower.id);
+        if (target) {
+          const code = tower.attack(target);
+          if (code === OK) {
+            recordFixedCpuAction("towerControl");
+          }
+        }
+      });
+    }
+  } else {
+    for (const tower of readyTowers) {
+      runIsolatedTowerOperation(room.name, tower.id, () => {
+        const code = tower.attack(focusTarget);
         if (code === OK) {
           recordFixedCpuAction("towerControl");
         }
-      }
-    }
-  } else {
-    for (const tower of attackTowers) {
-      const code = tower.attack(focusTarget);
-      if (code === OK) {
-        recordFixedCpuAction("towerControl");
-      }
+      });
     }
   }
 
@@ -530,7 +543,7 @@ export function runTowerControl(): void {
     delete state.spreadUntil;
 
     for (const tower of towers) {
-      runTowerPeaceFlow(tower, emergencyRamparts, woundedCreeps, damagedStructures);
+      runIsolatedTowerOperation(room.name, tower.id, () => runTowerPeaceFlow(tower, emergencyRamparts, woundedCreeps, damagedStructures));
     }
   });
 }

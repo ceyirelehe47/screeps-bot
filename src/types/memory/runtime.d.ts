@@ -10,9 +10,12 @@ import type {
   SynthesisRoomCapability,
 } from "@/runtime/hubPlanner";
 import type { MarketTerminalEnergyReadinessObservation } from "@/runtime/resourceControl";
+import type { DefenseFaultSummary } from "@/runtime/runtimeIsolation";
 
 declare global {
   interface ScreepsMemoryRuntime {
+    /** 防御故障单写摘要：最多八条，TTL 1000 tick，独立于 profiler。 */
+    defenseFaults?: DefenseFaultSummary;
     colonizationSupport?: Record<string, {
       miningHandoffs?: Record<string, { creepName: string; readySince: number }>;
       routeRooms?: string[];

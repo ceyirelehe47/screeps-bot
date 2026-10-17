@@ -66,7 +66,7 @@ function gameLoop(): void {
   // 本 tick 的 spawn/creep 快照由 TickContext 统一维护，避免与各模块重复
   // Object.values 扫描；快照在 tick 内不可变。
   const tickContext = getTickContextService();
-  // 只在编排边界隔离异常；模块内部调用仍向上传播，避免继续执行半完成操作。
+  // 普通阶段在编排边界隔离；T0 防御另有房间/单塔边界，避免一处故障阻断其余防御。
   const runPhase = (phase: string, work: () => void): void => {
     try {
       cpuProfiler.measure(phase, work);

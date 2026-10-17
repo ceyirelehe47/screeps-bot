@@ -127,9 +127,29 @@ describe("外出 creep 与常驻 creep 的统一房内寻路", () => {
     search.mockReturnValue([]);
     (PathFinder.search as jest.Mock).mockReturnValue({ path: [], incomplete: true, ops: 1, cost: 0 });
     expect(moveToTargetRoom(creep, "W0N1", "W1N1|W0N1")).toBe(ERR_NO_PATH);
-    expect(PathFinder.search).toHaveBeenCalledTimes(2);
+    expect(PathFinder.search).toHaveBeenCalledTimes(3);
     expect(state.travelState!.exitTarget).toBeUndefined();
     expect(state.travelState!.rejectedTransitions?.["W1N1->W0N1"]).toBe(Game.time + 20);
+  });
+
+  it("缓存路径到期后旧出口只剩 partial，立即重新选择完整可达的出口", () => {
+    const { creep } = traveler();
+    let blockOldExit = false;
+    const options = { cacheKey: "revalidate-expired-path", costCallback: (_room: string, matrix: CostMatrix) => {
+      if (blockOldExit) matrix.set(49, 10, 255);
+      return matrix;
+    } };
+    expect(moveToTargetRoom(creep, "W0N1", "W1N1|W0N1", options)).toBe(OK);
+    const state = ensureCreepMovementState(creep);
+    expect(state.travelState!.exitTarget).toMatchObject({ x: 49, y: 10 });
+    state.movePathState!.expiresAt = Game.time;
+    blockOldExit = true; Game.time++;
+    expect(moveToTargetRoom(creep, "W0N1", "W1N1|W0N1", options)).toBe(OK);
+    expect(state.travelState!.exitTarget?.y).not.toBe(10);
+    const strict = (PathFinder.search as jest.Mock).mock.results[1].value as PathFinderPath;
+    expect(strict.incomplete).toBe(true); expect(strict.path.length).toBeGreaterThan(0);
+    expect(PathFinder.search).toHaveBeenCalledTimes(3);
+    expect(state.travelState!.rejectedTransitions).toBeUndefined();
   });
 
   it("已观察到有主房后失去视野，双人路线选择和实际行军仍一致地改走安全出口", () => {

@@ -31,7 +31,7 @@ export interface MultiRoomTravelSegment {
 }
 
 export interface MoveToTargetOptions {
-  /** 仅战斗推进要求完整可达证明；普通旅行允许沿半截路径前进后重搜。 */
+  /** 战斗证明或缓存出口重搜要求完整抵达；普通房内移动仍允许局部进展。 */
   requireCompletePath?: boolean;
   /** 业务本 tick 已证明完整的房内路径；直接交给交通层，不再另做寻路。 */
   verifiedPath?: readonly StoredRoomPosition[];
@@ -49,6 +49,7 @@ export interface MoveToTargetOptions {
   /** Portal 在静态矩阵中默认阻挡；显式以 Portal 格为目标时豁免目标格（跨 shard 进入传送门）。 */
   allowPortalTarget?: boolean;
   costCallback?: (roomName: string, matrix: PathFinder["CostMatrix"]) => PathFinder["CostMatrix"];
+  /** 矩阵策略内容的稳定版本；内容变化必须换 key。动态逐步许可用 canMoveStep。 */
   cacheKey?: string;
 }
 

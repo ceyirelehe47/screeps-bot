@@ -27,3 +27,28 @@
 #### Scenario: 低 bucket 时建议延后规划
 - **WHEN** 采样 tick 的 CPU 或 bucket 达到低优先级建议阈值
 - **THEN** 样本记录建议原因，规划阶段仍按原顺序执行，T0 防御永不建议延后
+
+
+### Requirement: 静态出口不可达不得作为局部进展
+
+系统 MUST 将静态、预算未耗尽的 incomplete 搜索视为该跳转不可达，并立即短期排除；缓存出口重搜 SHALL 要求完整抵达。动态阻挡或预算不足的局部路径 SHALL 保留普通移动的推进语义。
+
+#### Scenario: 静态墙隔断出口但仍有非空 partial
+- **WHEN** 单房真实搜索返回非空 partial、incomplete 且 ops 小于预算，ignoreCreeps 为 true
+- **THEN** 不发移动 intent，立即记录 20 tick 跳转排除，不走向死胡同
+
+#### Scenario: 缓存出口在重搜时失去可达性
+- **WHEN** 原缓存路径需要重搜，而旧出口只剩半截路径
+- **THEN** 立即重新选择其他完整可达出口，或按静态失败排除跳转
+
+### Requirement: 单塔故障不阻断同房防御并持久可见
+
+系统 SHALL 隔离单塔计算与动作异常，继续同房其他塔，每 tick 重试；系统 MUST 在 profiler 关闭时仍维护至多八条有时限的防御故障摘要。
+
+#### Scenario: 同房首塔动作异常
+- **WHEN** 第一座塔攻击或治疗抛错
+- **THEN** 同房后续塔仍执行相应防御动作，下 tick 首塔重新尝试，并可读取有界摘要
+
+#### Scenario: profiler 关闭且故障过期
+- **WHEN** 故障停止超过 1000 tick，profiler 仍关闭
+- **THEN** 防御入口按正常运行清除过期摘要，不依赖采样 flush
