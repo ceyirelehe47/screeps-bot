@@ -20,7 +20,7 @@ const TARGET_ROOM_MOVE_OPTIONS = {
   ignoreCreeps: false,
 } as const;
 const ROUTE_BREACH_RESUME_TICKS = 5;
-const COMBAT_APPROACH_MAX_OPS = 2000;
+const COMBAT_APPROACH_MAX_OPS = 8000;
 const COUNTERSTRIKE_RANGE = 2;
 const COUNTERSTRIKE_SWAP_GRACE_TICKS = 1;
 
@@ -195,7 +195,7 @@ function chooseWarApproach(creep: Creep, includeNeutralWalls: boolean) {
 const candidateCursors = new Map<string, { cursor: number; targetId?: string }>();
 const approachFrames = new WeakMap<Game, { tick: number; matrices: Map<string, CostMatrix> }>();
 let lastApproachTick = -1;
-const approachResults = new Map<string, { tick: number; signature: string; x: number; y: number; open: boolean; breach?: string }>();
+const approachResults = new Map<string, { tick: number; signature: string; x: number; y: number; open: boolean; breach?: string; path?: RoomPosition[] }>();
 function approachTickMemo() {
   let frame = approachFrames.get(Game);
   if (!frame || frame.tick !== Game.time) {
@@ -212,15 +212,19 @@ function findCombatApproach(creep: Creep, target: Creep | Structure, towerDrain 
   const old = approachResults.get(key);
   const breach = old?.breach ? Game.getObjectById(old.breach as Id<StructureWall>) : null;
   // 只复用目标/屏障选择；临近攻击格、目标死亡、几何变化和跨区跳位均重新决策。
+  const cursor = old?.path?.findIndex(step => step.x === creep.pos.x && step.y === creep.pos.y) ?? -1;
+  const remaining = old?.path && (cursor >= 0 ? old.path.slice(cursor + 1) : old.x === creep.pos.x && old.y === creep.pos.y ? old.path : undefined);
+  const next = remaining?.[0];
   if (old && Game.time - old.tick < 4 && old.signature === signature && creep.pos.getRangeTo(target.pos) > 1
     && Math.max(Math.abs(creep.pos.x - old.x), Math.abs(creep.pos.y - old.y)) <= 4
-    && (!old.breach || breach && creep.pos.getRangeTo(breach.pos) > 1)) return { open: old.open, breach };
+    && (!old.open || !old.path || next && isWarFollowTileOpen(creep, next))
+    && (!old.breach || breach && creep.pos.getRangeTo(breach.pos) > 1)) return { open: old.open, breach, path: remaining };
   const result = searchCombatApproach(creep, target, towerDrain);
   if (approachResults.size >= 128) approachResults.delete(approachResults.keys().next().value!);
-  approachResults.set(key, { tick: Game.time, signature, x: creep.pos.x, y: creep.pos.y, open: result.open, breach: result.breach?.id });
+  approachResults.set(key, { tick: Game.time, signature, x: creep.pos.x, y: creep.pos.y, open: result.open, breach: result.breach?.id, path: result.path });
   return result;
 }
-interface WarCombatApproach { open: boolean; breach: StructureRampart | StructureWall | null }
+interface WarCombatApproach { open: boolean; breach: StructureRampart | StructureWall | null; path?: RoomPosition[] }
 
 /** 先证明开放路线；不把拆墙耗时折成少量移动代价，也不让旧破墙目标锁住现成通道。 */
 function searchCombatApproach(creep: Creep, target: Creep | Structure, towerDrain = false): WarCombatApproach {
@@ -244,16 +248,21 @@ function searchCombatApproach(creep: Creep, target: Creep | Structure, towerDrai
   const geometryKey = `${creep.room.name}:${geometry.signature}`;
   let base = memo.matrices.get(geometryKey);
   if (!base) { base = geometryMatrix(); memo.matrices.set(geometryKey, base); }
-  const matrix = towerDrain ? base.clone() : base;
+  const matrix = base.clone();
+  const healer = findPairedWarHealer(creep);
+  for (const other of [...creep.room.find(FIND_MY_CREEPS), ...getHostileCreeps(creep.room), ...creep.room.find(FIND_HOSTILE_POWER_CREEPS)]) {
+    if (other.name !== creep.name && other.name !== healer?.name) matrix.set(other.pos.x, other.pos.y, 0xfe);
+  }
   if (towerDrain) constrainTowerDrainBreachPath(creep, creep.room.name, matrix);
   const search = (costs: CostMatrix) => PathFinder.search(creep.pos, { pos: target.pos, range: 1 }, {
     plainCost: 2, swampCost: 8, maxRooms: 1, maxOps: COMBAT_APPROACH_MAX_OPS,
     roomCallback: (roomName) => roomName === creep.room.name ? costs : false,
   });
   const openPath = search(matrix);
-  if (!openPath.incomplete && openPath.path.every((step) => matrix.get(step.x, step.y) < 0xff)) return { open: true, breach: null };
-  // 搜索预算耗尽只说明尚未找到绕路，不能作为允许破墙的无路证明。
-  if (openPath.incomplete && openPath.ops >= COMBAT_APPROACH_MAX_OPS) return { open: false, breach: null };
+  const end = openPath.path[openPath.path.length - 1];
+  if (!openPath.incomplete && end && Math.max(Math.abs(end.x - target.pos.x), Math.abs(end.y - target.pos.y)) <= 1
+    && openPath.path.every((step) => matrix.get(step.x, step.y) < 0xff)) return { open: true, breach: null, path: openPath.path };
+  // 开放搜索耗尽预算时仍做有界突破搜索；只有完整突破路径才授予屏障攻击许可。
   // 退路门按当前未拆墙的世界封锁墙后区域。突破搜索只用原物理几何寻找第一道屏障，
   // 不能继承袋外的255；这不授予墙后移动许可，实际每步仍走 fresh 安全回调。
   const breachMatrix = base.clone();
@@ -1015,7 +1024,20 @@ export const meleeAttackerRole: RoleFactory = (
 
     const code = measureCreepIntent(() => creep.attack(target));
     if (code === ERR_NOT_IN_RANGE) {
-      const moveCode = moveWarAttackerToTarget(creep, target, 1, targetMoveOptions, (tactic === "towerDrainDuo" || tactic === "t3TowerDrainDuo"));
+      const verifiedOptions = approach?.path ? {
+        ...targetMoveOptions,
+        verifiedPath: approach.path,
+        canMoveStep: (pos: RoomPosition) => {
+          const healer = findPairedWarHealer(creep);
+          const partnerTile = healer && healer.room.name === pos.roomName && healer.pos.x === pos.x && healer.pos.y === pos.y;
+          if (!partnerTile && !isWarFollowTileOpen(creep, pos)) return false;
+          if (warGeometry(creep.room).blocked[pos.x * 50 + pos.y]) return false;
+          if (tactic !== "towerDrainDuo" && tactic !== "t3TowerDrainDuo") return true;
+          const matrix = constrainTowerDrainBreachPath(creep, pos.roomName, new PathFinder.CostMatrix());
+          return matrix.get(pos.x, pos.y) < 0xff;
+        },
+      } : targetMoveOptions;
+      const moveCode = moveWarAttackerToTarget(creep, target, 1, verifiedOptions, (tactic === "towerDrainDuo" || tactic === "t3TowerDrainDuo"));
       if (moveCode === ERR_NO_PATH && creep.room.name === target.pos.roomName && !approach?.open) {
         attackAdjacentBreachTarget(creep, target);
       }

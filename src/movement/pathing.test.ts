@@ -68,6 +68,7 @@ describe("moveToTarget baseline", () => {
     const pos = new MockRoomPosition(10, 10, room.name);
     jest.spyOn(pos, "findPathTo").mockReturnValue([
       { x: 11, y: 10, dx: 1, dy: 0, direction: RIGHT },
+      { x: 12, y: 10, dx: 1, dy: 0, direction: RIGHT },
     ] as PathStep[]);
     const powerCreep = {
       name: "operator",
@@ -178,5 +179,25 @@ describe("moveToTarget baseline", () => {
     expect(ignoreCreepsOnLastSearch).toBe(true);
     expect(getRoomBaseCostMatrixBuildCountForTest()).toBe(buildsAfterFirstTick);
     expect(capturedMatrix?.get(blocker.x, blocker.y)).toBeLessThan(0xfe);
+  });
+});
+
+
+describe("房内路径完整性", () => {
+  beforeEach(() => { resetRuntimeServices(); clearCreepMovementStateForTest(); advanceTick(); Game.rooms = {}; Game.creeps = {}; setupGlobals(); });
+  it("拒绝未抵达range的半截路径，也不缓存或提交向墙移动；完整已验证路径直接沿用", () => {
+    const room = createRoom("W1N1");
+    const creep = createCreep("partial-path", "worker", 10, 10, room);
+    const find = jest.fn(() => [{ x: 11, y: 10, dx: 1, dy: 0, direction: RIGHT }]);
+    creep.pos.findPathTo = find as RoomPosition["findPathTo"];
+    const target = new MockRoomPosition(15, 10, room.name) as unknown as RoomPosition;
+    expect(moveToTarget(creep, target, 1)).toBe(ERR_NO_PATH);
+    expect(creep.move).not.toHaveBeenCalled();
+    expect(getCreepMovementState(creep)?.movePathState).toBeUndefined();
+    find.mockClear();
+    const path = [11, 12, 13, 14].map(x => ({ x, y: 10, roomName: room.name }));
+    expect(moveToTarget(creep, target, 1, { verifiedPath: path })).toBe(OK);
+    expect(find).not.toHaveBeenCalled();
+    expect(creep.move).toHaveBeenCalledWith(RIGHT);
   });
 });

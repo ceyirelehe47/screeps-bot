@@ -119,6 +119,9 @@ export type MarketDirectContinuousTransactionEnergyCalculator = (
 ) => number;
 
 export interface MarketDirectContinuousLaneInput {
+  /** V3 当前 lane 的分层净价；由完整生产保护读计算，参与两读指纹。 */
+  pricing?: { effectiveNetFloor: number; minExecutableNotional: number; tier: "normal" | "overflow" | "liquidation" };
+
   lane: MarketDirectContinuousLane;
   protection: MarketDirectContinuousProtection;
   terminal: MarketDirectContinuousTerminal;
@@ -260,6 +263,8 @@ export interface MarketDirectContinuousTupleRejection {
 }
 
 export interface MarketDirectContinuousCandidate {
+  overflowTier?: "normal" | "overflow" | "liquidation";
+
   entryId: string;
   policyRevision: string;
   resourceType: string;
@@ -845,6 +850,7 @@ function normalizeInput(
           .map((laneInput: MarketDirectContinuousLaneInput) => ({
             lane: { ...laneInput.lane },
             protection: { ...laneInput.protection },
+            ...(laneInput.pricing ? { pricing: { ...laneInput.pricing } } : {}),
             terminal: { ...laneInput.terminal },
             quota: laneInput.quota ? { ...laneInput.quota } : null,
             legacyBookAdapter: normalizeBook(laneInput.book),
@@ -1452,6 +1458,12 @@ export function planMarketDirectContinuous(
           roomName: lane.roomName,
         });
       }
+      if (laneInput.pricing && (policy.evaluatorVersion !== 3 ||
+        !Number.isFinite(laneInput.pricing.effectiveNetFloor) || laneInput.pricing.effectiveNetFloor <= 0 ||
+        !Number.isFinite(laneInput.pricing.minExecutableNotional) || laneInput.pricing.minExecutableNotional <= 0 ||
+        !["normal", "overflow", "liquidation"].includes(laneInput.pricing.tier))) {
+        return blockedResult(input, { reason: "invalid_input", entryId: policy.entryId, roomName: lane.roomName });
+      }
       if (authorization === "writable") {
         writableLanes.push(laneInput);
       } else {
@@ -1670,7 +1682,8 @@ export function planMarketDirectContinuous(
           detail: "executable notional overflow",
         }, rejections);
       }
-      if (executableNotionalMilli < minExecutableNotionalMilli) {
+      if (executableNotionalMilli < Math.min(minExecutableNotionalMilli,
+        ...writableLanes.map(lane => priceToMilliUp(lane.pricing?.minExecutableNotional ?? policy.minExecutableNotional)))) {
         for (const laneInput of writableLanes) {
           rejections.push({
             entryId: policy.entryId,
@@ -1791,7 +1804,9 @@ export function planMarketDirectContinuous(
   const transactionEnergyMemo = new Map<string, number>();
   for (const prepared of preparedLanes) {
     const { preparedResource, laneInput } = prepared;
-    const { entry, effectiveNetFloorMilli } = preparedResource;
+    const { entry } = preparedResource;
+    const effectiveNetFloorMilli = laneInput.pricing
+      ? priceToMilliUp(laneInput.pricing.effectiveNetFloor) : preparedResource.effectiveNetFloorMilli;
     const { policy, quota } = entry;
     const { lane, protection, terminal } = laneInput;
     if (
@@ -1809,6 +1824,7 @@ export function planMarketDirectContinuous(
     }
 
     for (const eligible of preparedResource.eligibleOrders) {
+      if (eligible.executableNotionalMilli < priceToMilliUp(laneInput.pricing?.minExecutableNotional ?? policy.minExecutableNotional)) continue;
       let transactionEnergy: number;
       let worstCaseTransactionEnergy: number;
       try {
@@ -2020,6 +2036,7 @@ export function planMarketDirectContinuous(
         energyShadowCostMilli,
         netCreditsMilli,
         effectiveNetFloorMilli,
+        ...(laneInput.pricing ? { overflowTier: laneInput.pricing.tier } : {}),
         requiredNetCreditsMilli,
         worstCaseActualAmount: 1,
         worstCaseTransactionEnergy,

@@ -236,6 +236,7 @@ const REQUIRED_SHADOW_CYCLES = 100;
 export const MARKET_MAKER_HYBRID_PERMANENTLY_DISABLED = true;
 
 export interface MarketSalePlanCandidate {
+  overflowTier?: "normal" | "overflow" | "liquidation";
   roomName: string;
   resourceType: ResourceConstant;
   protectionEntry: MarketProtectionEntry;
@@ -927,6 +928,7 @@ function toMarketBaseResourceRuntimeCandidates(
         historyFloor: candidate.historyFloor ?? 0,
         ratchetFloor: candidate.ratchetFloor ?? 0,
         effectiveNetFloor: candidate.effectiveNetFloor,
+        overflowTier: candidate.overflowTier,
         effectiveEnergyShadowPrice:
           candidate.effectiveEnergyShadowPrice ?? Number.NaN,
         energyShadowObservedAt: candidate.energyShadowObservedAt ?? -1,

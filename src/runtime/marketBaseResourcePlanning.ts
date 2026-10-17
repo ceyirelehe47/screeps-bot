@@ -1521,7 +1521,8 @@ function collectFullRead(
       eligibleForBudget(
         order,
         resource,
-        resourceEntry.policy.minExecutableNotional,
+        Math.min(resourceEntry.policy.minExecutableNotional,
+          ...resourceEntry.lanes.map(lane => lane.pricing?.minExecutableNotional ?? resourceEntry.policy.minExecutableNotional)),
         ownOrderIds,
       ),
     );

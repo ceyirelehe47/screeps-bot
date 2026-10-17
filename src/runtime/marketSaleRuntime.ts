@@ -1,3 +1,4 @@
+import { baseMineralOverflowNetFloor, recordBaseMineralOverflow, liveBaseMineralOverflow } from "@/runtime/baseMineralOverflow";
 import { bumpMarketPerformanceCounter, snapshotMarketPerformanceCounters } from "@/runtime/marketPerformanceCounters";
 import {
   flushMarketSaleDiagnostics,
@@ -241,6 +242,10 @@ export function composeMarketSalePlanCandidates(
   return Object.values(protection.entries)
     .map((entry): MarketSalePlanCandidate => {
       const price = pricing.snapshots[entry.resource];
+      const v3 = (Memory.data?.marketSaleAutomation?.directAutomation as MarketDirectContinuousAutomationState | undefined)?.baseResourceV3;
+      const overflowTier = config.directCapability === "continuous-v3" && isMarketBaseResource(entry.resource) &&
+        v3?.scope?.laneLifecycles.some(lane => lane.sellerRoomName === entry.roomName && lane.resource === entry.resource && lane.stage === "continuous" && lane.status === "writable")
+        ? liveBaseMineralOverflow(entry, context.currentTick).tier : undefined;
       const protectionReasons = entry.issues.map(
         (issue) =>
           `protection:${issue.code}${
@@ -275,7 +280,11 @@ export function composeMarketSalePlanCandidates(
         roomName: entry.roomName,
         resourceType: entry.resource,
         protectionEntry: entry,
-        effectiveNetFloor: price?.effectiveNetFloor ?? 0,
+        overflowTier,
+        effectiveNetFloor: overflowTier !== undefined && price?.effectiveNetFloor
+          ? baseMineralOverflowNetFloor(entry, context.currentTick, price.effectiveNetFloor,
+              (Memory.data?.marketSaleAutomation?.directAutomation as MarketDirectContinuousAutomationState | undefined)?.baseResourceV3?.dynamicFloorProjection)
+          : price?.effectiveNetFloor ?? 0,
         historyTrusted: price?.historyResult?.trusted,
         historyCompleteDayCount: price?.historyResult?.completeDayCount,
         historyAcceptedDayCount: price?.historyResult?.acceptedDayCount,
@@ -1015,6 +1024,9 @@ export function runLiveMarketSaleAutomation(
               : { candidates: exposureCandidates },
           );
         });
+    if (protection && resourceControlCurrent && config.directCapability === "continuous-v3") {
+      recordBaseMineralOverflow(Object.values(protection.entries), Game.time);
+    }
     const usesMarketBaseResourceSuccessor =
       config.directCapability === "continuous-v3";
     // V3 preflight 会递归冻结 canonical trustedFloors 以关闭 TOCTOU。

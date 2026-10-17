@@ -64,6 +64,7 @@ class GridPosition extends MockPos {
 
   public findPathTo(target: RoomPosition | { pos: RoomPosition } | number, optionsOrY: FindPathOpts | number = {}, numericOptions: FindPathOpts = {}): PathStep[] {
     world.findPathCalls += 1;
+    if (world.red?.pos === this as unknown as RoomPosition) world.redFindPathCalls += 1;
     const options = typeof target === "number" ? numericOptions : optionsOrY as FindPathOpts;
     const goal = typeof target === "number" ? position(target, optionsOrY as number, this.roomName) : "pos" in target ? target.pos : target;
     const fallback = new RealCostMatrix() as unknown as CostMatrix;
@@ -161,6 +162,7 @@ class DuoWorld {
   public readonly searches: SearchRecord[] = [];
   public readonly frames: DuoFrame[] = [];
   public findPathCalls = 0;
+  public redFindPathCalls = 0;
   public pathFinderCalls = 0;
   public terrainReads = 0;
   private pending = new Map<Creep, DirectionConstant>();
@@ -279,6 +281,15 @@ class DuoWorld {
     return creep;
   }
 
+  public addRing(): void {
+    for (let x = 21; x <= 27; x++) for (let y = 17; y <= 23; y++) {
+      if ((x === 21 || x === 27 || y === 17 || y === 23) && !(x === 27 && y === 20)) this.structure(`ring-${x}-${y}`, STRUCTURE_WALL, x, y);
+    }
+  }
+  public blockRingGap(): void {
+    const blocker = this.creep("blocker-gap", "worker", 27, 20);
+    blocker.fatigue = 100; Game.creeps[blocker.name] = blocker;
+  }
   public addBlocker(): void {
     const blocker = this.creep("blocker", "worker", 17, 23);
     blocker.fatigue = 100; // 不能被 traffic 的被动让位推开。
@@ -430,12 +441,26 @@ describe("war duo 真实角色与共享移动的多 tick 集成", () => {
     expect(w.frames.length).toBeGreaterThanOrEqual(5);
     expect(w.red.pos.getRangeTo(w.core.pos)).toBeLessThanOrEqual(1);
     expect(w.frames.some(frame => frame.red.x === 17 && frame.red.y === 23)).toBe(true);
-    expect(w.findPathCalls).toBeGreaterThan(0);
+    expect(w.pathFinderCalls).toBeGreaterThan(0);
     expect(w.structures.filter(value => value.structureType === STRUCTURE_WALL).every(value => value.hits === 1_000_000)).toBe(true);
     expect(w.searches.every(search => {
       let previous = search.origin;
       return search.path.every(pos => { const valid = previous.getRangeTo(pos) === 1 && search.matrix.get(pos.x, pos.y) !== 0xff; previous = pos; return valid; });
     })).toBe(true);
+  });
+
+  it.each(["leader-first", "healer-first"] as const)("%s 通过环墙远端单格洞口；占位解除后继续且不重复findPathTo", order => {
+    const w = new DuoWorld(order); w.addRing(); w.blockRingGap();
+    for (let tick = 0; tick < 35 && w.red.pos.getRangeTo(position(27, 20)) > 1; tick++) { w.step(); verifyFrame(w); }
+    for (let tick = 0; tick < 2; tick++) { w.step(); verifyFrame(w); }
+    expect(w.red.pos.getRangeTo(w.core.pos)).toBeGreaterThan(1);
+    expect(w.structures.filter(s => s.structureType === STRUCTURE_WALL).every(s => s.hits === 1_000_000)).toBe(true);
+    w.removeBlockers();
+    for (let tick = 0; tick < 40 && w.red.pos.getRangeTo(w.core.pos) > 1; tick++) { w.step(); verifyFrame(w); }
+    expect(w.red.pos.getRangeTo(w.core.pos)).toBeLessThanOrEqual(1);
+    expect(w.frames.some(frame => frame.red.x === 27 && frame.red.y === 20)).toBe(true);
+    expect(w.redFindPathCalls).toBe(0);
+    expect(w.structures.filter(s => s.structureType === STRUCTURE_WALL).every(s => s.hits === 1_000_000)).toBe(true);
   });
 
   it.each(["leader-first", "healer-first"] as const)("%s 通道被实体占位两 tick 时等待，解除后沿真实路径继续", order => {

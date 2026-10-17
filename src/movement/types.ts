@@ -31,6 +31,8 @@ export interface MultiRoomTravelSegment {
 }
 
 export interface MoveToTargetOptions {
+  /** 业务本 tick 已证明完整的房内路径；直接交给交通层，不再另做寻路。 */
+  verifiedPath?: readonly StoredRoomPosition[];
   /** 业务安全策略检查实际下一步；寻路、缓存和交通仍由共用引擎执行。 */
   canMoveStep?: (destination: RoomPosition) => boolean;
   /** routing 的房内出口步仍属于此旅行；普通房内目标会结束旧旅行状态。 */

@@ -94,7 +94,7 @@ export function moveToTarget(
   {
     const currentPosKey = getPosKey(creep.pos);
     const movePathState = movementState.movePathState;
-    const canReuse = !noCacheReuse;
+    const canReuse = !noCacheReuse && !options.verifiedPath;
     const isMatchingState =
       canReuse &&
       movePathState &&
@@ -129,7 +129,7 @@ export function moveToTarget(
 
     recordMovementMetric("pathRepaths", room.name);
 
-    const path = measureCreepPathing(() =>
+    const path = options.verifiedPath ?? measureCreepPathing(() =>
       creep.pos.findPathTo(targetPos, {
         range,
         swampCost: options.swampCost,
@@ -140,6 +140,22 @@ export function moveToTarget(
       }),
     );
 
+    const end = path[path.length - 1];
+    // findPathTo 超出预算会返回半截路径；不能把朝墙方向的局部进展当成可达。
+    if (!end || Math.max(Math.abs(end.x - targetPos.x), Math.abs(end.y - targetPos.y)) > range) {
+      delete movementState.movePathState;
+      return ERR_NO_PATH;
+    }
+    if (options.verifiedPath) {
+      let previous = creep.pos;
+      for (const step of options.verifiedPath) {
+        if (step.roomName !== room.name || Math.max(Math.abs(step.x - previous.x), Math.abs(step.y - previous.y)) !== 1) {
+          delete movementState.movePathState;
+          return ERR_NO_PATH;
+        }
+        previous = new RoomPosition(step.x, step.y, step.roomName);
+      }
+    }
     if (path.length > 0) {
       const steps = path.map((step) => ({ x: step.x, y: step.y }));
       const currentPosKey2 = getPosKey(creep.pos);

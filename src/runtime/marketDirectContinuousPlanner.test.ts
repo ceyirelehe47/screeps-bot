@@ -271,3 +271,16 @@ describe("multi-resource full-book tuple planner", () => {
     expect(fast.planningFingerprint).toBe(slow.planningFingerprint);
   });
 });
+
+
+test("V3逐lane清仓价不外溢到同资源正常房，并在两读指纹中承诺", () => {
+  const entry = v3Entry("X", ["E1N1", "E2N2"], [order("cheap", "X", 40)], () => 0);
+  entry.lanes[0].pricing = { effectiveNetFloor: 1, minExecutableNotional: 1_000, tier: "liquidation" };
+  const input = planningInput([entry]);
+  const result = planMarketDirectContinuous(input);
+  expect(result.complete).toBe(true);
+  expect(result.safeCandidates.map(value => value.roomName)).toEqual(["E1N1"]);
+  expect(result.selected).toMatchObject({ roomName: "E1N1", overflowTier: "liquidation", effectiveNetFloorMilli: 1_000 });
+  const changed = { ...entry, lanes: entry.lanes.map((value, i) => i ? value : { ...value, pricing: { ...value.pricing!, effectiveNetFloor: 2 } }) };
+  expect(planMarketDirectContinuous(planningInput([changed])).planningFingerprint).not.toBe(result.planningFingerprint);
+});

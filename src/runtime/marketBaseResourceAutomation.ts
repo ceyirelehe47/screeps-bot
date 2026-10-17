@@ -1,3 +1,4 @@
+import { baseMineralOverflowNetFloor, liveBaseMineralOverflow, baseMineralOverflowCooldownNotBefore, recordBaseMineralOverflow } from "@/runtime/baseMineralOverflow";
 import { AUTHORITY_EXECUTOR_SHARD } from "@/config/deployment";
 import { isExplicitMarketNonOkReturnCode } from "@/runtime/marketActionArbiter";
 import { type PlanMarketDirectContinuousInput } from "@/runtime/marketDirectContinuousPlanner";
@@ -260,6 +261,7 @@ export function buildMarketBaseResourcePricingRatchetState(input: {
  * canonical v3 state 重新验证。
  */
 export interface MarketBaseResourceRuntimeCandidate {
+  overflowTier?: "normal" | "overflow" | "liquidation";
   roomName: string;
   resourceType: MarketBaseResource;
   protectionEntry: MarketProtectionEntry;
@@ -2148,6 +2150,8 @@ function candidatePricingComplete(
   stateRatchetHighWater: number,
   trustedFloor: MarketBaseResourceTrustedFloorObservation,
   dynamicFloor?: number,
+  projection?: import("@/runtime/marketBaseResourcePolicy").MarketBaseDynamicFloorState,
+  tick = Game.time,
 ): boolean {
   const policy =
     MARKET_BASE_RESOURCE_POLICY_BY_RESOURCE[candidate.resourceType];
@@ -2155,7 +2159,7 @@ function candidatePricingComplete(
   // 与 adapter 侧 computeEffectiveNetFloor 的分支保持同一映射来源
   //（state.dynamicFloorProjection，本 tick 内不变），否则整轮
   // candidate_incomplete fail-closed。
-  const effectiveFloor =
+  const normalFloor =
     dynamicFloor !== undefined && Number.isFinite(dynamicFloor)
       ? Math.max(policy.hardFloor, policy.economicFloor, dynamicFloor)
       : Math.max(
@@ -2164,10 +2168,13 @@ function candidatePricingComplete(
           candidate.historyFloor,
           trustedFloor.value,
         );
+  const effectiveFloor = candidate.overflowTier === undefined ? normalFloor
+    : baseMineralOverflowNetFloor(candidate.protectionEntry, tick, normalFloor, projection);
   const bootstrapRatchet =
     MARKET_BASE_RESOURCE_FLOOR_BOOTSTRAP.resources[candidate.resourceType]
       .ratchetFloor;
   return (
+    (candidate.overflowTier === undefined || candidate.overflowTier === liveBaseMineralOverflow(candidate.protectionEntry, tick).tier) &&
     candidate.historyTrusted === true &&
     Number.isFinite(candidate.historyFloor) &&
     candidate.historyFloor > 0 &&
@@ -2431,7 +2438,6 @@ function sameMarketBasePricingBasis(
   right: MarketBaseResourceRuntimeCandidate,
 ): boolean {
   return (
-    Object.is(left.effectiveNetFloor, right.effectiveNetFloor) &&
     Object.is(left.historyFloor, right.historyFloor) &&
     left.historyTrusted === right.historyTrusted &&
     Object.is(left.ratchetFloor, right.ratchetFloor) &&
@@ -2917,6 +2923,8 @@ function liveScopeForRead(
             stateRatchetHighWater.value,
             trustedFloor,
             enforcedDynamicFloors[resource],
+            state.dynamicFloorProjection,
+            input.tick,
           ) ||
           !candidateEnergyEvidence(
             candidate,
@@ -2984,6 +2992,12 @@ function liveScopeForRead(
         return {
           laneId: lane.laneId,
           roomInstanceId: lane.roomInstanceId,
+          pricing: {
+            effectiveNetFloor: candidate.effectiveNetFloor,
+            minExecutableNotional: !candidate.overflowTier || candidate.overflowTier === "normal"
+              ? policy.minOrderNotional : candidate.effectiveNetFloor * policy.maxDealAmount,
+            tier: candidate.overflowTier ?? "normal",
+          },
           lane: {
             roomName: lane.sellerRoomName,
             resourceType: lane.resource,
@@ -4082,6 +4096,11 @@ export function runMarketBaseResourceAutomation(
       ratchetBeforePlanning,
     );
   };
+  let lastObservedCandidates: readonly MarketBaseResourceRuntimeCandidate[] = [];
+  const observedInput = { ...input, readCandidates: () => {
+    lastObservedCandidates = input.readCandidates();
+    return lastObservedCandidates;
+  } };
   let liveScopeReadCount = 0;
   let staticReadAttestationResult:
     | MarketBaseResourceStaticReadAttestationResult
@@ -4100,7 +4119,7 @@ export function runMarketBaseResourceAutomation(
         const attestation = staticReadAttestationResult;
         return measureMarketSubPhase("v3LiveScopeRead", () => liveScopeForRead(
           state,
-          input,
+          observedInput,
           dependencies,
           runtimeSession,
           attestation,
@@ -4323,6 +4342,24 @@ export function runMarketBaseResourceAutomation(
     cpuUsed: cpuTraceRecorder.lastRawDelta,
     cpuTrace: cloneMarketBaseResourceCpuTrace(cpuTraceRecorder),
   };
+  if (plan.first?.complete && !plan.first.blocker) {
+    const observed = lastObservedCandidates;
+    const attempts: Record<string, "no_bid" | "bid" | "waiting"> = {};
+    for (const candidate of observed) {
+      const key = `${candidate.roomName}:${candidate.resourceType}`;
+      const lane = runtimeSession.scopeContext?.snapshot.laneLifecycles.find(value => value.sellerRoomName === candidate.roomName && value.resource === candidate.resourceType);
+      const terminal = Game.rooms?.[candidate.roomName]?.terminal;
+      if (!lane || lane.stage !== "continuous" || !laneAllowsRuntimeWrite(runtimeSession, AUTHORITY_EXECUTOR_SHARD, lane) ||
+        !terminal || terminal.cooldown > 0 || (terminal.store[candidate.resourceType] ?? 0) < 1_000 ||
+        (terminal.store[RESOURCE_ENERGY] ?? 0) < 26_000) { attempts[key] = "waiting"; continue; }
+      const bid = plan.first.safeCandidates.some(value => value.roomName === candidate.roomName && value.resourceType === candidate.resourceType);
+      const priceRejection = plan.first.rejections.some(value => value.roomName === candidate.roomName && value.resourceType === candidate.resourceType &&
+        ["planned_net_below_floor", "worst_case_net_below_floor", "executable_notional_below_minimum"].includes(value.reason));
+      attempts[key] = bid ? "bid" : priceRejection || plan.rawOrderCount === 0 ? "no_bid" : "waiting";
+    }
+    recordBaseMineralOverflow(observed.map(value => value.protectionEntry), input.tick, attempts,
+      Object.fromEntries(observed.filter(value => value.overflowTier !== undefined).map(value => [`${value.roomName}:${value.resourceType}`, value.effectiveNetFloor])));
+  }
   const selected = plan.selected;
   if (!selected) {
     return finish(true);
@@ -4595,6 +4632,11 @@ export function runMarketBaseResourceAutomation(
       plannedNetCreditsMilli: selected.netCreditsMilli,
       worstUnitNetCreditsMilli: selected.worstCaseNetCreditsMilli,
       evidenceKeyHint: requestId,
+      ...(selected.overflowTier && selected.overflowTier !== "normal" && grant?.stage === "continuous" && state.ledger
+        ? { overflowCooldownNotBefore: baseMineralOverflowCooldownNotBefore(state.ledger.confirmedCooldownNotBefore,
+              state.ledger.checkpoint.confirmedCooldownNotBeforeHighWater, selected.overflowTier),
+            overflowTier: selected.overflowTier }
+        : {}),
       ...(trialNotBefore !== undefined && permit
         ? { trialCooldownNotBefore: trialNotBefore, trialPermitId: permit.permitId }
         : {}),

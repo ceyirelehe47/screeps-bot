@@ -713,6 +713,8 @@ export interface PrepareMarketBaseResourceAttemptInput extends Omit<
   readonly firstDynamicScope: MarketBaseResourceDynamicScopeRead;
   readonly secondDynamicScope: MarketBaseResourceDynamicScopeRead;
   /** Scoped one-run trial gate; the persisted quota snapshot stays at 1,000. */
+  readonly overflowCooldownNotBefore?: number;
+  readonly overflowTier?: "overflow" | "liquidation";
   readonly trialCooldownNotBefore?: number;
   readonly trialPermitId?: string;
 }
@@ -4695,11 +4697,11 @@ function prepareMarketBaseResourceAttemptCore(
   skipFullValidation: boolean,
   authenticatedQuotaReceipts?: readonly MarketBaseResourceQuotaReceipt[],
 ): MarketBaseResourceLedgerOperation {
-  const trialPermit = input.trialCooldownNotBefore === undefined
+  const trialPermit = input.trialCooldownNotBefore === undefined && input.overflowCooldownNotBefore === undefined
     ? undefined
     : input.permitChain.retainedPermits.find((record) =>
         record.schemaVersion === 3 &&
-        record.permitId === input.trialPermitId &&
+        record.permitId === (input.trialPermitId ?? input.historicalPermit.permitId) &&
         record.permitId === input.permitChain.currentPermitId);
   const trialPolicy = trialPermit?.schemaVersion === 3
     ? trialPermit.resourcePolicies.find((policy) =>
@@ -4735,6 +4737,15 @@ function prepareMarketBaseResourceAttemptCore(
        trialGrant.newDealGrant !== "enabled" ||
        trialGrant.status !== "active" ||
        trialGrant.roomInstanceId !== input.historicalLane.roomInstanceId)) ||
+    (input.overflowCooldownNotBefore !== undefined && (
+      !isSafeInteger(input.overflowCooldownNotBefore) ||
+      !["overflow", "liquidation"].includes(input.overflowTier ?? "") ||
+      input.executionPolicy !== "continuous" ||
+      input.overflowCooldownNotBefore < state.checkpoint.confirmedCooldownNotBeforeHighWater ||
+      input.overflowCooldownNotBefore < Math.max(0, state.confirmedCooldownNotBefore - 1_000 + (input.overflowTier === "overflow" ? 100 : 0)) ||
+      trialPolicy?.fingerprint !== input.historicalLane.resourcePolicyFingerprint ||
+      trialGrant?.stage !== "continuous" || trialGrant.newDealGrant !== "enabled" || trialGrant.status !== "active" ||
+      trialGrant.roomInstanceId !== input.historicalLane.roomInstanceId)) ||
     !validExecutionEvidence(
       input.executionEvidence,
       input.tick,
@@ -4809,7 +4820,7 @@ function prepareMarketBaseResourceAttemptCore(
     [quota.global, quota.resourceQuota, quota.room, quota.lane].some(
       (layer) => layer.remaining < MARKET_BASE_RESOURCE_PLANNED_AMOUNT,
     ) ||
-    input.tick < (input.trialCooldownNotBefore ??
+    input.tick < (input.overflowCooldownNotBefore ?? input.trialCooldownNotBefore ??
       Math.max(quota.confirmedCooldownNotBefore,
         working.confirmedCooldownNotBefore)) ||
     input.tick < quota.retryNotBefore

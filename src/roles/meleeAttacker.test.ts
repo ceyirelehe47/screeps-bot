@@ -302,7 +302,7 @@ describe("meleeAttackerRole 目标策略与移动请求安全边界", () => {
     expect(attacker.memory._warBreachTargetId).toBeUndefined();
     expect(PathFinder.search).toHaveBeenCalledTimes(1);
     const options = (PathFinder.search as jest.Mock).mock.calls[0][2];
-    expect(options).toMatchObject({ maxRooms: 1, maxOps: 2000 });
+    expect(options).toMatchObject({ maxRooms: 1, maxOps: 8000 });
     expect(options.roomCallback(TARGET_ROOM).get(2, 28)).toBe(255);
     expect(moveToTarget).toHaveBeenCalledWith(attacker, spawn, 1, expect.any(Object));
   });
@@ -414,7 +414,7 @@ describe("meleeAttackerRole 目标策略与移动请求安全边界", () => {
     expect(PathFinder.search).not.toHaveBeenCalled();
   });
 
-  it.each([100, 2000])("搜索无完整证明时拒绝邻墙，屏障消失后重新请求目标移动（ops=%s）", (ops) => {
+  it.each([100, 8000])("搜索无完整证明时拒绝邻墙，屏障消失后重新请求目标移动（ops=%s）", (ops) => {
     const wall = hostileStructure(STRUCTURE_WALL, "unproven-wall", 2, 28, 100);
     const spawn = hostileStructure(STRUCTURE_SPAWN, "unreachable-spawn", 25, 25, 5000);
     const structures = [wall, spawn];
@@ -435,7 +435,7 @@ describe("meleeAttackerRole 目标策略与移动请求安全边界", () => {
     expect(moveToTarget).not.toHaveBeenCalled();
     expect(attacker.move).not.toHaveBeenCalled();
     expect(attacker.memory._warBreachTargetId).toBeUndefined();
-    expect(PathFinder.search).toHaveBeenCalledTimes(ops < 2000 ? 2 : 1);
+    expect(PathFinder.search).toHaveBeenCalledTimes(2);
 
     // 另一单位拆掉屏障是实际世界变化；不靠单纯流逝一 tick 假称能够恢复。
     Game.time += 1;
@@ -446,7 +446,7 @@ describe("meleeAttackerRole 目标策略与移动请求安全边界", () => {
     expect(attacker.attack).toHaveBeenCalledWith(spawn);
     expect(moveToTarget).toHaveBeenCalledWith(attacker, spawn, 1, expect.any(Object));
     expect(attacker.attack).not.toHaveBeenCalledWith(wall);
-    expect(PathFinder.search).toHaveBeenCalledTimes(ops < 2000 ? 2 : 1);
+    expect(PathFinder.search).toHaveBeenCalledTimes(2);
   });
 
   it.each([undefined, TARGET_ROOM])("战争目标本帧失效后下一帧重选；普通角色同帧回退（targetRoom=%s）", (targetRoom) => {
@@ -508,7 +508,7 @@ describe("meleeAttackerRole 目标策略与移动请求安全边界", () => {
     const seen = new Set<string>(); const role = meleeAttackerRole(TARGET_ROOM);
     for (let i = 0; i < 5; i++) {
       (PathFinder.search as jest.Mock).mockClear(); role.target(attacker);
-      expect((PathFinder.search as jest.Mock).mock.calls.length).toBeLessThanOrEqual(2);
+      expect((PathFinder.search as jest.Mock).mock.calls.length).toBeLessThanOrEqual(4);
       for (const [, goal] of (PathFinder.search as jest.Mock).mock.calls) seen.add(`${goal.pos.x}:${goal.pos.y}`);
       expect(attacker.attack).not.toHaveBeenCalled(); Game.time++;
     }
