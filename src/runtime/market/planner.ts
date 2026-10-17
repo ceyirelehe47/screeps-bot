@@ -1,6 +1,7 @@
 import type { MarketOrderSnapshot } from "@/runtime/marketSalePricing";
 import { priceToMilliDown, priceToMilliUp } from "@/runtime/marketSalePricing";
 import type { CompactMarketPolicy, MarketResource } from "@/runtime/market/policy";
+import { isBaseMarketResource } from "@/runtime/market/policy";
 import { compareNetUnitPrice, quoteNetDeal } from "@/runtime/market/pricing";
 
 export interface CompactMarketLane {
@@ -75,7 +76,8 @@ export function planCompactMarket(input: CompactMarketPlanInput): CompactMarketP
   const books = new Map<MarketResource, MarketOrderSnapshot[]>();
   const allOrderIds = new Map<string, string>();
   for (const book of input.books) {
-    if (!book.complete || books.has(book.resource) || !Array.isArray(book.orders) || book.orders.length > 1000) return incomplete("book_incomplete");
+    if (!book.complete || !isBaseMarketResource(book.resource) || books.has(book.resource) || !Array.isArray(book.orders) || book.orders.length > 1000 ||
+        !Array.isArray(book.ownOrderIds) || book.ownOrderIds.length > 1000 || book.ownOrderIds.some(id => typeof id !== "string" || !id)) return incomplete("book_incomplete");
     const own = new Set(book.ownOrderIds), orders: MarketOrderSnapshot[] = [];
     for (const order of book.orders) {
       if (input.shouldStop?.()) return incomplete("cpu_budget");
@@ -93,14 +95,18 @@ export function planCompactMarket(input: CompactMarketPlanInput): CompactMarketP
   const candidates: CompactMarketCandidate[] = [], laneIds = new Set<string>();
   for (const lane of input.lanes) {
     const key = `${lane.roomName}:${lane.resource}`, policy = lane.policy, terminal = lane.terminal;
-    if (laneIds.has(key) || !lane.fresh || ![lane.sellable, terminal.resourceAmount, terminal.energy, terminal.reserve, terminal.cooldown].every(validAmount) ||
+    if (typeof lane.roomName !== "string" || !lane.roomName || laneIds.has(key) || !lane.fresh ||
+        typeof terminal.claimed !== "boolean" || typeof terminal.ready !== "boolean" ||
+        ![lane.sellable, terminal.resourceAmount, terminal.energy, terminal.reserve, terminal.cooldown].every(validAmount) ||
+        lane.windowAmount !== undefined && !validAmount(lane.windowAmount) || lane.lastDealTick !== undefined && !validAmount(lane.lastDealTick) ||
         !Number.isFinite(lane.floor) || lane.floor <= 0 || !Number.isFinite(lane.minNotional) || lane.minNotional < 0) return incomplete("lane_incomplete");
     laneIds.add(key);
     const orders = books.get(lane.resource);
     if (!orders) return incomplete("book_missing");
     if (!Object.values(policy).every(value => Number.isFinite(value) && value >= 0) ||
-        ![policy.maxPerDeal, policy.maxPerWindow, policy.minIntervalTicks, policy.maxTransactionEnergy, policy.terminalEnergyReserve].every(validAmount) ||
-        policy.maxPerDeal < 1 || policy.hardNetFloor <= 0) return incomplete("policy_invalid");
+        ![policy.reserve, policy.maxPerDeal, policy.maxPerWindow, policy.minIntervalTicks, policy.windowTicks,
+          policy.maxTransactionEnergy, policy.terminalEnergyReserve].every(validAmount) ||
+        policy.maxPerDeal < 1 || policy.maxPerDeal > 100000 || policy.windowTicks < 1 || policy.hardNetFloor <= 0) return incomplete("policy_invalid");
     if (terminal.ready !== true || terminal.claimed || terminal.cooldown !== 0 || lane.lastDealTick !== undefined && input.tick < lane.lastDealTick + policy.minIntervalTicks) continue;
     let best: CompactMarketCandidate | undefined;
     for (const order of orders) {

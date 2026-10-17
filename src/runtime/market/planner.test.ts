@@ -38,13 +38,15 @@ describe("精简市场纯挑单", () => {
     const before = JSON.stringify(next); Object.freeze(next.books[0].orders);
     expect(planCompactMarket(next).selected?.orderId).toBe("a"); expect(JSON.stringify(next)).toBe(before);
   });
-  it.each(["cost", "budget", "stale", "conflict", "unsafe"])("不完整 %s 不产生候选", kind => {
+  it.each(["cost", "budget", "stale", "conflict", "unsafe", "counter", "identity"])("不完整 %s 不产生候选", kind => {
     const next = input();
     if (kind === "cost") next.transactionEnergy = () => undefined;
     if (kind === "budget") next.shouldStop = () => true;
     if (kind === "stale") next.lanes[0].fresh = false;
     if (kind === "conflict") next.books[0].orders = [compactOrder(), compactOrder("bid", 700)];
     if (kind === "unsafe") next.books[0].orders = [compactOrder("bid", Number.MAX_SAFE_INTEGER)];
+    if (kind === "counter") next.lanes[0].windowAmount = -1;
+    if (kind === "identity") next.books[0].ownOrderIds = undefined as any;
     expect(planCompactMarket(next)).toMatchObject({ complete: false, candidates: [] });
   });
   it.each(["claimed", "cooldown", "reserve", "cap", "interval"])("保留 %s 限制", kind => {
