@@ -143,7 +143,7 @@ export function recordBaseMineralOverflow(
       observation.noBidRounds = attempt === "bid" ? 0 : Math.min(BASE_MINERAL_NO_BID_ROUNDS, observation.noBidRounds + 1);
     }
     observation.reason = !observation.complete ? "protection_incomplete" : attempt ?? "not_attempted";
-    if (observation.tier !== "normal" && old?.paused) observation.paused = old.paused;
+    if ((!observation.complete || observation.tier !== "normal") && old?.paused) observation.paused = old.paused;
     next[key] = observation;
   }
   state.baseMineralOverflow = { updatedAt: tick, entries: next };
