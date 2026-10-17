@@ -196,3 +196,23 @@ it("Portal 旧快照已过期时不能继续排队，并撤销原有待孵化配
   expect(spawn.memory.spawnList).not.toContain(configName);
   expect(Memory.data!.crossShardColonization!["shard1:W9N9"].status).toBe("blocked");
 });
+
+it("老跨 shard 任务在 spawning 早退时刷新可用时刻，短暂阻塞不误判失败", () => {
+  jest.mocked(isDefenseMode).mockReturnValue(false); resetRuntimeServices();
+  Game.time = 20000; Game.creeps = {}; Game.flags = {}; Memory.runtime = {};
+  Game.shard = { name: "shard0" } as Game["shard"]; Game.gcl = { level: 20 } as GlobalControlLevel;
+  Object.assign(global, { InterShardMemory: { getRemote: jest.fn(() => "") } });
+  const source = createRoom("W1N1"), spawn = createSpawn("S", source);
+  Game.rooms = { W1N1: source }; Game.spawns = { S: spawn };
+  const configName = "W1N1:crossShard:shard1:W9N9:claimer:0";
+  spawn.memory.spawnList = [configName];
+  Memory.data = { creepConfigs: {}, crossShardColonization: { "shard1:W9N9": {
+    targetShard: "shard1", targetRoom: "W9N9", sourceRoom: source.name, portalRoom: "W1N2",
+    status: "spawning", flagName: "CLX_shard1_W9N9", createdAt: 1, updatedAt: 1, lastReadyAt: 1,
+  } } };
+  runCrossShardColonizationByFlag();
+  expect(Memory.data!.crossShardColonization!["shard1:W9N9"].lastReadyAt).toBe(Game.time);
+  Game.time++; Game.spawns = {}; runCrossShardColonizationByFlag();
+  Game.time++; runCrossShardColonizationByFlag();
+  expect(Memory.data!.crossShardColonization!["shard1:W9N9"].status).toBe("blocked");
+});

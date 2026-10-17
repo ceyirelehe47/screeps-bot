@@ -1,3 +1,4 @@
+import { needsFactoryOperatePower } from "@/runtime/factoryControl";
 import { executeTreasuryFencedTerminalCargo } from "@/runtime/treasuryTerminalCargo";
 import type {
   PowerCreepRoomCapability,
@@ -301,7 +302,8 @@ function isTaskObsolete(powerCreep: PowerCreep, task: PowerCreepTask, room: Room
     }
     case "operate_factory": {
       const target = getTaskTarget(task);
-      return !target || (getActivePowerEffect(target, PWR_OPERATE_FACTORY)?.ticksRemaining ?? 0) > 50;
+      return !target || !needsFactoryOperatePower(room, target as StructureFactory, getPowerLevel(powerCreep, PWR_OPERATE_FACTORY)) ||
+        (getActivePowerEffect(target, PWR_OPERATE_FACTORY)?.ticksRemaining ?? 0) > 50;
     }
     case "operate_storage": {
       const target = getTaskTarget(task);
@@ -379,20 +381,10 @@ function scheduleOperateStorage(powerCreep: PowerCreep, room: Room): void {
 
 function scheduleOperateFactory(powerCreep: PowerCreep, room: Room): void {
   if (!isPowerReady(powerCreep, PWR_OPERATE_FACTORY)) return;
-  const cfg = Memory.cfg?.factoryControl;
-  const roomCfg = cfg?.rooms?.[room.name];
-  if (cfg?.enabled === false || roomCfg?.enabled === false || roomCfg?.drainOnly) return;
   const level = getPowerLevel(powerCreep, PWR_OPERATE_FACTORY);
   const factory = room.find(FIND_MY_STRUCTURES).find(s => s.structureType === STRUCTURE_FACTORY) as StructureFactory | undefined;
-  if (!factory || factory.level && factory.level !== level || (getActivePowerEffect(factory, PWR_OPERATE_FACTORY)?.ticksRemaining ?? 0) > 50) return;
-  const targets = roomCfg?.targets ?? cfg?.targets ?? [];
-  const active = Memory.runtime?.factoryControl?.rooms?.[room.name]?.activeTarget;
-  const needed = targets.some(target => {
-    const recipe = COMMODITIES[target.resource as CommodityConstant];
-    const amount = (room.storage?.store.getUsedCapacity(target.resource) ?? 0) + (room.terminal?.store.getUsedCapacity(target.resource) ?? 0) + factory.store.getUsedCapacity(target.resource);
-    return recipe?.level === level && amount < (target.targetAmount ?? 1000);
-  }) || !!active && COMMODITIES[active as CommodityConstant]?.level === level;
-  if (needed) enqueuePowerCreepTask(powerCreep, "operate_factory", factory.id);
+  if (factory && (getActivePowerEffect(factory, PWR_OPERATE_FACTORY)?.ticksRemaining ?? 0) <= 50 &&
+      needsFactoryOperatePower(room, factory, level)) enqueuePowerCreepTask(powerCreep, "operate_factory", factory.id);
 }
 
 function scheduleRegenSource(powerCreep: PowerCreep, room: Room): void {

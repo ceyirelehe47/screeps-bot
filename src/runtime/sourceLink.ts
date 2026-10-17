@@ -35,7 +35,7 @@ export function getSourceAdjacentLinks(source: Source): StructureLink[] {
   const fallbackContainer = roomContext?.getContainers().find(container => container.pos.getRangeTo(source.pos) <= 1);
   const workPos = getPlannedSourceContainerPos(source) ?? fallbackContainer?.pos;
   const usable = links.filter(link => (typeof link.isActive !== "function" || link.isActive()) &&
-    link.pos.getRangeTo(workPos ?? source.pos) <= 1);
+    link.pos.getRangeTo(workPos ?? source.pos) <= (workPos ? 1 : SOURCE_LINK_RANGE));
   sourceAdjacentLinksBySourceId.set(source.id, { source, links: usable });
   return usable;
 }

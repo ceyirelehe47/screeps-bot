@@ -238,6 +238,7 @@ describe("bootstrapRooms", () => {
   });
 
   it("keeps colony source assistance until the planned RCL3 extension boundary is complete", () => {
+    Game.rooms.W9N9 = createRoom({ name: "W9N9", level: 8 });
     const structures = Array.from({ length: 9 }, () => createOwnedStructure(STRUCTURE_EXTENSION));
     const constructionSites = [createConstructionSite(STRUCTURE_EXTENSION)];
     const room = createRoom({

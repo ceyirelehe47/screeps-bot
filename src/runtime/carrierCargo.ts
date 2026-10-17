@@ -34,3 +34,16 @@ export function countCarrierCargo(targetId: string, resource: ResourceConstant):
   for (const amount of getCarrierCargoByActor(targetId, resource).values()) total += amount;
   return total;
 }
+
+/** carrier 在决策阶段新建或重定向快照后同步登记，后续同 tick 消费者可见。 */
+export function refreshCarrierCargoActor(actor: string): void {
+  if (!cache || cache.tick !== Game.time || cache.creeps !== Game.creeps) return;
+  const state = getCreepAssignmentState(actor);
+  const target = state?.synthesisCarrierPendingToId, resource = state?.synthesisCarrierPendingResource;
+  if (!target || !resource) return;
+  let resources = cache.targets.get(target);
+  if (!resources) cache.targets.set(target, resources = new Map());
+  let actors = resources.get(resource);
+  if (!actors) resources.set(resource, actors = []);
+  if (!actors.includes(actor)) actors.push(actor);
+}

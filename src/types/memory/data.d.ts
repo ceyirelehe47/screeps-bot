@@ -242,6 +242,8 @@ declare global {
         flagName: string;
         planReady: boolean;
         blockedReason?: string;
+        blockedUntil?: number;
+        scoutStartedAt?: number;
         claimCompleted: boolean;
         scoutSafe?: boolean;
         scoutRouteRooms?: string[];
@@ -271,6 +273,7 @@ declare global {
       {
         members?: Record<string, { configName: string; creepNames: string[]; spawnedAt?: number }>;
         membersVersion?: 1;
+        reserveContinuationUntil?: number;
         nextCheckAt?: number;
         scheduleKey?: string;
         sharedRetiredAt?: number;

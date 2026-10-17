@@ -13,7 +13,7 @@ jest.mock("@/runtime/defenseMode", () => ({
   isDefenseMode: jest.fn(() => false),
 }));
 
-import { runColonizationByFlag } from "@/runtime/colonization";
+import { runColonizationByFlag, isColonizationBootstrapRoom } from "@/runtime/colonization";
 import { isDefenseMode } from "@/runtime/defenseMode";
 import { getCreepConfigService } from "@/runtime/runtimeServices";
 
@@ -220,6 +220,68 @@ describe("runColonizationByFlag", () => {
 
     expect(getCreepConfigService().get(workerConfigName)).toBeUndefined();
     expect(Memory.data?.colonization?.W1N2).toBeUndefined();
+  });
+
+});
+
+
+describe("殖民复查回归", () => {
+  beforeEach(() => {
+    jest.clearAllMocks(); resetRuntimeServices(); Game.time = 20000;
+    jest.mocked(isDefenseMode).mockReturnValue(false);
+    Game.creeps = {}; Game.rooms = {}; Game.spawns = {}; Game.flags = {};
+    Memory.cfg = {}; Memory.runtime = {}; Memory.data = {}; Memory.creeps = {};
+    Game.gcl = { level: 20 } as GlobalControlLevel;
+    Game.map = { getRoomLinearDistance: jest.fn(() => 1), findRoute: jest.fn(() => ERR_NO_PATH),
+      getRoomStatus: jest.fn(() => ({ status: "normal" })), describeExits: jest.fn(() => null) } as unknown as Game["map"];
+  });
+  function setup(flagName = "CL") {
+    const source = createSourceRoom("W1N1"), target = { name: "W1N2", find: () => [] } as unknown as Room;
+    const flag = { name: flagName, pos: { roomName: "W1N2" }, remove: jest.fn() } as unknown as Flag;
+    Game.rooms = { W1N1: source, W1N2: target }; Game.spawns = { S: createSpawn(source) }; Game.flags = { [flagName]: flag };
+    Memory.data = { colonization: { W1N2: { targetRoom: "W1N2", sourceRoom: "W1N1", flagName,
+      status: "claiming", planReady: false, claimCompleted: false, scoutSafe: false, createdAt: Game.time, updatedAt: Game.time } } };
+    return { source, target, flag };
+  }
+  it("老任务重新侦察不会按创建时间立即放弃；当前侦察超时后保留旗和活体并暂停补员", () => {
+    const { source, flag } = setup();
+    Memory.data!.colonization!.W1N2.createdAt = 1;
+    const name = "W1N1:colonize:W1N2:scout:0";
+    const creep = { name: "scout", room: source, memory: { role: "scout", configName: name }, suicide: jest.fn() } as unknown as Creep;
+    Game.creeps = { scout: creep };
+    Memory.data!.creepConfigs = { [name]: { role: "scout", roomName: source.name, args: ["W1N2"] } };
+    runColonizationByFlag();
+    expect(Memory.data!.colonization!.W1N2.scoutStartedAt).toBe(Game.time);
+    expect(flag.remove).not.toHaveBeenCalled(); expect(creep.suicide).not.toHaveBeenCalled();
+    Game.time += 5000; runColonizationByFlag();
+    expect(Memory.data!.colonization!.W1N2.blockedReason).toBe("scout_timeout");
+    expect(flag.remove).not.toHaveBeenCalled(); expect(creep.suicide).not.toHaveBeenCalled();
+    Game.time++; runColonizationByFlag();
+    expect(Memory.data!.creepConfigs![name].roomName).toBeUndefined();
+    expect(Game.spawns.S.memory.spawnList).toEqual([]);
+  });
+  it("claimer 的原生 GCL 失败在冷却结束前保留，阻塞解除后重新计侦察时间", () => {
+    setup(); const task = Memory.data!.colonization!.W1N2;
+    task.blockedReason = "gcl_not_enough"; task.blockedUntil = Game.time + 500; task.scoutStartedAt = 1;
+    runColonizationByFlag();
+    expect(Memory.data!.colonization!.W1N2.blockedReason).toBe("gcl_not_enough");
+    expect(Memory.data!.colonization!.W1N2.scoutStartedAt).toBeUndefined();
+    Game.time += 500; runColonizationByFlag();
+    expect(Memory.data!.colonization!.W1N2.blockedReason).toBeUndefined();
+    expect(Memory.data!.colonization!.W1N2.scoutStartedAt).toBe(Game.time);
+  });
+  it("任务已存在时显式 CL_ 母房仍优先于锁定源房", () => {
+    setup("CL_W3N3"); const preferred = createSourceRoom("W3N3");
+    Game.rooms.W3N3 = preferred; Game.spawns.P = createSpawn(preferred);
+    runColonizationByFlag();
+    expect(Memory.data!.colonization!.W1N2.sourceRoom).toBe("W3N3");
+  });
+  it("母房防御时不压制殖民房本地采矿，防御解除后恢复正常支援交接", () => {
+    setup(); Memory.data!.colonization!.W1N2.status = "managed";
+    jest.mocked(isDefenseMode).mockReturnValue(true);
+    expect(isColonizationBootstrapRoom("W1N2")).toBe(false);
+    jest.mocked(isDefenseMode).mockReturnValue(false);
+    expect(isColonizationBootstrapRoom("W1N2")).toBe(true);
   });
 
 });

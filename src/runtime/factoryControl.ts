@@ -579,6 +579,24 @@ function resolveProductionCaps(
   return config.productionCaps;
 }
 
+/** 自动能力只维持已定级工厂，不替用户做永久定级决定。 */
+export function needsFactoryOperatePower(room: Room, factory: StructureFactory, level: number): boolean {
+  const config = parseConfig();
+  const roomCfg = config.rooms[room.name];
+  if (!config.enabled || roomCfg?.enabled === false || roomCfg?.drainOnly || !factory.level || factory.level !== level) return false;
+  const caps = resolveProductionCaps(config, room.name);
+  const targets = resolveTargetQueue(config, room.name);
+  const active = Memory.runtime?.factoryControl?.rooms?.[room.name]?.activeTarget;
+  const pending = targets.filter(target => {
+    const stock = getRoomStock(room, target.resource);
+    const cap = caps[target.resource] ?? target.cap;
+    return !(target.targetAmount > 0 && stock >= target.targetAmount) && !(cap > 0 && stock >= cap);
+  });
+  return pending.some(target => getRequiredFactoryLevel(target.resource) === level) ||
+    pending.length > 0 && !!active && getRequiredFactoryLevel(active) === level &&
+    !(caps[active] !== undefined && getRoomStock(room, active) >= caps[active]!);
+}
+
 // ---------------------------------------------------------------------------
 // Runtime state helpers
 // ---------------------------------------------------------------------------
@@ -927,17 +945,18 @@ function executeBatteryDecompressTask(
       const supplyDraft = generateBatteryDecompressSupplyDraft(room, factory, task);
       task.status = "loading";
       state.stage = "loading";
-      if (!state.loadingSinceTick) {
+      if (state.loadingSinceTick === undefined) {
         state.loadingSinceTick = Game.time;
       }
       if (!supplyDraft) {
         task.lastError = "no_battery_source";
-        if (Game.time - state.loadingSinceTick >= 500) {
-          task.status = "failed"; task.completedAt = Game.time;
-          state.stage = "idle"; state.activeTarget = undefined;
-        }
       }
-      replaceCarrierTasksForProducerRoom(FACTORY_CARRIER_TASK_PRODUCER, task.roomName, supplyDraft ? [supplyDraft] : []);
+      if (Game.time - state.loadingSinceTick >= 500) {
+        task.status = "failed"; task.completedAt = Game.time;
+        task.lastError = supplyDraft ? "battery_delivery_timeout" : "no_battery_source";
+        state.stage = "idle"; state.activeTarget = undefined;
+      }
+      replaceCarrierTasksForProducerRoom(FACTORY_CARRIER_TASK_PRODUCER, task.roomName, task.status !== "failed" && supplyDraft ? [supplyDraft] : []);
     }
   }
 
@@ -1022,7 +1041,7 @@ function executeProductionCycle(
           state.lastError = `produce_${result}`;
           if (result === ERR_NOT_ENOUGH_RESOURCES) {
             state.stage = "loading";
-            if (!state.loadingSinceTick) {
+            if (state.loadingSinceTick === undefined) {
               state.loadingSinceTick = Game.time;
             }
             drafts = generateFactorySupplyDrafts(room, factory, recipe, roomName);

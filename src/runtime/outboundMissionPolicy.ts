@@ -23,8 +23,15 @@ function ownsWarConfig(task: WarTask, name: string, config: CreepConfig): boolea
 export function canContinueWarMission(task: WarTask): boolean {
   if (isDefenseMode(task.sourceRoom) || Memory.data?.war?.[task.targetRoom] !== task ||
       !["staging", "clearing", "downgrading", "patrol_waiting"].includes(task.status)) return false;
+  const reserve = isRoomInReserveMode(task.sourceRoom);
+  if (!reserve) delete task.reserveContinuationUntil;
+  if (reserve && task.reserveContinuationUntil !== undefined && Game.time >= task.reserveContinuationUntil) return false;
+  const committed = (): true => {
+    if (reserve) task.reserveContinuationUntil ??= Game.time + CREEP_LIFE_TIME;
+    return true;
+  };
   const generation = task.activeGeneration;
-  if (generation?.boostGateOpenedAt !== undefined && generation.phase === "assembling") return true;
+  if (generation?.boostGateOpenedAt !== undefined && generation.phase === "assembling") return committed();
   const store = Memory.data?.creepConfigs ?? {};
   const prefix = `${task.sourceRoom}:war:${task.targetRoom}:`;
   const candidates = generation ? Object.values(generation.configNames) : [`${prefix}meleeAttacker:0`, `${prefix}meleeAttacker:1`, `${prefix}healer:0`];
@@ -36,15 +43,20 @@ export function canContinueWarMission(task: WarTask): boolean {
   }
   const context = getTickContextService();
   if ([...names].some(name => context.getCreepsByConfigName(name).some(creep =>
-    !creep.memory._warDetached && creep.memory.configName === name))) return true;
-  return context.getSpawnsByRoom(task.sourceRoom).some(spawn =>
+    !creep.memory._warDetached && creep.memory.configName === name))) return committed();
+  const pending = context.getSpawnsByRoom(task.sourceRoom).some(spawn =>
     ((spawn.memory.spawnList ?? []).some(name => names.has(name)) ||
       !!spawn.spawning && names.has(Memory.creeps?.[spawn.spawning.name]?.configName ?? "")));
+  return pending ? committed() : false;
 }
 
 export function isSpawnConfigEconomicallyBlocked(configName: string, config: CreepConfig): boolean {
   if (!config.roomName) return false;
   const defense = isDefenseMode(config.roomName);
+  if (configName.includes(":war:") && !isRoomInReserveMode(config.roomName)) {
+    const task = Memory.data?.war?.[config.args[0]];
+    if (task?.sourceRoom === config.roomName) delete task.reserveContinuationUntil;
+  }
   if (defense && ["colonizerHarvester", "remoteCarrier", "remoteDefender", "scout", "reserver"].includes(config.role)) return true;
   const blocked = !canStartOutboundMission(config.roomName) && (
     configName.includes(":war:") || configName.includes(":colonizationSupport:") ||

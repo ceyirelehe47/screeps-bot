@@ -6,6 +6,7 @@ jest.mock("@/movement/pathing", () => ({
 
 import {
   getPowerCreepRoomEnergyPolicy,
+  enqueuePowerCreepTask,
   listPowerCreepTasks,
   resetPowerCreepControlCacheForTest,
   runPowerCreepControl,
@@ -337,4 +338,32 @@ describe("powerCreepControl", () => {
     expect(powerCreep.usePower).toHaveBeenNthCalledWith(2, PWR_REGEN_SOURCE, sourceA);
     expect(powerCreep.memory.nextRegenSourceIndex).toBe(1);
   });
+});
+
+
+it.each([
+  { enabled: true, level: 1, expected: true },
+  { enabled: undefined, level: 1, expected: false },
+  { enabled: true, level: 0, expected: false },
+  { enabled: true, level: 2, expected: false },
+])("工厂能力遵守 targetQueue 和永久定级边界 %j", ({ enabled, level, expected }) => {
+  const storage = createStorage("E4N58", { energy: 100000 });
+  const { room, powerSpawn } = createRoom({ storage });
+  const factory = { id: "factory-normalized", structureType: STRUCTURE_FACTORY, level,
+    store: createStore(), effects: [], pos: createPos(room.name, 24) } as unknown as StructureFactory;
+  const previousFind = room.find;
+  room.find = ((kind: FindConstant) => kind === FIND_MY_STRUCTURES ? [...previousFind.call(room, kind), factory] : previousFind.call(room, kind)) as Room["find"];
+  Memory.cfg = { factoryControl: { enabled, targetQueue: [RESOURCE_COMPOSITE],
+    targets: [{ resource: expected ? RESOURCE_CRYSTAL : RESOURCE_COMPOSITE, targetAmount: 100 }] } }; Memory.runtime = {};
+  const pc = createPowerCreep({ room, ticksToLive: 1000, ops: 120, capacity: 300,
+    powers: { [PWR_OPERATE_FACTORY]: { level: 1, cooldown: 0 } } });
+  installGameObjects([storage, powerSpawn, factory]); installPowerCreeps(pc);
+  runPowerCreepControl();
+  if (expected) {
+    expect(pc.usePower).toHaveBeenCalledWith(PWR_OPERATE_FACTORY, factory);
+    jest.mocked(pc.usePower).mockClear(); Game.time++;
+    Memory.cfg!.factoryControl!.enabled = false;
+    enqueuePowerCreepTask(pc, "operate_factory", factory.id);
+    runPowerCreepControl(); expect(pc.usePower).not.toHaveBeenCalled();
+  } else expect(pc.usePower).not.toHaveBeenCalled();
 });

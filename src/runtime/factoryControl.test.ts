@@ -223,3 +223,17 @@ describe("工厂渐进生产与有界解压", () => {
     if (typeof result !== "string") expect(result.task.remainingBatteryAmount).toBe(expected);
   });
 });
+
+
+it("有补料来源但 carrier 始终未送到时，battery 任务也在 500 tick 后结束并撤板", () => {
+  const { room } = createFactoryRoom({ storageResources: { energy: 300000, battery: 1000 }, factoryOverrides: { level: 0 } });
+  setupGameRooms({ W1N1: room }); Memory.data = {}; Memory.runtime = {}; Game.flags = {};
+  setConfig({ enabled: true });
+  const result = addFactoryTask(room.name, "decompress_battery", { amount: 100 });
+  if (typeof result === "string") throw Error(result);
+  runFactoryControl(); expect(result.task.status).toBe("loading");
+  Game.time += 500; runFactoryControl();
+  expect(result.task.status).toBe("failed"); expect(result.task.lastError).toBe("battery_delivery_timeout");
+  const { listCarrierTasksByRoom } = require("@/runtime/carrierTaskBoard");
+  expect(listCarrierTasksByRoom(room.name).filter((task: { id: string }) => task.id.startsWith("factory:"))).toEqual([]);
+});

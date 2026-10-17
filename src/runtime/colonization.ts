@@ -1,3 +1,4 @@
+import { getGlobalOwnedRoomCount } from "@/runtime/globalRoomCount";
 import { enqueueConfig, ensureConfigStore, getBodyCost, getLiveCreepsByConfig, isConfigQueuedInSpawns, isConfigSpawning as hasSpawningConfig, removeQueuedSpawnConfig, selectLeastLoadedSpawn } from "@/runtime/spawnHelpers";
 import { runPlannerForRoom, savePlannerForRoom } from "@/modules/autoplanner";
 import { spawnProfiles } from "@/config/spawnProfiles";
@@ -5,6 +6,7 @@ import { isRcl3ExtensionBuildoutComplete } from "@/runtime/roomPlannerConstructi
 import { getCreepConfigService, getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
 import { clearWarRoomTask, isWarRoomClearDone, requestWarRoomClear } from "@/runtime/warControl";
 import { isDefenseMode } from "@/runtime/defenseMode";
+import { canStartOutboundMission } from "@/runtime/outboundMissionPolicy";
 import { canUseColonizationTransit, colonizationTransitKey, runColonizationSupport, readColonizationSupportPolicy } from "@/runtime/colonizationSupport";
 import {
   COLONIZATION_TRAVEL_PATH_RETRY_INTERVAL,
@@ -24,6 +26,8 @@ interface ColonizationTask {
   flagName: string;
   planReady: boolean;
   blockedReason?: string;
+  blockedUntil?: number;
+  scoutStartedAt?: number;
   claimCompleted: boolean;
   scoutSafe?: boolean;
   scoutRouteRooms?: string[];
@@ -910,6 +914,7 @@ function requestScoutRescan(task: ColonizationTask, reason: string): void {
   task.scoutRouteRooms = undefined;
   delete task.cachedTravelPath;
   task.scoutedAt = undefined;
+  task.scoutStartedAt = Game.time;
 
   const claimerConfigName = getTaskConfigName(task, "claimer", "0");
   removeQueuedConfig(task, claimerConfigName);
@@ -950,39 +955,17 @@ function ensureScout(task: ColonizationTask): void {
 }
 
 function abandonColonization(task: ColonizationTask, reason: string): void {
-  Game.flags[task.flagName]?.remove();
-  if (task.status === "clearing") {
-    clearWarRoomTask(task.targetRoom);
+  if (task.status === "clearing") clearWarRoomTask(task.targetRoom);
+  if (!Game.flags[task.flagName]) {
+    // 用户主动撤旗仍按既有取消语义清理；侦察超时不进入这个分支。
+    for (const name of getTaskConfigNames(task)) for (const creep of getLiveCreepsByConfig(name)) creep.suicide();
+    if (cleanupColonizationConfigs(task)) delete ensureColonizationStore()[task.targetRoom];
+    return;
   }
-  const configNames = getTaskConfigNames(task);
-  const store = ensureColonizationStore();
-  const configStore = ensureConfigStore();
-  let removedAll = true;
-
-  for (const configName of configNames) {
-    const liveCreeps = getLiveCreepsByConfig(configName);
-    for (const creep of liveCreeps) {
-      creep.suicide();
-    }
-    removeQueuedConfig(task, configName);
-
-    const config = configStore[configName];
-    if (config?.roomName) {
-      delete config.roomName;
-    }
-
-    if (isConfigSpawning(configName) || liveCreeps.length > 0) {
-      removedAll = false;
-      continue;
-    }
-
-    removeConfigWhenIdle(configName);
-  }
-
-  if (removedAll) {
-    delete store[task.targetRoom];
-  }
-  console.log(`[colonization] abandon ${task.targetRoom}: ${reason}`);
+  // 保留旗和活体；超时任务暂停，换旗名或源房后才重新开始侦察。
+  cleanupColonizationConfigs(task);
+  task.blockedReason = "scout_timeout";
+  console.log(`[colonization] paused ${task.targetRoom}: ${reason}`);
 }
 
 function cleanupOrphanedColonizationConfigs(tasks: Record<string, ColonizationTask>): void {
@@ -1014,8 +997,12 @@ function cleanupOrphanedColonizationConfigs(tasks: Record<string, ColonizationTa
 }
 
 function ensureScoutSafety(task: ColonizationTask): "pending" | "safe" | "abandon" {
-  if (!task.scoutSafe && Game.time - task.createdAt >= 5000) return "abandon";
+  if (!task.scoutSafe) {
+    task.scoutStartedAt ??= Game.time;
+    if (Game.time - task.scoutStartedAt >= 5000) return "abandon";
+  }
   if (task.scoutSafe) {
+    delete task.scoutStartedAt;
     clearSafeRouteRetry(task);
     return "safe";
   }
@@ -1060,6 +1047,7 @@ function ensureScoutSafety(task: ColonizationTask): "pending" | "safe" | "abando
     }
 
     task.scoutSafe = true;
+    delete task.scoutStartedAt;
     clearSafeRouteRetry(task);
     removeQueuedConfig(task, scoutConfigName);
     removeConfigWhenIdle(scoutConfigName);
@@ -1271,20 +1259,23 @@ function retireHandedOffHarvesters(task: ColonizationTask): void {
 }
 
 function processTask(task: ColonizationTask): void {
-  if (isDefenseMode(task.sourceRoom)) return;
+  if (isDefenseMode(task.sourceRoom)) { delete task.scoutStartedAt; return; }
+  if (task.blockedReason === "scout_timeout") return;
   const controller = Game.rooms[task.targetRoom]?.controller;
   const myUsername = getSpawnsForRoom(task.sourceRoom)[0]?.owner?.username;
   const reason = !controller?.my && Number.isFinite(Game.gcl?.level) &&
-      Game.gcl.level <= Object.values(Game.rooms).filter(room => room.controller?.my).length ? "gcl_not_enough" :
+      Game.gcl.level <= getGlobalOwnedRoomCount() ? "gcl_not_enough" :
     controller?.owner && !controller.my ? "hostile_owner" :
     controller?.reservation && controller.reservation.username !== myUsername && controller.reservation.username !== "Invader" ? "hostile_reservation" : undefined;
-  if (reason) {
-    if (task.blockedReason !== reason) console.log(`[colonization] blocked ${task.targetRoom}: ${reason}`);
-    task.blockedReason = reason;
+  if (reason || !controller?.my && (task.blockedUntil ?? 0) > Game.time) {
+    if (reason && task.blockedReason !== reason) console.log(`[colonization] blocked ${task.targetRoom}: ${reason}`);
+    if (reason) task.blockedReason = reason;
+    delete task.scoutStartedAt;
     cleanupColonizationConfigs(task);
     return;
   }
   delete task.blockedReason;
+  delete task.blockedUntil;
 
   updateDangerousRoomsFromSquadDamage(task);
   ensurePlanReady(task);
@@ -1386,6 +1377,11 @@ function processTask(task: ColonizationTask): void {
 
     cacheColonizationTravelPath(task);
 
+    if (!canStartOutboundMission(task.sourceRoom)) {
+      task.blockedReason = "reserve";
+      removeQueuedConfig(task, getTaskConfigName(task, "claimer", "0"));
+      return;
+    }
     ensureClaimer(task);
     return;
   }
@@ -1421,7 +1417,9 @@ function upsertColonizationTask(flag: Flag): boolean {
   const previousSource = existingTask?.sourceRoom;
   const keepSource = previousSource && previousSource !== targetRoom && Game.rooms[previousSource]?.controller?.my &&
     getTickContextService().getSpawnsByRoom(previousSource).length > 0;
-  const sourceRoom = keepSource ? previousSource : selectSourceRoom(targetRoom, preferredRoom);
+  const explicitSource = preferredRoom && preferredRoom !== targetRoom && Game.rooms[preferredRoom]?.controller?.my &&
+    getTickContextService().getSpawnsByRoom(preferredRoom).some(hasColonizationSquadProductionCapability) ? preferredRoom : undefined;
+  const sourceRoom = explicitSource ?? (keepSource ? previousSource : selectSourceRoom(targetRoom, preferredRoom));
 
   if (!sourceRoom) {
     return false;
@@ -1444,7 +1442,9 @@ function upsertColonizationTask(flag: Flag): boolean {
     status: existing?.status ?? "claiming",
     flagName: flag.name,
     planReady: existing?.planReady ?? false,
-    blockedReason: existing?.blockedReason,
+    blockedReason: existing?.sourceRoom === sourceRoom && existing.flagName === flag.name ? existing.blockedReason : undefined,
+    blockedUntil: existing?.blockedUntil,
+    scoutStartedAt: existing?.sourceRoom === sourceRoom && existing.flagName === flag.name ? existing.scoutStartedAt : undefined,
     claimCompleted: existing?.claimCompleted ?? false,
     scoutSafe: existing?.sourceRoom === sourceRoom && (existing.scoutSafe ?? false),
     scoutRouteRooms: existing?.sourceRoom === sourceRoom ? existing.scoutRouteRooms : undefined,
@@ -1479,6 +1479,8 @@ export function isColonizationBootstrapRoom(roomName: string): boolean {
     return false;
   }
 
+  if (!Game.rooms[task.sourceRoom]?.controller?.my || isDefenseMode(task.sourceRoom)) return false;
+
   if (task.status === "bootstrapping") {
     return true;
   }
@@ -1503,6 +1505,7 @@ export function runColonizationByFlag(): void {
     }
 
     if (isDefenseMode(task.sourceRoom)) {
+      delete task.scoutStartedAt;
       cleanupColonizationConfigs(task);
       if (task.status === "clearing") {
         clearWarRoomTask(task.targetRoom);

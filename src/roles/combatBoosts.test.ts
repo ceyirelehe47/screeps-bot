@@ -73,3 +73,26 @@ describe("prepareCombatBoost", () => {
     expect(lab.boostCreep).toHaveBeenCalledWith(creep);
   });
 });
+
+
+it.each([false, true])("非战争 boost 等待超时后保留身份并直接工作（已分配但缺料=%s）", hasLab => {
+  const creep = { ...createAttacker(), name: `helper-${hasLab}`, room: { name: "W1N1" }, memory: { configName: "W1N1:colonizationSupport:W1N2:worker:0" } } as unknown as Creep;
+  Game.creeps = { [creep.name]: creep }; Game.time = 1000;
+  const lab = createBoostLab(0);
+  Game.getObjectById = jest.fn(() => hasLab ? lab : null) as typeof Game.getObjectById;
+  expect(prepareCombatBoost(creep, "support-owner", RESOURCE_CATALYZED_UTRIUM_ACID)).toBe(false);
+  Game.time += 100;
+  expect(prepareCombatBoost(creep, "support-owner", RESOURCE_CATALYZED_UTRIUM_ACID)).toBe(true);
+  expect(creep.memory.configName).toBe("W1N1:colonizationSupport:W1N2:worker:0");
+  expect(creep.memory._recycleToRoom).toBeUndefined(); expect(creep.memory._warDetached).toBeUndefined();
+  Game.time++;
+  expect(prepareCombatBoost(creep, "support-owner", RESOURCE_CATALYZED_UTRIUM_ACID)).toBe(true);
+});
+it("战争缺少强化时超时仍回收，不放行无强化出击", () => {
+  const creep = { ...createAttacker(), name: "war-wait", room: { name: "W1N1" }, memory: { configName: "W1N1:war:W1N2:meleeAttacker:0" } } as unknown as Creep;
+  Game.creeps = { [creep.name]: creep }; Game.time = 2000; Game.getObjectById = jest.fn(() => null);
+  expect(prepareCombatBoost(creep, "war-owner", RESOURCE_CATALYZED_UTRIUM_ACID)).toBe(false);
+  Game.time += 100;
+  expect(prepareCombatBoost(creep, "war-owner", RESOURCE_CATALYZED_UTRIUM_ACID)).toBe(false);
+  expect(creep.memory._warDetached).toBe(true); expect(creep.memory.configName).toBeUndefined();
+});

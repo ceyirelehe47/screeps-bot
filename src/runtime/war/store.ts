@@ -42,6 +42,7 @@ export function registerWarSpawn(configName: string, creepName: string): void {
 }
 
 export interface WarTask {
+  reserveContinuationUntil?: number;
   entryEffect?: string;
   members?: Record<string, WarMember>;
   membersVersion?: 1;

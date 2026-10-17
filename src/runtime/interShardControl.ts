@@ -56,6 +56,7 @@ interface InterShardLocalPayload {
   colonization: InterShardColonizationSummary[];
   claims: InterShardClaimSummary[];
   rooms: InterShardRoomSummary[];
+  ownedRoomCount?: number;
 }
 
 function ensureCrossShardRuntimeStore(): NonNullable<NonNullable<Memory["runtime"]>["crossShard"]> {
@@ -142,6 +143,7 @@ function writeLocalPayload(): void {
   payload.colonization = getCrossShardColonizationSummaries();
   payload.claims = getCrossShardClaimSummaries();
   payload.rooms = getCrossShardRoomSummaries();
+  payload.ownedRoomCount = Object.values(Game.rooms).filter(room => room.controller?.my).length;
   InterShardMemory.setLocal(JSON.stringify(payload));
 }
 

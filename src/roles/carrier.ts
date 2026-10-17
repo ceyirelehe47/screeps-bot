@@ -1,3 +1,4 @@
+import { refreshCarrierCargoActor } from "@/runtime/carrierCargo";
 import type { RoleFactory } from "@/types/system";
 import {
   getEnergyStoreTarget,
@@ -1311,6 +1312,7 @@ function pickupSynthesisCarrierResource(
   state.synthesisCarrierPendingFromId = assignment.step.fromId;
   state.synthesisCarrierPendingToId = assignment.step.toId;
   state.synthesisCarrierPendingResource = assignment.step.resource;
+  refreshCarrierCargoActor(creep.name);
   state.synthesisCarrierPendingTaskType = assignment.task.type;
   if (feedTargetAmount !== undefined) state.synthesisCarrierPendingDestinationTargetAmount = feedTargetAmount;
   else delete state.synthesisCarrierPendingDestinationTargetAmount;
@@ -1484,8 +1486,8 @@ function returnBoundedTerminalFeedCargo(creep: Creep, resource: ResourceConstant
   state.synthesisCarrierPendingReturnStartedAt ??= Game.time;
   const source = state.synthesisCarrierPendingFromId ? resolveTaskStructure(state.synthesisCarrierPendingFromId) : null;
   const room = source?.room ?? creep.room;
-  const candidates = [source?.structureType === STRUCTURE_STORAGE ? source : room.storage, room.terminal,
-    ...room.find(FIND_STRUCTURES).filter((structure): structure is StructureContainer => structure.structureType === STRUCTURE_CONTAINER)];
+  const candidates = [source?.structureType === STRUCTURE_STORAGE ? source : room.storage];
+  state.synthesisCarrierPendingReturnToId = candidates[0]?.id ?? state.synthesisCarrierPendingToId;
   for (const target of candidates) {
     if (!target || !room.controller?.my || target.store.getFreeCapacity(resource) <= 0 || terminalHeldForTreasuryT1(target)) continue;
     state.synthesisCarrierPendingReturnToId = target.id;
@@ -1510,9 +1512,10 @@ function returnBoundedTerminalFeedCargo(creep: Creep, resource: ResourceConstant
     }
     return true;
   }
-  // 所有安全接收点都不可用时解除货物责任，避免抱货等到寿命耗尽。
+  // 等待仓位最多 50 tick，再释放背包；不把退货写进 feed 终端或专用容器。
+  if (Game.time - state.synthesisCarrierPendingReturnStartedAt < 50) return true;
   clearSynthesisCarrierTaskPlan(creep);
-  dropUnassignedResource(creep, resource);
+  measureCreepIntent(() => creep.drop(resource));
   return true;
 }
 
@@ -1841,6 +1844,7 @@ function deliverSynthesisCarrierResource(creep: Creep): boolean {
     state.synthesisCarrierPendingToId = assignedStep.toId;
     state.synthesisCarrierPendingFromId = assignedStep.fromId;
     state.synthesisCarrierPendingResource = resource;
+    refreshCarrierCargoActor(creep.name);
     state.synthesisCarrierPendingTaskType = "terminal_feed";
     state.synthesisCarrierPendingDestinationTargetAmount = boundedFeedTarget;
     state.synthesisCarrierPendingBoundResourceTransferTaskId = assignedStep.boundResourceTransferTaskId;

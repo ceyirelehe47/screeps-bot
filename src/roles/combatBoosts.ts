@@ -33,22 +33,28 @@ export function prepareCombatBoost(
   if (creep.memory._warQueued === true) return false;
 
   const compounds = parseBoostCompounds(encodedBoostCompounds);
-  if (!boostTaskId || compounds.length === 0) return true;
+  if (!boostTaskId || compounds.length === 0 || creep.memory._optionalBoostSkipped === boostTaskId) return true;
 
   const nextCompound = compounds.find((compound) => countRemainingBoostParts(creep, compound) > 0);
-  if (!nextCompound) return true;
+  if (!nextCompound) { missingPrepSince.delete(creep.name); return true; }
 
   const labId = getAssignedPowerBankBoostLabId(boostTaskId, nextCompound);
   const lab = labId ? Game.getObjectById(labId as Id<StructureLab>) : null;
-  if (!lab) {
+  if (!lab || (lab.store.getUsedCapacity(nextCompound) ?? 0) < LAB_BOOST_MINERAL ||
+      lab.store.getUsedCapacity(RESOURCE_ENERGY) < LAB_BOOST_ENERGY) {
     for (const name of missingPrepSince.keys()) if (!Game.creeps[name]) missingPrepSince.delete(name);
     let wait = missingPrepSince.get(creep.name);
     if (!wait || wait.taskId !== boostTaskId || wait.at > Game.time) {
       wait = { taskId: boostTaskId, at: Game.time }; missingPrepSince.set(creep.name, wait);
     }
     if (Game.time - wait.at >= 100) {
+      if (!creep.memory.configName?.includes(":war:")) {
+        creep.memory._optionalBoostSkipped = boostTaskId;
+        missingPrepSince.delete(creep.name);
+        return true;
+      }
       creep.memory._warDetached = true;
-      creep.memory._recycleToRoom = Memory.data?.creepConfigs?.[creep.memory.configName ?? ""]?.roomName ?? creep.room.name;
+      creep.memory._recycleToRoom = Memory.data?.creepConfigs?.[creep.memory.configName]?.roomName ?? creep.room.name;
       delete creep.memory.configName;
       missingPrepSince.delete(creep.name);
     }

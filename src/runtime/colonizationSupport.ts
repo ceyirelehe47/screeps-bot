@@ -224,11 +224,11 @@ export function runColonizationSupport(): void {
     }
     const helpersAtSource = service.getCreepsByRoom(sourceRoom).filter(creep =>
       creep.memory.configName === configName || creep.memory.configName?.startsWith(retiringPrefix));
-    const toBoost = helpersAtSource.filter(creep =>
-      creep.body.some(part => part.type === WORK && part.hits > 0 && part.boost !== RESOURCE_CATALYZED_GHODIUM_ACID));
+    const toBoost = helpersAtSource.filter(creep => creep.memory._optionalBoostSkipped !== boostOwner &&
+      creep.body.some(part => part.type === WORK && part.hits > 0 && !part.boost));
     if (toBoost.length > 0) {
       const needed = toBoost.reduce((sum, creep) => sum + creep.body.filter(part => part.type === WORK &&
-        part.hits > 0 && part.boost !== RESOURCE_CATALYZED_GHODIUM_ACID).length * LAB_BOOST_MINERAL, 0);
+        part.hits > 0 && !part.boost).length * LAB_BOOST_MINERAL, 0);
       prepareBoosts(boostOwner, sourceRoom, 8, new Map([[RESOURCE_CATALYZED_GHODIUM_ACID, needed]]), { requireLabEnergy: true });
     } else if (helpersAtSource.length > 0 || service.getCreepsByConfigName(configName).length > 0) {
       releaseBoostLabs(boostOwner, sourceRoom);

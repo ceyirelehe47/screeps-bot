@@ -47,7 +47,10 @@ export const claimerRole: RoleFactory = (
 
     if (code === ERR_GCL_NOT_ENOUGH || code === ERR_INVALID_TARGET && controller.owner) {
       const task = Memory.data?.colonization?.[creep.room.name];
-      if (task) task.blockedReason = code === ERR_GCL_NOT_ENOUGH ? "gcl_not_enough" : "hostile_owner";
+      if (task) {
+        task.blockedReason = code === ERR_GCL_NOT_ENOUGH ? "gcl_not_enough" : "hostile_owner";
+        task.blockedUntil = Game.time + 500;
+      }
       return false;
     }
     if (code === ERR_INVALID_TARGET && controller.reservation?.username === "Invader") {

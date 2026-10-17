@@ -424,7 +424,7 @@ describe("carrier terminal_feed 的实时绝对目的库存约束", () => {
     task.remainingAmount += 100;
     expect(terminalFeedBoundTaskIdentity(task)).toBe(identity);
   });
-  it("Terminal 已满足且 Storage 满时，将货物暂存在 Terminal 并释放 carrier", () => {
+  it("Terminal 已满足且 Storage 满时不绕过上限，等待有界后释放背包", () => {
     const scenario = createFeedScenario({ storageStock: 26, storageCapacity: 26 });
     const carrier = scenario.addCarrier("safe-overflow-return");
     const role = carrierRole();
@@ -433,10 +433,12 @@ describe("carrier terminal_feed 的实时绝对目的库存约束", () => {
     scenario.terminalInventory.set(RESOURCE_HYDROXIDE, 26);
     replaceCarrierTasksForProducerRoom("resourceControl:preload", scenario.room.name, []);
     role.target(carrier.creep);
-    expect(carrier.transfer).toHaveBeenCalledWith(scenario.terminal, RESOURCE_HYDROXIDE, 26);
-    scenario.nextTick();
-    expect(carrier.inventory.get(RESOURCE_HYDROXIDE)).toBe(0);
-    expect(scenario.terminalInventory.get(RESOURCE_HYDROXIDE)).toBe(52);
+    expect(carrier.transfer).not.toHaveBeenCalled();
+    const drop = jest.fn(() => OK); carrier.creep.drop = drop;
+    Game.time += 50; role.target(carrier.creep);
+    expect(drop).toHaveBeenCalledWith(RESOURCE_HYDROXIDE);
+    expect(getCreepAssignmentState(carrier.creep.name)?.synthesisCarrierPendingToId).toBeUndefined();
+    expect(scenario.terminalInventory.get(RESOURCE_HYDROXIDE)).toBe(26);
   });
 
   it("两个已取货 carrier 到货时库存突增，同 tick transfer 总量至多补剩余 2", () => {

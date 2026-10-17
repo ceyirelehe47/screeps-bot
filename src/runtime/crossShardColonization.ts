@@ -1,3 +1,4 @@
+import { getGlobalOwnedRoomCount } from "@/runtime/globalRoomCount";
 import { enqueueConfig, ensureConfigStore, getBodyCost, isConfigSpawning as hasSpawningConfig, removeQueuedSpawnConfig, selectLeastLoadedSpawn } from "@/runtime/spawnHelpers";
 import { spawnProfiles } from "@/config/spawnProfiles";
 import { encodeCrossShardTravelerName } from "@/runtime/crossShardNaming";
@@ -355,9 +356,7 @@ function generateTravelerName(
 }
 
 function ensureClaimer(task: CrossShardColonizationTask): void {
-  const remote = remotePayloadCache?.tick === Game.time ? remotePayloadCache.values.get(task.targetShard) : undefined;
-  const remoteRooms = remote?.rooms;
-  if (remoteRooms && Number.isFinite(Game.gcl?.level) && remoteRooms.length >= Game.gcl.level) {
+  if (Number.isFinite(Game.gcl?.level) && getGlobalOwnedRoomCount([task.targetShard]) >= Game.gcl.level) {
     cleanupTaskConfigs(task); task.status = "blocked"; task.reason = "target_shard_gcl_not_enough"; return;
   }
   if (!task.sourceRoom || !task.portalRoom) {
@@ -545,12 +544,15 @@ function processTask(task: CrossShardColonizationTask): void {
     }
 
     ensureBootstrapSquad(task);
+    task.lastReadyAt = Game.time;
     return;
   }
 
   // 已发出的名字和源房绑定；途中暂时失去观察或防御不能换母房。
   if ((task.status === "spawning" || task.status === "in_transit") && task.sourceRoom && task.portalRoom) {
-    ensureClaimer(task); return;
+    ensureClaimer(task);
+    if (task.status === "spawning" || task.status === "in_transit") task.lastReadyAt = Game.time;
+    return;
   }
   const selected = selectSourceAndPortal(task.targetShard, task.preferredSourceRoom, task.targetRoom);
   if (!selected) {

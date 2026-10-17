@@ -145,3 +145,22 @@ describe("本房防御与储备的出征边界", () => {
     expect(defender.move).not.toHaveBeenCalled();
   });
 });
+
+
+it("RESERVE 中交替补员不能刷新 standard 小队的固定续航期限，退出储备后可开启下一轮", () => {
+  jest.mocked(isDefenseMode).mockReturnValue(false); jest.mocked(isRoomInReserveMode).mockReturnValue(true);
+  const name = "W1N1:war:W2N2:meleeAttacker:0";
+  const green = "W1N1:war:W2N2:healer:0";
+  const task = { targetRoom: "W2N2", sourceRoom: "W1N1", status: "clearing", createdAt: 1 } as WarTask;
+  Memory.data = { war: { W2N2: task }, creepConfigs: { [name]: { role: "meleeAttacker", roomName: "W1N1", args: ["W2N2"] } } };
+  Game.time = 10000; Game.spawns = {}; Game.creeps = { red: { name: "red", room: { name: "W1N1" }, memory: { configName: name } } as Creep };
+  expect(canContinueWarMission(task)).toBe(true);
+  const deadline = task.reserveContinuationUntil;
+  Game.time += 1000; Game.creeps = { replacement: { name: "replacement", room: { name: "W1N1" }, memory: { configName: name } } as Creep };
+  expect(canContinueWarMission(task)).toBe(true); expect(task.reserveContinuationUntil).toBe(deadline);
+  Game.time += 500;
+  expect(isSpawnConfigEconomicallyBlocked(green, { role: "healer", roomName: "W1N1", args: ["W2N2"] })).toBe(true);
+  jest.mocked(isRoomInReserveMode).mockReturnValue(false);
+  expect(isSpawnConfigEconomicallyBlocked(green, { role: "healer", roomName: "W1N1", args: ["W2N2"] })).toBe(false);
+  expect(task.reserveContinuationUntil).toBeUndefined();
+});

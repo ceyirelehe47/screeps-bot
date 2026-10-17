@@ -43,3 +43,15 @@ it("没有布局时仍按实际 Container 工作位排除隔着矿点的 link", 
   const source = { id: "unplanned-source", room, pos: pos(10) } as unknown as Source;
   expect(getSourceAdjacentLinks(source)).toHaveLength(0);
 });
+
+
+it("无布局且 Container 拆除后仍接管 source 两格内激活的 link", () => {
+  registerRuntimeServices(undefined); Game.time++;
+  const pos = (x: number) => ({ x, y: 10, roomName: "W3N3", getRangeTo(other: { x: number; y: number }) {
+    return Math.max(Math.abs(x - other.x), Math.abs(10 - other.y));
+  } }) as RoomPosition;
+  const link = { id: "range-two", structureType: STRUCTURE_LINK, pos: pos(12), isActive: () => true };
+  const room = { name: "W3N3", find: () => [link] } as unknown as Room;
+  Game.rooms = { W3N3: room }; Memory.data = {};
+  expect(getSourceAdjacentLinks({ id: "source-no-container", room, pos: pos(10) } as unknown as Source)).toEqual([link]);
+});

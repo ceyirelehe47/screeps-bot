@@ -3,7 +3,7 @@ jest.mock("@/runtime/defenseMode", () => ({ isDefenseMode: jest.fn(() => false) 
 jest.mock("@/runtime/workerTaskPool", () => ({ releaseWorkerTask: jest.fn() }));
 jest.mock("@/runtime/energyPickupReservation", () => ({ releasePickupReservation: jest.fn() }));
 import { runColonizationSupport, supportConfigName, COLONIZATION_SUPPORT_BODY } from "@/runtime/colonizationSupport";
-import { prepareBoosts } from "@/runtime/powerBankBoost";
+import { prepareBoosts, releaseBoostLabs } from "@/runtime/powerBankBoost";
 import { runHubUpgradeControl } from "@/runtime/hubUpgradeControl";
 import { releaseWorkerTask } from "@/runtime/workerTaskPool";
 import { scheduleSpawnTasks } from "@/runtime/spawnPlanner";
@@ -208,6 +208,18 @@ describe("殖民 T3 支援生命周期", () => {
     expect(prepareBoosts).toHaveBeenCalledWith(`colonizationSupport:${SOURCE}:${TARGET}`, SOURCE, 8,
       new Map([[RESOURCE_CATALYZED_GHODIUM_ACID, 450]]), { requireLabEnergy: true });
     expect(Memory.data!.creepConfigs![name].roomName).toBe(SOURCE);
+  });
+  it.each(["other-boost", "skipped"])("已带其他强化或放弃可选强化的 helper 不继续占 lab：%s", mode => {
+    Game.rooms[TARGET] = room(TARGET, 4); Game.flags = {};
+    const name = supportConfigName(SOURCE, TARGET), owner = `colonizationSupport:${SOURCE}:${TARGET}`;
+    Game.creeps.helper = { name: "helper", room: Game.rooms[SOURCE],
+      memory: { configName: name, role: "colonizerUpgrader", ...(mode === "skipped" ? { _optionalBoostSkipped: owner } : {}) },
+      body: COLONIZATION_SUPPORT_BODY.map(type => ({ type, hits: 100,
+        boost: type === WORK && mode === "other-boost" ? RESOURCE_GHODIUM_HYDRIDE : undefined })) } as Creep;
+    jest.mocked(releaseBoostLabs).mockClear();
+    runColonizationSupport();
+    expect(prepareBoosts).not.toHaveBeenCalled();
+    expect(releaseBoostLabs).toHaveBeenCalledWith(owner, SOURCE);
   });
   it("现役与旧身体支援原位改为 upgrader 并释放 worker 租约，不新增单位或改身体", () => {
     Game.rooms[TARGET] = room(TARGET, 2);
