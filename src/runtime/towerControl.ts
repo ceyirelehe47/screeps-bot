@@ -1,3 +1,4 @@
+import { forEachIsolatedRoom } from "@/runtime/runtimeIsolation";
 import { setTowerBurstTarget } from "@/runtime/defenseCoordination";
 import { recordFixedCpuAction } from "@/runtime/cpuPhaseProfiler";
 import { getRoomDefenseCoordination, getTowerFocusFront, setTowerFocusFront } from "@/runtime/defenseCoordination";
@@ -497,19 +498,19 @@ function runTowerCombat(room: Room, towers: StructureTower[], hostiles: Creep[],
 export function runTowerControl(): void {
   const tickContext = getTickContextService();
   const rooms = tickContext.getMyRooms();
-  for (const room of rooms) {
+  forEachIsolatedRoom("towerControl", rooms, room => {
     const roomContext = tickContext.getRoomContext(room);
     const hostiles = roomContext?.getHostileCreeps() || [];
     const towers = roomContext?.getTowers() || [];
     // 没有 Tower 的房间立即跳过：应急路障 store 与受损扫描都只服务于 Tower。
     if (towers.length === 0) {
-      continue;
+      return;
     }
     const emergencyRamparts = collectEmergencyRamparts(room);
     const woundedCreeps = (roomContext?.getMyCreeps() || []).filter((creep) => creep.hits < creep.hitsMax);
 
     if (runTowerCombat(room, towers, hostiles, woundedCreeps, emergencyRamparts)) {
-      continue;
+      return;
     }
 
     // 普通受损结构扫描严格放在战斗分支之后：战斗 tick 完全不扫描、不解析。
@@ -531,7 +532,7 @@ export function runTowerControl(): void {
     for (const tower of towers) {
       runTowerPeaceFlow(tower, emergencyRamparts, woundedCreeps, damagedStructures);
     }
-  }
+  });
 }
 
 interface TowerDamagedScanCacheEntry {

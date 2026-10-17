@@ -6,6 +6,8 @@ import {
 } from "@/runtime/cpuMonitor";
 import type { CpuMonitorSnapshotV2, CpuMonitorRoomSummary } from "@/runtime/cpuMonitor";
 import { beginCpuTickHealth, markCpuTickPhase, markCpuTickCreep, completeCpuTickHealth } from "@/runtime/cpuTickHealth";
+import { createCpuSchedulerShadow, observeCpuScheduling } from "@/runtime/cpuSchedulerShadow";
+import { getRuntimeRoomFaults } from "@/runtime/runtimeIsolation";
 
 export interface TickCpuProfiler {
   measure<T>(phase: string, fn: () => T): T;
@@ -168,6 +170,7 @@ export function createTickCpuProfiler(): TickCpuProfiler {
   const perCreepTiming = config.roomRoleAggregation;
   let measurementDepth = 0;
   let topLevelUsed = 0;
+  const schedulerShadow = createCpuSchedulerShadow();
 
   function ensureRoom(roomName: string): CpuMonitorRoomSummary {
     if (!rooms[roomName]) {
@@ -191,6 +194,7 @@ export function createTickCpuProfiler(): TickCpuProfiler {
       if (measurementDepth === 0) markCpuTickPhase(phase);
       measurementDepth += 1;
       const start = Game.cpu.getUsed();
+      if (measurementDepth === 1) observeCpuScheduling(schedulerShadow, phase, start, Game.cpu);
       try {
         return fn();
       } finally {
@@ -247,6 +251,8 @@ export function createTickCpuProfiler(): TickCpuProfiler {
         startupUsed: loopStartUsed,
         tickUsedAtFlush,
         topLevelUsed,
+        schedulerShadow,
+        roomFaults: getRuntimeRoomFaults(),
         bucket: Game.cpu.bucket,
         limit: Game.cpu.limit,
         tickLimit: Game.cpu.tickLimit,

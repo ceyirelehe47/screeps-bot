@@ -1,3 +1,4 @@
+import { forEachIsolatedRoom } from "@/runtime/runtimeIsolation";
 import { isConfigQueuedInSpawns, selectLeastLoadedSpawn } from "@/runtime/spawnHelpers";
 import { getCreepConfigService, getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
 import { getSafeZone } from "@/runtime/safeZone";
@@ -137,11 +138,11 @@ function syncDefenderAssignments(roomName: string, desiredCount: number, frontCo
 export function runHomeDefense(): void {
   const tickContext = getTickContextService();
 
-  for (const room of tickContext.getMyRooms()) {
+  forEachIsolatedRoom("homeDefense", tickContext.getMyRooms(), room => {
     const safeZone = getSafeZone(room.name);
     if (safeZone.size === 0) {
       clearDefenseCoordination(room.name);
-      continue;
+      return;
     }
 
     const playerHostiles = getPlayerHostiles(room);
@@ -167,5 +168,5 @@ export function runHomeDefense(): void {
       clearDefenseCoordination(room.name);
       clearBoostLabTasks(room.name);
     }
-  }
+  });
 }

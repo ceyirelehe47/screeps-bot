@@ -1,3 +1,4 @@
+import { createTreasuryService } from "@/runtime/treasury/facade";
 import {
   createAutomaticResourceTransferTask,
   createResourceTransferTask,
@@ -721,6 +722,9 @@ describe("HUB lifecycle integration", () => {
     ) {
       throw new Error("failed_to_create_zero_delta_route_dependencies");
     }
+    const treasury = createTreasuryService({ getRooms: () => Object.values(Game.rooms) });
+    const beforeReplan = treasury.commitments();
+    expect(beforeReplan.incoming("W7N1", RESOURCE_HYDROGEN)).toBe(55);
     expect(wireDistributedSynthesis(
       INTEGRATION_HUB,
       6,
@@ -752,6 +756,9 @@ describe("HUB lifecycle integration", () => {
       status: "cancelled",
       lastError: "cancelled_by_replan",
     });
+
+    expect(treasury.commitments().incoming("W7N1", RESOURCE_HYDROGEN)).toBe(0);
+    expect(beforeReplan.incoming("W7N1", RESOURCE_HYDROGEN)).toBe(55);
 
     // Coverage-expired route work must not be rewritten back to life before
     // ResourceControl reconciliation. A fresh task is created instead.

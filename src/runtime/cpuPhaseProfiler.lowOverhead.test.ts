@@ -89,6 +89,26 @@ describe("cpu profiler low-overhead guarantees", () => {
     setupCpuMock();
   });
 
+  it("低 bucket 的调度 shadow 保留执行、异常与原 CPU API 调用数", () => {
+    profilerConfig({ roomRoleAggregation: false, sampleInterval: 1 });
+    const { getUsed } = setupCpuMock();
+    Game.cpu.bucket = 500;
+    getUsed.mockReturnValue(490);
+    const profiler = createTickCpuProfiler();
+    const executed: string[] = [];
+    expect(profiler.measure("towerControl", () => { executed.push("tower"); return 17; })).toBe(17);
+    expect(profiler.measure("hubPlanner", () => { executed.push("planner"); return 19; })).toBe(19);
+    expect(() => profiler.measure("productionMonitor", () => { executed.push("monitor"); throw new Error("expected"); })).toThrow("expected");
+    profiler.flush();
+    expect(executed).toEqual(["tower", "planner", "monitor"]);
+    expect(getUsed).toHaveBeenCalledTimes(8); // start + 三个阶段的计时对 + flush。
+    expect(Memory.analytics?.cpuMonitor?.latest.schedulerShadow).toMatchObject({
+      mode: "shadow", evaluated: { T0: 1, T3: 1, T4: 1 },
+      wouldDefer: { hubPlanner: { tier: "T3", reason: "bucket" }, productionMonitor: { tier: "T4", reason: "bucket" } },
+    });
+    expect(Memory.analytics?.cpuMonitor?.latest.schedulerShadow?.wouldDefer).not.toHaveProperty("towerControl");
+  });
+
   it("profiler disabled 时不调用 Game.cpu.getUsed", () => {
     profilerConfig({ enabled: false });
     const { getUsed } = setupCpuMock();

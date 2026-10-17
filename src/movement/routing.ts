@@ -1,10 +1,11 @@
+import { searchRoomExitPath } from "@/movement/exitPath";
 import { measureCreepPathing } from "@/runtime/cpuPhaseProfiler";
 import { ensureCreepMovementState } from "@/movement/creepState";
 import { getTickContextService } from "@/runtime/runtimeServices";
 import { getRoomTopologyRevision } from "@/movement/roomTopologyRevision";
 import { getPosKey, isExitTile, parseEncodedRouteRooms } from "@/movement/common";
 import { recordMovementMetric } from "@/movement/metrics";
-import { buildRoomMovementMatrix, clearRoomBaseCostMatrixCacheForTest, getRoomStaticMatrix, moveToTarget } from "@/movement/pathing";
+import { clearRoomBaseCostMatrixCacheForTest, getRoomStaticMatrix, moveToTarget, resolveMovementPolicy } from "@/movement/pathing";
 import { getMoveIntentDestination, issueMove, moveOffExit } from "@/movement/traffic";
 import { getSourceContainerPositionsForRoom } from "@/runtime/roomPlannerConstruction";
 import type {
@@ -203,7 +204,7 @@ export function moveToTargetRoom(
   const directExit = Object.entries(exits ?? {}).find(([direction, room]) => room === nextRoom && [TOP, RIGHT, BOTTOM, LEFT].some((exit) => exit === Number(direction)));
   const closed = typeof Game.map.getRoomStatus === "function" && Game.map.getRoomStatus(nextRoom)?.status === "closed";
   const exitDirection = closed ? ERR_NO_PATH : directExit ? Number(directExit[0]) : creep.room.findExitTo(nextRoom);
-  if (typeof exitDirection !== "number" || exitDirection < 1 || exitDirection > 8) {
+  if (![TOP, RIGHT, BOTTOM, LEFT].some(direction => direction === exitDirection)) {
     updateTravelState(creep, travelState);
     return ERR_NO_PATH;
   }
@@ -229,29 +230,35 @@ export function moveToTargetRoom(
     return result;
   }
   const revision = getRoomTopologyRevision(creep.room.name);
-  let exit = travelState.exitTarget;
+  const policy = resolveMovementPolicy(creep, moveOptions);
   const key = JSON.stringify([creep.room.name, nextRoom, revision, moveOptions.ignoreCreeps ?? true,
     options.plainCost, options.swampCost, options.cacheKey]);
-  if (!exit || exit.key !== key || exit.expiresAt <= Game.time || options.costCallback && !options.cacheKey) {
-    const selectionOptions = { ...moveOptions, avoidExitTiles: false };
-    const selectionMatrix = buildRoomMovementMatrix(creep, creep.room, creep.room.name, new PathFinder.CostMatrix(), selectionOptions, creep.pos);
-    const exitPos = measureCreepPathing(() => creep.pos.findClosestByPath(exitDirection as ExitConstant, {
-      ...selectionOptions,
-      // 目标过滤与路径矩阵共享约束，禁止把危险出口当成可用目标再反复等下一步许可。
-      filter: (position: RoomPosition) => selectionMatrix.get(position.x, position.y) < 255,
-      costCallback: (roomName, matrix) => roomName === creep.room.name ? selectionMatrix.clone() : matrix,
-    }));
-    if (!exitPos || exitPos.roomName !== creep.room.name || !isOnExitDirection(exitPos, exitDirection as DirectionConstant)) {
-      delete travelState.exitTarget;
-      (travelState.rejectedTransitions ??= {})[`${creep.room.name}->${nextRoom}`] = Game.time + 20;
+  let exit = travelState.exitTarget;
+  const needsSelection = !exit || exit.key !== key || exit.expiresAt <= Game.time || !!policy.costCallback && !policy.cacheKey;
+  let result: ScreepsReturnCode = ERR_NO_PATH;
+  if (!needsSelection && exit) {
+    result = moveToTarget(creep, new RoomPosition(exit.x, exit.y, creep.room.name), 0, moveOptions);
+  }
+  // 失效的缓存出口也用相同矩阵重选一次，避免原地重复同一失败目标。
+  if (needsSelection || result === ERR_NO_PATH) {
+    delete travelState.exitTarget;
+    const selected = searchRoomExitPath(creep, exitDirection as ExitConstant, moveOptions);
+    const end = selected.path[selected.path.length - 1];
+    if (!end) {
+      if (selected.rejectTransition) {
+        (travelState.rejectedTransitions ??= {})[`${creep.room.name}->${nextRoom}`] = Game.time + 20;
+      }
+      delete movementState.movePathState;
       updateTravelState(creep, travelState);
       return ERR_NO_PATH;
     }
-    exit = { key, x: exitPos.x, y: exitPos.y, expiresAt: Game.time + 20 };
-    travelState.exitTarget = exit;
+    if (selected.complete) {
+      exit = { key, x: end.x, y: end.y, expiresAt: Game.time + 20 };
+      travelState.exitTarget = exit;
+    }
+    result = moveToTarget(creep, end, 0, { ...moveOptions, verifiedPath: selected.path });
+    if (result === ERR_NO_PATH) delete travelState.exitTarget;
   }
-  const result = moveToTarget(creep, new RoomPosition(exit.x, exit.y, creep.room.name), 0, moveOptions);
-  if (result === ERR_NO_PATH) delete travelState.exitTarget;
   updateTravelState(creep, travelState);
   return result;
 }

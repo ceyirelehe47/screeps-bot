@@ -1,3 +1,4 @@
+import { searchSingleRoom } from "@mock/roomPathFinder";
 import { getNextTravelRoom, moveToTargetRoom, clearRoutingCachesForTest } from "@/movement/routing";
 import { getPowerBankOwnedAvoidRooms, powerBankTransitOptions } from "@/runtime/powerBankTransit";
 import { moveToTarget, buildRoomMovementMatrix, getRoomStaticMatrix, clearRoomBaseCostMatrixCacheForTest } from "@/movement/pathing";
@@ -13,6 +14,7 @@ describe("外出 creep 与常驻 creep 的统一房内寻路", () => {
     Memory.data = {} as NonNullable<Memory["data"]>; Memory.runtime = {};
     resetRuntimeServices(); clearRoutingCachesForTest(); clearCreepMovementStateForTest();
     setupRoomPositionGlobal(); setupPathFinderGlobal(); setDefaultMapMocks();
+    (PathFinder.search as jest.Mock).mockImplementation(searchSingleRoom);
     Game.map.describeExits = jest.fn((name: string) => name === "W1N1" ? { [RIGHT]: "W0N1", [TOP]: "W1N2" } : { [LEFT]: "W1N1" });
     Game.map.findRoute = jest.fn(() => [{ exit: RIGHT, room: "W0N1" }]);
   });
@@ -43,9 +45,10 @@ describe("外出 creep 与常驻 creep 的统一房内寻路", () => {
   it.each(["remoteMiningCarrier", "remoteCarrier", "remoteWorker", "powerBankAttacker", "powerBankHealer", "scout", "depositHarvester"])("%s 走出口使用房内缓存和交通执行器", (role) => {
     const { creep, search } = traveler(role);
     expect(moveToTargetRoom(creep, "W0N1", "W1N1|W0N1")).toBe(OK);
-    expect(search).toHaveBeenCalledWith(expect.objectContaining({ x: 49, y: 10 }), expect.objectContaining({ maxRooms: 1, range: 0 }));
+    expect(search).not.toHaveBeenCalled();
+    expect(PathFinder.search).toHaveBeenCalledWith(creep.pos, expect.any(Array), expect.objectContaining({ maxRooms: 1, maxOps: 8000 }));
     expect(creep.move).toHaveBeenCalledWith(RIGHT);
-    expect(PathFinder.search).not.toHaveBeenCalled();
+    expect(PathFinder.search).toHaveBeenCalledTimes(1);
     expect(getCreepMovementState(creep)?.movePathState?.targetX).toBe(49);
     expect(getCreepMovementState(creep)?.travelState?.multiRoomSegment).toBeUndefined();
   });
@@ -72,7 +75,8 @@ describe("外出 creep 与常驻 creep 的统一房内寻路", () => {
     Game.time += 1;
     creep.pos = new MockRoomPosition(11, 10, creep.room.name) as unknown as RoomPosition;
     moveToTargetRoom(creep, "W0N1", "W1N1|W0N1");
-    expect(search).toHaveBeenCalledTimes(1); expect(choose).toHaveBeenCalledTimes(1);
+    expect(PathFinder.search).toHaveBeenCalledTimes(1);
+    expect(search).not.toHaveBeenCalled(); expect(choose).not.toHaveBeenCalled();
     expect(getCreepMovementState(creep)?.movePathState?.cursor).toBe(0);
   });
 
@@ -91,10 +95,9 @@ describe("外出 creep 与常驻 creep 的统一房内寻路", () => {
     const state = ensureCreepMovementState(creep);
     state.travelState!.multiRoomSegment = { key: "stale" } as never;
     room.findExitTo = jest.fn(() => TOP);
-    choose.mockReturnValue(new MockRoomPosition(10, 0, room.name) as unknown as RoomPosition);
     Game.time += 1;
     moveToTargetRoom(creep, "W1N2", "W1N1|W1N2");
-    expect(search).toHaveBeenLastCalledWith(expect.objectContaining({ y: 0 }), expect.objectContaining({ maxRooms: 1 }));
+    expect(PathFinder.search).toHaveBeenLastCalledWith(creep.pos, expect.arrayContaining([expect.objectContaining({ pos: expect.objectContaining({ y: 0 }) })]), expect.objectContaining({ maxRooms: 1 }));
     expect(state.travelState?.targetRoom).toBe("W1N2");
     expect(state.travelState?.multiRoomSegment).toBeUndefined();
   });
@@ -109,9 +112,24 @@ describe("外出 creep 与常驻 creep 的统一房内寻路", () => {
   });
 
   it("没有可达出口时报告无路，不发移动或改走未确认出口", () => {
-    const { creep, choose, search } = traveler(); choose.mockReturnValue(null);
+    const { creep, search } = traveler();
+    (PathFinder.search as jest.Mock).mockReturnValue({ path: [], incomplete: true, ops: 1, cost: 0 });
     expect(moveToTargetRoom(creep, "W0N1", "W1N1|W0N1")).toBe(ERR_NO_PATH);
     expect(creep.move).not.toHaveBeenCalled(); expect(search).not.toHaveBeenCalled();
+  });
+
+  it("已缓存出口执行失败后重新验证，无静态通路时写入短期排除", () => {
+    const { creep, search } = traveler();
+    expect(moveToTargetRoom(creep, "W0N1", "W1N1|W0N1")).toBe(OK);
+    const state = ensureCreepMovementState(creep);
+    delete state.movePathState;
+    Game.time++;
+    search.mockReturnValue([]);
+    (PathFinder.search as jest.Mock).mockReturnValue({ path: [], incomplete: true, ops: 1, cost: 0 });
+    expect(moveToTargetRoom(creep, "W0N1", "W1N1|W0N1")).toBe(ERR_NO_PATH);
+    expect(PathFinder.search).toHaveBeenCalledTimes(2);
+    expect(state.travelState!.exitTarget).toBeUndefined();
+    expect(state.travelState!.rejectedTransitions?.["W1N1->W0N1"]).toBe(Game.time + 20);
   });
 
   it("已观察到有主房后失去视野，双人路线选择和实际行军仍一致地改走安全出口", () => {
@@ -128,7 +146,6 @@ describe("外出 creep 与常驻 creep 的统一房内寻路", () => {
     const options = powerBankTransitOptions(creep);
     expect(getNextTravelRoom(room.name, "W3N1", route, options.avoidRooms)).toBe("W1N2");
     room.findExitTo = jest.fn(() => TOP);
-    choose.mockReturnValue(new MockRoomPosition(10, 0, room.name) as unknown as RoomPosition);
     expect(moveToTargetRoom(creep, "W3N1", route, options)).toBe(OK);
     expect(Game.map.describeExits).toHaveBeenCalledWith(room.name);
     expect(room.findExitTo).not.toHaveBeenCalled();
@@ -163,7 +180,7 @@ describe("外出 creep 与常驻 creep 的统一房内寻路", () => {
       expect(getCreepMovementState(creep)!.movePathState).toBe(path);
       expect(getCreepMovementState(creep)!.travelState!.stuckTicks).toBe(0);
     }
-    expect(search).toHaveBeenCalledTimes(1);
+    expect(PathFinder.search).toHaveBeenCalledTimes(1);
     allow.mockReturnValue(true); Game.time++;
     expect(moveToTargetRoom(creep, "W0N1", "W1N1|W0N1", options)).toBe(OK);
     expect(creep.move).toHaveBeenCalledWith(RIGHT);
@@ -183,7 +200,7 @@ describe("外出 creep 与常驻 creep 的统一房内寻路", () => {
     expect(moveToTargetRoom(creep, "W0N2")).toBe(ERR_NO_PATH);
     expect(moveToTargetRoom(creep, "W0N2", undefined, { allowSourceKeeperRooms: true, canMoveStep: () => true })).toBe(OK);
     expect(creep.move).toHaveBeenCalledWith(RIGHT);
-    expect(PathFinder.search).not.toHaveBeenCalled();
+    expect(PathFinder.search).toHaveBeenCalledTimes(1);
     Game.time++; resetRuntimeServices();
     keeper.owner.username = "Invader";
     expect(moveToTargetRoom(creep, "W0N2", undefined, { allowSourceKeeperRooms: true })).toBe(ERR_NO_PATH);

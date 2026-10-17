@@ -14,6 +14,7 @@ import { getActivePowerBankBoostLabIds } from "@/runtime/powerBankBoostMemory";
  */
 
 import {
+  cancelAutomaticResourceTransferTaskForReplan,
   countsResourceTransferTaskTowardDemand,
   createAutomaticResourceTransferTask,
   createResourceTransferTaskAmountIndex,
@@ -2104,10 +2105,7 @@ function cancelStaleSynthesisRouteTasks(
       if (!countsResourceTransferTaskTowardDemand(task)) continue;
       if (supportsActiveSynthesisRouteDemand(task, activeDemand)) continue;
 
-      task.status = "cancelled";
-      task.updatedAt = Game.time;
-      task.lastError = "cancelled_by_replan";
-      cancelled++;
+      if (cancelAutomaticResourceTransferTaskForReplan(task.id)) cancelled++;
     }
   }
   return cancelled;

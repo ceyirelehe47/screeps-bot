@@ -15,6 +15,8 @@ import {
 } from "@/runtime/cpuProfilerConfig";
 import { getMemoryService } from "@/runtime/runtimeServices";
 import type { CpuTickHealthSummary } from "@/runtime/cpuTickHealth";
+import type { CpuSchedulerShadow } from "@/runtime/cpuSchedulerShadow";
+import type { getRuntimeRoomFaults } from "@/runtime/runtimeIsolation";
 
 // ─── v2 Config ────────────────────────────────────────────────────────────────
 
@@ -52,6 +54,8 @@ export interface CpuMonitorSnapshotV2 {
   tickUsedAtFlush?: number;
   /** 仅最外层 measure 的总量，不重复累加 inclusive 子阶段。 */
   topLevelUsed?: number;
+  schedulerShadow?: CpuSchedulerShadow;
+  roomFaults?: ReturnType<typeof getRuntimeRoomFaults>;
   bucket: number;
   limit: number;
   tickLimit: number;

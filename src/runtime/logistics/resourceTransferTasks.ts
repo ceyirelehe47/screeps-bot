@@ -320,6 +320,17 @@ export function cancelResourceTransferTask(taskId: string): CancelResourceTransf
   };
 }
 
+/** 合成重规划只取消尚未完成的自动任务；保留原有阻塞审计信息。 */
+export function cancelAutomaticResourceTransferTaskForReplan(taskId: string): boolean {
+  const task = ensureResourceTransferTaskStore()[taskId];
+  if (!task || task.status !== "pending" || task.origin !== "automatic") return false;
+  task.status = "cancelled";
+  task.updatedAt = Game.time;
+  task.lastError = "cancelled_by_replan";
+  bumpTreasuryCommitmentRevision();
+  return true;
+}
+
 export function markResourceTransferTaskBlocked(
   task: ResourceTransferTask,
   reason: ResourceTransferTaskBlockedReason,

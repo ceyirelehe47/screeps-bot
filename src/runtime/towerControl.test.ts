@@ -1,3 +1,4 @@
+import { resetRuntimeIsolationForTest } from "@/runtime/runtimeIsolation";
 import { runTowerControl } from "@/runtime/towerControl";
 
 type RuntimeGlobal = typeof global & {
@@ -134,9 +135,27 @@ function createRoom(
 describe("runTowerControl", () => {
   beforeEach(() => {
     resetRuntimeServices();
+    resetRuntimeIsolationForTest();
     jest.clearAllMocks();
     Game.time = 1;
     Memory.runtime = {};
+  });
+
+  it("首房塔异常后其余房间继续攻击，下 tick 仍重试首房", () => {
+    const brokenTower = createTower("W1N1", "broken", 25, 25);
+    const healthyTower = createTower("W2N2", "healthy", 25, 25);
+    (brokenTower.attack as jest.Mock).mockImplementation(() => { throw new Error("tower fault"); });
+    Game.rooms = {
+      W1N1: createRoom("W1N1", { towers: [brokenTower], hostiles: [createHostile("W1N1", "enemy1", 24, 24)] }),
+      W2N2: createRoom("W2N2", { towers: [healthyTower], hostiles: [createHostile("W2N2", "enemy2", 24, 24)] }),
+    };
+    const log = jest.spyOn(console, "log").mockImplementation(() => undefined);
+    try {
+      runTowerControl(); Game.time++; resetRuntimeServices(); runTowerControl();
+      expect(brokenTower.attack).toHaveBeenCalledTimes(2);
+      expect(healthyTower.attack).toHaveBeenCalledTimes(2);
+      expect(log).toHaveBeenCalledTimes(1);
+    } finally { log.mockRestore(); }
   });
 
   it("keeps towers focused on the same target during periodic probe ticks when focus damage is still positive", () => {

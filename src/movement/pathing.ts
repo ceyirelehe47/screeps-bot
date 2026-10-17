@@ -27,6 +27,15 @@ export function clearMovementState(creep: Creep): void {
   delete creep.memory._move;
 }
 
+/** 搜索与执行共用安全区包装，避免出口选择遗漏完整路径约束。 */
+export function resolveMovementPolicy(creep: AnyCreep, options: MoveToTargetOptions): MoveToTargetOptions {
+  if (!isStandardCreep(creep) || !shouldRestrictToSafeZone(creep)) return options;
+  const restrict = createSafeZoneCostCallback(getSafeZone(getCreepDefenseRoomName(creep)));
+  return { ...options, cacheKey: undefined,
+    costCallback: (name, matrix) => restrict(name, options.costCallback?.(name, matrix) || matrix),
+    canMoveStep: pos => isPositionAllowedForCreep(creep, pos) && (options.canMoveStep?.(pos) ?? true) };
+}
+
 export function moveToTarget(
   creep: AnyCreep,
   target: RoomPosition | { pos: RoomPosition },
@@ -66,13 +75,7 @@ export function moveToTarget(
   }
 
   movementState.pathingRequestedAt = Game.time;
-  if (isStandardCreep(creep) && shouldRestrictToSafeZone(creep)) {
-    const original = options;
-    const restrict = createSafeZoneCostCallback(getSafeZone(getCreepDefenseRoomName(creep)));
-    options = { ...original, cacheKey: undefined,
-      costCallback: (name, matrix) => restrict(name, original.costCallback?.(name, matrix) || matrix),
-      canMoveStep: pos => isPositionAllowedForCreep(creep, pos) && (original.canMoveStep?.(pos) ?? true) };
-  }
+  options = resolveMovementPolicy(creep, options);
 
   if (sameRoomNonEdgeMoveNeedsExitRecovery(creep, targetPos)) {
     recordMovementMetric("exitRecoveries", room.name);

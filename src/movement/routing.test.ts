@@ -1,3 +1,5 @@
+import { searchSingleRoom } from "@mock/roomPathFinder";
+import { getCreepMovementState } from "@/movement/creepState";
 import { clearCreepMovementStateForTest } from "@/movement/creepState";
 import { moveToTargetRoom, clearRoutingCachesForTest } from "@/movement/routing";
 import { getMoveIntentReceipt } from "@/movement/traffic";
@@ -91,7 +93,7 @@ describe("moveToTargetRoom", () => {
 
     Object.assign(global, {
       PathFinder: {
-        search: jest.fn(() => ({ path: [], incomplete: true, ops: 0, cost: 0 })),
+        search: jest.fn(searchSingleRoom),
         CostMatrix: RealCostMatrix as unknown as typeof PathFinder.CostMatrix,
       },
       Room: {
@@ -111,16 +113,15 @@ describe("moveToTargetRoom", () => {
     const creep = interiorCreep("safe-exit");
     const unsafe = new MockRoomPosition(49, 20, "W1N1") as unknown as RoomPosition;
     const safe = new MockRoomPosition(49, 30, "W1N1") as unknown as RoomPosition;
-    const choose = jest.fn((_exit: ExitConstant, opts: FindPathOpts & { filter: (p: RoomPosition) => boolean }) => {
-      const matrix = opts.costCallback!("W1N1", new RealCostMatrix() as unknown as CostMatrix) as CostMatrix;
-      expect(matrix.get(49, 20)).toBe(255);
-      expect(opts.filter(unsafe)).toBe(false); expect(opts.filter(safe)).toBe(true);
-      return [unsafe, safe].find(opts.filter) ?? null;
-    });
-    creep.pos.findClosestByPath = choose as unknown as RoomPosition["findClosestByPath"];
-    moveToTargetRoom(creep, "W1N2", undefined, { routePolicyKey: "salvage", routeRoomCost: () => 1,
-      costCallback: (_room, matrix) => { matrix.set(49, 20, 255); return matrix; } });
-    expect(choose).toHaveBeenCalledTimes(1);
+    expect(moveToTargetRoom(creep, "W1N2", undefined, { routePolicyKey: "salvage", routeRoomCost: () => 1,
+      costCallback: (_room, matrix) => { matrix.set(49, 20, 255); return matrix; } })).toBe(OK);
+    const goals = (PathFinder.search as jest.Mock).mock.calls[0][1] as Array<{ pos: RoomPosition }>;
+    expect(goals.some(goal => goal.pos.isEqualTo(unsafe))).toBe(false);
+    expect(goals.some(goal => goal.pos.isEqualTo(safe))).toBe(true);
+    const matrix = (PathFinder.search as jest.Mock).mock.calls[0][2].roomCallback("W1N1") as CostMatrix;
+    expect(matrix.get(49, 20)).toBe(255);
+    expect(matrix.get(0, 20)).toBe(255);
+    expect(creep.move).toHaveBeenCalledTimes(1);
   });
 
   it("一条出口无安全落点时短暂排除此有向通道，仍可从另一个入口到目标房", () => {
@@ -131,16 +132,13 @@ describe("moveToTargetRoom", () => {
       return Number.isFinite(direct) ? [{ exit: RIGHT, room: "W1N2" }] : [{ exit: TOP, room: "W1N0" }, { exit: RIGHT, room: "W1N2" }];
     });
     Game.map.describeExits = jest.fn(() => ({ [RIGHT]: "W1N2", [TOP]: "W1N0" }));
-    const directions: number[] = [];
-    creep.pos.findClosestByPath = jest.fn((exit: ExitConstant) => {
-      directions.push(exit);
-      return exit === RIGHT ? null : new MockRoomPosition(25, 0, "W1N1");
-    }) as unknown as RoomPosition["findClosestByPath"];
-    const opts = { routePolicyKey: "salvage", routeRoomCost: () => 1 };
+    const opts = { routePolicyKey: "salvage", routeRoomCost: () => 1,
+      costCallback: (_room: string, matrix: CostMatrix) => { for (let y = 0; y < 50; y++) matrix.set(49, y, 255); return matrix; } };
     expect(moveToTargetRoom(creep, "W1N2", undefined, opts)).toBe(ERR_NO_PATH);
-    Game.time++; moveToTargetRoom(creep, "W1N2", undefined, opts);
+    Game.time++; expect(moveToTargetRoom(creep, "W1N2", undefined, opts)).toBe(OK);
     expect(callbackCosts).toEqual([1, Infinity]);
-    expect(directions).toEqual([RIGHT, TOP]);
+    expect(getCreepMovementState(creep)!.travelState!.exitTarget?.y).toBe(0);
+    expect(creep.move).toHaveBeenCalledWith(TOP);
   });
 
   it("业务路线缓存与普通路线隔离，缓存命中也复核目标房的当前危险", () => {

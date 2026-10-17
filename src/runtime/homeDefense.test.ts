@@ -1,3 +1,5 @@
+import { getSafeZone } from "@/runtime/safeZone";
+import { resetRuntimeIsolationForTest } from "@/runtime/runtimeIsolation";
 jest.mock("@/runtime/safeZone", () => ({
   getSafeZone: jest.fn(() => new Set(["safe"])),
 }));
@@ -126,8 +128,22 @@ function createSpawn(room: Room, queue: string[] = []): StructureSpawn {
 describe("runHomeDefense", () => {
   beforeEach(() => {
     resetRuntimeServices();
+    resetRuntimeIsolationForTest();
     jest.clearAllMocks();
     Game.time += 1;
+  });
+
+  it("首房防御异常后其余房间继续创建防御配置", () => {
+    const bad = createRoom("W1N1"), good = createRoom("W2N2", { hostiles: [createHostile("W2N2", 20, 20)] });
+    Game.rooms = { W1N1: bad, W2N2: good };
+    const spawn = createSpawn(good); Game.spawns = { [spawn.name]: spawn };
+    (getSafeZone as jest.Mock).mockImplementationOnce(() => { throw new Error("safe-zone fault"); });
+    const log = jest.spyOn(console, "log").mockImplementation(() => undefined);
+    try {
+      runHomeDefense();
+      expect(spawn.memory.spawnList?.some(name => name.includes(good.name))).toBe(true);
+      expect(log).toHaveBeenCalledTimes(1);
+    } finally { log.mockRestore(); }
   });
 
   it("assigns primary and secondary roles when one front needs multiple defenders", () => {

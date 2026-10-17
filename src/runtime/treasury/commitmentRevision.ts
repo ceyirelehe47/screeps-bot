@@ -10,8 +10,8 @@
  * facade 缓存同时归零，不存在跨 reset 的陈旧缓存，因此无需 global 槽或
  * Memory 持久化（避免第二份状态副本）。
  *
- * 架构约束（treasuryCommitmentInvalidationBoundaries 测试守护）：两个权威
- * 模块的每个导出 mutation 函数都必须包含 bump 调用，新写入口不得绕过。
+ * treasuryCommitmentInvalidationBoundaries 守护权威写入口的失效委托链；
+ * treasuryCommitmentInvalidation 使用真实 facade 验证同 tick 取消后重查。
  */
 
 let commitmentRevision = 0;
