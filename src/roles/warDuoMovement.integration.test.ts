@@ -463,6 +463,24 @@ describe("war duo 真实角色与共享移动的多 tick 集成", () => {
     expect(w.structures.filter(s => s.structureType === STRUCTURE_WALL).every(s => s.hits === 1_000_000)).toBe(true);
   });
 
+  it.each(["leader-first", "healer-first"] as const)("%s 动态实体不降低敌方rampart硬阻挡，仍通过真实洞口", order => {
+    const w = new DuoWorld(order);
+    const barrier = w.structures.find(value => value.pos.x === 17 && value.pos.y === 20)!;
+    (barrier as unknown as { structureType: StructureConstant }).structureType = STRUCTURE_RAMPART;
+    const enemy = { name: "enemy-power", pos: barrier.pos, room: w.room } as PowerCreep;
+    const originalFind = w.room.find;
+    w.room.find = ((kind: FindConstant, options?: unknown) => kind === FIND_HOSTILE_POWER_CREEPS
+      ? [enemy] : originalFind(kind, options as never)) as Room["find"];
+    for (let tick = 0; tick < 30 && w.red.pos.getRangeTo(w.core.pos) > 1; tick++) { w.step(); verifyFrame(w); }
+    expect(w.red.pos.getRangeTo(w.core.pos)).toBeLessThanOrEqual(1);
+    const openSearch = w.searches.find(search => search.goal.pos.isEqualTo(w.core.pos));
+    expect(openSearch).toBeDefined();
+    expect(openSearch!.matrix.get(17, 20)).toBe(0xff);
+    expect(w.frames.some(frame => frame.red.x === 17 && frame.red.y === 23)).toBe(true);
+    expect(barrier.hits).toBe(1_000_000);
+    expect(w.redFindPathCalls).toBe(0);
+  });
+
   it.each(["leader-first", "healer-first"] as const)("%s 通道被实体占位两 tick 时等待，解除后沿真实路径继续", order => {
     const w = new DuoWorld(order);
     for (let tick = 0; tick < 15 && w.red.pos.x < 16; tick += 1) { w.step(); verifyFrame(w); }

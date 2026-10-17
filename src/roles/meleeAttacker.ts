@@ -256,7 +256,10 @@ function searchCombatApproach(creep: Creep, target: Creep | Structure, towerDrai
   if (creep.room.controller) matrix.set(creep.room.controller.pos.x, creep.room.controller.pos.y, 0xff);
   for (const other of [...creep.room.find(FIND_MY_CREEPS), ...getHostileCreeps(creep.room), ...creep.room.find(FIND_HOSTILE_POWER_CREEPS),
     ...Object.values(Game.powerCreeps || {}).filter(unit => unit.ticksToLive != null && unit.room?.name === creep.room.name)]) {
-    if (other.name !== creep.name && other.name !== healer?.name) matrix.set(other.pos.x, other.pos.y, 0xfe);
+    if (other.name !== creep.name && other.name !== healer?.name) {
+      // 动态拥堵不能把实体脚下的敌方 rampart 等硬障碍降成可通行。
+      matrix.set(other.pos.x, other.pos.y, Math.max(matrix.get(other.pos.x, other.pos.y), 0xfe));
+    }
   }
   if (towerDrain) constrainTowerDrainBreachPath(creep, creep.room.name, matrix);
   const search = (costs: CostMatrix) => PathFinder.search(creep.pos, { pos: target.pos, range: 1 }, {
@@ -278,7 +281,9 @@ function searchCombatApproach(creep: Creep, target: Creep | Structure, towerDrai
     breachMatrix.set(barrier.pos.x, barrier.pos.y, getCombatBreachCost(barrier, hostileCreeps));
     breachByPosition.set(`${barrier.pos.x}:${barrier.pos.y}`, barrier);
   }
-  for (const other of [...creep.room.find(FIND_MY_CREEPS), ...hostileCreeps]) if (other.name !== creep.name) breachMatrix.set(other.pos.x, other.pos.y, 0xfe);
+  for (const other of [...creep.room.find(FIND_MY_CREEPS), ...hostileCreeps]) if (other.name !== creep.name) {
+    breachMatrix.set(other.pos.x, other.pos.y, Math.max(breachMatrix.get(other.pos.x, other.pos.y), 0xfe));
+  }
   const result = search(breachMatrix);
   if (!result.incomplete) for (const step of result.path) {
     const breach = breachByPosition.get(`${step.x}:${step.y}`);

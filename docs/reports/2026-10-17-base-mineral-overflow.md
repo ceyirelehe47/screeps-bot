@@ -37,3 +37,5 @@
 ## PowerBank 发现目录与生产承诺（2026.10.17-8）
 
 实服的未准入 discovered 记录没有来源房间和 tier，旧保护适配器将它们一律记为 Boost 源不完整，导致已授权市场通道长期停卖。仅排除拥有合法任务 ID/目标房间、sourceRoom 为空串且 tier 未设置的规范发现记录。PowerBank 准入先检查成品 Boost 的本地、在途或供给房库存，再同步写入来源和 tier 并进入 preparing_boosts，因此发现目录不代表原矿生产承诺。已准入任务和已分配 Boost lab 仍独立完整保护；半填、未知来源、损坏任务继续阻止出售。
+
+开放与突破矩阵叠加动态实体时取原代价与 0xfe 的较大值，保留敌方 rampart 等 0xff 硬障碍；双角色执行顺序均补了占据 rampart 的敌方 PowerCreep 与真实洞口集成回归。
