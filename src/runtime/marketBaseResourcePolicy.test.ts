@@ -1,3 +1,4 @@
+import { isMarketBaseResourceReserveMigration, computeMarketBaseResourcePolicyFingerprint } from "@/runtime/marketBaseResourcePolicy";
 import {
   createMarketBaseRoomAdmissionPolicy,
   createMarketBaseSharedPolicy,
@@ -158,7 +159,7 @@ describe("2026-09-25 价格再校准", () => {
       expect(policy.minOrderNotional).toBe(economic * 1_000);
       expect(policy.directNetBidRatio).toBe(0.85);
       expect(policy.dynamicFloorMode).toBe("enforce");
-      expect(policy.laneReserve).toBe(100_000);
+      expect(policy.laneReserve).toBe(policy.inventoryReferenceAmount * 2);
       expect(policy.rollingMaxAmount).toBe(MARKET_BASE_RESOURCE_UNBOUNDED_QUOTA_LIMIT);
       expect(policy.inventoryReferenceAmount).toBe(
         resource === "H" || resource === "X" ? 8_000 : 5_000,
@@ -365,4 +366,19 @@ describe("Market Base 动态地板投影（bookEMA + 库存分量 + 日限幅）
     expect(migratedX.dailyAnchor).toBeCloseTo(448 * 0.85, 6);
     expect(marketBaseEnforcedDynamicFloors(migrated).X).toBeCloseTo(448 * 0.85, 3);
   });
+});
+
+
+test("动态储备迁移白名单逐资源保留身份与执行上限，拒绝附带扩权", () => {
+  for (const resource of MARKET_BASE_RESOURCE_CATALOG) {
+    const current = MARKET_BASE_RESOURCE_POLICY_BY_RESOURCE[resource];
+    const revision = resource === "X" ? "base-x-v3-r6" : resource === "L" ? "base-l-v3-r5" : `base-${resource.toLowerCase()}-v3-r4`;
+    const { fingerprint: _fingerprint, ...payload } = current;
+    const oldPayload = { ...payload, policyRevision: revision, laneReserve: 100_000 };
+    const old = { ...oldPayload, fingerprint: computeMarketBaseResourcePolicyFingerprint(oldPayload) };
+    expect(isMarketBaseResourceReserveMigration(old, current)).toBe(true);
+    expect(isMarketBaseResourceReserveMigration({ ...old, policyRevision: "unknown" }, current)).toBe(false);
+    expect(isMarketBaseResourceReserveMigration(old, { ...current, maxTransactionEnergy: 999 as 1000 })).toBe(false);
+    expect(isMarketBaseResourceReserveMigration(old, { ...current, laneReserve: 1_000 })).toBe(false);
+  }
 });

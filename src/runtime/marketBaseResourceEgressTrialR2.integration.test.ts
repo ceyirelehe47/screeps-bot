@@ -5,7 +5,7 @@ import {
   proposeMarketBaseResourcePolicyMigration,
   startMarketBaseResourceEgressTrialR2,
 } from "@/runtime/marketSaleAutomation";
-import { MARKET_BASE_RESOURCE_CONFIG_REVISION } from "@/runtime/marketBaseResourcePolicy";
+import { MARKET_BASE_RESOURCE_CONFIG_REVISION, MARKET_BASE_RESOURCE_POLICIES } from "@/runtime/marketBaseResourcePolicy";
 import { canonicalStableHashV1 } from "@/runtime/marketDirectContinuousPolicy";
 import {
   readMarketEgressTrialR2,
@@ -80,6 +80,7 @@ test("the real r6 operator snapshot proposes and accepts an r7 policy successor 
     Memory.cfg = { marketSaleAutomation: {
       ...fixture.marketConfig,
       configRevision: MARKET_BASE_RESOURCE_CONFIG_REVISION,
+      forecastBuffer: Object.fromEntries(MARKET_BASE_RESOURCE_POLICIES.map(policy => [policy.resource, policy.laneReserve])),
     } } as unknown as Memory["cfg"];
     Memory.data = { marketSaleAutomation: fixture.marketData } as unknown as Memory["data"];
     Memory.runtime = {} as Memory["runtime"];
@@ -118,13 +119,15 @@ test("the real r6 operator snapshot proposes and accepts an r7 policy successor 
     for (const resource of ["L", "X"] as const) {
       const oldPolicy = priorPermit.resourcePolicies.find((value) => value.resource === resource)!;
       const newPolicy = permit.resourcePolicies.find((value) => value.resource === resource)!;
+      expect(newPolicy.laneReserve).toBe(newPolicy.inventoryReferenceAmount * 2);
+      expect(oldPolicy.laneReserve).toBe(100_000);
       expect(newPolicy.cooldownTicks).toBe(100);
       expect(oldPolicy.cooldownTicks).toBe(1_000);
       expect([newPolicy.hardFloor, newPolicy.economicFloor,
-        newPolicy.laneReserve, newPolicy.maxDealAmount,
+        newPolicy.maxDealAmount,
         newPolicy.maxTransactionEnergy, newPolicy.terminalEnergyReserve])
         .toEqual([oldPolicy.hardFloor, oldPolicy.economicFloor,
-          oldPolicy.laneReserve, oldPolicy.maxDealAmount,
+          oldPolicy.maxDealAmount,
           oldPolicy.maxTransactionEnergy, oldPolicy.terminalEnergyReserve]);
     }
     const lane = state.scope.laneLifecycles.find((value) =>

@@ -1,3 +1,4 @@
+import { isMarketBaseResourceReserveMigration } from "@/runtime/marketBaseResourcePolicy";
 import { AUTHORITY_EXECUTOR_SHARD } from "@/config/deployment";
 /**
  * 基础矿物 Direct V3 permit chain。
@@ -2743,7 +2744,8 @@ function isPreservedPolicyMigrationGrant(
     maxTransactionEnergy: policy.maxTransactionEnergy,
     terminalEnergyReserve: policy.terminalEnergyReserve,
   });
-  if (!sameCanonical(executionShape(oldPolicy), executionShape(newPolicy))) {
+  if (!sameCanonical(executionShape(oldPolicy), executionShape(newPolicy)) &&
+      !isMarketBaseResourceReserveMigration(oldPolicy, newPolicy)) {
     return false;
   }
   const boundedR2CooldownUpgrade =

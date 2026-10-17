@@ -25,7 +25,7 @@ export const MARKET_BASE_RESOURCE_EVIDENCE_SHA256 =
 export const MARKET_BASE_RESOURCE_EVIDENCE_IMPLEMENTATION_BLOB =
   "f55503b3d45352e14513e9928706251c82992ecc" as const;
 export const MARKET_BASE_RESOURCE_CONFIG_REVISION =
-  "market-base-resource-v3-r7" as const;
+  "market-base-resource-v3-r8" as const;
 /** 冷却期间最多约 30 笔，十亿是有限整数运算中的非约束哨值。 */
 export const MARKET_BASE_RESOURCE_UNBOUNDED_QUOTA_LIMIT = 1_000_000_000 as const;
 
@@ -131,7 +131,7 @@ export interface MarketBaseResourcePolicy {
   readonly resourceClass: "base-mineral";
   readonly hardFloor: number;
   readonly economicFloor: number;
-  readonly laneReserve: 100000;
+  readonly laneReserve: number;
   readonly minOrderAmount: 1000;
   readonly minOrderNotional: number;
   readonly maxDealAmount: 1000;
@@ -173,12 +173,12 @@ const RAW_MARKET_BASE_RESOURCE_POLICIES = deepFreeze<
 >([
   {
     policyId: "base-h-v3-r1",
-    policyRevision: "base-h-v3-r4",
+    policyRevision: "base-h-v3-r5",
     resource: "H",
     resourceClass: "base-mineral",
     hardFloor: 428,
     economicFloor: 451,
-    laneReserve: 100_000,
+    laneReserve: 16_000,
     minOrderAmount: 1_000,
     minOrderNotional: 451_000,
     maxDealAmount: 1_000,
@@ -200,12 +200,12 @@ const RAW_MARKET_BASE_RESOURCE_POLICIES = deepFreeze<
   },
   {
     policyId: "base-k-v3-r1",
-    policyRevision: "base-k-v3-r4",
+    policyRevision: "base-k-v3-r5",
     resource: "K",
     resourceClass: "base-mineral",
     hardFloor: 33,
     economicFloor: 34,
-    laneReserve: 100_000,
+    laneReserve: 10_000,
     minOrderAmount: 1_000,
     minOrderNotional: 34_000,
     maxDealAmount: 1_000,
@@ -227,12 +227,12 @@ const RAW_MARKET_BASE_RESOURCE_POLICIES = deepFreeze<
   },
   {
     policyId: "base-l-v3-r1",
-    policyRevision: "base-l-v3-r5",
+    policyRevision: "base-l-v3-r6",
     resource: "L",
     resourceClass: "base-mineral",
     hardFloor: 161,
     economicFloor: 169,
-    laneReserve: 100_000,
+    laneReserve: 10_000,
     minOrderAmount: 1_000,
     minOrderNotional: 169_000,
     maxDealAmount: 1_000,
@@ -254,12 +254,12 @@ const RAW_MARKET_BASE_RESOURCE_POLICIES = deepFreeze<
   },
   {
     policyId: "base-o-v3-r1",
-    policyRevision: "base-o-v3-r4",
+    policyRevision: "base-o-v3-r5",
     resource: "O",
     resourceClass: "base-mineral",
     hardFloor: 71,
     economicFloor: 74,
-    laneReserve: 100_000,
+    laneReserve: 10_000,
     minOrderAmount: 1_000,
     minOrderNotional: 74_000,
     maxDealAmount: 1_000,
@@ -281,12 +281,12 @@ const RAW_MARKET_BASE_RESOURCE_POLICIES = deepFreeze<
   },
   {
     policyId: "base-u-v3-r1",
-    policyRevision: "base-u-v3-r4",
+    policyRevision: "base-u-v3-r5",
     resource: "U",
     resourceClass: "base-mineral",
     hardFloor: 31,
     economicFloor: 32,
-    laneReserve: 100_000,
+    laneReserve: 10_000,
     minOrderAmount: 1_000,
     minOrderNotional: 32_000,
     maxDealAmount: 1_000,
@@ -308,12 +308,12 @@ const RAW_MARKET_BASE_RESOURCE_POLICIES = deepFreeze<
   },
   {
     policyId: "base-x-v3-r2",
-    policyRevision: "base-x-v3-r6",
+    policyRevision: "base-x-v3-r7",
     resource: "X",
     resourceClass: "base-mineral",
     hardFloor: 371,
     economicFloor: 390,
-    laneReserve: 100_000,
+    laneReserve: 16_000,
     minOrderAmount: 1_000,
     minOrderNotional: 390_000,
     maxDealAmount: 1_000,
@@ -335,12 +335,12 @@ const RAW_MARKET_BASE_RESOURCE_POLICIES = deepFreeze<
   },
   {
     policyId: "base-z-v3-r1",
-    policyRevision: "base-z-v3-r4",
+    policyRevision: "base-z-v3-r5",
     resource: "Z",
     resourceClass: "base-mineral",
     hardFloor: 43,
     economicFloor: 45,
-    laneReserve: 100_000,
+    laneReserve: 10_000,
     minOrderAmount: 1_000,
     minOrderNotional: 45_000,
     maxDealAmount: 1_000,
@@ -395,6 +395,24 @@ export const MARKET_BASE_RESOURCE_POLICIES = deepFreeze<
       MARKET_BASE_RESOURCE_CATALOG.indexOf(right.resource),
   ),
 );
+
+/** 只承认已发布的固定储备策略向当前按资源标尺缓冲迁移，不放宽其它执行字段。 */
+export function isMarketBaseResourceReserveMigration(oldPolicy: MarketBaseResourcePolicy, newPolicy: MarketBaseResourcePolicy): boolean {
+  const accepted: Record<MarketBaseResource, readonly string[]> = {
+    H: ["base-h-v3-r4"], K: ["base-k-v3-r4"], L: ["base-l-v3-r4", "base-l-v3-r5"],
+    O: ["base-o-v3-r4"], U: ["base-u-v3-r4"], X: ["base-x-v3-r5", "base-x-v3-r6"], Z: ["base-z-v3-r4"],
+  };
+  const current = MARKET_BASE_RESOURCE_POLICIES.find(policy => policy.resource === oldPolicy.resource);
+  if (!current || !accepted[oldPolicy.resource]?.includes(oldPolicy.policyRevision) || oldPolicy.laneReserve !== 100_000 ||
+    newPolicy.laneReserve !== newPolicy.inventoryReferenceAmount * 2 || canonicalStableHashV1(current) !== canonicalStableHashV1(newPolicy)) return false;
+  const { fingerprint: oldFingerprint, policyRevision: _oldRevision, laneReserve: _oldReserve, cooldownTicks: oldCooldown, ...oldRest } = oldPolicy;
+  const { fingerprint: _newFingerprint, policyRevision: _newRevision, laneReserve: _newReserve, cooldownTicks: newCooldown, ...newRest } = newPolicy;
+  const { fingerprint: _oldFingerprint, ...oldPayload } = oldPolicy;
+  const cooldownUpgrade = oldCooldown === 1_000 && newCooldown === 100 &&
+    (oldPolicy.policyRevision === "base-x-v3-r5" || oldPolicy.policyRevision === "base-l-v3-r4");
+  return oldFingerprint === computeMarketBaseResourcePolicyFingerprint(oldPayload) &&
+    (oldCooldown === newCooldown || cooldownUpgrade) && canonicalStableHashV1(oldRest) === canonicalStableHashV1(newRest);
+}
 
 export const MARKET_BASE_RESOURCE_POLICY_BY_RESOURCE = deepFreeze<
   Record<MarketBaseResource, MarketBaseResourcePolicy>
