@@ -11,11 +11,15 @@ import type {
 } from "@/runtime/hubPlanner";
 import type { MarketTerminalEnergyReadinessObservation } from "@/runtime/resourceControl";
 import type { DefenseFaultSummary } from "@/runtime/runtimeIsolation";
+import type { ProcessSchedulerMemory } from "@/runtime/processScheduler";
+import type { CpuTickCheckpoint, CpuTickHealthSummary } from "@/runtime/cpuTickHealth";
 
 declare global {
   interface ScreepsMemoryRuntime {
     /** 防御故障单写摘要：最多八条，TTL 1000 tick，独立于 profiler。 */
     defenseFaults?: DefenseFaultSummary;
+    processScheduler?: ProcessSchedulerMemory;
+    cpuTickHealth?: { checkpoint: CpuTickCheckpoint; summary: CpuTickHealthSummary };
     colonizationSupport?: Record<string, {
       miningHandoffs?: Record<string, { creepName: string; readySince: number }>;
       routeRooms?: string[];

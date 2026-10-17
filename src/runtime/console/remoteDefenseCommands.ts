@@ -1,3 +1,4 @@
+import { getTickContextService } from "@/runtime/runtimeServices";
 import { jsonCommand } from "@/runtime/console/jsonCommand";
 import type { CreepConfig } from "@/types/system";
 import type { DamageSnapshot, RemoteDefenseReason, RemoteMiningTask } from "@/runtime/remoteMining";
@@ -259,7 +260,7 @@ function buildRelatedSpawnQueues(targetRoom: string, task: RemoteMiningTask | nu
 
 function getOwnRemoteCreeps(task: RemoteMiningTask | null): Creep[] {
   if (!task) return [];
-  return Object.values(Game.creeps).filter((creep) => isTaskCreep(creep, task));
+  return getTickContextService().getAllCreeps().filter((creep) => isTaskCreep(creep, task));
 }
 
 function getContainersNearSources(task: RemoteMiningTask, room: Room): StructureContainer[] {

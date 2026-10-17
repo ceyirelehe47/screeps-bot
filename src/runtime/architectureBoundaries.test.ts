@@ -1,0 +1,27 @@
+import { readFileSync, readdirSync } from "fs";
+import { join } from "path";
+
+function productionFiles(directory: string): string[] {
+  return readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
+    const path = join(directory, entry.name);
+    if (entry.isDirectory()) return productionFiles(path);
+    return entry.name.endsWith(".ts") && !entry.name.endsWith(".test.ts") ? [path] : [];
+  });
+}
+
+it("creep 全量枚举只能由 TickContext 建立，cargo 与任务不得另建私有全扫快照", () => {
+  const violations = productionFiles(join(__dirname, "..")).filter(path => !path.endsWith("/tickContext.ts"))
+    .filter(path => /Object\.(?:values|entries)\(Game\.creeps\)/.test(readFileSync(path, "utf8")));
+  expect(violations).toEqual([]);
+});
+
+it.each(["runtime/outboundMissionPolicy.ts", "roles/combatBoosts.ts"])("共享边界 %s 不直接解释具体任务 Memory", file => {
+  const source = readFileSync(join(__dirname, "..", file), "utf8");
+  expect(source).not.toMatch(/Memory\.data|from ["'][^"']*(?:war\/|depositHarvest|powerBankHarvest|colonization)[^"']*["']/);
+});
+
+it("独立 Game 对账入口仅由只读影子验证器使用，不回流业务决策", () => {
+  const violations = productionFiles(join(__dirname, "..")).filter(path => !path.endsWith("/tickContext.ts") && !path.endsWith("/empireInventoryShadow.ts"))
+    .filter(path => /\.readLiveCreepsForAudit\(/.test(readFileSync(path, "utf8")));
+  expect(violations).toEqual([]);
+});

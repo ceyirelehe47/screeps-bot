@@ -1,3 +1,4 @@
+import { getTickContextService } from "@/runtime/runtimeServices";
 import { issueMove } from "@/movement/traffic";
 import { moveToTarget, moveToTargetRoom } from "@/roles/shared";
 import { getPositionAtDirection, isExitTile } from "@/movement/common";
@@ -270,7 +271,7 @@ export const remoteDefenderRole: RoleFactory = (...args: string[]) => {
         creep.heal(creep);
       } else {
         let healed = false;
-        const friendlies = Object.values(Game.creeps).filter(
+        const friendlies = getTickContextService().getAllCreeps().filter(
           (c) => c.name !== creep.name && isFriendlyRemoteCreep(c, sourceRoom, resolvedTargetRoom) && c.hits < c.hitsMax,
         );
         const adjacent = friendlies.filter((f) => creep.pos.getRangeTo(f.pos) <= 1);

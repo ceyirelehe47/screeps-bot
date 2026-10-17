@@ -3,7 +3,7 @@ import { issueMove } from "@/movement/traffic";
 import { getRefillableHostileTowers } from "@/runtime/combatTowerThreat";
 import { warPartner } from "@/roles/warPartner";
 import { clearMovementState, moveToTarget, moveToTargetRoom } from "@/roles/shared";
-import { prepareCombatBoost } from "@/roles/combatBoosts";
+import { prepareWarCombatBoost } from "@/runtime/war/boostPreparation";
 import { runTowerDrainPair } from "@/roles/towerDrainPair";
 import {
   followMovingWarAttacker,
@@ -234,7 +234,7 @@ export const healerRole: RoleFactory = (
 ) => ({
   prepare: (creep): boolean => {
     synchronizeWarPartnerConfigName(creep, partnerConfigName);
-    return prepareCombatBoost(creep, boostTaskId, encodedBoostCompounds);
+    return prepareWarCombatBoost(creep, boostTaskId, encodedBoostCompounds);
   },
   source: (creep): boolean => {
     synchronizeWarPartnerConfigName(creep, partnerConfigName);

@@ -42,6 +42,17 @@ describe("外出 creep 与常驻 creep 的统一房内寻路", () => {
     return { room, creep, choose, search, units };
   }
 
+  it("严格房间路线在稳定输入下复用，危险房变化时重新计算", () => {
+    expect(getNextTravelRoom("W1N1", "W0N1", "W2N1|W0N1")).toBe("W0N1");
+    expect(getNextTravelRoom("W1N1", "W0N1", "W2N1|W0N1")).toBe("W0N1");
+    expect(Game.map.findRoute).toHaveBeenCalledTimes(1);
+    Game.time++;
+    expect(getNextTravelRoom("W1N1", "W0N1", "W2N1|W0N1")).toBe("W0N1");
+    expect(Game.map.findRoute).toHaveBeenCalledTimes(1);
+    getNextTravelRoom("W1N1", "W0N1", "W2N1|W0N1", ["W2N1"]);
+    expect(Game.map.findRoute).toHaveBeenCalledTimes(2);
+  });
+
   it.each(["remoteMiningCarrier", "remoteCarrier", "remoteWorker", "powerBankAttacker", "powerBankHealer", "scout", "depositHarvester"])("%s 走出口使用房内缓存和交通执行器", (role) => {
     const { creep, search } = traveler(role);
     expect(moveToTargetRoom(creep, "W0N1", "W1N1|W0N1")).toBe(OK);

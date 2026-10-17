@@ -1,5 +1,6 @@
 import { getSafeZone, getSafeZonePlanRevision } from "@/runtime/safeZone";
 import { getCreepConfigService, getTickContextService } from "@/runtime/runtimeServices";
+import { runIsolatedRoomOperation } from "@/runtime/runtimeIsolation";
 
 const DANGEROUS_BODY_PARTS: BodyPartConstant[] = [ATTACK, RANGED_ATTACK, WORK, HEAL];
 
@@ -33,7 +34,9 @@ function computeDefenseState(room: Room): boolean {
 
 function haveSafeZonePlanRevisionsChanged(snapshot: DefenseModeSnapshot): boolean {
   for (const [roomName, revision] of snapshot.planRevisions) {
-    if (getSafeZonePlanRevision(roomName) !== revision) return true;
+    // revision 探测成功不代表该房的完整快照恢复；失败由随后的重建边界报告。
+    try { if (getSafeZonePlanRevision(roomName) !== revision) return true; }
+    catch { return true; }
   }
   return false;
 }
@@ -52,8 +55,12 @@ function ensureCurrentDefenseSnapshot(checkPlanRevisions = false): DefenseModeSn
     const states = new Map<string, boolean>();
     const tickContext = getTickContextService();
     for (const room of tickContext.getMyRooms()) {
-      planRevisions.set(room.name, getSafeZonePlanRevision(room.name));
-      states.set(room.name, computeDefenseState(room));
+      const result = runIsolatedRoomOperation("defenseMode", room.name, () => ({
+        revision: getSafeZonePlanRevision(room.name), defending: computeDefenseState(room),
+      }));
+      // 故障只影响该房；保守阻止新出征与越界，下 tick 重新计算。
+      planRevisions.set(room.name, result?.revision ?? null);
+      states.set(room.name, result?.defending ?? true);
     }
 
     const nextSnapshot: DefenseModeSnapshot = {

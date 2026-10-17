@@ -114,24 +114,28 @@ export function moveToTargetRoom(
   const hasFixedRoute = routeRooms.length > 0;
   if (movementState.travelState?.targetRoom !== targetRoom) delete movementState.movePathState;
   const travelState = getTravelState(creep, targetRoom);
+  delete travelState.lastFailure;
   delete travelState.multiRoomSegment;
   movementState.pathingRequestedAt = Game.time;
   const currentPosKey = getPosKey(creep.pos);
   const currentOnExit = isExitTile(creep.pos);
   const repeatedExitTransition = travelState.lastWasExit && currentOnExit && travelState.lastPosKey !== currentPosKey;
-  if ((travelState.lastPosKey === currentPosKey || repeatedExitTransition) && creep.fatigue === 0 && movementState.stepPolicyWaitAt !== Game.time - 1) {
-    travelState.stuckTicks += 1;
-  } else {
-    // 位置恢复移动（或疲劳恢复）：stuck 与完整搜索退避一并清零。
-    if (travelState.stuckTicks !== 0) {
-      travelState.stuckTicks = 0;
+  if (travelState.observedAt !== Game.time) {
+    if ((travelState.lastPosKey === currentPosKey || repeatedExitTransition) && creep.fatigue === 0 && movementState.stepPolicyWaitAt !== Game.time - 1) {
+      travelState.stuckTicks += 1;
+    } else {
+      // 位置恢复移动（或疲劳恢复）：stuck 与完整搜索退避一并清零。
+      if (travelState.stuckTicks !== 0) {
+        travelState.stuckTicks = 0;
+      }
+      delete travelState.fullSearchBackoffUntil;
+      delete travelState.fullSearchBackoffLevel;
+      delete travelState.fullSearchSignature;
     }
-    delete travelState.fullSearchBackoffUntil;
-    delete travelState.fullSearchBackoffLevel;
-    delete travelState.fullSearchSignature;
+    travelState.lastPosKey = currentPosKey;
+    travelState.lastWasExit = currentOnExit;
+    travelState.observedAt = Game.time;
   }
-  travelState.lastPosKey = currentPosKey;
-  travelState.lastWasExit = currentOnExit;
 
   let nextRoom: string;
   if (hasFixedRoute) {
@@ -233,9 +237,11 @@ export function moveToTargetRoom(
   }
   const revision = getRoomTopologyRevision(creep.room.name);
   const policy = resolveMovementPolicy(creep, moveOptions);
-  const key = JSON.stringify([creep.room.name, nextRoom, revision, moveOptions.ignoreCreeps ?? true,
-    moveOptions.plainCost, moveOptions.swampCost, options.cacheKey]);
+  const key = JSON.stringify([creep.room.name, nextRoom, revision,
+    moveOptions.plainCost, moveOptions.swampCost, policy.cacheKey]);
   let exit = travelState.exitTarget;
+  const previousExit = exit;
+  if (exit && exit.key !== key) recordMovementMetric("exitReselectByKey", creep.room.name);
   const needsSelection = !exit || exit.key !== key || exit.expiresAt <= Game.time || !!policy.costCallback && !policy.cacheKey;
   let result: ScreepsReturnCode = ERR_NO_PATH;
   if (!needsSelection && exit) {
@@ -248,14 +254,17 @@ export function moveToTargetRoom(
     const selected = searchRoomExitPath(creep, exitDirection as ExitConstant, moveOptions);
     const end = selected.path[selected.path.length - 1];
     if (!end) {
+      if (selected.reason !== "complete") travelState.lastFailure = { at: Game.time, reason: selected.reason };
       if (selected.rejectTransition) {
         (travelState.rejectedTransitions ??= {})[`${creep.room.name}->${nextRoom}`] = Game.time + 20;
       }
       delete movementState.movePathState;
       updateTravelState(creep, travelState);
+      if (selected.reason === "policyDenied") { movementState.stepPolicyWaitAt = Game.time; return ERR_BUSY; }
       return ERR_NO_PATH;
     }
     if (selected.complete) {
+      if (previousExit && (previousExit.x !== end.x || previousExit.y !== end.y)) recordMovementMetric("exitTargetSwitches", creep.room.name);
       exit = { key, x: end.x, y: end.y, expiresAt: Game.time + 20 };
       travelState.exitTarget = exit;
     }
@@ -471,7 +480,7 @@ function isVisibleRoomDangerous(roomName: string, allowSourceKeepers = false): b
     return true;
   }
   if (room.controller?.reservation && !room.controller.my) {
-    const myUser = Object.values(Game.spawns)[0]?.owner.username || Object.values(Game.creeps)[0]?.owner.username;
+    const myUser = Object.values(Game.spawns)[0]?.owner.username || getTickContextService().getAllCreeps()[0]?.owner.username;
     if (!myUser || room.controller.reservation.username !== myUser) {
       return true;
     }
@@ -566,6 +575,12 @@ function findStrictRouteNextRoom(
   if (routeRooms.length === 0) {
     return null;
   }
+  const cacheKey = `strict:${buildDynamicRouteCacheKey(currentRoom, targetRoom, routeRooms, dangerousRooms)}`;
+  const cached = dynamicNextRoomCache[cacheKey];
+  if (cached && cached.expiresAt > Game.time) {
+    recordMovementMetric("dynamicRouteCacheHits");
+    return cached.nextRoom;
+  }
   const allowedRooms = new Set(routeRooms);
   const dangerousSet = new Set(dangerousRooms);
   allowedRooms.add(currentRoom);
@@ -582,8 +597,10 @@ function findStrictRouteNextRoom(
     },
   });
   if (route === ERR_NO_PATH || route.length === 0) {
+    setDynamicRouteCache(cacheKey, null);
     return null;
   }
+  setDynamicRouteCache(cacheKey, route[0].room);
   return route[0].room;
 }
 

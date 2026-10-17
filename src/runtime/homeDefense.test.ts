@@ -11,7 +11,7 @@ jest.mock("@/runtime/boostControl", () => ({
   shouldBoostDefender: jest.fn(() => true),
 }));
 
-import { runHomeDefense } from "@/runtime/homeDefense";
+import { runHomeDefense, runHomeDefenseSupply } from "@/runtime/homeDefense";
 import { getRoomDefenseCoordination } from "@/runtime/defenseCoordination";
 
 type RuntimeGlobal = typeof global & {
@@ -233,6 +233,8 @@ it("确需强化的防御任务连接 boost 补给与购买入口", () => {
   Memory.cfg = { homeDefense: { rooms: { W6N6: { boostLabId: "boost-lab" } } } };
   runHomeDefense();
   const { syncBoostLabTask, buyBoostIfNeeded } = jest.requireMock("@/runtime/boostControl");
+  expect(buyBoostIfNeeded).not.toHaveBeenCalled();
+  runHomeDefenseSupply();
   expect(syncBoostLabTask).toHaveBeenCalledWith(room);
   expect(buyBoostIfNeeded).toHaveBeenCalledWith(room);
 });

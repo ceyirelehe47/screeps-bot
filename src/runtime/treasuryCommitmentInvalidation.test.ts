@@ -1,5 +1,5 @@
 import { createTreasuryService } from "@/runtime/treasury/facade";
-import { cancelAutomaticResourceTransferTaskForReplan, createAutomaticResourceTransferTask, createResourceTransferTask } from "@/runtime/logistics/resourceTransferTasks";
+import { cancelAutomaticResourceTransferTaskForReplan, createAutomaticResourceTransferTask, createResourceTransferTask, patchResourceTransferTask } from "@/runtime/logistics/resourceTransferTasks";
 import { resetRuntimeServices } from "@mock/movement";
 
 describe("重规划取消的同 tick 承诺失效", () => {
@@ -34,5 +34,20 @@ describe("重规划取消的同 tick 承诺失效", () => {
     expect(cancelAutomaticResourceTransferTaskForReplan(manual.task.id)).toBe(false);
     expect(manual.task.status).toBe("pending");
     expect(service.commitments()).toBe(snapshot);
+  });
+  it("patch API 修改数量/终态后同 tick 重查真实 facade；相同值不重复失效", () => {
+    const created = createAutomaticResourceTransferTask("W1N1", "W2N2", RESOURCE_HYDROGEN, 500, "synthesis:direct:H");
+    if (typeof created === "string") throw new Error(created);
+    const service = createTreasuryService({ getRooms: () => [] });
+    const before = service.commitments();
+    expect(before.outgoing("W1N1", RESOURCE_HYDROGEN)).toBe(500);
+    expect(patchResourceTransferTask(created.task, { remainingAmount: 200, updatedAt: Game.time })).toBe(true);
+    const after = service.commitments();
+    expect(after.outgoing("W1N1", RESOURCE_HYDROGEN)).toBe(200);
+    expect(before.outgoing("W1N1", RESOURCE_HYDROGEN)).toBe(500);
+    expect(patchResourceTransferTask(created.task, { remainingAmount: 200, updatedAt: Game.time })).toBe(false);
+    expect(service.commitments()).toBe(after);
+    patchResourceTransferTask(created.task, { status: "done" });
+    expect(service.commitments().outgoing("W1N1", RESOURCE_HYDROGEN)).toBe(0);
   });
 });

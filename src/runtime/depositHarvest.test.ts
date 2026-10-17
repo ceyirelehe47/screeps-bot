@@ -1,3 +1,5 @@
+import { registerOutboundMissionOwners } from "@/runtime/registerOutboundMissionOwners";
+registerOutboundMissionOwners();
 import { canSpawnDepositConfig, runDepositHarvest } from "@/runtime/depositHarvest";
 import { isSpawnConfigEconomicallyBlocked } from "@/runtime/outboundMissionPolicy";
 import { recordDepositDiscovery } from "@/runtime/depositDiscovery";
@@ -9,7 +11,8 @@ jest.mock("@/runtime/powerBankObserver", () => ({ requestDepositObservation: jes
 jest.mock("@/runtime/depositPathDistance", () => ({ isDepositRoomSafe: jest.fn(() => true), measureDepositTravel: jest.fn() }));
 jest.mock("@/config/spawnProfiles", () => ({ spawnProfiles: { worker: () => [WORK, CARRY, MOVE] } }));
 jest.mock("@/runtime/runtimeServices", () => ({
-  getTickContextService: () => ({ getMyRooms: () => Object.values(Game.rooms).filter((r) => r.controller?.my) }),
+  getTickContextService: () => ({ getMyRooms: () => Object.values(Game.rooms).filter((r) => r.controller?.my),
+    getAllCreeps: () => Object.values(Game.creeps), getAllSpawns: () => Object.values(Game.spawns) }),
   getCreepConfigService: () => ({
     get: (name: string) => Memory.data?.creepConfigs?.[name], list: () => Memory.data?.creepConfigs ?? {},
     remove: (name: string) => { delete Memory.data!.creepConfigs![name]; },

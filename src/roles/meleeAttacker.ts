@@ -1,3 +1,4 @@
+import { getTickContextService } from "@/runtime/runtimeServices";
 import { warGeometry } from "@/roles/warGeometry";
 import { getRefillableHostileTowers } from "@/runtime/combatTowerThreat";
 import { warPartner } from "@/roles/warPartner";
@@ -5,7 +6,7 @@ import { clearMovementState, moveToTarget, moveToTargetRoom } from "@/roles/shar
 import { isWalkableConstructionSite, isWalkableStructure, parseEncodedRouteRooms } from "@/movement/common";
 import { cancelMoveIntent, getMoveIntentReceipt, hasMoveDestinationConflict, issueMove, moveOffExit } from "@/movement/traffic";
 import { getCreepMovementState } from "@/movement/creepState";
-import { prepareCombatBoost } from "@/roles/combatBoosts";
+import { prepareWarCombatBoost } from "@/runtime/war/boostPreparation";
 import { constrainTowerDrainBreachPath, moveTowerDrainBorderAttack, runTowerDrainPair } from "@/roles/towerDrainPair";
 import { measureCreepDecision, measureCreepIntent, measureSampledCpuPhase } from "@/runtime/cpuPhaseProfiler";
 import type { RoleFactory } from "@/types/system";
@@ -791,7 +792,7 @@ function isWarFollowTileOpen(attacker: Creep, tile: Readonly<{ x: number; y: num
     && !room.find(FIND_CONSTRUCTION_SITES).some(s => at(s) && s.my && !isWalkableConstructionSite(s))
     && ![...room.find(FIND_SOURCES), ...room.find(FIND_MINERALS), ...room.find(FIND_DEPOSITS)].some(at)
     && !(room.controller && at(room.controller))
-    && ![...Object.values(Game.creeps), ...room.find(FIND_HOSTILE_CREEPS), ...room.find(FIND_HOSTILE_POWER_CREEPS), ...Object.values(Game.powerCreeps || {})]
+    && ![...getTickContextService().getAllCreeps(), ...room.find(FIND_HOSTILE_CREEPS), ...room.find(FIND_HOSTILE_POWER_CREEPS), ...Object.values(Game.powerCreeps || {})]
       .some(unit => unit !== attacker && unit.room?.name === room.name && at(unit));
 }
 
@@ -824,9 +825,8 @@ export function followMovingWarAttacker(healer: Creep, attacker: Creep): boolean
 }
 
 function getTargetRoomMoveOptions(creep: Creep, towerDrain = false) {
-  const baseOptions = { ...TARGET_ROOM_MOVE_OPTIONS, reusePath: !towerDrain && getRefillableHostileTowers(creep.room).length === 0 ? 3 : 0 };
-  const healer = findPairedWarHealer(creep);
-  if ((!healer || healer.room.name !== creep.room.name) && !towerDrain) {
+  const baseOptions = { ...TARGET_ROOM_MOVE_OPTIONS, reusePath: towerDrain ? 0 : 3 };
+  if (!towerDrain) {
     return baseOptions;
   }
 
@@ -971,7 +971,7 @@ export const meleeAttackerRole: RoleFactory = (
 ) => ({
   prepare: (creep): boolean => {
     synchronizeWarPartnerConfigName(creep, partnerConfigName);
-    return prepareCombatBoost(creep, boostTaskId, encodedBoostCompounds);
+    return prepareWarCombatBoost(creep, boostTaskId, encodedBoostCompounds);
   },
   source: (creep): boolean => {
     synchronizeWarPartnerConfigName(creep, partnerConfigName);

@@ -456,7 +456,7 @@ function detectPlayerAggression(
 function getOwnRemoteCreeps(task: RemoteMiningTask): Creep[] {
   const prefix = `${task.sourceRoom}:remoteMine:${task.targetRoom}:`;
   const result: Creep[] = [];
-  for (const creep of Object.values(Game.creeps)) {
+  for (const creep of getTickContextService().getAllCreeps()) {
     const configName = creep.memory.configName;
     if (configName && configName.startsWith(prefix)) {
       result.push(creep);
@@ -512,7 +512,7 @@ export function getMyUsername(): string | null {
   if (firstSpawn) {
     return firstSpawn.owner.username;
   }
-  const firstCreep = Object.values(Game.creeps)[0];
+  const firstCreep = getTickContextService().getAllCreeps()[0];
   if (firstCreep) {
     return firstCreep.owner.username;
   }

@@ -1,97 +1,33 @@
-import { getTickContextService } from "@/runtime/runtimeServices";
 import { isDefenseMode } from "@/runtime/defenseMode";
 import { isRoomInReserveMode } from "@/runtime/roomReserve";
+import { resolveOutboundMissionIntent } from "@/runtime/outboundMissionRegistry";
+import { getRoleSpawnIntent } from "@/runtime/spawnIntent";
 import type { CreepConfig } from "@/types/system";
-import type { WarTask } from "@/runtime/war/store";
+
+export interface RoomMissionMode { defense: boolean; reserve: boolean }
+export function getRoomMissionMode(roomName: string): RoomMissionMode {
+  return { defense: isDefenseMode(roomName), reserve: isRoomInReserveMode(roomName) };
+}
 
 /** 只控制新增昂贵出征，已部署单位与外矿收入继续执行。 */
 export function canStartOutboundMission(roomName: string): boolean {
-  return !isDefenseMode(roomName) && !isRoomInReserveMode(roomName);
+  const mode = getRoomMissionMode(roomName);
+  return !mode.defense && !mode.reserve;
 }
 
-/** 只认任务所有者和当前代，旧代/同目标的孤立配置不能借用在途豁免。 */
-function ownsWarConfig(task: WarTask, name: string, config: CreepConfig): boolean {
-  if (config.roomName !== task.sourceRoom || config.args[0] !== task.targetRoom) return false;
-  const prefix = `${task.sourceRoom}:war:${task.targetRoom}:`;
-  if (config.role === "claimer") return false;
-  if (config.role !== "meleeAttacker" && config.role !== "healer") return false;
-  if (task.activeGeneration) return name === task.activeGeneration.configNames[config.role];
-  return name.startsWith(`${prefix}${config.role}:`) && /^\d+$/.test(name.slice(`${prefix}${config.role}:`.length));
-}
-
-/** status 可在首个 Spawn 前进入 clearing；必须另有已投入的排队、强化或出生证据。 */
-export function canContinueWarMission(task: WarTask): boolean {
-  if (isDefenseMode(task.sourceRoom) || Memory.data?.war?.[task.targetRoom] !== task ||
-      !["staging", "clearing", "downgrading", "patrol_waiting"].includes(task.status)) return false;
-  const reserve = isRoomInReserveMode(task.sourceRoom);
-  if (!reserve) delete task.reserveContinuationUntil;
-  if (reserve && task.reserveContinuationUntil !== undefined && Game.time >= task.reserveContinuationUntil) return false;
-  const committed = (): true => {
-    if (reserve) task.reserveContinuationUntil ??= Game.time + CREEP_LIFE_TIME;
-    return true;
-  };
-  const generation = task.activeGeneration;
-  if (generation?.boostGateOpenedAt !== undefined && generation.phase === "assembling") return committed();
-  const store = Memory.data?.creepConfigs ?? {};
-  const prefix = `${task.sourceRoom}:war:${task.targetRoom}:`;
-  const candidates = generation ? Object.values(generation.configNames) : [`${prefix}meleeAttacker:0`, `${prefix}meleeAttacker:1`, `${prefix}healer:0`];
-  const names = new Set(candidates.filter(name => generation || store[name] && ownsWarConfig(task, name, store[name])));
-  if (generation) for (const name of Object.values(generation.configNames)) names.add(name);
-  else for (const member of Object.values(task.members ?? {})) {
-    const config = store[member.configName];
-    if (config && ownsWarConfig(task, member.configName, config)) names.add(member.configName);
-  }
-  const context = getTickContextService();
-  if ([...names].some(name => context.getCreepsByConfigName(name).some(creep =>
-    !creep.memory._warDetached && creep.memory.configName === name))) return committed();
-  const pending = context.getSpawnsByRoom(task.sourceRoom).some(spawn =>
-    ((spawn.memory.spawnList ?? []).some(name => names.has(name)) ||
-      !!spawn.spawning && names.has(Memory.creeps?.[spawn.spawning.name]?.configName ?? "")));
-  return pending ? committed() : false;
+export type SpawnAdmission = { allowed: true } | { allowed: false; reason: "defense" | "reserve" };
+export function getSpawnAdmission(configName: string, config: CreepConfig): SpawnAdmission {
+  if (!config.roomName) return { allowed: true };
+  const mode = getRoomMissionMode(config.roomName);
+  const mission = resolveOutboundMissionIntent(configName, config, mode);
+  const intent = mission?.intent ?? getRoleSpawnIntent(config.role);
+  if (mode.defense && intent !== "local") return { allowed: false, reason: "defense" };
+  if (mode.reserve && intent === "expedition" && !mission?.committed) return { allowed: false, reason: "reserve" };
+  return { allowed: true };
 }
 
 export function isSpawnConfigEconomicallyBlocked(configName: string, config: CreepConfig): boolean {
-  if (!config.roomName) return false;
-  const defense = isDefenseMode(config.roomName);
-  if (configName.includes(":war:") && !isRoomInReserveMode(config.roomName)) {
-    const task = Memory.data?.war?.[config.args[0]];
-    if (task?.sourceRoom === config.roomName) delete task.reserveContinuationUntil;
-  }
-  if (defense && ["colonizerHarvester", "remoteCarrier", "remoteDefender", "scout", "reserver"].includes(config.role)) return true;
-  const blocked = !canStartOutboundMission(config.roomName) && (
-    configName.includes(":war:") || configName.includes(":colonizationSupport:") ||
-    ["powerBankAttacker", "powerBankHealer", "powerBankHauler", "depositHarvester", "claimer", "colonizerWorker", "colonizerUpgrader"].includes(config.role));
-  if (!blocked || defense) return blocked;
-  // RESERVE 只阻止新出征；已承诺任务继续使用原有生命周期/出生门控。
-  if (config.taskId && ["powerBankAttacker", "powerBankHealer", "powerBankHauler"].includes(config.role)) {
-    const task = Memory.data?.powerBankHarvest?.[config.taskId];
-    if (task?.id === config.taskId && task.sourceRoom === config.roomName && task.targetRoom === config.args[0] &&
-        ["preparing_boosts", "spawning", "renewing", "boosting", "travelling", "attacking", "hauling"].includes(task.status)) return false;
-  }
-  if ((config.role === "colonizerWorker" || config.role === "colonizerHarvester") && Game.rooms[config.args[0]]?.controller?.my) {
-    const colonization = Memory.data?.colonization?.[config.args[0]];
-    const rescue = Memory.data?.rescue?.[config.args[0]];
-    if (configName.startsWith(`${config.roomName}:colonize:${config.args[0]}:`) && colonization?.sourceRoom === config.roomName &&
-        ["bootstrapping", "managed"].includes(colonization.status) ||
-        configName.startsWith(`${config.roomName}:rescue:${config.args[0]}:`) && rescue?.sourceRoom === config.roomName) return false;
-  }
-  if (configName === `${config.roomName}:war:${config.args[0]}:controllerAttacker:0` && config.role === "claimer" && config.args[2] === "attack") {
-    const task = Memory.data?.war?.[config.args[0]];
-    if (!task || task.sourceRoom !== config.roomName || !["staging", "clearing", "downgrading", "patrol_waiting"].includes(task.status)) return true;
-    return !Object.values(Game.spawns).some(spawn => spawn.room.name === config.roomName &&
-      ((spawn.memory.spawnList ?? []).includes(configName) || !!spawn.spawning && Memory.creeps?.[spawn.spawning.name]?.configName === configName));
-  }
-  if (configName.includes(":war:")) {
-    const task = Memory.data?.war?.[config.args[0]];
-    if (task && ownsWarConfig(task, configName, config) && canContinueWarMission(task)) return false;
-  }
-  if (config.role === "depositHarvester" && config.taskId) {
-    const task = Memory.data?.depositHarvest?.[config.taskId];
-    if (task?.id === config.taskId && task.sourceRoom === config.roomName && task.status === "spawning" && task.generation === 0 &&
-        task.configName === configName && configName === `${task.sourceRoom}:deposit:${task.id}:g0` &&
-        config.args.length === 2 && config.args[0] === task.id && config.args[1] === task.sourceRoom) return false;
-  }
-  return true;
+  return !getSpawnAdmission(configName, config).allowed;
 }
 
 export function fixedBodyExceedsCapacity(config: CreepConfig, capacity: number): boolean {

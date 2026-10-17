@@ -1,3 +1,5 @@
+import { registerOutboundMissionOwners } from "@/runtime/registerOutboundMissionOwners";
+registerOutboundMissionOwners();
 jest.mock("@/runtime/tickContext", () => ({
   ...jest.requireActual("@/runtime/tickContext"),
   isSpawnActive: jest.fn(() => true),

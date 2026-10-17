@@ -120,7 +120,7 @@ beforeEach(() => {
     }) });
   }
   Game.creeps = { red: attacker, green: healer };
-  (getTickContextService as jest.Mock).mockReturnValue({ getMyRooms: () => [], getRoomContext: (owner: Room | string) => {
+  (getTickContextService as jest.Mock).mockReturnValue({ getAllCreeps: () => Object.values(Game.creeps), getMyRooms: () => [], getRoomContext: (owner: Room | string) => {
     const name = typeof owner === "string" ? owner : owner.name;
     return {
     room: Game.rooms[name],
@@ -169,6 +169,20 @@ describe("PowerBank same-frame pair movement", () => {
     expect(moveToTargetRoom).toHaveBeenCalledTimes(2);
     expect(moveToTargetRoom).toHaveBeenLastCalledWith(attacker, TARGET, expect.any(String), expect.objectContaining({ ignoreCreeps: false, reusePath: 0 }));
     expect(pending.has(attacker)).toBe(true); expect(pending.has(healer)).toBe(true);
+  });
+
+  it("静态出口断路不清除排除记录，也不重复搜索同一出口", () => {
+    const edge = `${SOURCE}->${TARGET}`;
+    (moveToTargetRoom as jest.Mock).mockImplementation((creep: Creep) => {
+      ensureCreepMovementState(creep).travelState = {
+        targetRoom: TARGET, stuckTicks: 0, rejectedTransitions: { [edge]: Game.time + 20 },
+      };
+      return ERR_NO_PATH;
+    });
+    calls("attacker-first");
+    expect(moveToTargetRoom).toHaveBeenCalledTimes(1);
+    expect(getCreepMovementState(attacker)!.travelState!.rejectedTransitions?.[edge]).toBe(Game.time + 20);
+    expect(pending.size).toBe(0);
   });
 
   it("跟随连续两帧无路后领队回靠，第三帧重新聚拢", () => {

@@ -1,3 +1,4 @@
+import { getTickContextService } from "@/runtime/runtimeServices";
 import { isHubOnlyReserveCompound } from "@/config/hub";
 import {
   listCarrierDispatchEntriesByRoom,
@@ -559,7 +560,7 @@ function collectCarrierCommitments(
     }
   }
 
-  for (const creep of Object.values(Game.creeps)) {
+  for (const creep of getTickContextService().getAllCreeps()) {
     const state = getCreepAssignmentState(creep.name);
     const resource = state?.synthesisCarrierPendingResource;
     if (!resource) continue;

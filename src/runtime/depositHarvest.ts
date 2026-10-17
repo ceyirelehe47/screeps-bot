@@ -1,7 +1,7 @@
 import { canStartOutboundMission } from "@/runtime/outboundMissionPolicy";
 import { spawnProfiles } from "@/config/spawnProfiles";
 import { isDefenseMode } from "@/runtime/defenseMode";
-import { ensureDepositDiscoveryStore } from "@/runtime/depositDiscovery";
+import { ensureDepositDiscoveryStore, cleanupDepositDiscoveryTasks } from "@/runtime/depositDiscovery";
 import { isDepositRoomSafe, measureDepositTravel } from "@/runtime/depositPathDistance";
 import { requestDepositObservation } from "@/runtime/powerBankObserver";
 import { getCreepConfigService, getTickContextService } from "@/runtime/runtimeServices";
@@ -137,7 +137,7 @@ function receiver(room: Room): StructureStorage | StructureTerminal | undefined 
 }
 function taskCreep(task: DepositHarvestTask): Creep | undefined {
   if (!task.configName) return undefined;
-  return Object.values(Game.creeps).find((creep) => {
+  return getTickContextService().getAllCreeps().find((creep) => {
     const mem = creep.memory as CreepMemory & DepositHarvesterMemory;
     return (mem.taskId === undefined || mem.taskId === task.id) && creep.memory.configName === task.configName;
   });
@@ -294,9 +294,7 @@ export function runDepositHarvest(): void {
   const store = ensureDepositDiscoveryStore(); const config = getDepositHarvestConfig();
   const tasks = Object.values(store);
   for (const task of tasks) reconcile(task, config);
-  for (const task of tasks) {
-    if (isDepositTerminal(task) && Game.time > task.expiresAt + 5_000 && !taskCreep(task) && !actualSpawning(task)) delete store[task.id];
-  }
+  cleanupDepositDiscoveryTasks();
   // 孤立的一代配置不交给 generic spawnOnce 重试；活体从 memory fallback 返仓。
   for (const [name, cfg] of Object.entries(getCreepConfigService().list())) {
     if (cfg.role !== "depositHarvester" || (cfg.taskId && store[cfg.taskId])) continue;

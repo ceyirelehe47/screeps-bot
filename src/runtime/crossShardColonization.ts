@@ -1,3 +1,5 @@
+import { hasTaskActors } from "@/runtime/taskActors";
+import { getTickContextService } from "@/runtime/runtimeServices";
 import { getGlobalOwnedRoomCount } from "@/runtime/globalRoomCount";
 import { enqueueConfig, ensureConfigStore, getBodyCost, isConfigSpawning as hasSpawningConfig, removeQueuedSpawnConfig, selectLeastLoadedSpawn } from "@/runtime/spawnHelpers";
 import { spawnProfiles } from "@/config/spawnProfiles";
@@ -202,7 +204,7 @@ function getSpawnsForRoom(roomName: string): StructureSpawn[] {
 }
 
 function getLiveCreepsByConfig(configName: string): Creep[] {
-  return Object.values(Game.creeps).filter((creep) => creep.memory.configName === configName);
+  return getTickContextService().getAllCreeps().filter((creep) => creep.memory.configName === configName);
 }
 
 function isConfigSpawning(configName: string): boolean { return hasSpawningConfig(configName, Object.values(Game.spawns)); }
@@ -645,18 +647,28 @@ export function getCrossShardColonizationSummaries(limit = 20): CrossShardTaskSu
     .slice(0, limit);
 }
 
+/** 唯一任务删除规则；中央 GC 和运行循环共用，活体/出生引用优先于 TTL。 */
+export function cleanupCrossShardColonizationTasks(): number {
+  const store = Memory.data?.crossShardColonization;
+  if (!store) return 0;
+  let removed = 0;
+  for (const [id, task] of Object.entries(store)) {
+    if (!["completed", "failed"].includes(task.status) || Game.time - (task.completedAt ?? task.updatedAt) <= 5000) continue;
+    if (hasTaskActors(getAllTaskConfigNames(task), undefined, task.claimerName ? [task.claimerName] : [])) continue;
+    cleanupTaskConfigs(task);
+    delete store[id]; removed++;
+  }
+  return removed;
+}
+
 export function runCrossShardColonizationByFlag(): void {
   for (const flag of getCrossShardFlags()) {
     upsertTaskFromFlag(flag);
   }
 
+  cleanupCrossShardColonizationTasks();
   const store = ensureTaskStore();
-  for (const [id, task] of Object.entries(store)) {
-    if (["completed", "failed"].includes(task.status) && Game.time - (task.completedAt ?? task.updatedAt) > 5000) {
-      cleanupTaskConfigs(task);
-      if (getAllTaskConfigNames(task).every(name => getLiveCreepsByConfig(name).length === 0 && !isConfigSpawning(name))) delete store[id];
-      continue;
-    }
+  for (const task of Object.values(store)) {
     if (task.status === "blocked" && Game.time - (task.lastReadyAt ?? task.createdAt) > 5000) {
       cleanupTaskConfigs(task); task.status = "failed"; task.reason = "blocked_timeout"; task.completedAt = Game.time;
     }

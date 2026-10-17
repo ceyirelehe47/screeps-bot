@@ -42,9 +42,11 @@ const MEMORY_BRANCHES = {
   runtime: {
     declaration: "src/types/memory/runtime.d.ts",
     interfaceName: "ScreepsMemoryRuntime",
-    // 新增 runtimeIsolation 单写的有界防御故障摘要，profiler 关闭时仍可见。
-    schemaFingerprint: "1772b6d08e24df5e12ec8ce29be237cb90c71cf5c450d1419955bbf37db396f6",
+    // 登记实际调度摘要与独立 CPU 健康面包屑；均由各自 owner 单写。
+    schemaFingerprint: "41bacc8f8188197858677d6dfc8d9e943c0f51b4676adbc9409115ad61b6e678",
     imports: [
+      "@/runtime/cpuTickHealth:CpuTickCheckpoint",
+      "@/runtime/cpuTickHealth:CpuTickHealthSummary",
       "@/runtime/hubPlanner:AllocationLedgerEntry",
       "@/runtime/hubPlanner:DirectRouteDecision",
       "@/runtime/hubPlanner:ProgressEdge",
@@ -52,11 +54,14 @@ const MEMORY_BRANCHES = {
       "@/runtime/hubPlanner:SynthesisRoomCapability",
       "@/runtime/hubProtectionSnapshot:HubCommittedProtectionSnapshot",
       "@/runtime/hubProtectionSnapshot:HubProtectionAttempt",
+      "@/runtime/processScheduler:ProcessSchedulerMemory",
       "@/runtime/resourceControl:MarketTerminalEnergyReadinessObservation",
       "@/runtime/runtimeIsolation:DefenseFaultSummary",
     ],
     fields: [
       "defenseFaults",
+      "processScheduler",
+      "cpuTickHealth",
       "colonizationSupport",
       "warRebuildWatch",
       "lastDeployTag",

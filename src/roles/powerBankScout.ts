@@ -1,3 +1,4 @@
+import { getTickContextService } from "@/runtime/runtimeServices";
 import type { RoleFactory } from "@/types/system";
 import { isPowerBankSearchRoom } from "@/runtime/powerBankConstants";
 import { getPowerBankSearchCandidates, getPowerBankSearchRooms } from "@/runtime/powerBankSearch";
@@ -133,7 +134,7 @@ function hasHostileController(room: Room): boolean {
   if (room.controller?.reservation && !room.controller.my) {
     const myUser =
       Object.values(Game.spawns)[0]?.owner.username ||
-      Object.values(Game.creeps)[0]?.owner.username;
+      getTickContextService().getAllCreeps()[0]?.owner.username;
     if (!myUser || room.controller.reservation.username !== myUser) {
       return true;
     }

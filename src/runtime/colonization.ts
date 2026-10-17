@@ -208,7 +208,7 @@ function getMyUsername(): string | null {
     return firstSpawn.owner.username;
   }
 
-  const firstCreep = Object.values(Game.creeps)[0];
+  const firstCreep = getTickContextService().getAllCreeps()[0];
   if (firstCreep) {
     return firstCreep.owner.username;
   }

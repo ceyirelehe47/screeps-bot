@@ -1,5 +1,19 @@
 import { isPowerBankSearchRoom } from "@/runtime/powerBankConstants";
 import type { DepositHarvestTask } from "@/runtime/depositHarvest";
+import { hasTaskActors } from "@/runtime/taskActors";
+
+export function cleanupDepositDiscoveryTasks(): number {
+  const tasks = Memory.data?.depositHarvest;
+  if (!tasks) return 0;
+  let removed = 0;
+  for (const [id, task] of Object.entries(tasks)) {
+    if (["complete", "aborted", "failed"].includes(task.status) && Game.time > task.expiresAt + 5_000 &&
+        !hasTaskActors(task.configName ? [task.configName] : [], id)) {
+      delete tasks[id]; removed++;
+    }
+  }
+  return removed;
+}
 
 export function ensureDepositDiscoveryStore(): Record<string, DepositHarvestTask> {
   Memory.data ??= {};
@@ -23,9 +37,7 @@ export function recordDepositDiscovery(deposit: Deposit): void {
     return;
   }
   // 发现记录有界；先清已过期终态，绝不驱逐活任务或复活尚在场的终态。
-  for (const [id, task] of Object.entries(tasks)) {
-    if (["complete", "aborted", "failed"].includes(task.status) && Game.time > task.expiresAt + 5_000) delete tasks[id];
-  }
+  cleanupDepositDiscoveryTasks();
   if (Object.keys(tasks).length >= 256) return;
   tasks[deposit.id] = {
     id: deposit.id, depositId: deposit.id, status: "discovered", generation: 0,

@@ -6,7 +6,6 @@ import {
 } from "@/runtime/cpuMonitor";
 import type { CpuMonitorSnapshotV2, CpuMonitorRoomSummary } from "@/runtime/cpuMonitor";
 import { beginCpuTickHealth, markCpuTickPhase, markCpuTickCreep, completeCpuTickHealth } from "@/runtime/cpuTickHealth";
-import { createCpuSchedulerShadow, observeCpuScheduling } from "@/runtime/cpuSchedulerShadow";
 import { getRuntimeRoomFaults } from "@/runtime/runtimeIsolation";
 
 export interface TickCpuProfiler {
@@ -148,12 +147,12 @@ export function recordFixedCpuAction(phase: string, count = 1): void {
 
 export function createTickCpuProfiler(): TickCpuProfiler {
   const config = normalizeCpuMonitorConfig(Memory.cfg?.cpuProfiler);
+  beginCpuTickHealth();
 
   // Zero-overhead: disabled profiler never calls Game.cpu.getUsed()
   if (!config.enabled) {
-    return createNoopProfiler();
+    return createNoopProfiler(true);
   }
-  beginCpuTickHealth();
 
   // Zero-overhead: enabled but non-sample tick never calls Game.cpu.getUsed()
   if (Game.time % config.sampleInterval !== 0) {
@@ -170,7 +169,6 @@ export function createTickCpuProfiler(): TickCpuProfiler {
   const perCreepTiming = config.roomRoleAggregation;
   let measurementDepth = 0;
   let topLevelUsed = 0;
-  const schedulerShadow = createCpuSchedulerShadow();
 
   function ensureRoom(roomName: string): CpuMonitorRoomSummary {
     if (!rooms[roomName]) {
@@ -194,7 +192,6 @@ export function createTickCpuProfiler(): TickCpuProfiler {
       if (measurementDepth === 0) markCpuTickPhase(phase);
       measurementDepth += 1;
       const start = Game.cpu.getUsed();
-      if (measurementDepth === 1) observeCpuScheduling(schedulerShadow, phase, start, Game.cpu);
       try {
         return fn();
       } finally {
@@ -251,7 +248,6 @@ export function createTickCpuProfiler(): TickCpuProfiler {
         startupUsed: loopStartUsed,
         tickUsedAtFlush,
         topLevelUsed,
-        schedulerShadow,
         roomFaults: getRuntimeRoomFaults(),
         bucket: Game.cpu.bucket,
         limit: Game.cpu.limit,

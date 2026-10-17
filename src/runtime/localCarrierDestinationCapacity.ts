@@ -1,3 +1,4 @@
+import { getTickContextService } from "@/runtime/runtimeServices";
 import { getCreepAssignmentState } from "@/runtime/creepAssignmentState";
 
 export interface LocalCarrierDestinationCapacityClaim {
@@ -74,7 +75,7 @@ function seedCarrierCommitment(
 }
 
 function seedLiveCarrierCommitments(target: DestinationCapacityLedger): void {
-  for (const creep of Object.values(Game.creeps)) {
+  for (const creep of getTickContextService().getAllCreeps()) {
     const state = getCreepAssignmentState(creep.name);
     const snapshotTargetId = state?.synthesisCarrierPendingReturnToId ?? state?.synthesisCarrierPendingToId;
     const snapshotResource = state?.synthesisCarrierPendingResource;

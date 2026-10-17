@@ -1,6 +1,6 @@
 jest.mock("@/runtime/runtimeServices", () => ({ getTickContextService: () => ({
   getMyRooms: () => Object.values(Game.rooms), getRoomContext: () => undefined,
-}) }));
+}), getMemoryService: () => ({ ensureRuntime: () => Memory.runtime ??= {} }) }));
 import { runCoreDefense } from "@/runtime/coreDefense";
 
 function scenario() {
@@ -63,4 +63,15 @@ it("落地后 Nuke 对象消失仍排除核伤害", () => {
 it("没有规划快照的裸塔一 tick 内被摧毁仍触发", () => {
   const w = scenario(); w.ramparts.clear(); runCoreDefense(); w.structures.length = 0; w.step();
   expect(w.room.controller!.activateSafeMode).toHaveBeenCalledTimes(1);
+});
+
+it("前房读取失败不阻断后房 safe mode，下一 tick 继续尝试故障房", () => {
+  const w = scenario();
+  const failed = { name: "W0N0", find: jest.fn(() => { throw new Error("bad-room"); }) } as unknown as Room;
+  Game.rooms = { W0N0: failed, W1N1: w.room };
+  w.hostiles.length = 0;
+  w.hostiles.push({ pos: new w.Pos(24, 25), getActiveBodyparts: (type: BodyPartConstant) => type === CLAIM ? 1 : 0 } as unknown as Creep);
+  expect(() => runCoreDefense()).not.toThrow();
+  expect(w.room.controller!.activateSafeMode).toHaveBeenCalledTimes(1);
+  w.step(); expect(failed.find).toHaveBeenCalledTimes(2);
 });

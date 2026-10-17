@@ -1,4 +1,8 @@
+import { createProcessScheduler } from "@/runtime/processScheduler";
+import { markCpuTickPhase, completeCpuTickHealth } from "@/runtime/cpuTickHealth";
 import { errorMapper, reportRuntimeError } from "@/modules/errorMapper";
+import { registerOutboundMissionOwners } from "@/runtime/registerOutboundMissionOwners";
+import { registerTaskMemoryOwners } from "@/runtime/registerTaskMemoryOwners";
 import { mountAll } from "@/mount";
 import { announceDeploy } from "@/runtime/deployAnnounce";
 import { runMemoryCleanup } from "@/runtime/memoryCleanup";
@@ -18,7 +22,7 @@ import { runMineralExtraction } from "@/runtime/mineralExtraction";
 import { runExternalTelemetryExport } from "@/runtime/externalTelemetry";
 import { bootstrapRooms } from "@/runtime/bootstrap";
 import { runCoreDefense } from "@/runtime/coreDefense";
-import { runHomeDefense } from "@/runtime/homeDefense";
+import { runHomeDefense, runHomeDefenseSupply } from "@/runtime/homeDefense";
 import { runDefenseMode } from "@/runtime/defenseMode";
 import { runFlagControl } from "@/runtime/flagControl";
 import { runLinkControl } from "@/runtime/linkControl";
@@ -49,9 +53,11 @@ import {
   runTreasuryT1ShadowObservation,
 } from "@/runtime/treasuryTerminalTransfer";
 
+registerOutboundMissionOwners();
+registerTaskMemoryOwners();
 registerTreasuryProductionTerminalTransfer();
-mountAll();
 registerGlobalApi();
+mountAll();
 registerConsoleCommands();
 registerProductionApi();
 
@@ -66,79 +72,74 @@ function gameLoop(): void {
   // 本 tick 的 spawn/creep 快照由 TickContext 统一维护，避免与各模块重复
   // Object.values 扫描；快照在 tick 内不可变。
   const tickContext = getTickContextService();
-  // 普通阶段在编排边界隔离；T0 防御另有房间/单塔边界，避免一处故障阻断其余防御。
-  const runPhase = (phase: string, work: () => void): void => {
-    try {
-      cpuProfiler.measure(phase, work);
-    } catch (error) {
-      if (!isPermitChainStorageUnavailableError(error)) reportRuntimeError(`phase:${phase}`, error);
-    }
-  };
+  const scheduler = createProcessScheduler((phase, work) => cpuProfiler.measure(phase, work), (phase, error) => {
+    if (!isPermitChainStorageUnavailableError(error)) reportRuntimeError(`phase:${phase}`, error);
+  });
+  const runPhase = scheduler.runPhase;
   let treasuryLifecycleStarted = false;
   runPhase("treasuryBeginTick", () => {
     treasuryLifecycleStarted = beginTreasuryProductionTick();
   });
 
   try {
-    runPhase("announceDeploy", announceDeploy);
-    runPhase("marketSalePreflight", runMarketSalePreflight);
-    // 保留冻结生产顺序中的 phase；模块本身由代码级闩永久关闭。
-    runPhase("pixelGenerator", runPixelGenerator);
-    runPhase("productionMonitor", runProductionMonitor);
-    runPhase("nukerControl", runNukerControl);
-    runPhase("hubPlanner", runHubPlanner);
-    runPhase("hubUpgradeControl", runHubUpgradeControl);
-    runPhase("synthesisControl", runSynthesisControl);
-    runPhase("factoryControl", runFactoryControl);
-    runPhase("mineralExtraction", runMineralExtraction);
-    runPhase("resourceControl", runResourceControl);
-    runPhase("marketSaleAutomation", runLiveMarketSaleAutomation);
-    runPhase("hubProgressAnalytics", runHubProgressAnalytics);
-    runPhase("hubProgressOverlay", renderHubProgressOverlays);
-    runPhase("externalTelemetryExport", runExternalTelemetryExport);
-    runPhase("memoryCleanup", runMemoryCleanup);
-    runPhase("portalDiscovery", runPortalDiscovery);
-    runPhase("flagControl", runFlagControl);
-    runPhase("crossShardSignals", runCrossShardSignals);
-    runPhase("interShardControl", runInterShardControl);
-    runPhase("warControl", runWarControl);
-    runPhase("powerBankObserver", runPowerBankObserver);
-    runPhase("powerBankHarvest", runPowerBankHarvest);
-    runPhase("depositHarvest", runDepositHarvest);
-    runPhase("powerCreepControl", runPowerCreepControl);
-    runPhase("powerSpawnControl", runPowerSpawnControl);
-    runPhase("roomPlannerConstruction", runRoomPlannerConstruction);
-    runPhase("linkControl", runLinkControl);
-    runPhase("coreDefense", runCoreDefense);
-    runPhase("defenseMode", runDefenseMode);
-    runPhase("homeDefense", runHomeDefense);
-    runPhase("towerControl", runTowerControl);
-    runPhase("refreshWorkerTasks", refreshWorkerTasks);
-    runPhase("bootstrapRooms", bootstrapRooms);
-    runPhase("remoteMining", runRemoteMining);
-    runPhase("scheduleSpawnTasks", scheduleSpawnTasks);
-
-    runPhase("spawnWork", () => {
-      tickContext.getAllSpawns().forEach((spawn) => {
-        try {
-          cpuProfiler.measureRoomPhase("spawnWork", spawn.room.name, () => spawn.work());
-        } catch (error) {
-          reportRuntimeError(`spawn:${spawn.name}`, error);
-        }
-      });
+    scheduler.runAll({
+      announceDeploy: announceDeploy,
+      marketSalePreflight: runMarketSalePreflight,
+      pixelGenerator: runPixelGenerator,
+      productionMonitor: runProductionMonitor,
+      nukerControl: runNukerControl,
+      hubPlanner: runHubPlanner,
+      hubUpgradeControl: runHubUpgradeControl,
+      synthesisControl: runSynthesisControl,
+      factoryControl: runFactoryControl,
+      mineralExtraction: runMineralExtraction,
+      resourceControl: runResourceControl,
+      marketSaleAutomation: runLiveMarketSaleAutomation,
+      hubProgressAnalytics: runHubProgressAnalytics,
+      hubProgressOverlay: renderHubProgressOverlays,
+      externalTelemetryExport: runExternalTelemetryExport,
+      memoryCleanup: runMemoryCleanup,
+      portalDiscovery: runPortalDiscovery,
+      flagControl: runFlagControl,
+      crossShardSignals: runCrossShardSignals,
+      interShardControl: runInterShardControl,
+      warControl: runWarControl,
+      powerBankObserver: runPowerBankObserver,
+      powerBankHarvest: runPowerBankHarvest,
+      depositHarvest: runDepositHarvest,
+      powerCreepControl: runPowerCreepControl,
+      powerSpawnControl: runPowerSpawnControl,
+      roomPlannerConstruction: runRoomPlannerConstruction,
+      linkControl: runLinkControl,
+      coreDefense: runCoreDefense,
+      defenseMode: runDefenseMode,
+      homeDefense: runHomeDefense,
+      homeDefenseSupply: runHomeDefenseSupply,
+      towerControl: runTowerControl,
+      refreshWorkerTasks: refreshWorkerTasks,
+      bootstrapRooms: bootstrapRooms,
+      remoteMining: runRemoteMining,
+      scheduleSpawnTasks: scheduleSpawnTasks,
+      spawnWork: () => {
+        tickContext.getAllSpawns().forEach((spawn) => {
+          try {
+            cpuProfiler.measureRoomPhase("spawnWork", spawn.room.name, () => spawn.work());
+          } catch (error) {
+            reportRuntimeError(`spawn:${spawn.name}`, error);
+          }
+        });
+      },
+      creepWork: () => {
+        tickContext.getAllCreeps().forEach((creep) => {
+          try {
+            cpuProfiler.measureCreep(creep, () => creep.work());
+          } catch (error) {
+            reportRuntimeError(`creep:${creep.name}`, error);
+          }
+        });
+      },
+      empireInventoryShadow: runEmpireInventoryShadowCheck,
     });
-    runPhase("creepWork", () => {
-      tickContext.getAllCreeps().forEach((creep) => {
-        try {
-          cpuProfiler.measureCreep(creep, () => creep.work());
-        } catch (error) {
-          reportRuntimeError(`creep:${creep.name}`, error);
-        }
-      });
-    });
-    // 库存影子等价验证（Phase 1 只读观察者）：低频对账新索引与直读 Store，
-    // 不参与任何生产决策；详见 empireInventoryShadow.ts。
-    runPhase("empireInventoryShadow", runEmpireInventoryShadowCheck);
   } finally {
     try {
       runPhase("treasuryT1Shadow", runTreasuryT1ShadowObservation);
@@ -146,12 +147,17 @@ function gameLoop(): void {
         runPhase("treasuryEndTick", endTreasuryProductionTick);
       }
     } finally {
+      markCpuTickPhase("cpuProfiler.flush");
       try {
         cpuProfiler.flush();
       } catch (error) {
         reportRuntimeError("cpuProfiler.flush", error);
       } finally {
-        try { finishMemoryStorageTick(); }
+        markCpuTickPhase("processScheduler.finish");
+        try { scheduler.finish(); }
+        catch (error) { reportRuntimeError("processScheduler.finish", error); }
+        markCpuTickPhase("memoryStorage.finish");
+        try { finishMemoryStorageTick(); completeCpuTickHealth(); }
         catch (error) { reportRuntimeError("memoryStorage.finish", error); }
       }
     }

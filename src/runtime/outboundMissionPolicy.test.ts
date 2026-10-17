@@ -1,8 +1,11 @@
+import { registerOutboundMissionOwners } from "@/runtime/registerOutboundMissionOwners";
+import { canContinueWarMission } from "@/runtime/war/outbound";
+registerOutboundMissionOwners();
 jest.mock("@/runtime/defenseMode", () => ({ isDefenseMode: jest.fn(() => false) }));
 jest.mock("@/runtime/roomReserve", () => ({ isRoomInReserveMode: jest.fn(() => false) }));
 import { isDefenseMode } from "@/runtime/defenseMode";
 import { isRoomInReserveMode } from "@/runtime/roomReserve";
-import { isSpawnConfigEconomicallyBlocked, canStartOutboundMission, canContinueWarMission } from "@/runtime/outboundMissionPolicy";
+import { isSpawnConfigEconomicallyBlocked, canStartOutboundMission } from "@/runtime/outboundMissionPolicy";
 import type { WarTask } from "@/runtime/war/store";
 import type { DepositHarvestTask } from "@/runtime/depositHarvest";
 import { pushBlockingCreep } from "@/movement/traffic";

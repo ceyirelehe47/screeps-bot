@@ -105,6 +105,7 @@ describe("runHubUpgradeControl", () => {
       "E4N58:upgrader:0",
       RCL8_UPGRADER_MAINTENANCE_BODY,
     );
+    Game.time++; // 新生单位在下一帧进入 Game.creeps 快照。
     Game.creeps.maintenance = maintenance;
     Game.rooms.E4N58.controller!.ticksToDowngrade = RCL8_UPGRADER_RECOVERY_STOP_TICKS;
     runHubUpgradeControl();

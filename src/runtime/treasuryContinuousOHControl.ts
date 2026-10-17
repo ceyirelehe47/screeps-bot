@@ -1,3 +1,4 @@
+import { getTickContextService } from "@/runtime/runtimeServices";
 import { AUTHORITY_EXECUTOR_SHARD } from "@/config/deployment";
 import { BUILD_INFO } from "@/buildMeta";
 import { runtime, finiteNonNegative, treasuryT1SerializedBytes } from "@/runtime/treasuryFirstLiveState";
@@ -120,7 +121,7 @@ function cargoQuiescent(state: TreasuryContinuousOHState): boolean {
   if (endpointTouched()) return false;
   const terminalIds = [state.sourceTerminalId, state.targetTerminalId];
   if (terminalIds.some((id) => getLocalCarrierDestinationCommittedAmount(id) > 0)) return false;
-  for (const creep of Object.values(Game.creeps)) {
+  for (const creep of getTickContextService().getAllCreeps()) {
     const assignment = getCreepAssignmentState(creep.name);
     const legacy = creep.memory as unknown as Record<string, unknown>;
     const fromId = assignment?.synthesisCarrierPendingFromId ?? legacy.synthesisCarrierPendingFromId;

@@ -1,3 +1,4 @@
+import { countBoostableParts } from "@/runtime/boostParts";
 import { canStartOutboundMission } from "@/runtime/outboundMissionPolicy";
 import { getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
 import { prepareBoosts, releaseBoostLabs } from "@/runtime/powerBankBoost";
@@ -60,7 +61,7 @@ function stopConfig(configName: string, sourceRoom: string, boostOwner?: string)
   const spawning = service.getSpawnsByRoom(sourceRoom).some(spawn => spawn.spawning &&
     Memory.creeps?.[spawn.spawning.name]?.configName === configName);
   // 同tick交接会改写configName，旧索引不能证明新退役配置已无活体。
-  if (!spawning && !Object.values(Game.creeps).some(creep => creep.memory.configName === configName)) delete configs[configName];
+  if (!spawning && !getTickContextService().getAllCreeps().some(creep => creep.memory.configName === configName)) delete configs[configName];
 }
 
 /** 只对实际就位、采力足够且不临近死亡的接班矿工计时。 */
@@ -172,7 +173,7 @@ export function runColonizationSupport(): void {
       const miningName = `${miningPrefix}${source.id}`;
       validMiningNames.add(miningName);
       const supportMiners = service.getCreepsByConfigName(miningName).filter(creep => !creep.memory._colonizationRetiring);
-      const otherMiners = Object.values(Game.creeps).filter(creep => {
+      const otherMiners = getTickContextService().getAllCreeps().filter(creep => {
         const existing = configs[creep.memory.configName ?? ""];
         const args = existing?.args ?? creep.memory.roleArgs;
         return creep.memory.role === "colonizerHarvester" && creep.memory.configName?.includes(":colonize:") &&
@@ -225,10 +226,9 @@ export function runColonizationSupport(): void {
     const helpersAtSource = service.getCreepsByRoom(sourceRoom).filter(creep =>
       creep.memory.configName === configName || creep.memory.configName?.startsWith(retiringPrefix));
     const toBoost = helpersAtSource.filter(creep => creep.memory._optionalBoostSkipped !== boostOwner &&
-      creep.body.some(part => part.type === WORK && part.hits > 0 && !part.boost));
+      countBoostableParts(creep.body, RESOURCE_CATALYZED_GHODIUM_ACID) > 0);
     if (toBoost.length > 0) {
-      const needed = toBoost.reduce((sum, creep) => sum + creep.body.filter(part => part.type === WORK &&
-        part.hits > 0 && !part.boost).length * LAB_BOOST_MINERAL, 0);
+      const needed = toBoost.reduce((sum, creep) => sum + countBoostableParts(creep.body, RESOURCE_CATALYZED_GHODIUM_ACID) * LAB_BOOST_MINERAL, 0);
       prepareBoosts(boostOwner, sourceRoom, 8, new Map([[RESOURCE_CATALYZED_GHODIUM_ACID, needed]]), { requireLabEnergy: true });
     } else if (helpersAtSource.length > 0 || service.getCreepsByConfigName(configName).length > 0) {
       releaseBoostLabs(boostOwner, sourceRoom);

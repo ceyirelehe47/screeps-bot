@@ -1,16 +1,16 @@
-jest.mock("@/roles/combatBoosts", () => ({ prepareCombatBoost: jest.fn(() => false) }));
+jest.mock("@/roles/optionalCombatBoosts", () => ({ prepareOptionalCombatBoost: jest.fn(() => false) }));
 jest.mock("@/roles/energyTargets", () => ({
   pickupEnergyFromPreferredTarget: jest.fn(() => ({ picked: false, outOfRange: false })),
 }));
 jest.mock("@/roles/shared", () => ({ moveToTarget: jest.fn() }));
 
-import { prepareCombatBoost } from "@/roles/combatBoosts";
+import { prepareOptionalCombatBoost } from "@/roles/optionalCombatBoosts";
 import { pickupEnergyFromPreferredTarget } from "@/roles/energyTargets";
 import { moveToTarget } from "@/roles/shared";
 import { upgraderRole } from "@/roles/upgrader";
 import { createMockStore } from "@mock/powerBank";
 
-const mockedPrepareBoost = prepareCombatBoost as jest.MockedFunction<typeof prepareCombatBoost>;
+const mockedPrepareBoost = prepareOptionalCombatBoost as jest.MockedFunction<typeof prepareOptionalCombatBoost>;
 const mockedPickupEnergy = pickupEnergyFromPreferredTarget as jest.MockedFunction<typeof pickupEnergyFromPreferredTarget>;
 const mockedMoveToTarget = moveToTarget as jest.MockedFunction<typeof moveToTarget>;
 

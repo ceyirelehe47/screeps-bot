@@ -25,6 +25,14 @@ describe("出口搜索的引擎语义边界", () => {
     Game.creeps[name] = creep;
     return creep;
   }
+  it("同 tick 重入旅行不重复增加 stuck，下一帧无进展才计一次", () => {
+    const creep = unit();
+    moveToTargetRoom(creep, "W0N1"); moveToTargetRoom(creep, "W0N1");
+    expect(getCreepMovementState(creep)!.travelState!.stuckTicks).toBe(0);
+    Game.time++;
+    moveToTargetRoom(creep, "W0N1"); moveToTargetRoom(creep, "W0N1");
+    expect(getCreepMovementState(creep)!.travelState!.stuckTicks).toBe(1);
+  });
   it("安全区层在自定义成本之后生效，选择与路径都不越过许可格", () => {
     const creep = unit();
     const restrict = jest.spyOn(safeZoneHelpers, "shouldRestrictToSafeZone").mockReturnValue(true);
@@ -36,6 +44,20 @@ describe("出口搜索的引擎语义边界", () => {
       const matrix = (PathFinder.search as jest.Mock).mock.calls[0][2].roomCallback(creep.room.name) as CostMatrix;
       expect(matrix.get(20, 11)).toBe(255);
       expect(matrix.get(20, 10)).toBeLessThan(255);
+    } finally { restrict.mockRestore(); zone.mockRestore(); }
+  });
+  it("安全区封住出口属于策略拒绝，不污染物理断路排除，也不累计 stuck", () => {
+    const creep = unit();
+    const restrict = jest.spyOn(safeZoneHelpers, "shouldRestrictToSafeZone").mockReturnValue(true);
+    const zone = jest.spyOn(safeZone, "getSafeZone").mockReturnValue(new Set([10 * 50 + 10, 11 * 50 + 10]));
+    try {
+      expect(searchRoomExitPath(creep, RIGHT, {})).toMatchObject({ reason: "policyDenied", rejectTransition: false, path: [] });
+      expect(moveToTargetRoom(creep, "W0N1", "W1N1|W0N1")).toBe(ERR_BUSY);
+      expect(getCreepMovementState(creep)!.travelState!.rejectedTransitions).toBeUndefined();
+      Game.time++;
+      expect(moveToTargetRoom(creep, "W0N1", "W1N1|W0N1")).toBe(ERR_BUSY);
+      expect(getCreepMovementState(creep)!.travelState!.stuckTicks).toBe(0);
+      expect(PathFinder.search).not.toHaveBeenCalled();
     } finally { restrict.mockRestore(); zone.mockRestore(); }
   });
   it("密集母房的 PB 两人都能绕过障碍发出移动意图，选路不再重复搜索", () => {

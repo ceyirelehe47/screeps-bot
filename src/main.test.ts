@@ -1,3 +1,6 @@
+import { RUNTIME_PROCESSES } from "@/runtime/processTable";
+import { createProcessScheduler, resetProcessSchedulerForTest } from "@/runtime/processScheduler";
+import { resetRuntimeServices } from "@mock/movement";
 import { readFileSync } from "fs";
 import { resolve } from "path";
 import * as ts from "typescript";
@@ -13,7 +16,12 @@ describe("main loop phase ordering", () => {
   );
   const canonicalTickPhases = [
     ["announceDeploy", "announceDeploy"],
+    ["coreDefense", "runCoreDefense"],
+    ["defenseMode", "runDefenseMode"],
+    ["homeDefense", "runHomeDefense"],
+    ["towerControl", "runTowerControl"],
     ["marketSalePreflight", "runMarketSalePreflight"],
+    ["homeDefenseSupply", "runHomeDefenseSupply"],
     ["pixelGenerator", "runPixelGenerator"],
     ["productionMonitor", "runProductionMonitor"],
     ["nukerControl", "runNukerControl"],
@@ -40,10 +48,6 @@ describe("main loop phase ordering", () => {
     ["powerSpawnControl", "runPowerSpawnControl"],
     ["roomPlannerConstruction", "runRoomPlannerConstruction"],
     ["linkControl", "runLinkControl"],
-    ["coreDefense", "runCoreDefense"],
-    ["defenseMode", "runDefenseMode"],
-    ["homeDefense", "runHomeDefense"],
-    ["towerControl", "runTowerControl"],
     ["refreshWorkerTasks", "refreshWorkerTasks"],
     ["bootstrapRooms", "bootstrapRooms"],
     ["remoteMining", "runRemoteMining"],
@@ -70,43 +74,20 @@ describe("main loop phase ordering", () => {
     return guarded.tryBlock;
   }
 
-  /** Extract the canonical production phases inside the lifecycle guard in order. */
-  function extractMeasureCalls(): Array<{
-    phase: string;
-    callback: string;
-    call: ts.CallExpression;
-  }> {
-    const calls: Array<{
-      phase: string;
-      callback: string;
-      call: ts.CallExpression;
-    }> = [];
-    for (const statement of getProductionPhaseBlock().statements) {
-      if (!ts.isExpressionStatement(statement) || !ts.isCallExpression(statement.expression)) {
-        continue;
-      }
-      const callee = statement.expression.expression;
-      if (
-        !ts.isIdentifier(callee) || callee.text !== "runPhase"
-      ) {
-        continue;
-      }
-      const phaseArgument = statement.expression.arguments[0];
-      const callbackArgument = statement.expression.arguments[1];
-      calls.push({
-        phase:
-          phaseArgument && ts.isStringLiteralLike(phaseArgument)
-            ? phaseArgument.text
-            : "<non-literal-phase>",
-        callback: ts.isIdentifier(callbackArgument)
-          ? callbackArgument.text
-          : ts.isArrowFunction(callbackArgument)
-            ? "<inline>"
-            : "<unsupported-callback>",
-        call: statement.expression,
-      });
-    }
-    return calls;
+  function extractMeasureCalls(): Array<{ phase: string; callback: string; callbackNode: ts.Expression }> {
+    const statement = getProductionPhaseBlock().statements.find(node =>
+      ts.isExpressionStatement(node) && ts.isCallExpression(node.expression) && node.expression.expression.getText(mainAst) === "scheduler.runAll");
+    if (!statement || !ts.isExpressionStatement(statement) || !ts.isCallExpression(statement.expression)) throw new Error("process table execution missing");
+    const work = statement.expression.arguments[0];
+    if (!ts.isObjectLiteralExpression(work)) throw new Error("process work map missing");
+    const entries = work.properties.filter(ts.isPropertyAssignment).map(property => ({
+      phase: property.name.getText(mainAst), callback: ts.isIdentifier(property.initializer) ? property.initializer.text : "<inline>", callbackNode: property.initializer,
+    }));
+    return RUNTIME_PROCESSES.map(spec => {
+      const entry = entries.find(candidate => candidate.phase === spec.id);
+      if (!entry) throw new Error(`missing phase callback: ${spec.id}`);
+      return entry;
+    });
   }
 
   function containsCatchClause(node: ts.Node): boolean {
@@ -132,8 +113,7 @@ describe("main loop phase ordering", () => {
   }
 
   function getInlinePhaseCallback(phase: "spawnWork" | "creepWork"): ts.ArrowFunction {
-    const phaseCall = extractMeasureCalls().find((entry) => entry.phase === phase)?.call;
-    const callback = phaseCall?.arguments[1];
+    const callback = extractMeasureCalls().find((entry) => entry.phase === phase)?.callbackNode;
     if (!callback || !ts.isArrowFunction(callback)) {
       throw new Error(`${phase} inline callback not found`);
     }
@@ -215,14 +195,14 @@ describe("main loop phase ordering", () => {
 
     expect(phaseContract).toEqual(canonicalTickPhases);
     expect(new Set(order).size).toBe(order.length);
-    expect(order).toHaveLength(39);
+    expect(order).toHaveLength(40);
   });
 
   it("keeps one-time registrations outside and before gameLoop", () => {
     const gameLoopIndex = mainAst.statements.indexOf(getGameLoopDeclaration());
     const registrations = [
-      "mountAll",
       "registerGlobalApi",
+      "mountAll",
       "registerConsoleCommands",
       "registerProductionApi",
     ];
@@ -265,7 +245,7 @@ describe("main loop phase ordering", () => {
       "utf-8",
     );
     expect(mainSrc).toContain(
-      'runPhase("pixelGenerator", runPixelGenerator)',
+      'pixelGenerator: runPixelGenerator',
     );
     expect(pixelSrc).toContain(
       "PIXEL_GENERATOR_PERMANENTLY_DISABLED = true",
@@ -295,8 +275,16 @@ describe("main loop phase ordering", () => {
 });
 
 describe("主循环异常隔离", () => {
+  beforeEach(() => {
+    resetRuntimeServices(); resetProcessSchedulerForTest();
+    Game.cpu = { ...Game.cpu, bucket: 10000, limit: 120, tickLimit: 500, getUsed: jest.fn(() => 0) };
+    Memory.runtime = {};
+  });
   // 运行实际 main.ts 编排；隔离游戏模块副作用，用依赖替身注入异常。
   function loadLoop(options: { failPhase?: string; begin?: boolean; flushThrows?: boolean } = {}) {
+    resetProcessSchedulerForTest();
+    createProcessScheduler(() => undefined, () => undefined).finish();
+    Game.time += 3;
     const phases: string[] = [];
     const reportRuntimeError = jest.fn();
     const creepWorks = [jest.fn(() => { throw new Error("creep 失败"); }), jest.fn()];
@@ -324,6 +312,7 @@ describe("主循环异常隔离", () => {
       beginMemoryStorageTick: memoryBegin,
       finishMemoryStorageTick: memoryFinish,
       createTickCpuProfiler: () => profiler,
+      createProcessScheduler,
       getTickContextService: () => ({
         getAllSpawns: () => spawnWorks.map((work, index) => ({ name: `spawn${index}`, room: { name: "E1N1" }, work })),
         getAllCreeps: () => creepWorks.map((work, index) => ({ name: `creep${index}`, work })),
@@ -351,8 +340,9 @@ describe("主循环异常隔离", () => {
       const runtime = loadLoop({ failPhase });
       expect(() => runtime.loop()).not.toThrow();
       // begin 异常时没有成功开启 Treasury 生命周期，因此不调用 end。
-      expect(runtime.phases).toEqual(failPhase === "treasuryBeginTick"
-        ? baseline.phases.filter((phase) => phase !== "treasuryEndTick") : baseline.phases);
+      const dependent = failPhase === "marketSalePreflight" ? ["homeDefenseSupply", "resourceControl", "marketSaleAutomation"] : [];
+      expect(runtime.phases).toEqual(baseline.phases.filter(phase => !dependent.includes(phase) &&
+        !(failPhase === "treasuryBeginTick" && phase === "treasuryEndTick")));
       expect(runtime.flush).toHaveBeenCalledTimes(1);
       expect(runtime.memoryBegin).toHaveBeenCalledTimes(1);
       expect(runtime.memoryFinish).toHaveBeenCalledTimes(1);

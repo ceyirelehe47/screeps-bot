@@ -214,6 +214,7 @@ export function issueMove(creep: AnyCreep, direction: DirectionConstant): CreepM
     : creep.move(direction);
   if (code === OK) {
     const receipts = currentMoveReceipts();
+    if (receipts.has(creep)) recordMovementMetric("moveIntentOverwrites", creep.room?.name);
     removeMoveDestination(creep, receipts.get(creep));
     const receipt = Object.freeze({
       tick: Game.time, actorId: creep.id ?? creep.name, direction, from,

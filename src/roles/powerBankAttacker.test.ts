@@ -135,7 +135,7 @@ describe("powerBankAttackerRole", () => {
     Object.assign(global, { RoomPosition: MockPos });
     Game.time = 1000;
     Game.creeps = {} as Record<string, Creep>;
-    getTickContextService.mockReturnValue({ getRoomContext: (owner: Room | string) => {
+    getTickContextService.mockReturnValue({ getAllCreeps: () => Object.values(Game.creeps), getRoomContext: (owner: Room | string) => {
       const name = typeof owner === "string" ? owner : owner.name;
       return {
         room: typeof owner === "string" ? { name } : owner,

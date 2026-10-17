@@ -1,13 +1,16 @@
+import { retireCreep, retireCreepMemory } from "@/runtime/retirement";
+import { canContinueWarMission } from "./outbound";
+import { countBoostableParts } from "@/runtime/boostParts";
 import { selectLeastLoadedSpawn } from "@/runtime/spawnHelpers";
 export { getSpawnQueueLoad, selectLeastLoadedSpawn } from "@/runtime/spawnHelpers";
-import { canContinueWarMission, canStartOutboundMission, isSpawnConfigEconomicallyBlocked } from "@/runtime/outboundMissionPolicy";
+import { canStartOutboundMission, isSpawnConfigEconomicallyBlocked } from "@/runtime/outboundMissionPolicy";
 import { cancelSpawning, invalidateWarSpawnQueues, queuedSpawns, spawningForConfig } from "./spawnIndex";
 import { getSquadPolicy } from "./squadPolicy/index";
 import { getTickContextService } from "@/runtime/runtimeServices";
 import { prepareBoosts, releaseBoostLabs } from "@/runtime/powerBankBoost";
 import { clearMovementState } from "@/roles/shared";
 import type { CreepConfig } from "@/types/system";
-import { CONTROLLER_ATTACKER_QUEUE_INTERVAL, T3_ATTACKER_BOOSTS, T3_BOOST_PARTS, T3_DUO_BOOST_AMOUNTS, T3_HEALER_BOOSTS } from "./constants";
+import { CONTROLLER_ATTACKER_QUEUE_INTERVAL, T3_ATTACKER_BOOSTS, T3_DUO_BOOST_AMOUNTS, T3_HEALER_BOOSTS } from "./constants";
 import type { WarGenerationState, WarRole, WarStatus, WarTask, WarTaskAssetReleaseOptions, WarTaskAssetReleaseResult } from "./store";
 import { ensureConfigStore, getConfigName, getControllerAttackConfigName, getGenerationBoostTaskId, getGenerationConfigName, getLegacyWarBoostTaskId, getLiveCreepsByConfig, getTaskConfigNames, isPatrolTask, sameArray } from "./store";
 import { getHealerCount, getMeleeCount, getRoleArgs, getRoleBody } from "./squadPolicy/index";
@@ -146,15 +149,13 @@ export function detachWarTaskCreeps(task: WarTask, configNames: ReadonlySet<stri
   for (const configName of configNames) {
     const actors = getLiveCreepsByConfig(configName);
     for (const creep of actors) {
-      if (suicide && creep.suicide() === OK) suicided++;
-      creep.memory._warDetached = true;
-      delete creep.memory._warPartnerConfigName; delete creep.memory.configName;
+      if (retireCreep(creep, { owner: "war", mode: suicide ? "suicide" : "detach" })) suicided++;
       detachedNames.add(creep.name);
     }
     for (const name of task.members?.[configName]?.creepNames ?? []) {
       const memory = Memory.creeps?.[name];
       if (!memory || memory.configName !== configName) continue;
-      memory._warDetached = true; delete memory._warPartnerConfigName; delete memory.configName; detachedNames.add(name);
+      retireCreepMemory(memory, { owner: "war", mode: "detach" }); detachedNames.add(name);
     }
   }
   return { detachedCreeps: detachedNames.size, suicidedCreeps: suicided };
@@ -512,11 +513,7 @@ export function getGenerationRemainingBoostAmounts(
     } as BodyPartDefinition));
     const compounds = role === "meleeAttacker" ? T3_ATTACKER_BOOSTS : T3_HEALER_BOOSTS;
     for (const compound of compounds) {
-      const partType = T3_BOOST_PARTS[compound];
-      if (!partType) continue;
-      const partCount = body.filter((part) =>
-        part.type === partType && part.hits > 0 && part.boost !== compound
-      ).length;
+      const partCount = countBoostableParts(body, compound);
       if (partCount <= 0) continue;
       amounts.set(compound, (amounts.get(compound) ?? 0) + partCount * LAB_BOOST_MINERAL);
     }

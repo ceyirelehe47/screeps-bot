@@ -1,4 +1,5 @@
 import { getTickContextService } from "@/runtime/runtimeServices";
+import { forEachIsolatedRoom } from "@/runtime/runtimeIsolation";
 
 const CORE_ATTACK_RANGE = 3;
 const NUKE_DAMAGE_RANGE = 2;
@@ -91,5 +92,5 @@ function evaluateRoomCore(room: Room): void {
 }
 
 export function runCoreDefense(): void {
-  for (const room of getTickContextService().getMyRooms()) evaluateRoomCore(room);
+  forEachIsolatedRoom("coreDefense", getTickContextService().getMyRooms(), evaluateRoomCore);
 }

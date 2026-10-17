@@ -15,6 +15,7 @@ import { reconcileSpawnQueueOwnership } from "@/runtime/spawnQueueOwnership";
 import { colonizationHarvesterPreSpawnThreshold } from "@/runtime/colonizationHarvesterPreSpawn";
 import type { CreepConfig } from "@/types/system";
 import { fixedBodyExceedsCapacity, isSpawnConfigEconomicallyBlocked } from "@/runtime/outboundMissionPolicy";
+import { getRoleSpawnIntent } from "@/runtime/spawnIntent";
 
 const CARRIER_PRESPAWN_BUFFER_TICKS = 30;
 const UPGRADER_PRESPAWN_BUFFER_TICKS = 30;
@@ -574,27 +575,6 @@ function shouldQueueConfig(
   return getConfigCreeps(configName, context).length === 0;
 }
 
-function isOutboundNonWarRole(role: CreepConfig["role"]): boolean {
-  return role === "colonizerHarvester" ||
-    role === "colonizerWorker" ||
-    role === "colonizerUpgrader" ||
-    role === "crossShardColonizerHarvester" ||
-    role === "crossShardColonizerWorker" ||
-    role === "crossShardClaimer" ||
-    role === "remoteCarrier" ||
-    role === "remoteMiningCarrier" ||
-    role === "remoteMiningReserver" ||
-    role === "remoteWorker" ||
-    role === "remoteDefender" ||
-    role === "claimer" ||
-    role === "scout" ||
-    role === "powerBankScout" ||
-    role === "powerBankAttacker" ||
-    role === "powerBankHealer" ||
-    role === "powerBankHauler" ||
-    role === "depositHarvester";
-}
-
 function isWorkPositionOutsideSafeZone(roomName: string, workPos: RoomPosition | null): boolean {
   if (!workPos) {
     return false;
@@ -614,7 +594,7 @@ function shouldSkipConfigInDefenseMode(config: CreepConfig): boolean {
     return false;
   }
 
-  if (isOutboundNonWarRole(config.role)) {
+  if (getRoleSpawnIntent(config.role) !== "local") {
     return true;
   }
 

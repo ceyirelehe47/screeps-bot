@@ -1,6 +1,7 @@
 import { cancelMoveIntent, getMoveIntentAttemptedPosition, getMoveIntentDestination, getMoveIntentReceipt, issueMove } from "@/movement/traffic";
 import { moveToTarget } from "@/movement/pathing";
 import { createMockPowerBankCreep } from "@mock/powerBank";
+import { clearMovementAnalyticsForTest, getMovementAnalyticsForTest } from "@/movement/metrics";
 jest.mock("@/runtime/cpuPhaseProfiler", () => ({ measureCreepIntent: (fn: () => unknown) => fn() }));
 
 beforeEach(() => {
@@ -21,13 +22,16 @@ describe("actual move receipts", () => {
     Game.time += 1; expect(getMoveIntentReceipt(creep)).toBeUndefined();
   });
   it("tracks the last accepted intent and does not erase it for a failed attempt", () => {
+    clearMovementAnalyticsForTest();
     const creep = createMockPowerBankCreep("powerBankAttacker");
     issueMove(creep, RIGHT);
     (creep.move as jest.Mock).mockReturnValue(ERR_TIRED);
     expect(issueMove(creep, TOP)).toBe(ERR_TIRED);
     expect(getMoveIntentReceipt(creep)!.direction).toBe(RIGHT);
+    expect(getMovementAnalyticsForTest().totals.moveIntentOverwrites).toBe(0);
     (creep.move as jest.Mock).mockReturnValue(OK); issueMove(creep, LEFT);
     expect(getMoveIntentReceipt(creep)!.direction).toBe(LEFT);
+    expect(getMovementAnalyticsForTest().totals.moveIntentOverwrites).toBe(1);
   });
   it("does not create a receipt for canonical in-range OK", () => {
     const creep = createMockPowerBankCreep("powerBankAttacker");

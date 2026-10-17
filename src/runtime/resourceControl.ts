@@ -11,6 +11,7 @@ import { limitActionLog } from "@/runtime/actionLog";
 import { recordFixedCpuAction } from "@/runtime/cpuPhaseProfiler";
 import {
   cancelResourceTransferTask,
+  patchResourceTransferTask,
   clearResourceTransferTaskBlocker,
   countsResourceTransferTaskTowardDemand,
   createAutomaticResourceTransferTask,
@@ -22,7 +23,6 @@ import {
   recordResourceTransferTaskProgress,
   type ResourceTransferTask,
 } from "@/runtime/logistics/resourceTransferTasks";
-import { bumpTreasuryCommitmentRevision } from "@/runtime/treasury/commitmentRevision";
 import { isHubOnlyReserveCompound } from "@/config/hub";
 import { runTreasuryTerminalTransferTask } from "@/runtime/treasuryTerminalTransfer";
 import { TREASURY_TERMINAL_LANES, treasuryLaneTaskMatches } from "@/runtime/treasuryTerminalLane";
@@ -603,14 +603,6 @@ function syncResourceControlTransferTask(
   context: ResourceControlTransferContext,
   task: ResourceTransferTask,
 ): void {
-  // Direct task-field mutations in ResourceControl invalidate Treasury's
-  // same-tick commitment snapshot before another admission can reuse it.
-  const fingerprints = context.taskCommitmentFingerprints ??= new Map();
-  const fingerprint = JSON.stringify(task);
-  if (fingerprints.get(task.id) !== fingerprint) {
-    bumpTreasuryCommitmentRevision();
-    fingerprints.set(task.id, fingerprint);
-  }
   if (!context.taskById.has(task.id)) {
     context.tasks.push(task);
   }
@@ -2732,9 +2724,7 @@ function planCapacityReliefTasks(
     if (existing) {
       const cancelled = cancelResourceTransferTask(existing.id);
       if (typeof cancelled === "string") {
-        result.task.status = "cancelled";
-        result.task.updatedAt = Game.time;
-        result.task.lastError = "capacity_retarget_rollback";
+        patchResourceTransferTask(result.task, { status: "cancelled", updatedAt: Game.time, lastError: "capacity_retarget_rollback" });
         syncResourceControlTransferTask(context, result.task);
         actions.push(
           `capacity-retarget-failed:${source.roomName}:${candidate.resource}:${cancelled}`,
@@ -2865,11 +2855,7 @@ function executeTransferTasks(
     }
 
     if (task.remainingAmount <= 0) {
-      task.status = "done";
-      task.updatedAt = Game.time;
-      task.blockedReason = undefined;
-      task.blockedSince = undefined;
-      task.lastError = undefined;
+      patchResourceTransferTask(task, { status: "done", updatedAt: Game.time, blockedReason: undefined, blockedSince: undefined, lastError: undefined });
       syncResourceControlTransferTask(context, task);
       actions.push(`task-auto-done:${task.id}:non_positive_remaining`);
       continue;
@@ -2883,7 +2869,7 @@ function executeTransferTasks(
     if (synthesisDemand.status === "bounded" && synthesisDemand.amount <= 0) {
       const cancelled = cancelResourceTransferTask(task.id);
       if (typeof cancelled !== "string") {
-        task.lastError = "automatic_synthesis_need_covered";
+        patchResourceTransferTask(task, { lastError: "automatic_synthesis_need_covered" });
         syncResourceControlTransferTask(context, task);
         actions.push(`synthesis-task-cancelled:${task.id}:need_covered`);
       }
@@ -2899,9 +2885,7 @@ function executeTransferTasks(
       continue;
     }
     if (donor.roomName === receiver.roomName) {
-      task.status = "failed";
-      task.updatedAt = Game.time;
-      task.lastError = "same_room";
+      patchResourceTransferTask(task, { status: "failed", updatedAt: Game.time, lastError: "same_room" });
       syncResourceControlTransferTask(context, task);
       actions.push(`task-failed:${task.id}:same_room`);
       continue;
@@ -2915,11 +2899,7 @@ function executeTransferTasks(
       isCapacityRelief &&
       (donor.capacityState === "normal" || recoveryGap <= 0)
     ) {
-      task.status = "cancelled";
-      task.updatedAt = Game.time;
-      task.blockedReason = undefined;
-      task.blockedSince = undefined;
-      task.lastError = "capacity_source_recovered";
+      patchResourceTransferTask(task, { status: "cancelled", updatedAt: Game.time, blockedReason: undefined, blockedSince: undefined, lastError: "capacity_source_recovered" });
       syncResourceControlTransferTask(context, task);
       actions.push(`capacity-task-cancelled:${task.id}:source_recovered`);
       continue;
@@ -3107,10 +3087,9 @@ function executeTransferTasks(
           { ownerTaskId: task.id },
         );
       }
-      task.updatedAt = Game.time;
-      task.lastError = `send_code_${code}`;
+      patchResourceTransferTask(task, { updatedAt: Game.time, lastError: `send_code_${code}` });
       if (code === ERR_INVALID_ARGS || code === ERR_INVALID_TARGET) {
-        task.status = "failed";
+        patchResourceTransferTask(task, { status: "failed" });
         syncResourceControlTransferTask(context, task);
         actions.push(`task-failed:${task.id}:send_code_${code}`);
         continue;
@@ -3142,10 +3121,10 @@ function executeTransferTasks(
         ),
       );
     }
-    task.remainingAmount = Math.max(0, task.remainingAmount - allocatedAmount);
+    patchResourceTransferTask(task, { remainingAmount: Math.max(0, task.remainingAmount - allocatedAmount) });
     recordResourceTransferTaskProgress(task);
     if (task.remainingAmount <= 0) {
-      task.status = "done";
+      patchResourceTransferTask(task, { status: "done" });
     }
     syncResourceControlTransferTask(context, task);
 

@@ -1,3 +1,5 @@
+import { registerOutboundMissionOwners } from "@/runtime/registerOutboundMissionOwners";
+registerOutboundMissionOwners();
 jest.mock("@/runtime/defenseMode", () => ({ isDefenseMode: jest.fn(() => false) }));
 import { enqueueConfig, prepareCombatSquad } from "@/runtime/war/production";
 import { isDefenseMode } from "@/runtime/defenseMode";

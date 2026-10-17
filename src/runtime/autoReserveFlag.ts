@@ -1,4 +1,4 @@
-import { invalidateRoomReserveCache } from "@/runtime/roomReserve";
+import { recordAutomaticReserveFlag } from "@/runtime/roomReserve";
 import { resolveRoomEnergyPolicy } from "@/runtime/roomEnergyPolicy";
 
 function getAutoReserveFlagName(roomName: string): string {
@@ -30,24 +30,24 @@ export function runAutoReserveFlags(): void {
     if (storageEnergy < policy.energyFloor) {
       if (flag) {
         if (!isAtPosition(flag, room.storage.pos)) {
-          flag.setPosition(room.storage.pos);
-          invalidateRoomReserveCache();
+          if (flag.setPosition(room.storage.pos) === OK) recordAutomaticReserveFlag(flagName, room.name);
         }
         continue;
       }
 
       const createdFlagName = room.createFlag(room.storage.pos, flagName);
-      invalidateRoomReserveCache();
       if (createdFlagName === flagName) {
+        recordAutomaticReserveFlag(flagName, room.name);
         console.log(`[reserve] ${room.name} entered reserve mode at ${storageEnergy} energy`);
       }
       continue;
     }
 
     if (flag && storageEnergy >= policy.energyTarget) {
-      flag.remove();
-      invalidateRoomReserveCache();
-      console.log(`[reserve] ${room.name} cleared reserve mode at ${storageEnergy} energy`);
+      if (flag.remove() === OK) {
+        recordAutomaticReserveFlag(flagName, null);
+        console.log(`[reserve] ${room.name} cleared reserve mode at ${storageEnergy} energy`);
+      }
     }
   }
 }

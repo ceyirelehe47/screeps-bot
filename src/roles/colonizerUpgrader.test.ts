@@ -1,10 +1,10 @@
 jest.mock("@/roles/shared", () => ({ moveToTargetRoom: jest.fn(), moveToTarget: jest.fn() }));
-jest.mock("@/roles/combatBoosts", () => ({ prepareCombatBoost: jest.fn(() => true) }));
+jest.mock("@/roles/optionalCombatBoosts", () => ({ prepareOptionalCombatBoost: jest.fn(() => true) }));
 jest.mock("@/roles/energyTargets", () => ({ pickupEnergyFromPreferredTarget: jest.fn(() => ({ picked: false, outOfRange: false })) }));
 jest.mock("@/runtime/energyPickupReservation", () => ({ releasePickupReservation: jest.fn() }));
 import { colonizerUpgraderRole } from "@/roles/colonizerUpgrader";
 import { moveToTargetRoom, moveToTarget } from "@/roles/shared";
-import { prepareCombatBoost } from "@/roles/combatBoosts";
+import { prepareOptionalCombatBoost } from "@/roles/optionalCombatBoosts";
 import { pickupEnergyFromPreferredTarget } from "@/roles/energyTargets";
 import { releasePickupReservation } from "@/runtime/energyPickupReservation";
 import { createMockStore } from "@mock/powerBank";
@@ -62,7 +62,7 @@ describe("殖民 upgrader：直接升级与本地取能", () => {
   it("源房只增强并空手 travel，不调用本地取能或升级", () => {
     const c = actor(Game.rooms[SOURCE]);
     expect(role().prepare!(c)).toBe(true);
-    expect(prepareCombatBoost).toHaveBeenCalledWith(c, "boost-owner", RESOURCE_CATALYZED_GHODIUM_ACID);
+    expect(prepareOptionalCombatBoost).toHaveBeenCalledWith(c, "boost-owner", RESOURCE_CATALYZED_GHODIUM_ACID);
     expect(role().source!(c)).toBe(false);
     expect(moveToTargetRoom).toHaveBeenCalledWith(c, TARGET, ROUTE, expect.any(Object));
     expect(pickupEnergyFromPreferredTarget).not.toHaveBeenCalled();

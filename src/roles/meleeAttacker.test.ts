@@ -149,7 +149,9 @@ describe("meleeAttackerRole 目标策略与移动请求安全边界", () => {
       expect(attacker.attack).toHaveBeenCalledWith(wall);
       expect(attacker.attack).not.toHaveBeenCalledWith(incidental);
       expect(attacker.memory._warBreachTargetId).toBe(wall.id);
-      expect(moveToTarget).toHaveBeenCalledWith(attacker, wall, 1, expect.objectContaining({ costCallback: expect.any(Function) }));
+      expect(moveToTarget).toHaveBeenCalledWith(attacker, wall, 1, expect.objectContaining({ requireCompletePath: true, reusePath: towerDrain ? 0 : 3 }));
+      if (towerDrain) expect(jest.mocked(moveToTarget).mock.calls[0][3]?.costCallback).toEqual(expect.any(Function));
+      else expect(jest.mocked(moveToTarget).mock.calls[0][3]?.costCallback).toBeUndefined();
       if (towerDrain) expect(safePath).toHaveBeenCalledWith(attacker, TARGET_ROOM, expect.any(Object));
       else expect(safePath).not.toHaveBeenCalled();
       expect(PathFinder.search).toHaveBeenCalledTimes(2);

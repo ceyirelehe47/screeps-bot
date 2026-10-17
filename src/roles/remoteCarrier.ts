@@ -1,3 +1,4 @@
+import { getTickContextService } from "@/runtime/runtimeServices";
 import { executeTreasuryFencedTerminalCargo, isTerminalCargoBlocked } from "@/runtime/treasuryTerminalCargo";
 import { moveToTarget, moveToTargetRoom } from "@/roles/shared";
 import { measureCreepDecision, measureCreepIntent } from "@/runtime/cpuPhaseProfiler";
@@ -74,7 +75,7 @@ function getSalvageAvoidRooms(targetRoom: string, currentRoom: string): string[]
 function moveSalvageSafely(creep: Creep, goal: RoomPosition, range = 1): void {
   if (salvageSearchTick !== Game.time || salvageSearchGame !== Game) {
     salvageSearchTick = Game.time; salvageSearchGame = Game; salvageSearches = 0;
-    const participants = Object.values(Game.creeps).filter((actor) => !actor.spawning && !actor.memory._recycleToRoom && actor.memory.role === "remoteCarrier"
+    const participants = getTickContextService().getAllCreeps().filter((actor) => !actor.spawning && !actor.memory._recycleToRoom && actor.memory.role === "remoteCarrier"
       && (actor.memory.roleArgs?.[2] === SALVAGE_MODE || (actor.memory.configName && getCreepConfigService().get(actor.memory.configName)?.args[2] === SALVAGE_MODE)))
       .map((actor) => actor.name).sort();
     const start = participants.length ? Game.time % participants.length : 0;

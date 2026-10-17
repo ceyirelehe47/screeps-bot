@@ -3,8 +3,9 @@ import { clearCreepMovementState, ensureCreepMovementState } from "@/movement/cr
 import { recordMovementMetric } from "@/movement/metrics";
 import { getTickContextService } from "@/runtime/runtimeServices";
 import { getRoomTopologyRevision } from "@/movement/roomTopologyRevision";
-import { createSafeZoneCostCallback, getCreepDefenseRoomName, isPositionAllowedForCreep, shouldRestrictToSafeZone } from "@/runtime/safeZoneHelpers";
-import { getSafeZone } from "@/runtime/safeZone";
+import { getCreepDefenseRoomName, isPositionAllowedForCreep, shouldRestrictToSafeZone } from "@/runtime/safeZoneHelpers";
+import { getSafeZone, getSafeZonePlanRevision } from "@/runtime/safeZone";
+import { applySafeZoneLayer } from "@/movement/safeZoneLayer";
 import { getPosKey, getTargetPos, isExitTile, isStandardCreep } from "@/movement/common";
 import { getMoveIntentDestination, moveOffExit, moveToAdjacentPosition } from "@/movement/traffic";
 import { buildStaticRoomCostMatrix, collectStaticRoomMatrixSources } from "@/movement/staticRoomMatrix";
@@ -31,10 +32,13 @@ export function clearMovementState(creep: Creep): void {
 /** 搜索与执行共用安全区包装，避免出口选择遗漏完整路径约束。 */
 export function resolveMovementPolicy(creep: AnyCreep, options: MoveToTargetOptions): MoveToTargetOptions {
   if (!isStandardCreep(creep) || !shouldRestrictToSafeZone(creep)) return options;
-  const restrict = createSafeZoneCostCallback(getSafeZone(getCreepDefenseRoomName(creep)));
-  return { ...options, cacheKey: undefined,
-    costCallback: (name, matrix) => restrict(name, options.costCallback?.(name, matrix) || matrix),
-    canMoveStep: pos => isPositionAllowedForCreep(creep, pos) && (options.canMoveStep?.(pos) ?? true) };
+  const roomName = getCreepDefenseRoomName(creep), revision = getSafeZonePlanRevision(roomName);
+  if (options.safeZone?.roomName === roomName && options.safeZone.revision === revision) return options;
+  const zone = getSafeZone(roomName);
+  return { ...options,
+    cacheKey: options.costCallback && !options.cacheKey ? undefined : `${options.cacheKey ?? "base"}|sz:${roomName}:${revision}`,
+    safeZone: { roomName, revision, zone },
+    canMoveStep: pos => pos.roomName === roomName && zone.has(pos.x * 50 + pos.y) && (options.canMoveStep?.(pos) ?? true) };
 }
 
 export function moveToTarget(
@@ -102,7 +106,7 @@ export function moveToTarget(
     ignoreCreeps ? 1 : 0
   }:s${terrainCosts.swampCost}:p${terrainCosts.plainCost}:m${options.maxRooms ?? "d"}:e${options.avoidExitTiles ? 1 : 0}:sc${
     options.allowSourceContainerTarget ? 1 : 0
-  }:pt${options.allowPortalTarget ? 1 : 0}:full${options.requireCompletePath ? 1 : 0}:c${options.cacheKey ?? ""}`;
+  }:pt${options.allowPortalTarget ? 1 : 0}:full${options.requireCompletePath ? 1 : 0}:c${options.cacheKey ?? ""}:layout${getRoomTopologyRevision(room.name)}`;
 
   {
     const currentPosKey = getPosKey(creep.pos);
@@ -119,12 +123,15 @@ export function moveToTarget(
       movePathState.expiresAt > Game.time;
 
     if (isMatchingState && movePathState && movePathState.steps.length > 0) {
-      if (!policyWaiting && movePathState.lastPosKey === currentPosKey && (!isStandardCreep(creep) || creep.fatigue === 0)) {
-        movePathState.stuckTicks += 1;
-      } else {
-        movePathState.stuckTicks = 0;
+      if (movePathState.observedAt !== Game.time) {
+        if (!policyWaiting && movePathState.lastPosKey === currentPosKey && (!isStandardCreep(creep) || creep.fatigue === 0)) {
+          movePathState.stuckTicks += 1;
+        } else {
+          movePathState.stuckTicks = 0;
+        }
+        movePathState.lastPosKey = currentPosKey;
+        movePathState.observedAt = Game.time;
       }
-      movePathState.lastPosKey = currentPosKey;
 
       if (movePathState.stuckTicks >= PATH_STUCK_REPATH_THRESHOLD) {
         // 位置连续多 tick 无进展：路径视为失效，落入下方重新寻路（ignoreCreeps 已被强制为 false）。
@@ -204,8 +211,10 @@ export function moveToTarget(
         targetY: targetPos.y,
         range,
         lastPosKey: currentPosKey2,
+        observedAt: Game.time,
         stuckTicks: 0,
-        expiresAt: noCacheReuse ? Game.time : (reusePath === 0 ? Game.time : Game.time + Math.max(MOVE_PATH_CACHE_TTL, reusePath)),
+        expiresAt: noCacheReuse || reusePath === 0 ? Game.time : Game.time + (
+          Math.max(Math.abs(end.x - targetPos.x), Math.abs(end.y - targetPos.y)) > range ? 2 : Math.max(MOVE_PATH_CACHE_TTL, reusePath)),
       };
 
       const followPathCode = followStoredRoomPath(creep, movementState.movePathState, targetPos, range, options);
@@ -254,10 +263,7 @@ export function buildRoomMovementMatrix(
 
   const roomContext = getTickContextService().getRoomContext(creepRoom);
   if (!roomContext) {
-    if (options.costCallback) {
-      return options.costCallback(roomName, matrix);
-    }
-    return matrix;
+    return applySafeZoneLayer(options.costCallback?.(roomName, matrix) ?? matrix, options.safeZone);
   }
 
   // fallbackMatrix（引擎传入的矩阵）在 ignoreCreeps=false 时已被引擎写入当
@@ -281,11 +287,12 @@ export function buildRoomMovementMatrix(
 
   if (!(options.ignoreCreeps ?? true)) applyMovementCreepObstacles(roomMatrix, creep, roomName);
 
-  if (options.costCallback && roomName === creepRoom.name) {
-    return options.costCallback(roomName, roomMatrix);
-  }
-
-  return roomMatrix;
+  const result = options.costCallback?.(roomName, roomMatrix) ?? roomMatrix;
+  const layerKey = (options.ignoreCreeps ?? true) && !options.costCallback ? JSON.stringify([
+    roomName, getRoomTopologyRevision(roomName), targetPos.x, targetPos.y,
+    options.allowPortalTarget, options.allowSourceContainerTarget, options.avoidExitTiles,
+  ]) : undefined;
+  return applySafeZoneLayer(result, options.safeZone, layerKey);
 }
 
 function applyExitTileAvoidance(matrix: CostMatrix, targetPos: RoomPosition, roomName: string): void {

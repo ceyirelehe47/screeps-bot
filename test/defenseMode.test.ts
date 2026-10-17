@@ -101,7 +101,7 @@ describe("current-tick Defense Mode snapshot", () => {
     expect(tickContext.getMyRooms).toHaveBeenCalledTimes(3);
   });
 
-  test("多房构建失败不发布半份 snapshot，并在下一次调用完整重试", () => {
+  test("多房构建失败只将故障房置为防御，下一 tick 重试而不拖垮健康房", () => {
     const hostile = withActiveParts(makeHostile(), ATTACK);
     const room1 = makeRoomWithFind([hostile], ROOM_W1N1);
     const room2 = makeRoomWithFind([], ROOM_W2N2);
@@ -112,10 +112,12 @@ describe("current-tick Defense Mode snapshot", () => {
       return SAFE_ZONE;
     });
 
-    expect(() => isDefenseMode(ROOM_W1N1)).toThrow("safe-zone failure");
+    expect(isDefenseMode(ROOM_W1N1)).toBe(true);
+    expect(isDefenseMode(ROOM_W2N2)).toBe(true);
     expect(room1.find).toHaveBeenCalledTimes(1);
-    shouldFail = false;
+    shouldFail = false; Game.time++;
 
+    expect(isDefenseMode(ROOM_W2N2)).toBe(false);
     expect(isDefenseMode(ROOM_W1N1)).toBe(true);
     expect(tickContext.getMyRooms).toHaveBeenCalledTimes(2);
     expect(room1.find).toHaveBeenCalledTimes(2);

@@ -1,4 +1,5 @@
 import { buildMemoryAuditSnapshot } from "@/runtime/memoryAudit";
+import { runInNewContext } from "vm";
 
 describe("buildMemoryAuditSnapshot", () => {
 
@@ -41,6 +42,13 @@ describe("buildMemoryAuditSnapshot", () => {
     expect(paths).toContain("a.b.c.d.e");
     expect(paths).not.toContain("a.b.c.d.e.f");
   });
+});
+
+it("引擎其他 realm 和无原型 Memory 对象仍可分支统计", () => {
+  const crossRealm = runInNewContext('({data:{roomPlanner:{layout:[1,2,3]}}})');
+  expect(buildMemoryAuditSnapshot(crossRealm, { maxDepth: 3 }).branches.map(branch => branch.path)).toEqual(["data", "data.roomPlanner"]);
+  const data = Object.assign(Object.create(null), { cfg: { constructor: "普通用户字段", enabled: true } });
+  expect(buildMemoryAuditSnapshot(data, { maxDepth: 2 }).branches[0].path).toBe("cfg");
 });
 
 it("按 UTF-8 计算中文及 emoji，不把 code unit 数当字节数", () => {

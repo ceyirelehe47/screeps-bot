@@ -1,3 +1,4 @@
+import { getTickContextService } from "@/runtime/runtimeServices";
 import { countCarrierCargo } from "@/runtime/carrierCargo";
 /** 从 synthesisControl.ts 分离的独立职责模块；共享状态仅由此处持有。 */
 import {
@@ -184,7 +185,7 @@ export function inspectSynthesisTransferNeed(roomName: string, resource: Resourc
     const productDeficit = Math.max(0, active.targetAmount - roomSynthesisProductAmount(room, product));
     const required = Math.min(active.batchSize, roundUpReactionAmount(productDeficit));
     let covered = roomResourceAmount(room, resource);
-    for (const creep of Object.values(Game.creeps)) {
+    for (const creep of getTickContextService().getAllCreeps()) {
       const cargo = creep.memory as unknown as {room?: string; home?: string; synthesisCarrierPendingResource?: ResourceConstant; synthesisCarrierPendingToId?: string};
       const assignment = getCreepAssignmentState(creep.name);
       const targetId = assignment?.synthesisCarrierPendingToId ?? cargo.synthesisCarrierPendingToId;

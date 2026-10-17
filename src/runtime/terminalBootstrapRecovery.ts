@@ -1,3 +1,4 @@
+import { getTickContextService } from "@/runtime/runtimeServices";
 import { resolveRoomEnergyPolicy } from "@/runtime/roomEnergyPolicy";
 
 export const TERMINAL_BOOTSTRAP_RECOVERY_STABLE_TICKS = 25;
@@ -95,7 +96,7 @@ function isManagedLiveCreep(
 }
 
 function hasStableManagedRoles(roomName: string): boolean {
-  const creeps = Object.values(Game.creeps);
+  const creeps = getTickContextService().getAllCreeps();
   const canonicalCarrierConfigName = `${roomName}:carrier:0`;
   const hasCanonicalCarrier = creeps.some((creep) =>
     isManagedLiveCreep(

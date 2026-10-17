@@ -45,7 +45,7 @@ function findCreepById(id: string): Creep | null {
     return object as Creep;
   }
 
-  for (const creep of Object.values(Game.creeps)) {
+  for (const creep of getTickContextService().getAllCreeps()) {
     if (creep.id === id) return creep;
   }
   return null;
@@ -226,7 +226,7 @@ function refreshPairQueries(): void {
   if (pairQueryContext === context && pairQueryCreeps === Game.creeps && pairQueryPowerCreeps === Game.powerCreeps) return;
   pairQueryContext = context; pairQueryCreeps = Game.creeps; pairQueryPowerCreeps = Game.powerCreeps;
   pairTileChecks = new WeakMap(); pairOccupants = new Map();
-  for (const creep of [...Object.values(Game.creeps), ...Object.values(Game.powerCreeps || {}).filter((actor) => actor.ticksToLive != null)]) {
+  for (const creep of [...getTickContextService().getAllCreeps(), ...Object.values(Game.powerCreeps || {}).filter((actor) => actor.ticksToLive != null)]) {
     const key = pairPositionKey(creep.pos), list = pairOccupants.get(key);
     if (list) list.push(creep); else pairOccupants.set(key, [creep]);
   }
@@ -569,11 +569,15 @@ export function coordinatePowerBankPairMovement(pair: PowerBankPairContext, fall
     const options = powerBankTransitOptions(pair.attacker, { ...PAIR_TRAVEL_OPTIONS, avoidRooms: getPowerBankAvoidRooms(pair.task) });
     const code = moveToTargetRoom(pair.attacker, pair.task.targetRoom, route, options);
     if (code === ERR_NO_PATH && !getMoveIntentReceipt(pair.attacker)) {
-      // 房内无路尚未产生跨房回执：清掉本次出口退避，换动态占位策略只重试一次。
+      // 动态占位可重试；已证明的静态断路必须保留，不能每 tick 重搜同一死路。
       const state = ensureCreepMovementState(pair.attacker);
       delete state.movePathState;
-      if (state.travelState) { delete state.travelState.exitTarget; delete state.travelState.rejectedTransitions; }
-      moveToTargetRoom(pair.attacker, pair.task.targetRoom, route, { ...options, ignoreCreeps: false, reusePath: 0 });
+      const failure = state.travelState?.lastFailure;
+      const rejected = Object.values(state.travelState?.rejectedTransitions ?? {}).some(until => until > Game.time);
+      if (!rejected && (!failure || failure.at !== Game.time || failure.reason === "dynamicBlocked")) {
+        if (state.travelState) delete state.travelState.exitTarget;
+        moveToTargetRoom(pair.attacker, pair.task.targetRoom, route, { ...options, ignoreCreeps: false, reusePath: 0 });
+      }
     }
   } else if (pair.stage === "attacking" && pairReadyForCombat(pair)) {
     const bank = Game.getObjectById(pair.task.bankId as Id<StructurePowerBank>);

@@ -9,6 +9,8 @@ import { assignDefenderSlot, clearDefenseCoordination, setDefenderRole, writeDef
 import { buildDefenseFronts } from "@/runtime/defenseFronts";
 
 const DEFAULT_MAX_DEFENDERS = 3;
+let boostSupplyTick = -1;
+const boostSupplyRooms = new Set<string>();
 
 function getConfigName(roomName: string, index: number): string {
   return `${roomName}:homeDefense:defender:${index}`;
@@ -137,6 +139,8 @@ function syncDefenderAssignments(roomName: string, desiredCount: number, frontCo
 
 export function runHomeDefense(): void {
   const tickContext = getTickContextService();
+  boostSupplyTick = Game.time;
+  boostSupplyRooms.clear();
 
   forEachIsolatedRoom("homeDefense", tickContext.getMyRooms(), room => {
     const safeZone = getSafeZone(room.name);
@@ -148,8 +152,10 @@ export function runHomeDefense(): void {
     const playerHostiles = getPlayerHostiles(room);
     const fronts = buildDefenseFronts(playerHostiles);
     if (playerHostiles.length > 0) {
-      writeDefenseFronts(room.name, fronts);
       const desiredCount = calcDesiredDefenderCount(room, playerHostiles, fronts.length);
+      const needsBoost = desiredCount > 0 && !!Memory.cfg?.homeDefense?.rooms?.[room.name]?.boostLabId && shouldBoostDefender(room, playerHostiles);
+      // 先完成可能失败的只读计划，再提交协调/配置；下一 tick 重算可收敛半写状态。
+      writeDefenseFronts(room.name, fronts);
       syncDefenderAssignments(room.name, desiredCount, fronts.length);
 
       if (desiredCount === 0) {
@@ -158,9 +164,9 @@ export function runHomeDefense(): void {
       } else {
         ensureDefenders(room, desiredCount);
         stopQueuedDefenderSpawning(room.name, desiredCount);
-        if (Memory.cfg?.homeDefense?.rooms?.[room.name]?.boostLabId && shouldBoostDefender(room, playerHostiles)) {
+        if (needsBoost) {
           syncBoostLabTask(room);
-          buyBoostIfNeeded(room);
+          boostSupplyRooms.add(room.name);
         } else clearBoostLabTasks(room.name);
       }
     } else {
@@ -169,4 +175,10 @@ export function runHomeDefense(): void {
       clearBoostLabTasks(room.name);
     }
   });
+}
+
+/** 采购属于可延后 T2，不能让订单扫描或市场写入阻塞前置 T0 防御。 */
+export function runHomeDefenseSupply(): void {
+  if (boostSupplyTick !== Game.time) return;
+  forEachIsolatedRoom("homeDefenseSupply", getTickContextService().getMyRooms().filter(room => boostSupplyRooms.has(room.name)), buyBoostIfNeeded);
 }

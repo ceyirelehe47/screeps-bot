@@ -22,7 +22,8 @@ const DEFAULT_MAX_DEPTH = 6;
 const DEFAULT_TOP_N = 25;
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value) && value.constructor === Object;
+  // Screeps 原生 Memory 的对象可能来自引擎的其他 realm，constructor 身份不能用于判断。
+  return typeof value === "object" && value !== null && Object.prototype.toString.call(value) === "[object Object]";
 }
 
 function measureBytes(value: unknown): number {

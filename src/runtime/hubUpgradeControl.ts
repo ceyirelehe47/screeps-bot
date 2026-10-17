@@ -1,3 +1,4 @@
+import { getTickContextService } from "@/runtime/runtimeServices";
 import { HUB_UPGRADER_BODY } from "@/config/spawnProfiles";
 import { releaseBoostLabs } from "@/runtime/powerBankBoost";
 import { getMemoryService } from "@/runtime/runtimeServices";
@@ -121,7 +122,7 @@ function cleanupManagedUpgraders(
   }
 
   cleanupSpawnedAndQueuedUpgraders(keptConfigNames);
-  for (const creep of Object.values(Game.creeps)) {
+  for (const creep of getTickContextService().getAllCreeps()) {
     const configName = creep.memory.configName;
     const isKept = !!configName && keptConfigNames.has(configName);
     const isRetiringRcl8Maintenance = !!configName &&
@@ -247,7 +248,7 @@ export function getUpgraderStatus(roomName?: string): ManualUpgraderResult[] | M
       roomName: name,
       active: isEligibleUpgraderRoom(name),
       configName,
-      creepNames: Object.values(Game.creeps)
+      creepNames: getTickContextService().getAllCreeps()
         .filter((creep) => creep.memory.configName === configName)
         .map((creep) => creep.name),
       boosted: config?.args[1] === getBoostTaskId(name),

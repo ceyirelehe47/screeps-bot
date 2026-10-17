@@ -30,7 +30,10 @@ export interface MultiRoomTravelSegment {
   hardExpiresAt: number;
 }
 
+export interface SafeZoneConstraint { roomName: string; revision: number | null; zone: ReadonlySet<number> }
 export interface MoveToTargetOptions {
+  /** 由 resolveMovementPolicy 生成的内部安全区层，必须在业务 callback 之后应用。 */
+  safeZone?: SafeZoneConstraint;
   /** 战斗证明或缓存出口重搜要求完整抵达；普通房内移动仍允许局部进展。 */
   requireCompletePath?: boolean;
   /** 业务本 tick 已证明完整的房内路径；直接交给交通层，不再另做寻路。 */
@@ -68,12 +71,15 @@ export interface MoveToRoomOptions extends MoveToTargetOptions {
 export type MovementOptions = MoveToRoomOptions;
 
 export interface TravelState {
+  lastFailure?: { at: number; reason: "staticBlocked" | "policyDenied" | "budgetExhausted" | "dynamicBlocked" | "invalidPath" };
   /** 暂时不可达的有向房间出口；改用其它入口，不将整个目标房永久禁行。 */
   rejectedTransitions?: Record<string, number>;
   exitTarget?: { key: string; x: number; y: number; expiresAt: number };
   targetRoom: string;
   lastPosKey?: string;
   lastWasExit?: boolean;
+  /** 位置停滞按帧观察；同 tick 的策略重试不能增加停滞次数。 */
+  observedAt?: number;
   stuckTicks: number;
   multiRoomSegment?: MultiRoomTravelSegment;
   /** colonization 共享缓存路径的 per-creep 游标（路径对象本身跨 creep 共享，不能存游标）。 */
@@ -103,6 +109,7 @@ export interface MovePathState {
   targetY: number;
   range: 0 | 1 | 2 | 3;
   lastPosKey?: string;
+  observedAt?: number;
   stuckTicks: number;
   expiresAt: number;
 }

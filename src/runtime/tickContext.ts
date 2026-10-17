@@ -1,6 +1,8 @@
 // isActive() reads the immutable tick-start snapshot, so it is stable for the
 // whole tick; memoizing avoids redundant JS->native calls from the spawn
 // planner's per-config spawn filters and mountSpawn's work loop.
+import { getCreepAssignmentState } from "@/runtime/creepAssignmentState";
+
 let spawnActiveCacheTick = -1;
 let spawnActiveCacheGame: typeof Game | undefined;
 const spawnActiveCache = new Map<StructureSpawn, boolean>();
@@ -65,6 +67,10 @@ export interface TickContextService {
   /** 本 tick 的全部 spawn/creep 快照，避免主循环与各模块重复 Object.values。 */
   getAllSpawns(): StructureSpawn[];
   getAllCreeps(): Creep[];
+  /** 仅供独立对账；业务决策必须使用上面的唯一 tick 快照。 */
+  readLiveCreepsForAudit(): Creep[];
+  getCarrierCargoActors(targetId: string, resource: ResourceConstant): readonly string[];
+  refreshCarrierCargoActor(actor: string): void;
   getPrimarySpawnByRoom(roomName: string): StructureSpawn | undefined;
   getSpawnsByRoom(roomName: string): StructureSpawn[];
   getCreepsByConfigName(configName: string): Creep[];
@@ -90,6 +96,7 @@ interface TickContextSnapshot {
   creepsByRole?: Map<string, Creep[]>;
   creepsByRoom?: Map<string, Creep[]>;
   roomContexts?: Map<string, RoomTickContext>;
+  carrierCargoActors?: Map<string, Map<ResourceConstant, Set<string>>>;
 }
 
 const EMPTY_STRUCTURES: Structure<StructureConstant>[] = [];
@@ -314,6 +321,17 @@ export function createTickContextService(): TickContextService {
     return current.allCreeps;
   }
 
+  function indexCarrierCargoActor(current: TickContextSnapshot, actor: string): void {
+    const state = getCreepAssignmentState(actor);
+    const target = state?.synthesisCarrierPendingToId, resource = state?.synthesisCarrierPendingResource;
+    if (!target || !resource || !current.carrierCargoActors) return;
+    let resources = current.carrierCargoActors.get(target);
+    if (!resources) current.carrierCargoActors.set(target, resources = new Map());
+    let actors = resources.get(resource);
+    if (!actors) resources.set(resource, actors = new Set());
+    actors.add(actor);
+  }
+
   function ensureSpawnIndexes(current: TickContextSnapshot): void {
     if (current.spawnsByRoom && current.primarySpawnByRoom) {
       return;
@@ -402,6 +420,23 @@ export function createTickContextService(): TickContextService {
     getAllCreeps(): Creep[] {
       const current = ensureCurrentTick();
       return ensureAllCreeps(current);
+    },
+
+    readLiveCreepsForAudit(): Creep[] {
+      return Object.values(Game.creeps);
+    },
+
+    getCarrierCargoActors(targetId: string, resource: ResourceConstant): readonly string[] {
+      const current = ensureCurrentTick();
+      if (!current.carrierCargoActors) {
+        current.carrierCargoActors = new Map();
+        for (const creep of ensureAllCreeps(current)) indexCarrierCargoActor(current, creep.name);
+      }
+      return [...(current.carrierCargoActors.get(targetId)?.get(resource) ?? [])];
+    },
+
+    refreshCarrierCargoActor(actor: string): void {
+      indexCarrierCargoActor(ensureCurrentTick(), actor);
     },
 
     getPrimarySpawnByRoom(roomName: string): StructureSpawn | undefined {

@@ -90,6 +90,22 @@ export interface ListResourceTransferTasksResult {
 let taskIdSequence = 0;
 let taskIdSequenceTick = -1;
 
+type ResourceTransferTaskPatch = Partial<Pick<ResourceTransferTask,
+  "status" | "remainingAmount" | "updatedAt" | "lastProgressAt" | "blockedReason" | "blockedSince" | "lastError" | "reason"
+>>;
+
+/** 任务 owner 的字段更新入口；任何有效修改在本 tick 立即失效承诺读模型。 */
+export function patchResourceTransferTask(task: ResourceTransferTask, patch: ResourceTransferTaskPatch): boolean {
+  let changed = false;
+  for (const key of Object.keys(patch) as Array<keyof ResourceTransferTaskPatch>) {
+    if (!Object.is(task[key], patch[key])) { changed = true; break; }
+  }
+  if (!changed) return false;
+  Object.assign(task, patch);
+  bumpTreasuryCommitmentRevision();
+  return true;
+}
+
 const AUTOMATIC_LEGACY_REASON_PREFIXES = [
   "hub:",
   "synthesis:",

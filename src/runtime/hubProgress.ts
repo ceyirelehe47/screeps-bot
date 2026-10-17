@@ -1,3 +1,4 @@
+import { getTickContextService } from "@/runtime/runtimeServices";
 import { getCreepConfigService, getMemoryService } from "@/runtime/runtimeServices";
 import { hasDiagnosticBudget } from "@/runtime/diagnosticBudget";
 import { HUB_RESERVE_PER_COMPOUND, HUB_RESERVE_PER_ROOM, isHubOnlyReserveCompound, getHubOnlyReserve } from "@/config/hub";
@@ -663,7 +664,7 @@ function classifyTransferTask(
 
 export function collectCarrierCargoInventory(hubRoomName: string): Record<string, number> {
   const result: Record<string, number> = {};
-  for (const creep of Object.values(Game.creeps)) {
+  for (const creep of getTickContextService().getAllCreeps()) {
     if (creep.memory.role !== "carrier") continue;
     const configName = creep.memory.configName;
     const assignedRoom = configName

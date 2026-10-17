@@ -4,6 +4,7 @@ import { getMemoryService } from "@/runtime/runtimeServices";
 const MAX_FAULT_SCOPES = 64;
 const FAULT_TTL = 1000;
 const REPORT_INTERVAL = 100;
+const NOTIFY_AFTER_FAILURES = 10;
 export interface RoomFault {
   scope: string;
   message: string;
@@ -11,11 +12,15 @@ export interface RoomFault {
   lastReported: number;
   failures: number;
   suppressed: number;
+  kind?: string;
+  streak?: number;
+  lastNotifiedAt?: number;
 }
-export interface DefenseFaultSummary { updatedAt: number; faults: RoomFault[] }
+export interface DefenseFaultSummary { updatedAt: number; faults: RoomFault[]; lastNotifiedAt?: number }
 const faults = new Map<string, RoomFault>();
 let loadedPersistentFaults = false;
 let housekeepingAt = -1;
+let lastNotifiedAt = -Infinity;
 
 function isCurrentFault(value: RoomFault): boolean {
   return !!value && typeof value.scope === "string" && value.scope.length <= 200 &&
@@ -33,7 +38,8 @@ function persistFaults(): void {
   try {
     const runtime = getMemoryService().ensureRuntime();
     const rows = heapSnapshot();
-    if (rows.length) runtime.defenseFaults = { updatedAt: Game.time, faults: rows };
+    if (rows.length) runtime.defenseFaults = { updatedAt: Game.time, faults: rows,
+      ...(Number.isFinite(lastNotifiedAt) ? { lastNotifiedAt } : {}) };
     else delete runtime.defenseFaults;
   } catch { /* heap 与控制台仍可供诊断。 */ }
 }
@@ -47,6 +53,7 @@ function prepareFaultStore(): void {
     const current = Array.isArray(stored?.faults) ? stored.faults.slice(0, 8).filter(isCurrentFault) : [];
     if (!loadedPersistentFaults) {
       loadedPersistentFaults = true;
+      if (Number.isSafeInteger(stored?.lastNotifiedAt) && stored!.lastNotifiedAt! <= Game.time) lastNotifiedAt = stored!.lastNotifiedAt!;
       for (const fault of current) faults.set(fault.scope, { ...fault });
     }
     for (const [scope, fault] of faults) if (fault.lastSeen > Game.time || Game.time - fault.lastSeen > FAULT_TTL) faults.delete(scope);
@@ -56,43 +63,63 @@ function prepareFaultStore(): void {
 
 function recordFault(scope: string, error: unknown): void {
   let message: string;
+  let kind: string;
   try { message = String(error instanceof Error ? error.message : error).slice(0, 240); }
   catch { message = "无法格式化的异常"; }
+  try { kind = error instanceof Error ? error.name.slice(0, 64) : typeof error; }
+  catch { kind = "unknown"; }
   let fault = faults.get(scope);
   if (!fault || Game.time < fault.lastSeen || Game.time - fault.lastSeen > FAULT_TTL) {
     if (!fault && faults.size >= MAX_FAULT_SCOPES) faults.delete(faults.keys().next().value!);
     fault = { scope, message, lastSeen: Game.time, lastReported: -Infinity, failures: 0, suppressed: 0 };
   }
-  const report = fault.message !== message || Game.time - fault.lastReported >= REPORT_INTERVAL;
+  const report = fault.kind !== kind || Game.time - fault.lastReported >= REPORT_INTERVAL;
+  if (fault.kind !== kind || !fault.streak) fault.streak = 1;
+  else if (fault.lastSeen !== Game.time) fault.streak = Math.min(1_000_000_000, fault.streak + 1);
+  fault.kind = kind;
   fault.message = message;
   fault.lastSeen = Game.time;
   fault.failures = Math.min(1_000_000_000, fault.failures + 1);
   if (report) fault.lastReported = Game.time;
   else fault.suppressed = Math.min(1_000_000_000, fault.suppressed + 1);
   faults.delete(scope); faults.set(scope, fault);
+  if (fault.streak >= NOTIFY_AFTER_FAILURES && Game.time - (fault.lastNotifiedAt ?? -Infinity) >= FAULT_TTL &&
+      Game.time - lastNotifiedAt >= REPORT_INTERVAL && typeof Game.notify === "function") {
+    try {
+      Game.notify(`[runtime] ${scope} 连续 ${fault.streak} 次执行失败: ${message}`);
+      fault.lastNotifiedAt = lastNotifiedAt = Game.time;
+    } catch { /* 通知失败也不能中断关键防御。 */ }
+  }
   persistFaults();
   if (report) {
     try { reportRuntimeError(scope, error); } catch { /* 继续下一座塔或房间。 */ }
   }
 }
 
+function recordSuccess(scope: string): void {
+  const fault = faults.get(scope);
+  if (fault?.streak) { fault.streak = 0; persistFaults(); }
+}
+
 /** 规划与动作均可包在单塔边界；失败仅跳过该塔当次操作，下 tick 继续尝试。 */
 export function runIsolatedTowerOperation<T>(roomName: string, towerId: string, work: () => T): T | undefined {
   prepareFaultStore();
-  try { return work(); }
+  try { const result = work(); recordSuccess(`towerControl:${roomName}:${towerId}`.slice(0, 200)); return result; }
   catch (error) { recordFault(`towerControl:${roomName}:${towerId}`.slice(0, 200), error); return undefined; }
 }
 
 /** 可捕获的单房异常不得中断后续房间。关键防御每 tick 重试，不做熔断。 */
-export function forEachIsolatedRoom(phase: "towerControl" | "homeDefense", rooms: readonly Room[], work: (room: Room) => void): void {
+export function runIsolatedRoomOperation<T>(phase: string, roomName: string, work: () => T): T | undefined {
   prepareFaultStore();
+  try { const result = work(); recordSuccess(`${phase}:${roomName}`.slice(0, 200)); return result; }
+  catch (error) { recordFault(`${phase}:${roomName}`.slice(0, 200), error); return undefined; }
+}
+
+export function forEachIsolatedRoom(phase: string, rooms: readonly Room[], work: (room: Room) => void): void {
   for (const room of rooms) {
-    try {
-      work(room);
-    } catch (error) {
-      recordFault(`${phase}:${room.name}`.slice(0, 200), error);
-    }
+    runIsolatedRoomOperation(phase, room.name, () => work(room));
   }
+  prepareFaultStore();
 }
 
 /** 样本只保留最近的八个异常范围，heap 上限与日志限频互相独立。 */
@@ -101,4 +128,4 @@ export function getRuntimeRoomFaults(): RoomFault[] {
   return heapSnapshot();
 }
 
-export function resetRuntimeIsolationForTest(): void { faults.clear(); loadedPersistentFaults = false; housekeepingAt = -1; }
+export function resetRuntimeIsolationForTest(): void { faults.clear(); loadedPersistentFaults = false; housekeepingAt = -1; lastNotifiedAt = -Infinity; }

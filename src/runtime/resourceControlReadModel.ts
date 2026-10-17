@@ -98,7 +98,6 @@ export interface ResourceControlTransferContext {
   marketSellingResources?: Set<ResourceConstant>;
   tasks: ResourceTransferTask[];
   taskById: Map<string, ResourceTransferTask>;
-  taskCommitmentFingerprints?: Map<string, string>;
   snapshotByRoom: Map<string, ResourceControlSnapshot>;
   receiverCapacityLedger: ReceiverCapacityLedger;
   healthyOutgoingByRoomResource: Map<string, number>;
@@ -643,7 +642,6 @@ export function createResourceControlTransferContext(
     stagingObservationByRoom,
     terminalRecoveryObservationByRoom,
     taskContributionById,
-    taskCommitmentFingerprints: new Map(tasks.map(task => [task.id, JSON.stringify(task)])),
     taskContributionIndex,
     marketEnergyReadinessByRoom,
   };

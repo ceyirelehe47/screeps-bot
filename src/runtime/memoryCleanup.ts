@@ -14,6 +14,7 @@ import { gcProductionReservations } from "@/runtime/resourceReservation";
 import { cleanupTerminalBootstrapRecoveryRuntime } from "@/runtime/terminalBootstrapRecovery";
 import { releaseWarTaskOwner } from "@/runtime/warControl";
 import { isRoleName } from "@/types/roleCatalog";
+import { runRegisteredMemoryGc } from "@/runtime/memoryGcRegistry";
 
 const CLEANUP_INTERVAL = 17;
 const ROOM_PLANNER_TTL = 50000;
@@ -21,7 +22,6 @@ const INTER_SHARD_PORTAL_TTL = 10000;
 const INTER_SHARD_REMOTE_TTL = 500;
 const INTER_SHARD_CLAIM_TTL = 5000;
 const INTER_SHARD_ROOM_STATE_TTL = 5000;
-const CROSS_SHARD_COLONIZATION_TTL = 5000;
 const RESOURCE_CONTROL_TERMINAL_TASK_TTL = 200;
 const CARRIER_TASK_BOARD_TTL = 500;
 
@@ -47,7 +47,7 @@ function createCreepConfigReferenceSnapshot(): CreepConfigReferenceSnapshot {
   const configNames = new Set<string>();
   const spawningCreepNames = new Set<string>();
 
-  for (const creep of Object.values(Game.creeps)) {
+  for (const creep of getTickContextService().getAllCreeps()) {
     if (creep.memory.configName) {
       configNames.add(creep.memory.configName);
     }
@@ -492,31 +492,6 @@ function cleanupCrossShardRuntimeMemory(): number {
   return removed;
 }
 
-function cleanupCrossShardColonizationMemory(ownedRooms: Set<string>): number {
-  const store = Memory.data?.crossShardColonization;
-  if (!store) {
-    return 0;
-  }
-
-  let removed = 0;
-  for (const [taskId, task] of Object.entries(store)) {
-    const sourceRoomLost = !!task.sourceRoom && !ownedRooms.has(task.sourceRoom);
-    const staleTerminal =
-      (task.status === "blocked" ||
-        task.status === "failed" ||
-        task.status === "claimed" ||
-        task.status === "completed") &&
-      Game.time - task.updatedAt > CROSS_SHARD_COLONIZATION_TTL;
-    const malformed = !task.targetShard || !task.targetRoom;
-    if (sourceRoomLost || staleTerminal || malformed) {
-      delete store[taskId];
-      removed += 1;
-    }
-  }
-
-  return removed;
-}
-
 function cleanupResourceControlTaskMemory(ownedRooms: Set<string>): number {
   return cleanupResourceTransferTaskStore(
     ownedRooms,
@@ -700,7 +675,7 @@ export function runMemoryCleanup(): void {
   cleanupWarMemory(ownedRooms);
   cleanupInterShardPortalMemory();
   cleanupCrossShardRuntimeMemory();
-  cleanupCrossShardColonizationMemory(ownedRooms);
+  runRegisteredMemoryGc({ ownedRooms });
   cleanupRescueMemory(ownedRooms);
   cleanupResourceControlTaskMemory(ownedRooms);
   cleanupLogisticsControlStore(ownedRooms);

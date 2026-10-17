@@ -1,3 +1,4 @@
+import { getTickContextService } from "@/runtime/runtimeServices";
 import { getSquadPolicy } from "./squadPolicy/index";
 import { getRefillableHostileTowers } from "@/runtime/combatTowerThreat";
 import { isRebuildStructureRelevant } from "@/runtime/warRebuildScope";
@@ -24,7 +25,7 @@ export function isHostileReservation(room: Room): boolean {
     return false;
   }
 
-  const myUser = Object.values(Game.spawns)[0]?.owner.username || Object.values(Game.creeps)[0]?.owner.username;
+  const myUser = Object.values(Game.spawns)[0]?.owner.username || getTickContextService().getAllCreeps()[0]?.owner.username;
   const reservation = controller.reservation;
   if (!reservation) {
     return false;

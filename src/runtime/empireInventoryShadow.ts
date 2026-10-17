@@ -1,3 +1,4 @@
+import { getTickContextService } from "@/runtime/runtimeServices";
 /**
  * EmpireInventoryIndex 影子等价验证（Phase 2，只读观察者）：
  * - 每 40 tick（20–50 区间）低频执行一次「层检查」：默认按
@@ -654,7 +655,7 @@ function compareCreepCargo(
   const directTotals = new Map<ResourceConstant, number>();
   const directByRoom = new Map<string, Map<ResourceConstant, number>>();
   const resourceUnion = new Set<ResourceConstant>(cargo.resources());
-  for (const creep of Object.values(Game.creeps)) {
+  for (const creep of getTickContextService().readLiveCreepsForAudit()) {
     const roomName = creep.room?.name;
     for (const key of directStoreKeys(creep)) {
       resourceUnion.add(key);
@@ -835,7 +836,7 @@ function runOracleCheck(
     }
     const cargo = getEmpireInventoryCreepCargo();
     oracleVerifyStoreGroup(
-      state, "<creeps>", "cargo", Object.values(Game.creeps),
+      state, "<creeps>", "cargo", getTickContextService().readLiveCreepsForAudit(),
       (resource) => cargo.total(resource),
       () => cargo.resources(),
     );

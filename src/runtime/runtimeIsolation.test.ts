@@ -48,4 +48,39 @@ describe("关键房间异常隔离", () => {
     expect(reportRuntimeError).toHaveBeenCalledTimes(1);
   });
 
+  it("错误消息含不同 id 不绕过限频，连续失败升级通知，恢复后重算连续次数", () => {
+    const savedNotify = Game.notify;
+    const notify = jest.fn(); Game.notify = notify;
+    const rooms = [{ name: "W1N1" }] as Room[];
+    try {
+      for (let index = 0; index < 12; index++) {
+        Game.time = 100 + index;
+        forEachIsolatedRoom("homeDefense", rooms, () => { throw new Error(`missing id-${index}`); });
+      }
+      expect(reportRuntimeError).toHaveBeenCalledTimes(1);
+      expect(notify).toHaveBeenCalledTimes(1);
+      expect(getRuntimeRoomFaults()[0].streak).toBe(12);
+      resetRuntimeIsolationForTest(); Game.time++;
+      forEachIsolatedRoom("homeDefense", rooms, () => { throw new Error("missing id-next"); });
+      expect(notify).toHaveBeenCalledTimes(1);
+      forEachIsolatedRoom("homeDefense", rooms, () => undefined);
+      expect(getRuntimeRoomFaults()[0].streak).toBe(0);
+      Game.time++;
+      forEachIsolatedRoom("homeDefense", rooms, () => { throw new Error("missing id-next"); });
+      expect(getRuntimeRoomFaults()[0].streak).toBe(1);
+    } finally { Game.notify = savedNotify; }
+  });
+
+  it("低频任务连续失败同样升级通知，不把 cadence 间隔当作恢复", () => {
+    const savedNotify = Game.notify; const notify = jest.fn(); Game.notify = notify;
+    try {
+      for (let index = 0; index < 10; index++) {
+        Game.time = 100 + index * 17;
+        forEachIsolatedRoom("memoryGc", [{ name: "owner" }] as Room[], () => { throw new Error("gc failure"); });
+      }
+      expect(getRuntimeRoomFaults()[0].streak).toBe(10);
+      expect(notify).toHaveBeenCalledTimes(1);
+    } finally { Game.notify = savedNotify; }
+  });
+
 });

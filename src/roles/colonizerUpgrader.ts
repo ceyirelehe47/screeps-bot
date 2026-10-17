@@ -1,5 +1,5 @@
 import { controllerUpgraderRole } from "@/roles/upgrader";
-import { prepareCombatBoost } from "@/roles/combatBoosts";
+import { prepareOptionalCombatBoost } from "@/roles/optionalCombatBoosts";
 import { moveToTargetRoom } from "@/roles/shared";
 import { canUseColonizationTransit, supportIsComplete } from "@/runtime/colonizationSupport";
 import { releasePickupReservation } from "@/runtime/energyPickupReservation";
@@ -61,7 +61,7 @@ export const colonizerUpgraderRole: RoleFactory = (targetRoom, encodedRouteRooms
   };
   return {
     prepare: creep => !valid || supportIsComplete(targetRoom, sourceRoom) ||
-      prepareCombatBoost(creep, boostOwner, RESOURCE_CATALYZED_GHODIUM_ACID),
+      prepareOptionalCombatBoost(creep, boostOwner, RESOURCE_CATALYZED_GHODIUM_ACID),
     source: creep => pauseForTravelOrCompletion(creep) ? false : core.source!(creep),
     target: creep => pauseForTravelOrCompletion(creep) ? false : core.target(creep),
   };

@@ -1,4 +1,4 @@
-import { prepareCombatBoost } from "@/roles/combatBoosts";
+import { prepareOptionalCombatBoost } from "@/roles/optionalCombatBoosts";
 import { pickupEnergyFromPreferredTarget } from "@/roles/energyTargets";
 import { moveToTarget } from "@/roles/shared";
 import { measureCreepDecision, measureCreepIntent } from "@/runtime/cpuPhaseProfiler";
@@ -91,5 +91,5 @@ export function controllerUpgraderRole(getController: (creep: Creep) => Structur
 export const upgraderRole: RoleFactory = (roomName?: string, boostTaskId?: string) => ({
   ...controllerUpgraderRole(creep => getActiveController(roomName, creep)),
   prepare: creep => getActiveController(roomName, creep)
-    ? prepareCombatBoost(creep, boostTaskId, RESOURCE_CATALYZED_GHODIUM_ACID) : true,
+    ? prepareOptionalCombatBoost(creep, boostTaskId, RESOURCE_CATALYZED_GHODIUM_ACID) : true,
 });

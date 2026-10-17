@@ -1,3 +1,4 @@
+import { countBoostableParts, getBoostPartType } from "@/runtime/boostParts";
 import { canStartOutboundMission } from "@/runtime/outboundMissionPolicy";
 import {
   predictPowerBankRecovery,
@@ -86,12 +87,6 @@ const BOOST_FINISHED_STATUSES = new Set<string>([
 type PowerBankCreepMemory = CreepMemory & { taskId?: string };
 type PowerBankReinforcementCreepMemory = PowerBankCreepMemory & { powerBankReinforcementStage?: PowerBankReinforcementStage };
 type PowerBankTravelMemory = PowerBankCreepMemory & { powerBankTravelTaskId?: string };
-
-const POWER_BANK_BOOST_PARTS: Partial<Record<ResourceConstant, BodyPartConstant>> = {
-  [RESOURCE_CATALYZED_GHODIUM_ALKALIDE]: TOUGH,
-  [RESOURCE_CATALYZED_UTRIUM_ACID]: ATTACK,
-  [RESOURCE_CATALYZED_LEMERGIUM_ALKALIDE]: HEAL,
-};
 
 function tierKindToNumber(tierKind: string): PowerBankHarvestTier {
   if (tierKind === "rcl8") return 8;
@@ -1194,20 +1189,10 @@ function getRequiredBoostsForRole(tier: number, role: "attacker" | "healer"): Re
   return requirements[role];
 }
 
-function getBoostedPartType(compound: ResourceConstant): BodyPartConstant | undefined {
-  return POWER_BANK_BOOST_PARTS[compound];
-}
-
 function countBodyPartsForBoost(body: BodyPartConstant[], compound: ResourceConstant): number {
-  const partType = getBoostedPartType(compound);
+  const partType = getBoostPartType(compound);
   if (!partType) return 0;
   return body.filter((part) => part === partType).length;
-}
-
-function countRemainingBoostParts(creep: Creep, compound: ResourceConstant): number {
-  const partType = getBoostedPartType(compound);
-  if (!partType) return 0;
-  return creep.body.filter((part) => part.type === partType && part.hits > 0 && part.boost !== compound).length;
 }
 
 function addRemainingBoostAmountsForRole(
@@ -1222,7 +1207,7 @@ function addRemainingBoostAmountsForRole(
 
   for (const compound of requirements) {
     const partCount = creep
-      ? countRemainingBoostParts(creep, compound)
+      ? countBoostableParts(creep.body, compound)
       : countBodyPartsForBoost(tierBodies[role], compound);
     if (partCount <= 0) continue;
     amounts.set(compound, (amounts.get(compound) ?? 0) + partCount * LAB_BOOST_MINERAL);
@@ -1243,13 +1228,13 @@ function getRemainingBoostAmounts(
 function isBoostSatisfied(creep: Creep, requiredCompounds: ResourceConstant[]): boolean {
   if (requiredCompounds.length === 0) return true;
   return requiredCompounds.every((compound) =>
-    countRemainingBoostParts(creep, compound) === 0,
+    countBoostableParts(creep.body, compound) === 0,
   );
 }
 
 function getNextMissingBoost(creep: Creep, requiredCompounds: ResourceConstant[]): ResourceConstant | undefined {
   return requiredCompounds.find((compound) =>
-    countRemainingBoostParts(creep, compound) > 0,
+    countBoostableParts(creep.body, compound) > 0,
   );
 }
 
