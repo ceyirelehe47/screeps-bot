@@ -629,6 +629,7 @@ it("RESERVE 下调度已投入战争搭档，不启动同源新战争", () => {
   Game.flags = { RESERVE: { name: "RESERVE", pos: { roomName: room.name } } as Flag };
   const red = "W1N1:war:W2N2:meleeAttacker:0", green = "W1N1:war:W2N2:healer:0", fresh = "W1N1:war:W3N3:healer:0";
   Memory.data = { creepConfigs: {
+    [red]: { role: "meleeAttacker", roomName: room.name, args: ["W2N2"], body: [ATTACK, MOVE] },
     [green]: { role: "healer", roomName: room.name, args: ["W2N2"], body: [HEAL, MOVE] },
     [fresh]: { role: "healer", roomName: room.name, args: ["W3N3"], body: [HEAL, MOVE] },
   }, war: {
@@ -637,6 +638,7 @@ it("RESERVE 下调度已投入战争搭档，不启动同源新战争", () => {
     W3N3: { targetRoom: "W3N3", sourceRoom: room.name, status: "clearing", reason: "manual", attempts: 1,
       createdAt: Game.time, updatedAt: Game.time },
   } };
+  Game.creeps.red = { name: "red", room, memory: { role: "meleeAttacker", configName: red }, ticksToLive: 1000 } as Creep;
   scheduleSpawnTasks();
   expect(spawn.memory.spawnList).toContain(green);
   expect(spawn.memory.spawnList).not.toContain(fresh);

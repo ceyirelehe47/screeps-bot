@@ -23,6 +23,7 @@ interface ColonizationTask {
   status: ColonizationStatus;
   flagName: string;
   planReady: boolean;
+  blockedReason?: string;
   claimCompleted: boolean;
   scoutSafe?: boolean;
   scoutRouteRooms?: string[];
@@ -100,7 +101,7 @@ function getOwnedSpawnRooms(): string[] {
 }
 
 function selectSourceRoom(targetRoom: string, preferredRoom?: string): string | null {
-  const ownedSpawnRooms = getOwnedSpawnRooms();
+  const ownedSpawnRooms = getOwnedSpawnRooms().filter(name => name !== targetRoom);
   if (ownedSpawnRooms.length === 0) {
     return null;
   }
@@ -949,6 +950,7 @@ function ensureScout(task: ColonizationTask): void {
 }
 
 function abandonColonization(task: ColonizationTask, reason: string): void {
+  Game.flags[task.flagName]?.remove();
   if (task.status === "clearing") {
     clearWarRoomTask(task.targetRoom);
   }
@@ -998,10 +1000,6 @@ function cleanupOrphanedColonizationConfigs(tasks: Record<string, ColonizationTa
     }
 
     const liveCreeps = getLiveCreepsByConfig(configName);
-    for (const creep of liveCreeps) {
-      creep.suicide();
-    }
-
     removeQueuedConfigFromSourceRoom(parsed.sourceRoom, configName);
     if (config.roomName) {
       delete config.roomName;
@@ -1016,6 +1014,7 @@ function cleanupOrphanedColonizationConfigs(tasks: Record<string, ColonizationTa
 }
 
 function ensureScoutSafety(task: ColonizationTask): "pending" | "safe" | "abandon" {
+  if (!task.scoutSafe && Game.time - task.createdAt >= 5000) return "abandon";
   if (task.scoutSafe) {
     clearSafeRouteRetry(task);
     return "safe";
@@ -1273,6 +1272,19 @@ function retireHandedOffHarvesters(task: ColonizationTask): void {
 
 function processTask(task: ColonizationTask): void {
   if (isDefenseMode(task.sourceRoom)) return;
+  const controller = Game.rooms[task.targetRoom]?.controller;
+  const myUsername = getSpawnsForRoom(task.sourceRoom)[0]?.owner?.username;
+  const reason = !controller?.my && Number.isFinite(Game.gcl?.level) &&
+      Game.gcl.level <= Object.values(Game.rooms).filter(room => room.controller?.my).length ? "gcl_not_enough" :
+    controller?.owner && !controller.my ? "hostile_owner" :
+    controller?.reservation && controller.reservation.username !== myUsername && controller.reservation.username !== "Invader" ? "hostile_reservation" : undefined;
+  if (reason) {
+    if (task.blockedReason !== reason) console.log(`[colonization] blocked ${task.targetRoom}: ${reason}`);
+    task.blockedReason = reason;
+    cleanupColonizationConfigs(task);
+    return;
+  }
+  delete task.blockedReason;
 
   updateDangerousRoomsFromSquadDamage(task);
   ensurePlanReady(task);
@@ -1322,10 +1334,6 @@ function processTask(task: ColonizationTask): void {
         requestScoutRescan(task, "cached scout route interrupted by dangerous room");
       }
     }
-
-    const claimerConfigName = getTaskConfigName(task, "claimer", "0");
-    removeQueuedConfig(task, claimerConfigName);
-    removeConfigWhenIdle(claimerConfigName);
 
     const scoutSafety = ensureScoutSafety(task);
     if (scoutSafety === "abandon") {
@@ -1409,7 +1417,11 @@ function processTask(task: ColonizationTask): void {
 function upsertColonizationTask(flag: Flag): boolean {
   const targetRoom = flag.pos.roomName;
   const preferredRoom = getPreferredSourceFromFlagName(flag.name);
-  const sourceRoom = selectSourceRoom(targetRoom, preferredRoom);
+  const existingTask = Memory.data?.colonization?.[targetRoom];
+  const previousSource = existingTask?.sourceRoom;
+  const keepSource = previousSource && previousSource !== targetRoom && Game.rooms[previousSource]?.controller?.my &&
+    getTickContextService().getSpawnsByRoom(previousSource).length > 0;
+  const sourceRoom = keepSource ? previousSource : selectSourceRoom(targetRoom, preferredRoom);
 
   if (!sourceRoom) {
     return false;
@@ -1432,9 +1444,10 @@ function upsertColonizationTask(flag: Flag): boolean {
     status: existing?.status ?? "claiming",
     flagName: flag.name,
     planReady: existing?.planReady ?? false,
+    blockedReason: existing?.blockedReason,
     claimCompleted: existing?.claimCompleted ?? false,
-    scoutSafe: existing?.scoutSafe ?? false,
-    scoutRouteRooms: existing?.scoutRouteRooms,
+    scoutSafe: existing?.sourceRoom === sourceRoom && (existing.scoutSafe ?? false),
+    scoutRouteRooms: existing?.sourceRoom === sourceRoom ? existing.scoutRouteRooms : undefined,
     cachedTravelPath: existing?.sourceRoom === sourceRoom ? existing?.cachedTravelPath : undefined,
     travelPathRetryAt: existing?.sourceRoom === sourceRoom ? existing?.travelPathRetryAt : undefined,
     travelPathRetryKey: existing?.sourceRoom === sourceRoom ? existing?.travelPathRetryKey : undefined,
@@ -1462,7 +1475,7 @@ function upsertColonizationTask(flag: Flag): boolean {
 
 export function isColonizationBootstrapRoom(roomName: string): boolean {
   const task = Memory.data?.colonization?.[roomName];
-  if (!task || isDefenseMode(task.sourceRoom)) {
+  if (!task) {
     return false;
   }
 

@@ -82,8 +82,18 @@ describe("runHubUpgradeControl", () => {
       roomName: "E4N58",
       body: [...RCL8_UPGRADER_MAINTENANCE_BODY],
     });
+    expect(mockedReleaseBoostLabs).not.toHaveBeenCalled();
+    Memory.runtime!.powerBankBoost = {
+      "upgrader:E4N58": { taskId: "upgrader:E4N58", sourceRoomName: "E4N58", labs: {} },
+      "hubUpgrade:E4N58": { taskId: "hubUpgrade:E4N58", sourceRoomName: "E4N58", labs: {} },
+    };
+    runHubUpgradeControl();
     expect(mockedReleaseBoostLabs).toHaveBeenCalledWith("upgrader:E4N58", "E4N58");
     expect(mockedReleaseBoostLabs).toHaveBeenCalledWith("hubUpgrade:E4N58", "E4N58");
+
+    delete Memory.runtime!.powerBankBoost;
+    runHubUpgradeControl();
+    expect(mockedReleaseBoostLabs).toHaveBeenCalledTimes(2);
 
     Game.rooms.E4N58.controller!.ticksToDowngrade = RCL8_UPGRADER_RECOVERY_START_TICKS + 1;
     runHubUpgradeControl();

@@ -1,3 +1,4 @@
+import { getTickContextService } from "@/runtime/runtimeServices";
 import { isDefenseMode } from "@/runtime/defenseMode";
 import { isRoomInReserveMode } from "@/runtime/roomReserve";
 import type { CreepConfig } from "@/types/system";
@@ -12,7 +13,7 @@ export function canStartOutboundMission(roomName: string): boolean {
 function ownsWarConfig(task: WarTask, name: string, config: CreepConfig): boolean {
   if (config.roomName !== task.sourceRoom || config.args[0] !== task.targetRoom) return false;
   const prefix = `${task.sourceRoom}:war:${task.targetRoom}:`;
-  if (config.role === "claimer") return name === `${prefix}controllerAttacker:0` && config.args[2] === "attack";
+  if (config.role === "claimer") return false;
   if (config.role !== "meleeAttacker" && config.role !== "healer") return false;
   if (task.activeGeneration) return name === task.activeGeneration.configNames[config.role];
   return name.startsWith(`${prefix}${config.role}:`) && /^\d+$/.test(name.slice(`${prefix}${config.role}:`.length));
@@ -23,16 +24,20 @@ export function canContinueWarMission(task: WarTask): boolean {
   if (isDefenseMode(task.sourceRoom) || Memory.data?.war?.[task.targetRoom] !== task ||
       !["staging", "clearing", "downgrading", "patrol_waiting"].includes(task.status)) return false;
   const generation = task.activeGeneration;
-  if (generation?.boostGateOpenedAt !== undefined || generation?.phase === "deployed") return true;
+  if (generation?.boostGateOpenedAt !== undefined && generation.phase === "assembling") return true;
   const store = Memory.data?.creepConfigs ?? {};
-  const names = new Set(Object.entries(store).filter(([name, config]) => ownsWarConfig(task, name, config)).map(([name]) => name));
+  const prefix = `${task.sourceRoom}:war:${task.targetRoom}:`;
+  const candidates = generation ? Object.values(generation.configNames) : [`${prefix}meleeAttacker:0`, `${prefix}meleeAttacker:1`, `${prefix}healer:0`];
+  const names = new Set(candidates.filter(name => generation || store[name] && ownsWarConfig(task, name, store[name])));
   if (generation) for (const name of Object.values(generation.configNames)) names.add(name);
   else for (const member of Object.values(task.members ?? {})) {
-    if (member.configName.startsWith(`${task.sourceRoom}:war:${task.targetRoom}:`)) names.add(member.configName);
+    const config = store[member.configName];
+    if (config && ownsWarConfig(task, member.configName, config)) names.add(member.configName);
   }
-  if ([...names].some(name => task.members?.[name]?.spawnedAt !== undefined || store[name]?.spawnOnce?.queuedAt !== undefined)) return true;
-  if (Object.values(Game.creeps).some(creep => !creep.memory._warDetached && names.has(creep.memory.configName ?? ""))) return true;
-  return Object.values(Game.spawns).some(spawn => spawn.room.name === task.sourceRoom &&
+  const context = getTickContextService();
+  if ([...names].some(name => context.getCreepsByConfigName(name).some(creep =>
+    !creep.memory._warDetached && creep.memory.configName === name))) return true;
+  return context.getSpawnsByRoom(task.sourceRoom).some(spawn =>
     ((spawn.memory.spawnList ?? []).some(name => names.has(name)) ||
       !!spawn.spawning && names.has(Memory.creeps?.[spawn.spawning.name]?.configName ?? "")));
 }
@@ -50,6 +55,19 @@ export function isSpawnConfigEconomicallyBlocked(configName: string, config: Cre
     const task = Memory.data?.powerBankHarvest?.[config.taskId];
     if (task?.id === config.taskId && task.sourceRoom === config.roomName && task.targetRoom === config.args[0] &&
         ["preparing_boosts", "spawning", "renewing", "boosting", "travelling", "attacking", "hauling"].includes(task.status)) return false;
+  }
+  if ((config.role === "colonizerWorker" || config.role === "colonizerHarvester") && Game.rooms[config.args[0]]?.controller?.my) {
+    const colonization = Memory.data?.colonization?.[config.args[0]];
+    const rescue = Memory.data?.rescue?.[config.args[0]];
+    if (configName.startsWith(`${config.roomName}:colonize:${config.args[0]}:`) && colonization?.sourceRoom === config.roomName &&
+        ["bootstrapping", "managed"].includes(colonization.status) ||
+        configName.startsWith(`${config.roomName}:rescue:${config.args[0]}:`) && rescue?.sourceRoom === config.roomName) return false;
+  }
+  if (configName === `${config.roomName}:war:${config.args[0]}:controllerAttacker:0` && config.role === "claimer" && config.args[2] === "attack") {
+    const task = Memory.data?.war?.[config.args[0]];
+    if (!task || task.sourceRoom !== config.roomName || !["staging", "clearing", "downgrading", "patrol_waiting"].includes(task.status)) return true;
+    return !Object.values(Game.spawns).some(spawn => spawn.room.name === config.roomName &&
+      ((spawn.memory.spawnList ?? []).includes(configName) || !!spawn.spawning && Memory.creeps?.[spawn.spawning.name]?.configName === configName));
   }
   if (configName.includes(":war:")) {
     const task = Memory.data?.war?.[config.args[0]];

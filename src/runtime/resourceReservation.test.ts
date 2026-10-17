@@ -4,6 +4,7 @@ import {
   reserveProductionResource,
   releaseProductionReservation,
   listProductionReservations,
+  repairProductionReservations,
 } from "@/runtime/resourceReservation";
 import { classifyTreasuryHolderIdAsOwner } from "@/runtime/treasury/ownerIdentity";
 
@@ -72,4 +73,19 @@ describe("resourceReservation", () => {
       expect(entries[0].holderId).toBe("carrier2");
     });
   });
+});
+
+it("修复入口不删除坏责任，只在全库修正后解除 corrupted 锁存", () => {
+  expect(ensureReservationSchemaActivated()).toEqual({ status: "ready" });
+  reserveProductionResource("W1N1", RESOURCE_HYDROGEN, 75, "task:repair");
+  const runtime = Memory.runtime as NonNullable<Memory["runtime"]> & { resourceReservationsCorrupted?: string };
+  const entry = Object.values(runtime.resourceReservations!)[0];
+  entry.amount = -1; runtime.resourceReservationsCorrupted = "broken";
+  expect(repairProductionReservations().healthy).toBe(false);
+  expect(entry.amount).toBe(-1);
+  expect(runtime.resourceReservationsCorrupted).toBe("broken");
+  entry.amount = 75;
+  expect(repairProductionReservations().healthy).toBe(true);
+  expect(runtime.resourceReservationsCorrupted).toBeUndefined();
+  expect(reserveProductionResource("W1N1", RESOURCE_HYDROGEN, 80, "task:repair")).toMatchObject({ status: "ok" });
 });

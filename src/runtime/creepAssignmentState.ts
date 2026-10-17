@@ -35,6 +35,7 @@ export interface CreepAssignmentState {
   synthesisCarrierPendingBoundResourceTransferTaskIdentity?: string;
   /** 原 accepted cargo provenance 保留；额外标记安全退回源 Storage 的目的地。 */
   synthesisCarrierPendingReturnToId?: string;
+  synthesisCarrierPendingReturnStartedAt?: number;
   /** Accepted-cargo provenance; independent from the actor's current sticky binding. */
   synthesisCarrierPendingTaskRef?: CarrierDispatchRef;
 }

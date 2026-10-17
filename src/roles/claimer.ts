@@ -45,7 +45,12 @@ export const claimerRole: RoleFactory = (
       return false;
     }
 
-    if (code === ERR_INVALID_TARGET && controller.reservation && !controller.my) {
+    if (code === ERR_GCL_NOT_ENOUGH || code === ERR_INVALID_TARGET && controller.owner) {
+      const task = Memory.data?.colonization?.[creep.room.name];
+      if (task) task.blockedReason = code === ERR_GCL_NOT_ENOUGH ? "gcl_not_enough" : "hostile_owner";
+      return false;
+    }
+    if (code === ERR_INVALID_TARGET && controller.reservation?.username === "Invader") {
       const attackCode = measureCreepIntent(() => creep.attackController(controller));
       if (attackCode === ERR_NOT_IN_RANGE) {
         moveToTarget(creep, controller, 1, { plainCost: 2, swampCost: 8, maxRooms: 1 });

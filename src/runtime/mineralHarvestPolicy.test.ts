@@ -35,6 +35,7 @@ describe("原矿停采作为最后手段", () => {
     Game.time += 201;
     expect(shouldPauseNativeMineralHarvest(roomWithMineral(200_000), RESOURCE_CATALYST)).toBe(true);
     Game.rooms.E1N1 = roomWithMineral(46_000);
+    expect(shouldPauseNativeMineralHarvest(Game.rooms.E1N1, RESOURCE_CATALYST)).toBe(false);
     noBid(46_000);
     expect(shouldPauseNativeMineralHarvest(roomWithMineral(46_000), RESOURCE_CATALYST)).toBe(false);
   });

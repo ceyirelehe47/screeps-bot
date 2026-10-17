@@ -1,3 +1,4 @@
+import { ensureCreepAssignmentState } from "@/runtime/creepAssignmentState";
 import {
   prepareBoosts,
   releaseBoostLabs,
@@ -153,6 +154,29 @@ describe("powerBankBoost", () => {
 
   describe("prepareBoosts", () => {
 
+    it("库存刚好够时，已取货在途不会导致准备失败", () => {
+      const compound = RESOURCE_CATALYZED_UTRIUM_ACID;
+      const lab = createLabWithCompound("in-flight-lab", SOURCE_ROOM, null, 0, 2000);
+      const room = createRoomWithInfrastructure({ name: SOURCE_ROOM, labs: [lab], storageResources: { [compound]: 900 } });
+      Game.rooms[SOURCE_ROOM] = room;
+      expect(prepareBoosts("in-flight", SOURCE_ROOM, 0, new Map([[compound, 900]])).status).toBe("preparing");
+      Game.time++;
+      room.storage!.store = createMockStore({ [compound]: 400 });
+      const creep = { name: "boost-carrier", store: createMockStore({ [compound]: 500 }) } as Creep;
+      Game.creeps = { [creep.name]: creep };
+      Object.assign(ensureCreepAssignmentState(creep.name), { synthesisCarrierPendingToId: lab.id, synthesisCarrierPendingResource: compound });
+      expect(prepareBoosts("in-flight", SOURCE_ROOM, 0, new Map([[compound, 900]])).status).toBe("preparing");
+      const supply = listCarrierTasksByRoom(SOURCE_ROOM).flatMap(task => task.steps).filter(step => step.resource === compound);
+      expect(supply.reduce((sum, step) => sum + step.amount, 0)).toBe(400);
+    });
+    it("Storage 和 Terminal 的合计库存足够时无需外房供体", () => {
+      const compound = RESOURCE_CATALYZED_UTRIUM_ACID;
+      Game.rooms[SOURCE_ROOM] = createRoomWithInfrastructure({ name: SOURCE_ROOM,
+        labs: [createLabWithCompound("split-lab", SOURCE_ROOM, null, 0, 2000)],
+        storageResources: { [compound]: 500 }, terminalResources: { [compound]: 400 } });
+      expect(prepareBoosts("split-stock", SOURCE_ROOM, 0, new Map([[compound, 900]])).status).toBe("preparing");
+      expect(Object.values(ensureResourceTransferTaskStore())).toHaveLength(0);
+    });
     it("重复失败不清空合成任务也不重置合成阶段", () => {
       const compound = RESOURCE_CATALYZED_UTRIUM_ACID;
       const lab = createLabWithCompound("empty-boost-lab", SOURCE_ROOM, null, 0, 2000);

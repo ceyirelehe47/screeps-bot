@@ -180,7 +180,7 @@ describe("energyTargets", () => {
     expect(getEnergyStoreTarget(createCreep(room))?.id).toBe(extension.id);
   });
 
-  it("PC 已接管后同时跳过 Spawn、Extension 和普通 PowerSpawn 供能", () => {
+  it("PC 仅存活但没有补能意图时，carrier 继续补 Extension 和 Spawn", () => {
     const roomName = "W3N3";
     const spawn = {
       id: "controlled-spawn",
@@ -235,6 +235,8 @@ describe("energyTargets", () => {
       [powerCreep.name]: powerCreep,
     };
 
-    expect(getEnergyStoreTarget(createCreep(room))?.id).toBe(storage.id);
+    expect(getEnergyStoreTarget(createCreep(room))?.id).toBe(extension.id);
+    extension.store = createStore(50, 50) as unknown as StructureExtension["store"];
+    expect(getEnergyStoreTarget(createCreep(room))?.id).toBe(spawn.id);
   });
 });

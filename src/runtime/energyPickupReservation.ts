@@ -197,6 +197,10 @@ export function reservePickupTarget(
 
   const claimAmount = Math.min(availableForThisCreep, wanted);
 
+  const previous = getCreepAssignmentState(creep.name);
+  if (previous?.energyPickupTargetId && (previous.energyPickupTargetId !== target.id || previous.energyPickupRoomName !== target.pos.roomName)) {
+    releasePickupReservation(creep);
+  }
   entry.claims[creep.name] = {
     amount: claimAmount,
     until: Game.time + RESERVATION_TTL,

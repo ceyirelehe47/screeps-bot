@@ -1,3 +1,4 @@
+import { countCarrierCargo } from "@/runtime/carrierCargo";
 /** 从 synthesisControl.ts 分离的独立职责模块；共享状态仅由此处持有。 */
 import {
   countsResourceTransferTaskTowardDemand,
@@ -138,15 +139,8 @@ export function roomResourceAmount(room: Room, resource: ResourceConstant): numb
 
 function roomSynthesisProductAmount(room: Room, product: ResourceConstant): number {
   let amount = roomResourceAmount(room, product);
-  for (const creep of Object.values(Game.creeps)) {
-    const assignment = getCreepAssignmentState(creep.name);
-    if (assignment?.synthesisCarrierPendingResource !== product || !assignment.synthesisCarrierPendingToId) continue;
-    const target = Game.getObjectById(assignment.synthesisCarrierPendingToId as Id<AnyStoreStructure>);
-    // 只承认已接受、本房 Storage/Terminal 目的地的产物卸货；路过或外运产品不覆盖本房目标。
-    if (!target || target.room?.name !== room.name ||
-        target.id !== room.storage?.id && target.id !== room.terminal?.id) continue;
-    amount += creep.store.getUsedCapacity(product);
-  }
+  for (const target of [room.storage, room.terminal]) if (target) amount += countCarrierCargo(target.id, product);
+
   return amount;
 }
 

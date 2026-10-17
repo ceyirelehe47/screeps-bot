@@ -522,7 +522,7 @@ export function getMyUsername(): string | null {
 function countSourceRoomRemotes(store: Record<string, RemoteMiningTask>, sourceRoom: string): number {
   let count = 0;
   for (const task of Object.values(store)) {
-    if (task.sourceRoom === sourceRoom && (task.status === "active" || task.status === "scouting")) {
+    if (task.sourceRoom === sourceRoom && task.status !== "abandoned") {
       count++;
     }
   }
@@ -1265,6 +1265,9 @@ function upsertReserverConfig(task: RemoteMiningTask, config: RemoteMiningConfig
   const creepConfigs = getCreepConfigService();
   const myUsername = getMyUsername();
 
+  if ((Game.rooms[task.sourceRoom]?.energyCapacityAvailable ?? 0) < 1300) {
+    removeReserverConfig(task.sourceRoom, task.targetRoom); return;
+  }
   const visibleTarget = Game.rooms[task.targetRoom];
   if (visibleTarget) {
     const controller = visibleTarget.controller;
@@ -1272,7 +1275,7 @@ function upsertReserverConfig(task: RemoteMiningTask, config: RemoteMiningConfig
       removeReserverConfig(task.sourceRoom, task.targetRoom);
       return;
     }
-    if (controller?.reservation && controller.reservation.username !== myUsername) {
+    if (controller?.reservation && controller.reservation.username !== myUsername && controller.reservation.username !== "Invader") {
       removeReserverConfig(task.sourceRoom, task.targetRoom);
       return;
     }
@@ -1447,8 +1450,10 @@ export function processRemoteConfigLifecycle(
     }
 
     if (task.status === "abandoned") {
-      cleanupAllRemoteConfigs(task);
-      removeScoutConfigAndSpawnQueues(task.sourceRoom, task.targetRoom);
+      if (Game.time % 50 === 0 || task.updatedAt === Game.time) {
+        cleanupAllRemoteConfigs(task);
+        removeScoutConfigAndSpawnQueues(task.sourceRoom, task.targetRoom);
+      }
       continue;
     }
 
@@ -1504,7 +1509,7 @@ export function processRemoteConfigLifecycle(
         }
 
         const threatReason = getRemoteThreatReason(visibleTarget);
-        if (threatReason !== null) {
+        if (threatReason !== null || getActiveDefenseReason(visibleTarget, task) !== null) {
           task.lastThreatAt = Game.time;
           task.updatedAt = Game.time;
           delete task.safeSince;
@@ -1824,7 +1829,7 @@ export function runRemoteMining(): void {
   syncRemoteObserverLeases(store);
 
   processScoutLifecycle(store, config);
-  processRemoteConstruction(store, config);
+  if (Game.time % 25 === 0 || Object.values(store).some(task => task.assignedAt === Game.time)) processRemoteConstruction(store, config);
   processRemoteConfigLifecycle(store, config);
 
   const lastScanAt = Memory.runtime.remoteMining.lastScanAt;
@@ -1868,8 +1873,12 @@ export function runRemoteMining(): void {
         continue;
       }
 
-      if (store[targetRoom]) {
-        continue;
+      const previous = store[targetRoom];
+      if (previous) {
+        if (previous.status !== "abandoned" || Game.time < (previous.nextRetryAt ?? previous.updatedAt + 5000)) continue;
+        cleanupAllRemoteConfigs(previous);
+        removeScoutConfigAndSpawnQueues(previous.sourceRoom, previous.targetRoom);
+        delete store[targetRoom];
       }
 
       if (!isRouteDirect(sourceRoom.name, targetRoom)) {

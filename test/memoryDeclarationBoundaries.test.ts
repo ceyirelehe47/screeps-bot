@@ -93,8 +93,8 @@ const MEMORY_BRANCHES = {
   data: {
     declaration: "src/types/memory/data.d.ts",
     interfaceName: "ScreepsMemoryData",
-    // 新增有界市场对照根；不迁移或修改旧市场根。
-    schemaFingerprint: "92fbab2b0c2ba2821878277259e599fefa0cf40b47ee357d12cf3afcffb382c4",
+    // 登记殖民阻塞原因与跨 shard 新鲜度、有限重试和已发队伍状态。
+    schemaFingerprint: "21f74759eb15f08cfa482582a00e3adca0bfef78c1c7850bf0703d061744ad88",
     imports: [
       "@/runtime/market/state:CompactMarketState",
       "@/runtime/depositHarvest:DepositHarvestTask",

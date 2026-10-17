@@ -1,3 +1,4 @@
+import { isRoomInReserveMode } from "@/runtime/roomReserve";
 import { fixedBodyExceedsCapacity, isSpawnConfigEconomicallyBlocked } from "@/runtime/outboundMissionPolicy";
 import { readSpawnExitDirections } from "@/config/deployment";
 import { issueMove } from "@/movement/traffic";
@@ -245,6 +246,7 @@ function hasWaitingWarSpawn(spawn: StructureSpawn): boolean {
 }
 
 function shouldYieldEnergyToWar(spawn: StructureSpawn, configName: string): boolean {
+  if (isRoomInReserveMode(spawn.room.name)) return false;
   const config = getCreepConfigService().get(configName);
   if (config?.role === "homeDefender" || config?.roomName === spawn.room.name && ["miner", "harvester"].includes(config.role)) return false;
   if (isWarConfigName(configName) || isSourceRoomCarrierConfig(spawn, configName)) {

@@ -241,6 +241,7 @@ declare global {
         mode?: "normal" | "npcStronghold";
         flagName: string;
         planReady: boolean;
+        blockedReason?: string;
         claimCompleted: boolean;
         scoutSafe?: boolean;
         scoutRouteRooms?: string[];
@@ -384,6 +385,7 @@ declare global {
         claimerName?: string;
         bootstrapConfigNames?: string[];
         bootstrapDispatchedAt?: number;
+        bootstrapLaunched?: boolean;
         launchedAt?: number;
         claimedAt?: number;
         completedAt?: number;
@@ -391,6 +393,9 @@ declare global {
         createdAt: number;
         updatedAt: number;
         lastReadyAt?: number;
+        claimAttempts?: number;
+        remoteObservedVersion?: number;
+        remoteAdvancedAt?: number;
       }
     >;
     interShardPortals?: Record<

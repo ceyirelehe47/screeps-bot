@@ -302,22 +302,30 @@ export function claimLocalCarrierDestinationCapacity(params: {
   };
 }
 
-/** 已接受 terminal_feed 余货只可退回原 source Storage；不改原目标 provenance。 */
-export function claimLocalCarrierReturnToSourceCapacity(params: {
-  claimantId: string; target: StructureStorage; resource: ResourceConstant; requestedAmount: number;
+/** 已接受 terminal_feed 余货可转移到自有安全仓位；不改原目标 provenance。 */
+export function claimLocalCarrierReturnCapacity(params: {
+  claimantId: string; target: AnyStoreStructure; resource: ResourceConstant; requestedAmount: number;
 }): LocalCarrierDestinationCapacityClaim | null {
+  if (!params.target.room?.controller?.my || ![STRUCTURE_STORAGE, STRUCTURE_TERMINAL, STRUCTURE_CONTAINER].includes(params.target.structureType as "storage" | "terminal" | "container")) return null;
   const state = getCreepAssignmentState(params.claimantId);
-  if (state?.synthesisCarrierPendingTaskType !== "terminal_feed" || state.synthesisCarrierPendingFromId !== params.target.id ||
-      state.synthesisCarrierPendingReturnToId !== params.target.id || state.synthesisCarrierPendingResource !== params.resource) return null;
+  if (state?.synthesisCarrierPendingTaskType !== "terminal_feed" || state.synthesisCarrierPendingReturnToId !== params.target.id || state.synthesisCarrierPendingResource !== params.resource) return null;
   const current = ensureLedger();
   const existing = current.claimByClaimantId.get(params.claimantId);
   if (existing && existing.targetId !== params.target.id) {
-    if (!existing.seeded || existing.targetId !== state.synthesisCarrierPendingToId || existing.seededTransfer?.committed) return null;
+    if (!existing.seeded || existing.seededTransfer?.committed) return null;
     current.committedByTargetId.set(existing.targetId, Math.max(0, (current.committedByTargetId.get(existing.targetId) || 0) - existing.amount));
     current.claimByClaimantId.delete(params.claimantId);
     seedCarrierCommitment(current, params.claimantId, params.target.id, Game.creeps[params.claimantId]?.store.getUsedCapacity(params.resource) || 0);
   }
   return claimLocalCarrierDestinationCapacity(params);
+}
+
+/** 兼容旧调用；仍严格限制为原 Storage。 */
+export function claimLocalCarrierReturnToSourceCapacity(params: {
+  claimantId: string; target: StructureStorage; resource: ResourceConstant; requestedAmount: number;
+}): LocalCarrierDestinationCapacityClaim | null {
+  if (getCreepAssignmentState(params.claimantId)?.synthesisCarrierPendingFromId !== params.target.id) return null;
+  return claimLocalCarrierReturnCapacity(params);
 }
 
 export function getLocalCarrierDestinationCommittedAmount(

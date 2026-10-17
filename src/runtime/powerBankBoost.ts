@@ -1,3 +1,4 @@
+import { countCarrierCargo } from "@/runtime/carrierCargo";
 import { POWER_BANK_BODY_TIERS, POWER_BANK_BOOST_REQUIREMENTS } from "@/runtime/powerBankConstants";
 import {
   pauseSynthesisForBoost,
@@ -272,7 +273,7 @@ export function prepareBoosts(
     const loadedMineral = lab.mineralType as ResourceConstant | undefined;
     if (loadedMineral && loadedMineral !== compound) {
       // 异物清理也会暂停合成，先证明清完后有补给，避免下一 tick 再失败恢复。
-      const missing = Math.max(0, needed - getLocalStock(room, compound) - getOwnedIncomingBoostAmount(taskId, sourceRoomName, compound));
+      const missing = Math.max(0, needed - getLocalStock(room, compound) - countCarrierCargo(lab.id, compound) - getOwnedIncomingBoostAmount(taskId, sourceRoomName, compound));
       if (missing > 0 && !findBestDonorRoom(compound, missing, [sourceRoomName])) {
         return failBoostPreparation(taskId, sourceRoomName, "insufficient_boost_compound", labs);
       }
@@ -304,8 +305,7 @@ export function prepareBoosts(
     const labHas = (lab.store.getUsedCapacity(compound) ?? 0);
     const localStock = getLocalStock(room, compound);
 
-    const deficit = Math.max(0, needed - labHas);
-    let localSupplyAmount = 0;
+    const deficit = Math.max(0, needed - labHas - countCarrierCargo(lab.id, compound));
 
     if (deficit > 0 && localStock > 0) {
       const source = resolveBoostSupplySource(room, compound);
@@ -314,7 +314,6 @@ export function prepareBoosts(
         const usableFree = getLabFreeCapacityForResource(lab, compound);
         const transferAmt = Math.min(amount, usableFree);
         if (transferAmt > 0) {
-          localSupplyAmount = transferAmt;
           drafts.push({
             id: `powerBankBoost:lab_supply:${taskId}:${compound}`,
             type: "lab_supply",
@@ -337,7 +336,7 @@ export function prepareBoosts(
 
     if (options.requireLabEnergy) {
       const requiredEnergy = getRequiredLabEnergy(needed);
-      const energyDeficit = Math.max(0, requiredEnergy - lab.store.getUsedCapacity(RESOURCE_ENERGY));
+      const energyDeficit = Math.max(0, requiredEnergy - lab.store.getUsedCapacity(RESOURCE_ENERGY) - countCarrierCargo(lab.id, RESOURCE_ENERGY));
       if (energyDeficit > 0) {
         const energySource = resolveBoostSupplySource(room, RESOURCE_ENERGY);
         const transferAmount = Math.min(
@@ -345,7 +344,7 @@ export function prepareBoosts(
           energySource ? getBoostSupplyAmount(energySource, RESOURCE_ENERGY) : 0,
           lab.store.getFreeCapacity(RESOURCE_ENERGY) ?? 0,
         );
-        if (!energySource || transferAmount < energyDeficit) {
+        if (!energySource || ((room.storage ? getBoostSupplyAmount(room.storage, RESOURCE_ENERGY) : 0) + (room.terminal ? getBoostSupplyAmount(room.terminal, RESOURCE_ENERGY) : 0)) < energyDeficit) {
           return failBoostPreparation(taskId, sourceRoomName, "insufficient_lab_energy", labs);
         }
         drafts.push({
@@ -367,7 +366,7 @@ export function prepareBoosts(
       }
     }
 
-    const remainingDeficit = Math.max(0, deficit - localSupplyAmount);
+    const remainingDeficit = Math.max(0, deficit - localStock);
     const incoming = getOwnedIncomingBoostAmount(taskId, sourceRoomName, compound);
     const donorDeficit = Math.max(0, remainingDeficit - incoming);
 

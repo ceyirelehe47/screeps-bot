@@ -1,3 +1,4 @@
+import { invalidateRoomReserveCache } from "@/runtime/roomReserve";
 import { resolveRoomEnergyPolicy } from "@/runtime/roomEnergyPolicy";
 
 function getAutoReserveFlagName(roomName: string): string {
@@ -25,23 +26,18 @@ export function runAutoReserveFlags(): void {
     const scale = level >= 8 ? 1 : level >= 7 ? 0.5 : level >= 6 ? 0.25 : 0.1;
     const policy = resolveRoomEnergyPolicy({ energyFloor: 120_000 * scale, energyTarget: 200_000 * scale, ...raw });
     const storageEnergy = room.storage.store.getUsedCapacity(RESOURCE_ENERGY);
-    const hasCriticalConstruction = room.find(FIND_MY_CONSTRUCTION_SITES).some(site =>
-      site.structureType === STRUCTURE_SPAWN || site.structureType === STRUCTURE_STORAGE ||
-      site.structureType === STRUCTURE_TOWER || site.structureType === STRUCTURE_EXTENSION);
-    if (hasCriticalConstruction) {
-      if (flag) flag.remove();
-      continue;
-    }
 
     if (storageEnergy < policy.energyFloor) {
       if (flag) {
         if (!isAtPosition(flag, room.storage.pos)) {
           flag.setPosition(room.storage.pos);
+          invalidateRoomReserveCache();
         }
         continue;
       }
 
       const createdFlagName = room.createFlag(room.storage.pos, flagName);
+      invalidateRoomReserveCache();
       if (createdFlagName === flagName) {
         console.log(`[reserve] ${room.name} entered reserve mode at ${storageEnergy} energy`);
       }
@@ -50,6 +46,7 @@ export function runAutoReserveFlags(): void {
 
     if (flag && storageEnergy >= policy.energyTarget) {
       flag.remove();
+      invalidateRoomReserveCache();
       console.log(`[reserve] ${room.name} cleared reserve mode at ${storageEnergy} energy`);
     }
   }

@@ -9,6 +9,7 @@ import { isKnownEmptyLegacyTreasuryRoot } from "@/runtime/treasuryTerminalRespon
 import {
   inspectTreasuryResourceTransferReadiness,
   inspectTreasuryResourceTransferPreparation,
+  createTreasuryPreparationInspector,
 } from "@/runtime/resourceControlReadModel";
 import { inspectConfiguredSynthesisTransferDemand } from "@/runtime/synthesisReadModel";
 import { cancelResourceTransferTask, type ResourceTransferTask } from "@/runtime/logistics/resourceTransferTasks";
@@ -313,6 +314,8 @@ function procurementSupplyAmount(state: TreasuryContinuousOHState, requestedAmou
     const desired = Math.min(requestedAmount, demand.amount, unbound ? state.pilot.cap : state.policy.sliceAmount);
     if (unbound && backing < desired) return 0;
     const maximum = Math.min(desired, backing);
+    // 同步规划中不发生 mutation，复用完整快照；native 仍独立重新验收。
+    const inspectPreparation = createTreasuryPreparationInspector();
     // 持续期可接真实1..9小片；未绑定 pilot 必须整批足额，不能以部分货建死任务。
     for (let amount = maximum; amount >= (unbound ? maximum : 1); amount -= 1) {
       const plan = procurementBudgetPlan(state, amount);
@@ -321,7 +324,9 @@ function procurementSupplyAmount(state: TreasuryContinuousOHState, requestedAmou
       const prospect: ResourceTransferTask = adoptingTask ?? { id: prospectId, resource, fromRoomName: sourceRoomName,
         toRoomName: targetRoomName, amount, remainingAmount: amount, status: "pending", origin: "automatic",
         reason: TREASURY_T4_LANE.requiredReason, createdAt: clock.tick, updatedAt: clock.tick, lastProgressAt: clock.tick };
-      if (inspectTreasuryResourceTransferPreparation(prospect, amount, fee).ok) return amount;
+      const preparation = inspectPreparation(prospect, amount, fee);
+      if (preparation.ok) return amount;
+      if (["shared_endpoint_unavailable", "shared_market_exposure_protected", "shared_commitment_invalid", "shared_commitment_unreadable"].includes(preparation.reason)) return 0;
     }
     return 0;
   } catch { return 0; }

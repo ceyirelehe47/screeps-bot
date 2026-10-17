@@ -90,7 +90,7 @@ export function runTreasuryTerminalTransferTask(task: ResourceTransferTask, ledg
     return {handled:true,status:"cross_lane_recovery_only"};
   }
   const owner = task.treasurySlice === undefined ? undefined : engines.find((entry) => entry.lane.runId === task.treasurySlice?.runId);
-  const continuousOwner = engines.find((entry) => entry.lane.continuous && ownsActivity(entry.lane) && treasuryLaneTaskMatches(entry.lane, task));
+  const continuousOwner = engines.find((entry) => entry.lane.continuous && treasuryLaneTaskMatches(entry.lane, task) && ownsActivity(entry.lane));
   const selected = owner ?? continuousOwner ?? engines.find((entry) => !entry.lane.continuous && treasuryLaneTaskMatches(entry.lane, task)) ?? engines[0];
   return selected.engine.run(task, ledger, nativeBudgetAvailable, onScheduled);
 }

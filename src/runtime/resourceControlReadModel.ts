@@ -98,6 +98,7 @@ export interface ResourceControlTransferContext {
   marketSellingResources?: Set<ResourceConstant>;
   tasks: ResourceTransferTask[];
   taskById: Map<string, ResourceTransferTask>;
+  taskCommitmentFingerprints?: Map<string, string>;
   snapshotByRoom: Map<string, ResourceControlSnapshot>;
   receiverCapacityLedger: ReceiverCapacityLedger;
   healthyOutgoingByRoomResource: Map<string, number>;
@@ -356,6 +357,7 @@ function resolveState(
   return "balanced";
 }
 
+let emptyResourceAmounts: Partial<Record<ResourceConstant, number>> | undefined;
 export function collectResourceControlSnapshots(
   capturedResources?: readonly ResourceConstant[],
   liveRooms?: readonly Room[],
@@ -376,10 +378,11 @@ export function collectResourceControlSnapshots(
     const storageResourceAmounts: Partial<
       Record<ResourceConstant, number>
     > = {};
-    const terminalResourceAmounts: Partial<
-      Record<ResourceConstant, number>
-    > = {};
-    const snapshotResources = capturedResources ?? RESOURCES_ALL;
+    emptyResourceAmounts ??= Object.fromEntries(RESOURCES_ALL.map(resource => [resource, 0]));
+    const terminalResourceAmounts: Partial<Record<ResourceConstant, number>> = capturedResources ? {} : { ...emptyResourceAmounts };
+    const storedResources = Object.keys(room.terminal!.store).filter(key => RESOURCES_ALL.includes(key as ResourceConstant)) as ResourceConstant[];
+    const snapshotResources = capturedResources ?? (storedResources.length > 0 || terminalUsedCapacity === 0
+      ? [...new Set<ResourceConstant>([RESOURCE_ENERGY, ...storedResources])] : RESOURCES_ALL);
     for (const resource of snapshotResources) {
       terminalResourceAmounts[resource] =
         resource === RESOURCE_ENERGY
@@ -395,9 +398,9 @@ export function collectResourceControlSnapshots(
     const previousCapacityState =
       Memory.runtime?.resourceControl?.rooms?.[room.name]?.capacityState;
     const mineral = room.find(FIND_MINERALS)[0] || null;
-    const extractor = room.find(FIND_STRUCTURES, {
-      filter: (structure) => structure.structureType === STRUCTURE_EXTRACTOR,
-    })[0] as StructureExtractor | undefined;
+    const extractor = getTickContextService().getRoomContext(room)?.getMyStructures().find(
+      structure => structure.structureType === STRUCTURE_EXTRACTOR,
+    ) as StructureExtractor | undefined;
 
     return {
       roomName: room.name,
@@ -640,6 +643,7 @@ export function createResourceControlTransferContext(
     stagingObservationByRoom,
     terminalRecoveryObservationByRoom,
     taskContributionById,
+    taskCommitmentFingerprints: new Map(tasks.map(task => [task.id, JSON.stringify(task)])),
     taskContributionIndex,
     marketEnergyReadinessByRoom,
   };
@@ -1909,25 +1913,41 @@ export function inspectTreasuryResourceTransferReadiness(task: ResourceTransferT
   return inspectTreasuryResourceTransferAvailability(task, amount, fee, liveLedger, true);
 }
 
+interface TreasuryPreparationContext {
+  snapshots: ResourceControlSnapshot[];
+  config: ResourceCapacityConfig;
+  context: ResourceControlTransferContext;
+}
+
+/** 只用于同一个同步规划调用，不跨 tick 或 mutation 复用。 */
+export function createTreasuryPreparationInspector(): (task: ResourceTransferTask, amount: number, fee: number) => {ok: boolean; reason: string} {
+  const snapshots = collectResourceControlSnapshots(undefined, Object.values(Game.rooms).filter(room => room.controller?.my === true));
+  const config = resolveCapacityConfig();
+  const context = createResourceControlTransferContext(snapshots, config, {count:0}, {readonlyCarrierBoard:true});
+  return (task, amount, fee) => [TREASURY_T3_LANE, TREASURY_T4_LANE].some(lane => treasuryLaneTaskMatches(lane, task))
+    ? inspectTreasuryResourceTransferAvailability(task, amount, fee, undefined, false, { snapshots, config, context })
+    : { ok: false, reason: "outside_preparation_lane" };
+}
+
 /** 仅 OH 准备入口可接受正常 Storage 备货；尚不授予 native。 */
 export function inspectTreasuryResourceTransferPreparation(task: ResourceTransferTask, amount: number, fee: number): {ok: boolean; reason: string} {
   if (![TREASURY_T3_LANE,TREASURY_T4_LANE].some((lane) => treasuryLaneTaskMatches(lane, task))) return {ok:false,reason:"outside_preparation_lane"};
   return inspectTreasuryResourceTransferAvailability(task, amount, fee, undefined, false);
 }
 
-function inspectTreasuryResourceTransferAvailability(task: ResourceTransferTask, amount: number, fee: number, liveLedger: ReceiverCapacityLedger | undefined, requireTerminalStock: boolean): {ok: boolean; reason: string} {
+function inspectTreasuryResourceTransferAvailability(task: ResourceTransferTask, amount: number, fee: number, liveLedger: ReceiverCapacityLedger | undefined, requireTerminalStock: boolean, prepared?: TreasuryPreparationContext): {ok: boolean; reason: string} {
   try {
     if (!Number.isSafeInteger(amount) || amount < 1 || amount > 100 || amount > task.remainingAmount ||
         !Number.isSafeInteger(fee) || fee < 0 || fee > 100 || !validateReservationStoreHealth().healthy) return {ok:false,reason:"shared_commitment_invalid"};
     const demand = inspectSynthesisTransferNeed(task.toRoomName, task.resource, RESOURCE_UTRIUM_ACID, task.id);
     if (!demand.ok) return {ok:false,reason:demand.reason};
     if (demand.amount < amount) return {ok:false,reason:"synthesis_need_below_slice"};
-    const snapshots = collectResourceControlSnapshots(undefined, Object.values(Game.rooms).filter((room) => room.controller?.my === true));
+    const snapshots = prepared?.snapshots ?? collectResourceControlSnapshots(undefined, Object.values(Game.rooms).filter((room) => room.controller?.my === true));
     const donor = snapshots.find((entry) => entry.roomName === task.fromRoomName);
     const receiver = snapshots.find((entry) => entry.roomName === task.toRoomName);
     if (!donor?.storage || !receiver?.storage) return {ok:false,reason:"shared_endpoint_unavailable"};
-    const config = resolveCapacityConfig();
-    const context = createResourceControlTransferContext(snapshots, config, {count:0}, {readonlyCarrierBoard:true});
+    const config = prepared?.config ?? resolveCapacityConfig();
+    const context = prepared?.context ?? createResourceControlTransferContext(snapshots, config, {count:0}, {readonlyCarrierBoard:true});
     const outgoing = getHealthyOutgoingCommitment(donor.roomName, task.resource, context);
     const ownHealthy = isHealthyResourceTransferTaskReservation(task,"outgoing");
     const residualResourceCommitment = Math.max(0,outgoing - (ownHealthy ? amount : 0));

@@ -17,19 +17,23 @@ const TASK_PRIORITY: Record<PowerCreepTaskType, number> = {
   renew: 1_000,
   enable_room: 950,
   deposit_ops: 900,
+  withdraw_ops: 850,
   operate_storage: 400,
+  operate_factory: 350,
   regen_source: 300,
-  operate_extension: 300,
+  operate_extension: 500,
   generate_ops: 300,
 };
 
 const POWER_TASKS: Partial<Record<PowerCreepTaskType, PowerConstant>> = {
   operate_storage: PWR_OPERATE_STORAGE,
+  operate_factory: PWR_OPERATE_FACTORY,
   regen_source: PWR_REGEN_SOURCE,
   operate_extension: PWR_OPERATE_EXTENSION,
   generate_ops: PWR_GENERATE_OPS,
 };
 
+const extensionSupplyIntents = new Map<string, number>();
 let capabilityCacheTick = -1;
 let capabilityCache: Record<string, PowerCreepRoomCapability> = {};
 
@@ -181,7 +185,12 @@ function isOperateExtensionControlHealthy(roomName: string, capability: PowerCre
     const powerCreep = Game.powerCreeps[name];
     return !!powerCreep &&
       getPowerLevel(powerCreep, PWR_OPERATE_EXTENSION) > 0 &&
-      powerCreep.ticksToLive != null &&
+      extensionSupplyIntents.get(powerCreep.name) === Game.time &&
+      (powerCreep.ticksToLive ?? 0) > POWER_CREEP_RENEW_TTL &&
+      Number.isFinite(powerCreep.ticksToLive) &&
+      powerCreep.store.getUsedCapacity(RESOURCE_OPS) >= getPowerOpsCost(powerCreep, PWR_OPERATE_EXTENSION) &&
+      (getPowerCooldown(powerCreep, PWR_OPERATE_EXTENSION) ?? Infinity) <= 1 &&
+      !!getOperateExtensionTarget(room) &&
       powerCreep.room?.name === roomName &&
       powerCreep.memory.lastControlTick !== undefined &&
       powerCreep.memory.lastControlTick >= Game.time - 1;
@@ -199,7 +208,7 @@ export function getPowerCreepRoomEnergyPolicy(roomName: string): PowerCreepRoomE
   }
 
   return {
-    suppressSpawnSupply: true,
+    suppressSpawnSupply: false,
     suppressExtensionSupply: isOperateExtensionControlHealthy(roomName, capability),
     managePowerSpawnSupply: true,
   };
@@ -281,17 +290,25 @@ function isTaskObsolete(powerCreep: PowerCreep, task: PowerCreepTask, room: Room
       return !!room.controller?.isPowerEnabled;
     case "renew":
       return powerCreep.ticksToLive == null || powerCreep.ticksToLive >= POWER_CREEP_RENEW_TTL;
+    case "withdraw_ops": {
+      const target = getTaskTarget(task) as AnyStoreStructure | null;
+      return !target || (target.store.getUsedCapacity(RESOURCE_OPS) ?? 0) <= 0 ||
+        powerCreep.store.getUsedCapacity(RESOURCE_OPS) >= opsReserve(powerCreep) || (powerCreep.store.getFreeCapacity() ?? 0) <= 0;
+    }
     case "deposit_ops": {
       const capacity = powerCreep.store.getCapacity() || 0;
       return powerCreep.store.getUsedCapacity(RESOURCE_OPS) <= Math.floor(capacity * POWER_CREEP_OPS_RETAIN_RATIO);
+    }
+    case "operate_factory": {
+      const target = getTaskTarget(task);
+      return !target || (getActivePowerEffect(target, PWR_OPERATE_FACTORY)?.ticksRemaining ?? 0) > 50;
     }
     case "operate_storage": {
       const target = getTaskTarget(task);
       if (!powerCreep.powers[PWR_OPERATE_STORAGE] || !target) {
         return true;
       }
-      return hasActivePowerEffect(target, PWR_OPERATE_STORAGE) &&
-        getPowerCooldown(powerCreep, PWR_OPERATE_STORAGE) !== 0;
+      return (getActivePowerEffect(target, PWR_OPERATE_STORAGE)?.ticksRemaining ?? 0) > 50;
     }
     case "regen_source":
       return !powerCreep.powers[PWR_REGEN_SOURCE] || !getTaskTarget(task);
@@ -326,7 +343,16 @@ function scheduleLifecycleTasks(powerCreep: PowerCreep, room: Room, powerSpawn: 
   }
 }
 
+function opsReserve(powerCreep: PowerCreep): number {
+  return Math.min(Math.floor((powerCreep.store.getCapacity() || 0) * POWER_CREEP_OPS_RETAIN_RATIO),
+    Math.max(20, 2 * getPowerOpsCost(powerCreep, PWR_OPERATE_EXTENSION) + getPowerOpsCost(powerCreep, PWR_OPERATE_STORAGE)));
+}
+
 function scheduleOpsTasks(powerCreep: PowerCreep, room: Room): void {
+  if (powerCreep.store.getUsedCapacity(RESOURCE_OPS) < opsReserve(powerCreep)) {
+    const source = [room.storage, room.terminal].find(target => target && (target.store.getUsedCapacity(RESOURCE_OPS) ?? 0) > 0);
+    if (source) enqueuePowerCreepTask(powerCreep, "withdraw_ops", source.id);
+  }
   if (isPowerReady(powerCreep, PWR_GENERATE_OPS)) {
     enqueuePowerCreepTask(powerCreep, "generate_ops");
   }
@@ -346,10 +372,27 @@ function scheduleOperateStorage(powerCreep: PowerCreep, room: Room): void {
   if (!room.storage || getPowerLevel(powerCreep, PWR_OPERATE_STORAGE) <= 0) {
     return;
   }
-  const hasEffect = hasActivePowerEffect(room.storage, PWR_OPERATE_STORAGE);
-  if (!hasEffect || getPowerCooldown(powerCreep, PWR_OPERATE_STORAGE) === 0) {
+  if ((getActivePowerEffect(room.storage, PWR_OPERATE_STORAGE)?.ticksRemaining ?? 0) <= 50) {
     enqueuePowerCreepTask(powerCreep, "operate_storage", room.storage.id);
   }
+}
+
+function scheduleOperateFactory(powerCreep: PowerCreep, room: Room): void {
+  if (!isPowerReady(powerCreep, PWR_OPERATE_FACTORY)) return;
+  const cfg = Memory.cfg?.factoryControl;
+  const roomCfg = cfg?.rooms?.[room.name];
+  if (cfg?.enabled === false || roomCfg?.enabled === false || roomCfg?.drainOnly) return;
+  const level = getPowerLevel(powerCreep, PWR_OPERATE_FACTORY);
+  const factory = room.find(FIND_MY_STRUCTURES).find(s => s.structureType === STRUCTURE_FACTORY) as StructureFactory | undefined;
+  if (!factory || factory.level && factory.level !== level || (getActivePowerEffect(factory, PWR_OPERATE_FACTORY)?.ticksRemaining ?? 0) > 50) return;
+  const targets = roomCfg?.targets ?? cfg?.targets ?? [];
+  const active = Memory.runtime?.factoryControl?.rooms?.[room.name]?.activeTarget;
+  const needed = targets.some(target => {
+    const recipe = COMMODITIES[target.resource as CommodityConstant];
+    const amount = (room.storage?.store.getUsedCapacity(target.resource) ?? 0) + (room.terminal?.store.getUsedCapacity(target.resource) ?? 0) + factory.store.getUsedCapacity(target.resource);
+    return recipe?.level === level && amount < (target.targetAmount ?? 1000);
+  }) || !!active && COMMODITIES[active as CommodityConstant]?.level === level;
+  if (needed) enqueuePowerCreepTask(powerCreep, "operate_factory", factory.id);
 }
 
 function scheduleRegenSource(powerCreep: PowerCreep, room: Room): void {
@@ -400,6 +443,10 @@ function scheduleOperateExtension(powerCreep: PowerCreep, room: Room): void {
 function isTaskRunnable(powerCreep: PowerCreep, task: PowerCreepTask): boolean {
   if (task.type === "renew" || task.type === "enable_room") {
     return !!getTaskTarget(task);
+  }
+  if (task.type === "withdraw_ops") {
+    const target = getTaskTarget(task) as AnyStoreStructure | null;
+    return !!target && (target.store.getUsedCapacity(RESOURCE_OPS) ?? 0) > 0 && (powerCreep.store.getFreeCapacity() ?? 0) > 0;
   }
   if (task.type === "deposit_ops") {
     const target = getTaskTarget(task) as StructureStorage | null;
@@ -485,6 +532,7 @@ function syncPowerTaskWorkAnchor(powerCreep: PowerCreep, task: PowerCreepTask | 
 }
 
 function finishSuccessfulTask(powerCreep: PowerCreep, task: PowerCreepTask): void {
+  if (task.type === "operate_extension") extensionSupplyIntents.set(powerCreep.name, Game.time);
   if (task.type === "regen_source") {
     const sourceCount = powerCreep.memory.regenSourceIds?.length || 0;
     if (sourceCount > 0) {
@@ -544,8 +592,19 @@ function executeTask(powerCreep: PowerCreep, task: PowerCreepTask): void {
       result = powerCreep.transfer(target as StructureStorage, RESOURCE_OPS, amount);
       break;
     }
+    case "withdraw_ops": {
+      const source = target as StructureStorage | StructureTerminal;
+      const amount = Math.min(opsReserve(powerCreep) - powerCreep.store.getUsedCapacity(RESOURCE_OPS),
+        source.store.getUsedCapacity(RESOURCE_OPS), powerCreep.store.getFreeCapacity());
+      if (amount <= 0) { removePowerCreepTask(powerCreep, task.id); return; }
+      result = executeTreasuryFencedTerminalCargo(source, () => powerCreep.withdraw(source, RESOURCE_OPS, amount));
+      break;
+    }
     case "generate_ops":
       result = powerCreep.usePower(PWR_GENERATE_OPS);
+      break;
+    case "operate_factory":
+      result = powerCreep.usePower(PWR_OPERATE_FACTORY, target || undefined);
       break;
     case "operate_storage":
       result = powerCreep.usePower(PWR_OPERATE_STORAGE, target || undefined);
@@ -620,6 +679,7 @@ function runPowerCreep(powerCreep: PowerCreep): void {
   scheduleLifecycleTasks(powerCreep, room, powerSpawn);
   scheduleOpsTasks(powerCreep, room);
   scheduleOperateStorage(powerCreep, room);
+  scheduleOperateFactory(powerCreep, room);
   scheduleRegenSource(powerCreep, room);
   scheduleOperateExtension(powerCreep, room);
 
@@ -662,6 +722,7 @@ export function runPowerCreepControl(): void {
 }
 
 export function resetPowerCreepControlCacheForTest(): void {
+  extensionSupplyIntents.clear();
   capabilityCacheTick = -1;
   capabilityCache = {};
 }

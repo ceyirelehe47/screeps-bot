@@ -131,6 +131,7 @@ function getMarketBuyDemandDeficit(
   return Math.max(0, demandTarget - current - incoming);
 }
 
+const marketOrders = new Map<string, Order[]>();
 function findBestBuyOrder(
   type: ORDER_BUY | ORDER_SELL,
   resource: ResourceConstant,
@@ -140,13 +141,16 @@ function findBestBuyOrder(
   priceCap?: number,
   priceFloor?: number,
   energyShadowPrice = 0.12,
+  minimumDealAmount = 1,
 ): Order | null {
-  const orders = Game.market.getAllOrders({ type, resourceType: resource });
+  const key = `${type}:${resource}`;
+  let orders = marketOrders.get(key);
+  if (!orders) { orders = Game.market.getAllOrders({ type, resourceType: resource }).map(order => ({ ...order })); marketOrders.set(key, orders); }
   let best: Order | null = null;
   let bestEffectivePrice = Infinity;
 
   for (const order of orders) {
-    if (order.amount < amount || !order.roomName) {
+    if (order.amount < minimumDealAmount || !order.roomName) {
       continue;
     }
 
@@ -157,20 +161,17 @@ function findBestBuyOrder(
       continue;
     }
 
-    const cost = Game.market.calcTransactionCost(
-      amount,
-      roomName,
-      order.roomName,
-    );
-    const ratio = amount > 0 ? cost / amount : Infinity;
+    const dealAmount = Math.min(amount, order.amount);
+    const cost = Game.market.calcTransactionCost(dealAmount, roomName, order.roomName);
+    const ratio = cost / dealAmount;
     if (ratio > maxDealEnergyCostRatio) {
       continue;
     }
 
     if (type === ORDER_SELL) {
       const effectivePrice = resource === RESOURCE_ENERGY
-        ? (amount > cost ? order.price * amount / (amount - cost) : Infinity)
-        : order.price + cost / amount * energyShadowPrice;
+        ? (dealAmount > cost ? order.price * dealAmount / (dealAmount - cost) : Infinity)
+        : order.price + cost / dealAmount * energyShadowPrice;
       if (!Number.isFinite(effectivePrice) || (priceCap !== undefined && effectivePrice > priceCap)) continue;
       if (effectivePrice < bestEffectivePrice) { best = order; bestEffectivePrice = effectivePrice; }
       continue;
@@ -202,6 +203,7 @@ export function applyMarketOps(
     return [];
   }
 
+  marketOrders.clear();
   const actions: string[] = [];
   let dealsDone = 0;
   let availableCredits = getAvailableMarketCredits(resolveMarketCreditReserve(marketCfg.creditReserve));
@@ -240,7 +242,7 @@ export function applyMarketOps(
       room.terminalFreeCapacity,
       room.terminal.store.getFreeCapacity(RESOURCE_ENERGY),
     );
-    const amount = Math.min(need, marketCfg.maxDealAmount, terminalFree);
+    let amount = Math.min(need, marketCfg.maxDealAmount, terminalFree);
     if (amount < marketCfg.minDealAmount) {
       continue;
     }
@@ -255,11 +257,14 @@ export function applyMarketOps(
       maxBuyPrice,
       undefined,
       marketCfg.energyShadowPrice,
+      marketCfg.minDealAmount,
     );
     if (!order || !order.roomName) {
       continue;
     }
 
+    amount = Math.min(amount, order.amount);
+    if (amount < marketCfg.minDealAmount) continue;
     const transferCost = Game.market.calcTransactionCost(
       amount,
       room.roomName,
@@ -291,6 +296,7 @@ export function applyMarketOps(
       continue;
     }
 
+    order.amount = Math.max(0, order.amount - amount);
     availableCredits -= amount * order.price;
     room.terminalEnergy = Math.max(
       0,
@@ -365,7 +371,7 @@ export function applyMarketOps(
         room.terminalFreeCapacity,
         room.terminal.store.getFreeCapacity(resource),
       );
-      const amount = Math.min(deficit, marketCfg.maxDealAmount, terminalFree);
+      let amount = Math.min(deficit - internalSupply, marketCfg.maxDealAmount, terminalFree);
       if (amount < marketCfg.minDealAmount) {
         continue;
       }
@@ -379,11 +385,14 @@ export function applyMarketOps(
         maxBuyPrice,
         undefined,
         marketCfg.energyShadowPrice,
+        marketCfg.minDealAmount,
       );
       if (!order || !order.roomName) {
         continue;
       }
 
+      amount = Math.min(amount, order.amount);
+      if (amount < marketCfg.minDealAmount) continue;
       const transferCost = Game.market.calcTransactionCost(
         amount,
         room.roomName,
@@ -417,6 +426,7 @@ export function applyMarketOps(
         continue;
       }
 
+      order.amount = Math.max(0, order.amount - amount);
       availableCredits -= amount * order.price;
       room.terminalEnergy = Math.max(0, room.terminalEnergy - transferCost);
       terminalBusy.add(room.roomName);

@@ -100,3 +100,29 @@ it("当前授权 V3 在卖的资源禁止旧买入路径再次采购", () => {
   applyMarketOps([receiver], w.config, new Set(), w.context);
   expect(w.market.deal).not.toHaveBeenCalled();
 });
+
+it("采购小单时跳过低于最小成交量的廉价碎单", () => {
+  const w = setup(); const room = w.snapshot(); w.config.buyResources = [RESOURCE_HYDROGEN];
+  w.market.getAllOrders.mockReturnValue([
+    { id: "dust", type: ORDER_SELL, resourceType: RESOURCE_HYDROGEN, price: 0.01, amount: 50, remainingAmount: 50, roomName: "W9N9" },
+    { id: "usable", type: ORDER_SELL, resourceType: RESOURCE_HYDROGEN, price: 0.1, amount: 400, remainingAmount: 400, roomName: "W9N9" },
+  ]);
+  applyMarketOps([room], w.config, new Set(), w.context);
+  expect(w.market.deal).toHaveBeenCalledWith("usable", 400, room.roomName);
+});
+it("多个房间共享订单查询，并遵守同轮剩余订单量", () => {
+  const w = setup(); w.config.buyResources = [RESOURCE_HYDROGEN];
+  const first = w.snapshot(), second = w.snapshot("W2N2");
+  w.market.getAllOrders.mockReturnValue([{ id: "shared", type: ORDER_SELL, resourceType: RESOURCE_HYDROGEN,
+    price: 0.1, amount: 1500, remainingAmount: 1500, roomName: "W9N9" }]);
+  applyMarketOps([first, second], w.config, new Set(), w.context);
+  expect(w.market.getAllOrders).toHaveBeenCalledTimes(1);
+  expect(w.market.deal).toHaveBeenNthCalledWith(1, "shared", 1000, first.roomName);
+  expect(w.market.deal).toHaveBeenNthCalledWith(2, "shared", 500, second.roomName);
+});
+it("市场只购买内部部分供给以外的真实缺口", () => {
+  const w = setup(); w.config.buyResources = [RESOURCE_HYDROGEN];
+  const receiver = w.snapshot(), donor = w.snapshot("W3N3", { energy: 20000, H: 400 });
+  applyMarketOps([receiver, donor], w.config, new Set(), w.context);
+  expect(w.market.deal).toHaveBeenCalledWith("sell-H", 600, receiver.roomName);
+});

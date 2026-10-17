@@ -605,7 +605,12 @@ function syncResourceControlTransferTask(
 ): void {
   // Direct task-field mutations in ResourceControl invalidate Treasury's
   // same-tick commitment snapshot before another admission can reuse it.
-  bumpTreasuryCommitmentRevision();
+  const fingerprints = context.taskCommitmentFingerprints ??= new Map();
+  const fingerprint = JSON.stringify(task);
+  if (fingerprints.get(task.id) !== fingerprint) {
+    bumpTreasuryCommitmentRevision();
+    fingerprints.set(task.id, fingerprint);
+  }
   if (!context.taskById.has(task.id)) {
     context.tasks.push(task);
   }
@@ -675,7 +680,7 @@ function computeTransferAmount(
   const donorBudget = getEnergyBalancingSurplus(from, context);
   const terminalBudget = Math.max(
     0,
-    from.terminalEnergy - getOutgoingTransactionFeeReserve(from, context),
+    from.terminalEnergy - from.terminalEnergyReserve - getOutgoingTransactionFeeReserve(from, context),
   );
   const maximum = Math.floor(
     Math.min(
@@ -2888,11 +2893,9 @@ function executeTransferTasks(
     const donor = byRoomName[task.fromRoomName];
     const receiver = byRoomName[task.toRoomName];
     if (!donor || !receiver) {
-      task.status = "failed";
-      task.updatedAt = Game.time;
-      task.lastError = "room_not_ready";
+      markResourceTransferTaskBlocked(task, "receiver_capacity");
       syncResourceControlTransferTask(context, task);
-      actions.push(`task-failed:${task.id}:room_not_ready`);
+      actions.push(`task-blocked:${task.id}:room_not_ready`);
       continue;
     }
     if (donor.roomName === receiver.roomName) {

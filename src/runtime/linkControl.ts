@@ -118,9 +118,9 @@ export function hasSharedStorageControllerLinkCluster(room: Room): boolean {
   );
 }
 
-function chooseReceiverTarget(sender: StructureLink, receiverLinks: StructureLink[]): StructureLink | null {
+function chooseReceiverTarget(sender: StructureLink, receiverLinks: StructureLink[], incoming: ReadonlyMap<string, number>): StructureLink | null {
   const validReceivers = receiverLinks
-    .filter((receiver) => receiver.id !== sender.id && isLinkUnderfilled(receiver))
+    .filter((receiver) => receiver.id !== sender.id && isLinkUnderfilled(receiver) && receiver.store.getFreeCapacity(RESOURCE_ENERGY) > (incoming.get(receiver.id) ?? 0))
     .sort((a, b) => {
       const entrySender = isRemoteEntranceLink(sender);
       const aControllerPriority = (entrySender ? isStorageReceiverByPosition(a) : isControllerReceiver(a)) ? 0 : 1;
@@ -217,18 +217,23 @@ export function runLinkControl(): void {
       continue;
     }
 
+    const incoming = new Map<string, number>();
     for (const sender of senderLinks) {
-      if (sender.cooldown > 0 || sender.store.getUsedCapacity(RESOURCE_ENERGY) <= 0) {
+      if (sender.cooldown > 0 || sender.store.getUsedCapacity(RESOURCE_ENERGY) < 400) {
         continue;
       }
 
-      const target = chooseReceiverTarget(sender, receiverLinks);
+      const target = chooseReceiverTarget(sender, receiverLinks, incoming);
       if (!target) {
         continue;
       }
 
-      const code = sender.transferEnergy(target);
+      const free = target.store.getFreeCapacity(RESOURCE_ENERGY) - (incoming.get(target.id) ?? 0);
+      const amount = Math.min(sender.store.getUsedCapacity(RESOURCE_ENERGY), free);
+      if (amount <= 0) continue;
+      const code = sender.transferEnergy(target, amount);
       if (code === OK) {
+        incoming.set(target.id, (incoming.get(target.id) ?? 0) + amount - Math.ceil(amount * LINK_LOSS_RATIO));
         recordFixedCpuAction("linkControl");
       }
     }

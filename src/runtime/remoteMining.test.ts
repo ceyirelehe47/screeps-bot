@@ -131,6 +131,22 @@ describe("runRemoteMining first come assignment", () => {
     Memory.runtime = {};
   });
 
+  it.each(["defending", "suspended"] as const)("%s 的既有外矿仍占用每房上限", status => {
+    Memory.data = { remoteMining: { W1N0: { sourceRoom: "W1N1", targetRoom: "W1N0", status, sourceIds: [],
+      assignedAt: 1, updatedAt: 1, suspendedAt: 99, suspendReason: "source_room_defense_mode", defendingSince: 99 } } } as Memory["data"];
+    const source = createRclRoom("W1N1", 7); Game.rooms.W1N1 = source; Game.spawns.Spawn1 = createSpawn(source);
+    setupGameMap({ W1N1: { "3": "W2N1" } });
+    runRemoteMining();
+    expect(ensureRemoteMiningStore().W2N1).toBeUndefined();
+  });
+  it("abandoned 的冷却到期后重新侦察，之前保持冷却", () => {
+    const source = createRclRoom("W1N1", 7); Game.rooms.W1N1 = source; Game.spawns.Spawn1 = createSpawn(source);
+    setupGameMap({ W1N1: { "1": "W1N0" } });
+    Memory.data = { remoteMining: { W1N0: { sourceRoom: "W1N1", targetRoom: "W1N0", status: "abandoned", sourceIds: [],
+      assignedAt: 1, updatedAt: 1, nextRetryAt: 150 } } };
+    runRemoteMining(); expect(ensureRemoteMiningStore().W1N0.status).toBe("abandoned");
+    Game.time = 150; runRemoteMining(); expect(ensureRemoteMiningStore().W1N0.status).toBe("scouting");
+  });
   it("creates active task for visible cardinal room with exactly two sources", () => {
     const rcl7Room = createRclRoom("W1N1", 7);
     const targetRoom = createVisibleTargetRoom("W1N0", {
@@ -195,6 +211,13 @@ describe("remote Invader Core clearance", () => {
     return task;
   }
 
+  it("清掉 core 后的 Invader 预定仍保留 reserver 配置", () => {
+    setupSourceRoom(); setupTask();
+    const target = createVisibleTargetRoom("W1N0", { reservationUsername: "Invader" });
+    Game.rooms.W1N0 = target;
+    processRemoteConfigLifecycle(store, getRemoteMiningConfig());
+    expect(Object.values(Memory.data!.creepConfigs!).some(config => config.role === "remoteMiningReserver" && config.roomName === "W1N1")).toBe(true);
+  });
   function setupTarget(core?: StructureInvaderCore): Room {
     const target = createVisibleTargetRoom("W1N0", {
       sources: [createSource("src1"), createSource("src2")],

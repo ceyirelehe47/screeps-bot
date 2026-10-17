@@ -495,9 +495,8 @@ function decomposeTarget(
     const floor = resourceFloors[comp] ?? 0;
     const surplus = computeSurplus(room, comp, floor, holderId);
 
-    // Calculate total needed for the target amount
-    const batchesNeeded = Math.ceil(targetAmount / recipe.amount);
-    const totalNeeded = amountNeeded * batchesNeeded;
+    // 总目标决定是否继续；每次只要求下一批原料，允许逐批推进。
+    const totalNeeded = amountNeeded;
 
     if (surplus < totalNeeded) {
       const deficit = totalNeeded - surplus;
@@ -635,7 +634,7 @@ export function addFactoryTask(
     return "ERR_INVALID_AMOUNT";
   }
 
-  const amount = Math.floor(options.amount);
+  const amount = Math.ceil(options.amount / BATTERY_DECOMPRESS_BATCH_BATTERY) * BATTERY_DECOMPRESS_BATCH_BATTERY;
   const taskId = makeFactoryTaskId(roomName, type, amount);
   const store = ensureFactoryTaskStore();
   const existing = store[taskId];
@@ -888,7 +887,7 @@ function executeBatteryDecompressTask(
       state.lastError = "unload_target_full";
       replaceCarrierTasksForProducerRoom(FACTORY_CARRIER_TASK_PRODUCER, task.roomName, []);
     }
-  } else if (task.remainingBatteryAmount <= 0) {
+  } else if (task.remainingBatteryAmount < BATTERY_DECOMPRESS_BATCH_BATTERY) {
     task.status = "done";
     task.updatedAt = Game.time;
     task.completedAt = Game.time;
@@ -933,6 +932,10 @@ function executeBatteryDecompressTask(
       }
       if (!supplyDraft) {
         task.lastError = "no_battery_source";
+        if (Game.time - state.loadingSinceTick >= 500) {
+          task.status = "failed"; task.completedAt = Game.time;
+          state.stage = "idle"; state.activeTarget = undefined;
+        }
       }
       replaceCarrierTasksForProducerRoom(FACTORY_CARRIER_TASK_PRODUCER, task.roomName, supplyDraft ? [supplyDraft] : []);
     }
@@ -1309,6 +1312,12 @@ function attemptRegionalRawPurchase(
 // ---------------------------------------------------------------------------
 
 export function runFactoryControl(): void {
+  if (Game.time % 100 === 0) {
+    const tasks = Memory.data?.factoryTasks;
+    for (const [id, task] of Object.entries(tasks ?? {})) {
+      if (["done", "cancelled", "failed"].includes(task.status) && Game.time - (task.completedAt ?? task.updatedAt) > 5000) delete tasks![id];
+    }
+  }
   planHubFactory();
   const config = parseConfig();
   if (!config.enabled) {

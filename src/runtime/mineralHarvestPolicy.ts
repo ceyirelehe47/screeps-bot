@@ -11,7 +11,7 @@ export function shouldPauseNativeMineralHarvest(room: Room | undefined, resource
   if (storageMineralPressure(room)) return true;
   const stock = stored + terminal;
   const current = observation?.complete && observation.observedAt <= Game.time && Game.time - observation.observedAt <= 200;
-  if (observation?.paused && (!current || stock > observation.overflowThreshold)) return true;
+  if (observation?.paused && stock > observation.overflowThreshold) return true;
   if (!current || !observation) return false;
   if (stock <= observation.overflowThreshold) {
     return false;

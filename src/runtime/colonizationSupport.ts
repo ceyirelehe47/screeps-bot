@@ -98,7 +98,7 @@ export function runColonizationSupport(): void {
     const policy = readColonizationSupportPolicy(target);
     const controller = Game.rooms[target]?.controller;
     if (policy?.sourceRoom !== home || !controller?.my || controller.level >= 6 ||
-        !Game.rooms[home]?.controller?.my || isDefenseMode(home)) stopConfig(name, home);
+        !Game.rooms[home]?.controller?.my) stopConfig(name, home);
   }
   if (!policies) return;
   const configs = memory.getCreepConfigStore();
@@ -151,8 +151,14 @@ export function runColonizationSupport(): void {
         !controller?.my || !canStartOutboundMission(sourceRoom)) {
       if (state.status !== "complete") state.status = raw.enabled && !controller?.my ? "waiting_claim" : "paused";
       stopConfig(configName, sourceRoom, boostOwner);
+      const temporaryPause = raw.enabled === true && !!controller?.my && controller.level < 6 && !!Game.rooms[sourceRoom]?.controller?.my;
       for (const name of Object.keys(configs).filter(name => name.startsWith(`${sourceRoom}:colonizationSupport:${targetRoom}:harvester:`))) {
-        stopConfig(name, sourceRoom);
+        if (temporaryPause) {
+          // 出生策略阻止补员；保留现役身份，避免远端矿工被误当作退役召回。
+          for (const spawn of service.getSpawnsByRoom(sourceRoom)) {
+            if (spawn.memory.spawnList) spawn.memory.spawnList = spawn.memory.spawnList.filter(entry => entry !== name);
+          }
+        } else stopConfig(name, sourceRoom);
       }
       continue;
     }

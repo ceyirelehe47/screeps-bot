@@ -64,7 +64,7 @@ import {
 } from "@/runtime/terminalBootstrapRecovery";
 import {
   claimLocalCarrierDestinationCapacity,
-  claimLocalCarrierReturnToSourceCapacity,
+  claimLocalCarrierReturnCapacity,
   getLocalCarrierDestinationAvailableAmount,
   type LocalCarrierDestinationCapacityClaim,
 } from "@/runtime/localCarrierDestinationCapacity";
@@ -660,6 +660,7 @@ function clearSynthesisCarrierPendingSnapshot(
   delete state.synthesisCarrierPendingBoundResourceTransferTaskId;
   delete state.synthesisCarrierPendingBoundResourceTransferTaskIdentity;
   delete state.synthesisCarrierPendingReturnToId;
+  delete state.synthesisCarrierPendingReturnStartedAt;
 }
 
 function releaseSynthesisCarrierTaskBinding(creep: Creep): void {
@@ -1316,6 +1317,7 @@ function pickupSynthesisCarrierResource(
   state.synthesisCarrierPendingBoundResourceTransferTaskId = assignment.step.boundResourceTransferTaskId;
   state.synthesisCarrierPendingBoundResourceTransferTaskIdentity = assignment.step.boundResourceTransferTaskIdentity;
   delete state.synthesisCarrierPendingReturnToId;
+  delete state.synthesisCarrierPendingReturnStartedAt;
   const pendingTaskRef = cloneCarrierDispatchRef(assignment.ref);
   if (pendingTaskRef) {
     state.synthesisCarrierPendingTaskRef = pendingTaskRef;
@@ -1479,22 +1481,38 @@ function transferCarrierResource(
 
 function returnBoundedTerminalFeedCargo(creep: Creep, resource: ResourceConstant): boolean {
   const state = ensureCreepAssignmentState(creep.name);
+  state.synthesisCarrierPendingReturnStartedAt ??= Game.time;
   const source = state.synthesisCarrierPendingFromId ? resolveTaskStructure(state.synthesisCarrierPendingFromId) : null;
-  if (source?.structureType !== STRUCTURE_STORAGE || !source.room?.controller?.my || source.store.getFreeCapacity(resource) <= 0) return true;
-  state.synthesisCarrierPendingReturnToId = source.id;
-  const capacity = claimLocalCarrierReturnToSourceCapacity({ claimantId: creep.name, target: source as StructureStorage, resource,
-    requestedAmount: creep.store.getUsedCapacity(resource) });
-  if (!capacity) return true;
-  let code: ScreepsReturnCode;
-  try { code = measureCreepIntent(() => creep.transfer(source, resource, capacity.amount)); }
-  catch (error) { capacity.release(); throw error; }
-  if (code === OK) {
-    capacity.commit();
-    state.synthesisCarrierPendingDeliveryTick = Game.time;
-  } else {
-    capacity.release();
-    if (code === ERR_NOT_IN_RANGE) moveToTarget(creep, source);
+  const room = source?.room ?? creep.room;
+  const candidates = [source?.structureType === STRUCTURE_STORAGE ? source : room.storage, room.terminal,
+    ...room.find(FIND_STRUCTURES).filter((structure): structure is StructureContainer => structure.structureType === STRUCTURE_CONTAINER)];
+  for (const target of candidates) {
+    if (!target || !room.controller?.my || target.store.getFreeCapacity(resource) <= 0 || terminalHeldForTreasuryT1(target)) continue;
+    state.synthesisCarrierPendingReturnToId = target.id;
+    const capacity = claimLocalCarrierReturnCapacity({ claimantId: creep.name, target, resource,
+      requestedAmount: creep.store.getUsedCapacity(resource) });
+    if (!capacity) continue;
+    let transfer: CarrierTransferResult;
+    try {
+      const code = measureCreepIntent(() => executeTreasuryFencedTerminalCargo(target, () => creep.transfer(target, resource, capacity.amount)));
+      transfer = { code, requestedAmount: capacity.amount, acceptedAmount: code === OK ? capacity.amount : 0 };
+    }
+    catch (error) { capacity.release(); throw error; }
+    if (transfer.code === OK) {
+      capacity.commit();
+      state.synthesisCarrierPendingDeliveryTick = Game.time;
+    } else {
+      capacity.release();
+      if (transfer.code === ERR_NOT_IN_RANGE) {
+        if (Game.time - state.synthesisCarrierPendingReturnStartedAt >= 50) continue;
+        moveToTarget(creep, target);
+      } else continue;
+    }
+    return true;
   }
+  // 所有安全接收点都不可用时解除货物责任，避免抱货等到寿命耗尽。
+  clearSynthesisCarrierTaskPlan(creep);
+  dropUnassignedResource(creep, resource);
   return true;
 }
 

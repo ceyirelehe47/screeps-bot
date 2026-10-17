@@ -103,6 +103,22 @@ describe("runColonizationByFlag", () => {
     });
   });
 
+  it("母房防御只暂停，目标房新 spawn 不触发换源或自杀", () => {
+    const source = createSourceRoom("W1N1"), target = createSourceRoom("W1N2"), other = createSourceRoom("W3N3");
+    Game.rooms = { W1N1: source, W1N2: target, W3N3: other };
+    Game.spawns = { A: createSpawn(source), B: createSpawn(target), C: createSpawn(other) };
+    Game.flags = { CL: { name: "CL", pos: { roomName: "W1N2" }, remove: jest.fn() } as unknown as Flag };
+    const name = "W1N1:colonize:W1N2:worker:0";
+    const creep = { name: "helper", room: target, memory: { configName: name, role: "colonizerWorker" }, suicide: jest.fn() } as unknown as Creep;
+    Game.creeps = { helper: creep };
+    Memory.data = { colonization: { W1N2: { targetRoom: "W1N2", sourceRoom: "W1N1", status: "bootstrapping",
+      flagName: "CL", planReady: true, claimCompleted: true, createdAt: Game.time, updatedAt: Game.time } },
+      creepConfigs: { [name]: { role: "colonizerWorker", roomName: "W1N1", args: ["W1N2"] } } };
+    jest.mocked(isDefenseMode).mockImplementation(room => room === "W1N1");
+    runColonizationByFlag();
+    expect(Memory.data!.colonization!.W1N2.sourceRoom).toBe("W1N1");
+    expect(creep.suicide).not.toHaveBeenCalled();
+  });
   it("reuses a failed safe-route lookup within the same tick", () => {
     const sourceRoom = createSourceRoom("W1N1");
     const spawn = createSpawn(sourceRoom);

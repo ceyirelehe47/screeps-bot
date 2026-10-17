@@ -68,13 +68,13 @@ describe("runAutoReserveFlags", () => {
 });
 
 
-it("关键工地存在时不进入储备，并退出已有自动储备", () => {
+it("关键工地存在时仍维持低能量出征闸门", () => {
   const room = createRoom("W4N4", 1);
   room.find = jest.fn(() => [{ structureType: STRUCTURE_SPAWN }]) as Room["find"];
   runAutoReserveFlags();
-  expect(room.createFlag).not.toHaveBeenCalled();
-  const flag = { remove: jest.fn() } as unknown as Flag;
+  expect(room.createFlag).toHaveBeenCalled();
+  const flag = { name: "RESERVE_W4N4", pos: room.storage!.pos, remove: jest.fn() } as unknown as Flag;
   Game.flags.RESERVE_W4N4 = flag;
   runAutoReserveFlags();
-  expect(flag.remove).toHaveBeenCalledTimes(1);
+  expect(flag.remove).not.toHaveBeenCalled();
 });

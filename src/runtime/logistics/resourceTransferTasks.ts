@@ -339,13 +339,13 @@ export function markResourceTransferTaskBlocked(
     return;
   }
 
-  if (task.blockedReason !== reason || !Number.isFinite(task.blockedSince)) {
+  if (task.blockedReason !== reason || !Number.isFinite(task.blockedSince) || task.lastError !== undefined) {
     task.blockedReason = reason;
     task.blockedSince = Game.time;
     task.updatedAt = Game.time;
+    task.lastError = undefined;
+    bumpTreasuryCommitmentRevision();
   }
-  task.lastError = undefined;
-  bumpTreasuryCommitmentRevision();
 }
 
 export function clearResourceTransferTaskBlocker(task: ResourceTransferTask): void {

@@ -1,3 +1,4 @@
+import { countCarrierCargo } from "@/runtime/carrierCargo";
 import { limitActionLog } from "@/runtime/actionLog";
 import {
   listCarrierTasksByRoom,
@@ -136,23 +137,7 @@ function getOtherCarrierCommitments(
   return { total, bySourceId };
 }
 
-function getCarriedAmountToNuker(
-  nukerId: string,
-  resource: ResourceConstant,
-): number {
-  let amount = 0;
-  for (const creep of getTickContextService().getAllCreeps()) {
-    const state = getCreepAssignmentState(creep.name);
-    if (
-      state?.synthesisCarrierPendingToId !== nukerId ||
-      state.synthesisCarrierPendingResource !== resource
-    ) {
-      continue;
-    }
-    amount += creep.store.getUsedCapacity(resource);
-  }
-  return amount;
-}
+const getCarriedAmountToNuker = countCarrierCargo;
 
 function allocateSupplySteps(params: {
   room: Room;
@@ -572,7 +557,8 @@ function planCrossRoomGhodiumTransfers(
   ]));
   if (![...remainingByRoom.values()].some((amount) => amount > 0)) return;
 
-  const snapshots = collectResourceControlSnapshots();
+  if (Game.time % 25 !== 0) return;
+  const snapshots = collectResourceControlSnapshots([RESOURCE_GHODIUM]);
   const planByRoom = new Map(
     plans.map((plan) => [plan.room.name, plan]),
   );

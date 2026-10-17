@@ -1,7 +1,7 @@
 import { getMemoryService } from "@/runtime/runtimeServices";
 
-const MAX_CLAIM_SUMMARIES = 24;
-const MAX_ROOM_SUMMARIES = 32;
+const MAX_CLAIM_SUMMARIES = 512;
+const MAX_ROOM_SUMMARIES = 512;
 
 export interface CrossShardClaimSummary {
   room: string;
@@ -71,6 +71,8 @@ export function runCrossShardSignals(): void {
   const store = ensureCrossShardRuntimeStore();
   const claims = store.claims || {};
   const rooms = store.rooms || {};
+  for (const name of Object.keys(claims)) if (!Game.rooms[name]?.controller?.my) delete claims[name];
+  for (const name of Object.keys(rooms)) if (!Game.rooms[name]?.controller?.my) delete rooms[name];
 
   for (const room of Object.values(Game.rooms)) {
     if (!room.controller?.my) {

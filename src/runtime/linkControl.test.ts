@@ -96,8 +96,8 @@ describe("isReceiverLink", () => {
     Game.getObjectById = jest.fn(id => links.find(l => l.id === id) ?? null) as unknown as typeof Game.getObjectById;
     Memory.data = { roomPlanner: { W1N1: { layout: { remote_entry_link: [{ x: 47, y: 20 }] }, savedAt: 0, timestamp: "" } } };
     runLinkControl();
-    expect(entry.transferEnergy).toHaveBeenCalledWith(warehouse);
-    expect(source.transferEnergy).toHaveBeenCalledWith(controller);
+    expect(entry.transferEnergy).toHaveBeenCalledWith(warehouse, 800);
+    expect(source.transferEnergy).toHaveBeenCalledWith(controller, 800);
     expect(Memory.runtime!.linkNetwork!.W1N1.senderIds).toEqual([entry.id, source.id]);
   });
 

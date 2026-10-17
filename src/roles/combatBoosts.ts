@@ -2,6 +2,8 @@ import { moveToTarget } from "@/roles/shared";
 import { measureCreepIntent } from "@/runtime/cpuPhaseProfiler";
 import { getAssignedPowerBankBoostLabId } from "@/runtime/powerBankBoostMemory";
 
+const missingPrepSince = new Map<string, { taskId: string; at: number }>();
+
 const BOOSTED_PARTS: Partial<Record<ResourceConstant, BodyPartConstant>> = {
   [RESOURCE_CATALYZED_GHODIUM_ACID]: WORK,
   [RESOURCE_CATALYZED_GHODIUM_ALKALIDE]: TOUGH,
@@ -20,7 +22,7 @@ function parseBoostCompounds(encodedBoostCompounds?: string): ResourceConstant[]
 function countRemainingBoostParts(creep: Creep, compound: ResourceConstant): number {
   const partType = BOOSTED_PARTS[compound];
   if (!partType) return 0;
-  return creep.body.filter((part) => part.type === partType && part.hits > 0 && part.boost !== compound).length;
+  return creep.body.filter((part) => part.type === partType && part.hits > 0 && !part.boost).length;
 }
 
 export function prepareCombatBoost(
@@ -37,10 +39,22 @@ export function prepareCombatBoost(
   if (!nextCompound) return true;
 
   const labId = getAssignedPowerBankBoostLabId(boostTaskId, nextCompound);
-  if (!labId) return false;
-
-  const lab = Game.getObjectById(labId as Id<StructureLab>);
-  if (!lab) return false;
+  const lab = labId ? Game.getObjectById(labId as Id<StructureLab>) : null;
+  if (!lab) {
+    for (const name of missingPrepSince.keys()) if (!Game.creeps[name]) missingPrepSince.delete(name);
+    let wait = missingPrepSince.get(creep.name);
+    if (!wait || wait.taskId !== boostTaskId || wait.at > Game.time) {
+      wait = { taskId: boostTaskId, at: Game.time }; missingPrepSince.set(creep.name, wait);
+    }
+    if (Game.time - wait.at >= 100) {
+      creep.memory._warDetached = true;
+      creep.memory._recycleToRoom = Memory.data?.creepConfigs?.[creep.memory.configName ?? ""]?.roomName ?? creep.room.name;
+      delete creep.memory.configName;
+      missingPrepSince.delete(creep.name);
+    }
+    return false;
+  }
+  missingPrepSince.delete(creep.name);
 
   if ((lab.store.getUsedCapacity(nextCompound) ?? 0) < LAB_BOOST_MINERAL) return false;
   if (lab.store.getUsedCapacity(RESOURCE_ENERGY) < LAB_BOOST_ENERGY) return false;

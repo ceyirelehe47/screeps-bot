@@ -24,13 +24,10 @@ export const remoteMiningReserverRole: RoleFactory = (targetRoom?: string, encod
     // Owned rooms (mine or hostile) – no action
     if (controller.my || controller.owner) return false;
 
-    // Hostile reservation – conservative: do not overwrite
-    if (controller.reservation && controller.reservation.username !== getMyUsername()) {
-      return false;
-    }
-
-    // Neutral/unreserved or self-reserved – reserve
-    const code = measureCreepIntent(() => creep.reserveController(controller));
+    const reservation = controller.reservation?.username;
+    if (reservation && reservation !== getMyUsername() && reservation !== "Invader") return false;
+    const code = measureCreepIntent(() => reservation === "Invader"
+      ? creep.attackController(controller) : creep.reserveController(controller));
     if (code === ERR_NOT_IN_RANGE) {
       moveToTarget(creep, controller, 1, { plainCost: 2, swampCost: 8, maxRooms: 1 });
     }

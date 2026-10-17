@@ -163,7 +163,7 @@ function readRemotePayloads(): void {
     }
 
     remotes[shardName] = {
-      updatedAt: now,
+      updatedAt: remotes[shardName]?.remoteUpdatedAt === remote.updatedAt ? remotes[shardName].updatedAt : now,
       remoteUpdatedAt: remote.updatedAt,
       portalCount: remote.portals?.length ?? 0,
       colonyCount: remote.colonization?.length ?? 0,

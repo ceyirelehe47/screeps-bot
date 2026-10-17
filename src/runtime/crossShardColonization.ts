@@ -31,6 +31,7 @@ interface CrossShardColonizationTask {
   claimerName?: string;
   bootstrapConfigNames?: string[];
   bootstrapDispatchedAt?: number;
+  bootstrapLaunched?: boolean;
   launchedAt?: number;
   claimedAt?: number;
   completedAt?: number;
@@ -38,6 +39,9 @@ interface CrossShardColonizationTask {
   createdAt: number;
   updatedAt: number;
   lastReadyAt?: number;
+  claimAttempts?: number;
+  remoteObservedVersion?: number;
+  remoteAdvancedAt?: number;
 }
 
 interface CrossShardTaskSummary {
@@ -63,6 +67,7 @@ interface RemoteRoomSummary {
 
 interface RemotePayload {
   version: number;
+  updatedAt: number;
   shard: string;
   claims?: RemoteClaimSummary[];
   rooms?: RemoteRoomSummary[];
@@ -70,6 +75,7 @@ interface RemotePayload {
 
 interface RemoteTargetState {
   claimAt?: number;
+  fresh?: boolean;
   hasSpawn: boolean;
 }
 
@@ -140,6 +146,7 @@ function parseFlag(flagName: string): { targetShard: string; targetRoom: string;
 function selectSourceAndPortal(
   targetShard: string,
   preferredSourceRoom?: string,
+  targetRoom?: string,
 ): { sourceRoom: string; portal: InterShardPortalEntry } | null {
   const sourceRooms = getOwnedSpawnRooms();
   if (sourceRooms.length === 0) {
@@ -164,7 +171,10 @@ function selectSourceAndPortal(
   let best: { sourceRoom: string; portal: InterShardPortalEntry; distance: number } | null = null;
   for (const sourceRoom of orderedSourceRooms) {
     for (const portal of portals) {
-      const distance = Game.map.getRoomLinearDistance(sourceRoom, portal.originRoom);
+      const distance = Game.map.getRoomLinearDistance(sourceRoom, portal.originRoom) +
+        (targetRoom ? (portal.destinationRoom ? Game.map.getRoomLinearDistance(portal.destinationRoom, targetRoom) : Infinity) : 0);
+      // CLAIM 寿命为 600；按每房约 50 步留出入门与控制器接近余量。
+      if (distance > 8) continue;
       if (!best || distance < best.distance) {
         best = { sourceRoom, portal, distance };
       }
@@ -233,20 +243,35 @@ function safeJsonParse<T>(raw: string | null | undefined): T | null {
   }
 }
 
-function getRemoteState(targetShard: string, targetRoom: string): RemoteTargetState {
+let remotePayloadCache: { tick: number; reader: typeof InterShardMemory.getRemote; values: Map<string, RemotePayload | null> } | undefined;
+function getRemoteState(task: CrossShardColonizationTask): RemoteTargetState {
+  const { targetShard, targetRoom } = task;
   if (typeof InterShardMemory === "undefined") {
     return { hasSpawn: false };
   }
 
-  const remoteRaw = InterShardMemory.getRemote(targetShard);
-  const payload = safeJsonParse<RemotePayload>(remoteRaw);
+  if (!remotePayloadCache || remotePayloadCache.tick !== Game.time || remotePayloadCache.reader !== InterShardMemory.getRemote) {
+    remotePayloadCache = { tick: Game.time, reader: InterShardMemory.getRemote, values: new Map() };
+  }
+  if (!remotePayloadCache.values.has(targetShard)) remotePayloadCache.values.set(targetShard, safeJsonParse<RemotePayload>(InterShardMemory.getRemote(targetShard)));
+  const payload = remotePayloadCache.values.get(targetShard);
   if (!payload || payload.version !== INTER_SHARD_PROTOCOL_VERSION) {
     return { hasSpawn: false };
   }
 
+  if (!Number.isSafeInteger(payload.updatedAt)) return { hasSpawn: false };
+  if (task.remoteObservedVersion !== undefined && payload.updatedAt < task.remoteObservedVersion) {
+    task.remoteObservedVersion = payload.updatedAt; task.remoteAdvancedAt = undefined; return { hasSpawn: false };
+  }
+  if (task.remoteObservedVersion !== payload.updatedAt) {
+    if (task.remoteObservedVersion !== undefined) task.remoteAdvancedAt = Game.time;
+    task.remoteObservedVersion = payload.updatedAt;
+  }
+  // 必须在本次任务开始后观察到对端确实推进；不同 shard 的 tick 不可直接相减。
+  if (task.remoteAdvancedAt === undefined || Game.time - task.remoteAdvancedAt > 1000) return { hasSpawn: false };
   let claimAt: number | undefined;
   for (const claim of payload.claims || []) {
-    if (claim.room !== targetRoom) {
+    if (claim.room !== targetRoom || claim.at < payload.updatedAt - 5 || claim.at > payload.updatedAt) {
       continue;
     }
 
@@ -257,13 +282,13 @@ function getRemoteState(targetShard: string, targetRoom: string): RemoteTargetSt
 
   let hasSpawn = false;
   for (const room of payload.rooms || []) {
-    if (room.room === targetRoom && room.hasSpawn) {
+    if (room.room === targetRoom && room.hasSpawn && room.at >= payload.updatedAt - 5 && room.at <= payload.updatedAt && claimAt !== undefined) {
       hasSpawn = true;
       break;
     }
   }
 
-  return { claimAt, hasSpawn };
+  return { claimAt, hasSpawn, fresh: true };
 }
 
 function getAllTaskConfigNames(task: CrossShardColonizationTask): string[] {
@@ -330,6 +355,11 @@ function generateTravelerName(
 }
 
 function ensureClaimer(task: CrossShardColonizationTask): void {
+  const remote = remotePayloadCache?.tick === Game.time ? remotePayloadCache.values.get(task.targetShard) : undefined;
+  const remoteRooms = remote?.rooms;
+  if (remoteRooms && Number.isFinite(Game.gcl?.level) && remoteRooms.length >= Game.gcl.level) {
+    cleanupTaskConfigs(task); task.status = "blocked"; task.reason = "target_shard_gcl_not_enough"; return;
+  }
   if (!task.sourceRoom || !task.portalRoom) {
     task.status = "blocked";
     task.reason = "missing source room or portal room";
@@ -340,6 +370,10 @@ function ensureClaimer(task: CrossShardColonizationTask): void {
   task.claimerConfigName = configName;
 
   if (task.launchedAt && Game.time - task.launchedAt > CLAIM_RETRY_TTL) {
+    task.claimAttempts = (task.claimAttempts ?? 0) + 1;
+    if (task.claimAttempts >= 3) {
+      cleanupTaskConfigs(task); task.status = "failed"; task.reason = "claim_retry_limit"; task.completedAt = Game.time; return;
+    }
     removeQueuedConfig(task, configName);
     removeConfigWhenIdle(configName);
     task.launchedAt = undefined;
@@ -426,6 +460,7 @@ function ensureBootstrapSquad(task: CrossShardColonizationTask): void {
 
     task.bootstrapConfigNames = undefined;
     task.bootstrapDispatchedAt = undefined;
+    task.bootstrapLaunched = undefined;
     task.reason = `bootstrap retry after ${BOOTSTRAP_RETRY_TTL} ticks without target spawn`;
   }
 
@@ -470,6 +505,7 @@ function ensureBootstrapSquad(task: CrossShardColonizationTask): void {
 
   task.bootstrapConfigNames = bootstrapConfigNames;
   task.bootstrapDispatchedAt = Game.time;
+  task.bootstrapLaunched = false;
   task.status = "bootstrapping";
   task.reason = "bootstrap squad dispatched";
 }
@@ -489,7 +525,7 @@ function processTask(task: CrossShardColonizationTask): void {
     return;
   }
 
-  const remoteState = getRemoteState(task.targetShard, task.targetRoom);
+  const remoteState = getRemoteState(task);
 
   if (task.status !== "claimed" && task.status !== "bootstrapping") {
     if (remoteState.claimAt !== undefined) {
@@ -497,6 +533,11 @@ function processTask(task: CrossShardColonizationTask): void {
     }
   }
 
+  if ((task.status === "claimed" || task.status === "bootstrapping") && remoteState.fresh && remoteState.claimAt === undefined) {
+    cleanupTaskConfigs(task);
+    task.status = "planning"; task.claimedAt = undefined;
+    task.bootstrapDispatchedAt = undefined; task.bootstrapConfigNames = undefined; task.bootstrapLaunched = undefined;
+  }
   if (task.status === "claimed" || task.status === "bootstrapping") {
     if (remoteState.hasSpawn) {
       markCompleted(task);
@@ -507,7 +548,11 @@ function processTask(task: CrossShardColonizationTask): void {
     return;
   }
 
-  const selected = selectSourceAndPortal(task.targetShard, task.preferredSourceRoom);
+  // 已发出的名字和源房绑定；途中暂时失去观察或防御不能换母房。
+  if ((task.status === "spawning" || task.status === "in_transit") && task.sourceRoom && task.portalRoom) {
+    ensureClaimer(task); return;
+  }
+  const selected = selectSourceAndPortal(task.targetShard, task.preferredSourceRoom, task.targetRoom);
   if (!selected) {
     cleanupTaskConfigs(task);
     task.status = "blocked";
@@ -539,7 +584,8 @@ function upsertTaskFromFlag(flag: Flag): void {
 
   const taskId = getTaskId(parsed.targetShard, parsed.targetRoom);
   const store = ensureTaskStore();
-  const existing = store[taskId];
+  const previous = store[taskId];
+  const existing = previous && !["completed", "failed"].includes(previous.status) ? previous : undefined;
   const now = Game.time;
 
   store[taskId] = {
@@ -557,6 +603,7 @@ function upsertTaskFromFlag(flag: Flag): void {
     claimerName: existing?.claimerName,
     bootstrapConfigNames: existing?.bootstrapConfigNames,
     bootstrapDispatchedAt: existing?.bootstrapDispatchedAt,
+    bootstrapLaunched: existing?.bootstrapLaunched,
     launchedAt: existing?.launchedAt,
     claimedAt: existing?.claimedAt,
     completedAt: existing?.completedAt,
@@ -564,6 +611,9 @@ function upsertTaskFromFlag(flag: Flag): void {
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
     lastReadyAt: existing?.lastReadyAt,
+    claimAttempts: existing?.claimAttempts,
+    remoteObservedVersion: existing?.remoteObservedVersion,
+    remoteAdvancedAt: existing?.remoteAdvancedAt,
   };
 
   flag.remove();
@@ -599,9 +649,22 @@ export function runCrossShardColonizationByFlag(): void {
   }
 
   const store = ensureTaskStore();
-  for (const task of Object.values(store)) {
-    if (task.sourceRoom && isDefenseMode(task.sourceRoom)) {
+  for (const [id, task] of Object.entries(store)) {
+    if (["completed", "failed"].includes(task.status) && Game.time - (task.completedAt ?? task.updatedAt) > 5000) {
       cleanupTaskConfigs(task);
+      if (getAllTaskConfigNames(task).every(name => getLiveCreepsByConfig(name).length === 0 && !isConfigSpawning(name))) delete store[id];
+      continue;
+    }
+    if (task.status === "blocked" && Game.time - (task.lastReadyAt ?? task.createdAt) > 5000) {
+      cleanupTaskConfigs(task); task.status = "failed"; task.reason = "blocked_timeout"; task.completedAt = Game.time;
+    }
+    if (["completed", "failed"].includes(task.status)) { task.completedAt ??= Game.time; continue; }
+    if ((task.bootstrapConfigNames ?? []).some(name => getLiveCreepsByConfig(name).length > 0 || isConfigSpawning(name))) task.bootstrapLaunched = true;
+    if (task.sourceRoom && isDefenseMode(task.sourceRoom)) {
+      const neverLaunched = !task.bootstrapLaunched && (task.bootstrapConfigNames ?? []).every(name =>
+        getLiveCreepsByConfig(name).length === 0 && !isConfigSpawning(name));
+      cleanupTaskConfigs(task);
+      if (neverLaunched) { task.bootstrapDispatchedAt = undefined; task.bootstrapConfigNames = undefined; }
       task.updatedAt = Game.time;
       continue;
     }

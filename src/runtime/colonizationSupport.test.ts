@@ -161,7 +161,7 @@ describe("殖民 T3 支援生命周期", () => {
     const { names } = miningWorld(); runColonizationSupport();
     Game.spawns.Mother.memory.spawnList = [...names];
     (isDefenseMode as jest.Mock).mockReturnValue(true); Game.time++; runColonizationSupport();
-    for (const name of names) expect(Memory.data!.creepConfigs![name]).toBeUndefined();
+    for (const name of names) expect(Memory.data!.creepConfigs![name]?.roomName).toBe(SOURCE);
     expect(Game.spawns.Mother.memory.spawnList).toEqual([]);
     (isDefenseMode as jest.Mock).mockReturnValue(false); Game.time++; runColonizationSupport();
     for (const name of names) expect(Memory.data!.creepConfigs![name].roomName).toBe(SOURCE);

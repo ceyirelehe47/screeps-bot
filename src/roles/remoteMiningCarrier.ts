@@ -67,7 +67,7 @@ function isRemoteSuspendedOrDangerous(targetRoom: string): boolean {
 function isRemoteRoomVisibleSafe(room: Room): boolean {
   const controller = room.controller;
   if (controller?.owner && !controller.my) return false;
-  if (controller?.reservation && controller.reservation.username !== getMyUsername()) return false;
+  if (controller?.reservation && controller.reservation.username !== getMyUsername() && controller.reservation.username !== "Invader") return false;
 
   // Use tick-context cached accessors so repeated safety checks for the same
   // visible room do not re-issue raw room.find() scans within one tick.

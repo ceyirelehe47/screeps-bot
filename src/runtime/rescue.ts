@@ -228,11 +228,13 @@ function processRescueTask(task: RescueTask): void {
 function upsertRescueTask(flag: Flag): boolean {
   const targetRoom = flag.pos.roomName;
   const preferredRoom = getPreferredSourceFromFlagName(flag.name);
-  const sourceRoom = selectSourceRoom(targetRoom, preferredRoom);
+  const previousSource = Memory.data?.rescue?.[targetRoom]?.sourceRoom;
+  const sourceRoom = previousSource && Game.rooms[previousSource]?.controller?.my && getTickContextService().getSpawnsByRoom(previousSource).length > 0
+    ? previousSource : selectSourceRoom(targetRoom, preferredRoom);
 
   if (!sourceRoom) return false;
 
-  if (getTickContextService().getSpawnsByRoom(targetRoom).length > 0) {
+  if (!Memory.data?.rescue?.[targetRoom] && getTickContextService().getSpawnsByRoom(targetRoom).length > 0) {
     console.log(`[rescue] flag ignored: ${flag.name} target=${targetRoom} reason=spawn_exists`);
     flag.remove();
     return true;

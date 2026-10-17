@@ -441,8 +441,9 @@ export function getReservedProductionAmount(roomName: string, resource: Resource
   const store = Memory.runtime?.resourceReservations;
   if (!store) return 0;
   let total = 0;
+  const mode = reservationAdapterMode();
   for (const entry of Object.values(store)) {
-    if (reservationAdapterMode() !== "legacy" && !Number.isSafeInteger(entry.amount)) continue;
+    if (!entry || typeof entry !== "object" || mode !== "legacy" && !Number.isSafeInteger(entry.amount)) continue;
     if (entry.roomName === roomName && entry.resource === resource && isActive(entry)) {
       total += entry.amount;
     }
@@ -514,7 +515,7 @@ export function gcProductionReservations(): ReservationGcReport {
   if (!store) return report;
   if (reservationAdapterMode() === "legacy") {
     for (const [key, entry] of Object.entries(store)) {
-      if (entry.expiresAt < Game.time) {
+      if (!entry || typeof entry !== "object" || !Number.isFinite(entry.expiresAt) || entry.expiresAt < Game.time) {
         delete store[key];
         report.removed += 1;
       }
@@ -765,10 +766,8 @@ export function validateReservationStoreHealth(): ReservationStoreHealth {
     return { healthy: false, detail: runtime.resourceReservationsCorrupted, entryCount: 0 };
   }
   const store = runtime?.resourceReservations;
-  if (store === undefined || Object.keys(store).length === 0) {
-    return { healthy: true, detail: null, entryCount: 0 };
-  }
-  if (typeof store !== "object") {
+  if (store === undefined) return { healthy: true, detail: null, entryCount: 0 };
+  if (!store || typeof store !== "object" || Array.isArray(store)) {
     return { healthy: false, detail: "resourceReservations store 非对象", entryCount: 0 };
   }
   // 缓存复用守卫：revision 未变**且** key 数未变才复用——架构上只有本模块
@@ -835,4 +834,17 @@ export function validateReservationStoreHealth(): ReservationStoreHealth {
   }
   reservationHealthCache = { revision: reservationStoreRevision, healthy: true, detail: null, entryCount: entries.length, liveKeyCount };
   return { healthy: true, detail: null, entryCount: entries.length };
+}
+
+/** 不删除任何责任；仅在整库合法后显式解除损坏锁存。 */
+export function repairProductionReservations(): ReservationStoreHealth {
+  const runtime = Memory.runtime as (NonNullable<Memory["runtime"]> & { resourceReservationsCorrupted?: string }) | undefined;
+  const previous = runtime?.resourceReservationsCorrupted;
+  if (runtime) delete runtime.resourceReservationsCorrupted;
+  bumpReservationStoreRevision();
+  const health = validateReservationStoreHealth();
+  if (!health.healthy) {
+    if (runtime) runtime.resourceReservationsCorrupted = previous ?? health.detail ?? "reservation_store_invalid";
+  } else bumpTreasuryCommitmentRevision();
+  return health;
 }

@@ -50,7 +50,10 @@ export const colonizerHarvesterRole: RoleFactory = (targetRoom?: string, sourceI
         return false;
       }
       const persistentSupport = kind === "colonizationSupport" && role === "harvester" && supportedRoom === targetRoom;
-      if (persistentSupport && Memory.data?.creepConfigs?.[configName!]?.roomName !== home) {
+      const supportPolicy = targetRoom ? readColonizationSupportPolicy(targetRoom) : undefined;
+      const supportController = targetRoom ? Game.rooms[targetRoom]?.controller : undefined;
+      const supportActive = supportPolicy?.sourceRoom === home && (!supportController || supportController.my && supportController.level < 6);
+      if (persistentSupport && !supportActive && Memory.data?.creepConfigs?.[configName!]?.roomName !== home) {
         if (creep.room.name !== home) {
           moveToTargetRoom(creep, home, encodedRouteRooms?.split("|").reverse().join("|"), { plainCost: 2, swampCost: 10 });
         } else {

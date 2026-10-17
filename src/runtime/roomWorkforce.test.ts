@@ -12,7 +12,7 @@ function createSource(id: string, roomName: string, hasLink = false): Source {
     id,
     room: { name: roomName } as Room,
     pos: {
-      findInRange: () => (hasLink ? ([{ structureType: STRUCTURE_LINK }] as StructureLink[]) : []),
+      findInRange: () => (hasLink ? ([{ structureType: STRUCTURE_LINK, isActive: () => true, pos: { x: 11, y: 10, roomName, getRangeTo: () => 1 } }] as unknown as StructureLink[]) : []),
     } as unknown as RoomPosition,
   } as Source;
 }
@@ -343,6 +343,14 @@ describe("roomWorkforce", () => {
       "W1N6:carrier:0",
       "W1N6:worker:0",
     ]);
+    expect(reserveRoom.memory.workerConstructionTier).toBe(3);
+
+    const previousFind = reserveRoom.find;
+    reserveRoom.find = ((kind: FindConstant) => kind === FIND_MY_CONSTRUCTION_SITES
+      ? [{ structureType: STRUCTURE_EXTENSION }] : previousFind.call(reserveRoom, kind)) as Room["find"];
+    const criticalInventory = buildRoomWorkforceInventory(reserveRoom);
+    expect(criticalInventory.configs.filter(config => config.kind === "worker")).toHaveLength(4);
+    expect(Game.flags.RESERVE_W1N6).toBeDefined();
     expect(reserveRoom.memory.workerConstructionTier).toBe(3);
 
     const observedRoom = createRoom({ name: "W2N2", level: 5 });

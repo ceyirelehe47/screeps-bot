@@ -14,7 +14,7 @@ function createSource(id: string, roomName: string, hasLink = false): Source {
     id,
     room: { name: roomName } as Room,
     pos: {
-      findInRange: () => (hasLink ? ([{ structureType: STRUCTURE_LINK }] as StructureLink[]) : []),
+      findInRange: () => (hasLink ? ([{ structureType: STRUCTURE_LINK, isActive: () => true, pos: { x: 11, y: 10, roomName, getRangeTo: () => 1 } }] as unknown as StructureLink[]) : []),
       findClosestByRange: (targets: StructureLink[]) => targets[0] || null,
     } as unknown as RoomPosition,
   } as Source;

@@ -352,7 +352,9 @@ function upsertFlagHaulTask(flag: Flag): boolean {
     return true;
   }
 
-  const sourceRoom = selectSourceRoom(targetRoom, getPreferredSourceFromFlagName(flag.name), salvage);
+  const previousSource = Memory.data?.flagHauling?.[flag.name]?.sourceRoom;
+  const sourceRoom = previousSource && Game.rooms[previousSource]?.controller?.my && getTickContextService().getSpawnsByRoom(previousSource).length > 0
+    ? previousSource : selectSourceRoom(targetRoom, getPreferredSourceFromFlagName(flag.name), salvage);
   if (!sourceRoom) {
     return false;
   }
@@ -443,6 +445,10 @@ function processFlagHaulTask(task: FlagHaulTask): boolean {
     return cleanupFlagHaulConfig(task);
   }
 
+  if (targetRoom && !hasHaulableResources(getHaulableResourceSummary(targetRoom, false))) {
+    Game.flags[task.flagName]?.remove();
+    return cleanupFlagHaulConfig(task);
+  }
   upsertFlagHaulConfigs(task);
   task.updatedAt = Game.time;
   return true;

@@ -416,25 +416,27 @@ describe("carrier terminal_feed 的实时绝对目的库存约束", () => {
     }
   });
 
-  it("Terminal 已满足且 Storage 满时持有原责任，多 tick 不落入 generic Terminal cleanup", () => {
+  it("同一路由补增任务 amount 不使已取货身份失效", () => {
+    const scenario = createFeedScenario();
+    const { task } = installBoundSynthesisDemand(scenario);
+    const identity = terminalFeedBoundTaskIdentity(task);
+    task.amount += 100;
+    task.remainingAmount += 100;
+    expect(terminalFeedBoundTaskIdentity(task)).toBe(identity);
+  });
+  it("Terminal 已满足且 Storage 满时，将货物暂存在 Terminal 并释放 carrier", () => {
     const scenario = createFeedScenario({ storageStock: 26, storageCapacity: 26 });
-    const carrier = scenario.addCarrier("no-safe-return");
+    const carrier = scenario.addCarrier("safe-overflow-return");
     const role = carrierRole();
-    scenario.publish();
-    role.source?.(carrier.creep);
-    scenario.nextTick();
+    scenario.publish(); role.source?.(carrier.creep); scenario.nextTick();
     scenario.storageInventory.set(RESOURCE_HYDROXIDE, 26);
     scenario.terminalInventory.set(RESOURCE_HYDROXIDE, 26);
     replaceCarrierTasksForProducerRoom("resourceControl:preload", scenario.room.name, []);
-
-    for (let tick = 0; tick < 4; tick += 1) {
-      role.target(carrier.creep);
-      expect(carrier.transfer).not.toHaveBeenCalled();
-      expect(getCreepAssignmentState(carrier.creep.name)?.synthesisCarrierPendingToId).toBe(scenario.terminal.id);
-      scenario.nextTick();
-    }
-    expect(carrier.inventory.get(RESOURCE_HYDROXIDE)).toBe(26);
-    expect(scenario.terminalInventory.get(RESOURCE_HYDROXIDE)).toBe(26);
+    role.target(carrier.creep);
+    expect(carrier.transfer).toHaveBeenCalledWith(scenario.terminal, RESOURCE_HYDROXIDE, 26);
+    scenario.nextTick();
+    expect(carrier.inventory.get(RESOURCE_HYDROXIDE)).toBe(0);
+    expect(scenario.terminalInventory.get(RESOURCE_HYDROXIDE)).toBe(52);
   });
 
   it("两个已取货 carrier 到货时库存突增，同 tick transfer 总量至多补剩余 2", () => {

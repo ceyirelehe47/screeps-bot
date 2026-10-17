@@ -36,7 +36,11 @@ describe("本房防御与储备的出征边界", () => {
     Memory.data!.war = { W2N2: task };
     expect(isSpawnConfigEconomicallyBlocked(green, cfg)).toBe(true);
     task.members = { [red]: { configName: red, creepNames: [], spawnedAt: Game.time - 1 } };
+    expect(isSpawnConfigEconomicallyBlocked(green, cfg)).toBe(true);
+    Game.time++;
+    Game.creeps.red = { name: "red", room: { name: "W1N1" }, memory: { configName: red } } as Creep;
     expect(isSpawnConfigEconomicallyBlocked(green, cfg)).toBe(false);
+    Game.creeps = {};
     for (const status of ["queued", "done", "failed"] as const) {
       task.status = status; expect(isSpawnConfigEconomicallyBlocked(green, cfg)).toBe(true);
     }
@@ -47,9 +51,27 @@ describe("本房防御与储备的出征边界", () => {
     task.members = { [red.replace("g2", "g1")]: { configName: red.replace("g2", "g1"), creepNames: [], spawnedAt: Game.time - 1 } };
     expect(isSpawnConfigEconomicallyBlocked(green, cfg)).toBe(true);
     task.activeGeneration!.boostGateOpenedAt = Game.time - 1;
+    task.activeGeneration!.phase = "assembling";
     expect(isSpawnConfigEconomicallyBlocked(green, cfg)).toBe(false);
     jest.mocked(isDefenseMode).mockReturnValue(true);
     expect(isSpawnConfigEconomicallyBlocked(green, cfg)).toBe(true);
+    expect(canContinueWarMission(task)).toBe(false);
+  });
+  it("旧出生记录和 controllerAttacker 历史排队不能解锁新一代", () => {
+    jest.mocked(isRoomInReserveMode).mockReturnValue(true);
+    const red = "W1N1:war:W2N2:meleeAttacker:0", green = "W1N1:war:W2N2:healer:0";
+    const ctrl = "W1N1:war:W2N2:controllerAttacker:0";
+    const task = { targetRoom: "W2N2", sourceRoom: "W1N1", status: "patrol_waiting", reason: "manual", attempts: 1,
+      createdAt: 1, updatedAt: Game.time, members: { [red]: { configName: red, creepNames: [], spawnedAt: 1 } } } as WarTask;
+    Memory.data!.war = { W2N2: task };
+    Memory.data!.creepConfigs = {
+      [red]: { role: "meleeAttacker", roomName: "W1N1", args: ["W2N2"] },
+      [ctrl]: { role: "claimer", roomName: "W1N1", args: ["W2N2", "", "attack"], spawnOnce: { queuedAt: 1 } },
+    };
+    expect(canContinueWarMission(task)).toBe(false);
+    expect(isSpawnConfigEconomicallyBlocked(green, { role: "healer", roomName: "W1N1", args: ["W2N2"] })).toBe(true);
+    expect(isSpawnConfigEconomicallyBlocked(ctrl, Memory.data!.creepConfigs[ctrl])).toBe(true);
+    Game.creeps.ctrl = { name: "ctrl", room: { name: "W1N1" }, memory: { configName: ctrl } } as Creep;
     expect(canContinueWarMission(task)).toBe(false);
   });
   it("legacy war 用实际排队/孵化/活体识别投入，脱离任务和孤立配置不放行", () => {
@@ -67,7 +89,8 @@ describe("本房防御与储备的出征边界", () => {
     Memory.creeps.born = { role: "meleeAttacker", configName: red };
     expect(isSpawnConfigEconomicallyBlocked(green, cfg)).toBe(false);
     spawn.spawning = null;
-    Game.creeps.born = { memory: { role: "meleeAttacker", configName: red } } as Creep;
+    Game.time++;
+    Game.creeps.born = { name: "born", room: { name: "W1N1" }, memory: { role: "meleeAttacker", configName: red } } as Creep;
     expect(isSpawnConfigEconomicallyBlocked(green, cfg)).toBe(false);
     Game.creeps.born.memory._warDetached = true;
     expect(isSpawnConfigEconomicallyBlocked(green, cfg)).toBe(true);
@@ -93,6 +116,18 @@ describe("本房防御与储备的出征边界", () => {
     expect(isSpawnConfigEconomicallyBlocked(name + "other", cfg)).toBe(true);
     jest.mocked(isDefenseMode).mockReturnValue(true);
     expect(isSpawnConfigEconomicallyBlocked(name, cfg)).toBe(true);
+  });
+  it("储备保留已占领殖民地和救援 worker 的基础建设", () => {
+    jest.mocked(isRoomInReserveMode).mockReturnValue(true);
+    Game.rooms.W2N2 = { controller: { my: true } } as Room;
+    Memory.data!.colonization = { W2N2: { targetRoom: "W2N2", sourceRoom: "W1N1", status: "bootstrapping", flagName: "CL", planReady: true, claimCompleted: true, createdAt: 1, updatedAt: Game.time } };
+    Memory.data!.rescue = { W2N2: { targetRoom: "W2N2", sourceRoom: "W1N1", status: "bootstrapping", flagName: "RESCUE", createdAt: 1, updatedAt: Game.time } };
+    const cfg = { role: "colonizerWorker" as const, roomName: "W1N1", args: ["W2N2"] };
+    expect(isSpawnConfigEconomicallyBlocked("W1N1:colonize:W2N2:worker:0", cfg)).toBe(false);
+    expect(isSpawnConfigEconomicallyBlocked("W1N1:rescue:W2N2:worker:0", cfg)).toBe(false);
+    expect(isSpawnConfigEconomicallyBlocked("unowned-config", cfg)).toBe(true);
+    jest.mocked(isDefenseMode).mockReturnValue(true);
+    expect(isSpawnConfigEconomicallyBlocked("W1N1:rescue:W2N2:worker:0", cfg)).toBe(true);
   });
   it("储备期暂停昂贵出征，保留本地采矿和外矿收入补员", () => {
     jest.mocked(isRoomInReserveMode).mockReturnValue(true);

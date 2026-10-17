@@ -63,9 +63,20 @@ describe("remoteMiningReserverRole", () => {
 
   describe("target phase – safety guards", () => {
 
+    it("清除 Invader 预定，清零后立即切回正常 reserve", () => {
+      const controller = makeController({ reservation: { username: "Invader", ticksToEnd: 4000 } });
+      const creep = makeCreep(makeRoom("W5N5", controller), { attackController: jest.fn(() => OK) });
+      const role = remoteMiningReserverRole("W5N5");
+      role.target(creep);
+      expect(creep.attackController).toHaveBeenCalledWith(controller);
+      expect(creep.reserveController).not.toHaveBeenCalled();
+      delete controller.reservation;
+      role.target(creep);
+      expect(creep.reserveController).toHaveBeenCalledWith(controller);
+    });
     it("does nothing on a hostile-reserved controller", () => {
       const controller = makeController({
-        reservation: { username: "Invader", ticksToEnd: 4000 },
+        reservation: { username: "OtherPlayer", ticksToEnd: 4000 },
       });
       const room = makeRoom("W5N5", controller);
       const creep = makeCreep(room);

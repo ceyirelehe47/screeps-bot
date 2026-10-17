@@ -349,8 +349,8 @@ function createUpgradeTask(room: Room): WorkerTask | null {
   };
 }
 
-function createRampartRepairTask(rampart: StructureRampart): WorkerTask {
-  const targetHits = rampart.hitsMax;
+function createRampartRepairTask(rampart: StructureRampart, previousTarget?: number): WorkerTask {
+  const targetHits = Math.min(rampart.hitsMax, previousTarget ?? rampart.hits + 50_000);
   const remaining = Math.max(0, targetHits - rampart.hits);
   const priority = RAMPART_NORMAL_REPAIR_PRIORITY;
   const repairMode: "normal" = "normal";
@@ -514,6 +514,7 @@ export function refreshWorkerTasks(): void {
         task.type === "repair" &&
         task.repairMode === "normal" &&
         task.status === "active" &&
+        (Game.getObjectById(task.targetId as Id<StructureRampart>)?.hits ?? Infinity) < (task.repairTargetHits ?? 0) &&
         task.assignedCreeps.some((name) => !!ownDataValue<Creep>(Game.creeps, name)),
     );
     for (const task of Object.values(tasks)) {
@@ -547,7 +548,11 @@ export function refreshWorkerTasks(): void {
         );
       }
 
-      upsertTask(room.name, createRampartRepairTask(selectedNormalRampart));
+      const previousTarget = activeAssignedNormalRepairTask?.targetId === selectedNormalRampart.id &&
+        activeAssignedNormalRepairTask.repairTargetHits !== undefined &&
+        selectedNormalRampart.hits < activeAssignedNormalRepairTask.repairTargetHits
+        ? activeAssignedNormalRepairTask.repairTargetHits : undefined;
+      upsertTask(room.name, createRampartRepairTask(selectedNormalRampart, previousTarget));
     }
     destroyIllegalStructures(room);
 

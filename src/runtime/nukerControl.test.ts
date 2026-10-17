@@ -288,6 +288,9 @@ describe("nukerControl", () => {
     markResourceTransferTaskBlocked(expired.task, "receiver_capacity");
     Game.time += 500;
     runNukerControl();
+    expect(Object.values(ensureResourceTransferTaskStore())).toHaveLength(1);
+    Game.time = Math.ceil(Game.time / 25) * 25;
+    runNukerControl();
     const ghodiumTransfers = Object.values(
       ensureResourceTransferTaskStore(),
     ).filter(

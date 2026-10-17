@@ -2,6 +2,8 @@ import { createMockFactory, createMockStore, MockFactoryConfig } from "@mock/pow
 import {
   runFactoryControl,
   getRequiredFactoryLevel,
+  addFactoryTask,
+  decomposeTarget,
 } from "@/runtime/factoryControl";
 
 
@@ -205,4 +207,19 @@ it("工厂日预算会扣除当天以前 tick 的采购，并在下一天恢复"
   expect(findSafeSellOrder("silicon", 1000, 50_000, 25_000, 10_000, "W1N1", market, runtime, 200, 1_000_000)).toBeNull();
   runtime.claimedOrders[0].date = "2000-01-01";
   expect(findSafeSellOrder("silicon", 1000, 50_000, 25_000, 10_000, "W1N1", market, runtime, 200, 1_000_000)).toMatchObject({ dealAmount: 1000 });
+});
+
+describe("工厂渐进生产与有界解压", () => {
+  it("大目标只有十批原料时仍可先生产下一批", () => {
+    const { room } = createFactoryRoom({ storageResources: { U: 5000, energy: 300000 }, factoryOverrides: { level: 0 } });
+    const result = decomposeTarget(RESOURCE_UTRIUM_BAR, 10000, room, {}, "factory:test");
+    expect(result.missing).toEqual({});
+    expect(result.productionTarget).toBe(RESOURCE_UTRIUM_BAR);
+  });
+  it.each([[30, 50], [120, 150]])("解压 %i battery 对齐到 %i", (requested, expected) => {
+    Memory.data = {};
+    const result = addFactoryTask("W1N1", "decompress_battery", { amount: requested });
+    expect(typeof result).toBe("object");
+    if (typeof result !== "string") expect(result.task.remainingBatteryAmount).toBe(expected);
+  });
 });

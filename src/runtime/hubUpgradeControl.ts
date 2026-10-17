@@ -270,14 +270,12 @@ export function runHubUpgradeControl(): void {
     const configName = getConfigName(roomName);
     const boostTaskId = getBoostTaskId(roomName);
 
-    configs[configName] = {
-      role: "upgrader",
-      args: [roomName],
-      roomName,
-      body: [...RCL8_UPGRADER_MAINTENANCE_BODY],
-    };
-
-    releaseBoostLabs(boostTaskId, roomName);
-    releaseBoostLabs(`hubUpgrade:${roomName}`, roomName);
+    const previous = configs[configName];
+    if (previous?.role !== "upgrader" || previous.roomName !== roomName || previous.args.join("|") !== roomName ||
+        previous.body?.join("|") !== RCL8_UPGRADER_MAINTENANCE_BODY.join("|")) {
+      configs[configName] = { role: "upgrader", args: [roomName], roomName, body: [...RCL8_UPGRADER_MAINTENANCE_BODY] };
+    }
+    if (Memory.runtime?.powerBankBoost?.[boostTaskId]) releaseBoostLabs(boostTaskId, roomName);
+    if (Memory.runtime?.powerBankBoost?.[`hubUpgrade:${roomName}`]) releaseBoostLabs(`hubUpgrade:${roomName}`, roomName);
   }
 }

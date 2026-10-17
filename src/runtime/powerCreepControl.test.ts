@@ -145,6 +145,7 @@ function createPowerCreep(options: {
     enableRoom: jest.fn(() => options.enableRoomResult ?? OK),
     renew: jest.fn(() => options.renewResult ?? OK),
     transfer: jest.fn(() => OK),
+    withdraw: jest.fn(() => OK),
     usePower: jest.fn(() => options.usePowerResult ?? OK),
     moveTo: jest.fn(() => OK),
   } as unknown as PowerCreep;
@@ -171,6 +172,38 @@ describe("powerCreepControl", () => {
     Memory.powerCreeps = {};
   });
 
+  it("ops 耗尽或冷却时恢复普通供能，并从库存补充 ops", () => {
+    const storage = createStorage("E4N58", { energy: 100000, ops: 500 });
+    const { room, powerSpawn } = createRoom({ storage });
+    const pc = createPowerCreep({ room, ticksToLive: 1000, ops: 0, powers: {
+      [PWR_OPERATE_EXTENSION]: { level: 1, cooldown: 0 }, [PWR_OPERATE_STORAGE]: { level: 1, cooldown: 0 },
+    } });
+    installGameObjects([storage, powerSpawn]); installPowerCreeps(pc);
+    pc.memory.lastControlTick = Game.time;
+    expect(getPowerCreepRoomEnergyPolicy(room.name).suppressExtensionSupply).toBe(false);
+    expect(getPowerCreepRoomEnergyPolicy(room.name).suppressSpawnSupply).toBe(false);
+    runPowerCreepControl();
+    expect(pc.withdraw).toHaveBeenCalledWith(storage, RESOURCE_OPS, expect.any(Number));
+    expect(pc.usePower).not.toHaveBeenCalled();
+  });
+  it("未完成的等级配方自动调度 OPERATE_FACTORY，已有足够时长的效果不重放", () => {
+    const storage = createStorage("E4N58", { energy: 100000 });
+    const { room, powerSpawn } = createRoom({ storage });
+    const factory = { id: "factory", structureType: STRUCTURE_FACTORY, level: 1,
+      store: createStore(), effects: [], pos: createPos(room.name, 24) } as unknown as StructureFactory;
+    const previousFind = room.find;
+    room.find = ((kind: FindConstant) => kind === FIND_MY_STRUCTURES ? [...previousFind.call(room, kind), factory] : previousFind.call(room, kind)) as Room["find"];
+    Memory.cfg = { factoryControl: { enabled: true, targets: [{ resource: RESOURCE_COMPOSITE, targetAmount: 100 }] } };
+    const pc = createPowerCreep({ room, ticksToLive: 1000, ops: 120, capacity: 300,
+      powers: { [PWR_OPERATE_FACTORY]: { level: 1, cooldown: 0 } } });
+    installGameObjects([storage, powerSpawn, factory]); installPowerCreeps(pc);
+    runPowerCreepControl();
+    expect(pc.usePower).toHaveBeenCalledWith(PWR_OPERATE_FACTORY, factory);
+    jest.mocked(pc.usePower).mockClear(); Game.time++;
+    factory.effects = [createPowerEffect(PWR_OPERATE_FACTORY, 1, 200)];
+    runPowerCreepControl();
+    expect(pc.usePower).not.toHaveBeenCalled();
+  });
   it("从同名 PowerSpawn 出生，并跨 tick 去重 enable_room 直至房间启用", () => {
     const { room, controller, powerSpawn } = createRoom({
       name: "E6N59",

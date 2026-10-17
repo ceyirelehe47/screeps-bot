@@ -74,6 +74,22 @@ describe("runCrossShardColonizationByFlag", () => {
     });
   });
 
+  it("旧占领信号必须等到对端继续推进且重新确认当前所有权", () => {
+    let stamp = 500;
+    let claimAt = 500;
+    Object.assign(global, { InterShardMemory: { getRemote: jest.fn(() => JSON.stringify({ version: 1, shard: "shard1", updatedAt: stamp,
+      claims: [{ room: "W9N9", at: claimAt }], rooms: [{ room: "W9N9", at: claimAt, hasSpawn: true }] })) } });
+    Memory.data = { crossShardColonization: { "shard1:W9N9": { targetShard: "shard1", targetRoom: "W9N9",
+      status: "planning", flagName: "CLX_shard1_W9N9", createdAt: Game.time, updatedAt: Game.time } } };
+    runCrossShardColonizationByFlag();
+    expect(Memory.data!.crossShardColonization!["shard1:W9N9"].status).toBe("blocked");
+    Game.time++; stamp = 1000;
+    runCrossShardColonizationByFlag();
+    expect(Memory.data!.crossShardColonization!["shard1:W9N9"].status).toBe("blocked");
+    Game.time++; stamp++; claimAt = stamp;
+    runCrossShardColonizationByFlag();
+    expect(Memory.data!.crossShardColonization!["shard1:W9N9"].status).toBe("completed");
+  });
   it("enqueues claimer to the least-loaded spawn in a multi-spawn room", () => {
     const sourceRoom = createRoom("W1N1");
     Game.rooms[sourceRoom.name] = sourceRoom;

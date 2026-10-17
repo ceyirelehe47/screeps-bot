@@ -1,10 +1,11 @@
+import { getCarrierCargoByActor } from "@/runtime/carrierCargo";
 import type { CarrierTask, CarrierTaskStep } from "@/runtime/carrierTaskBoard";
 import { getCreepAssignmentState } from "@/runtime/creepAssignmentState";
 import { inspectAutomaticSynthesisTransferDemand } from "@/runtime/synthesisTransferDemand";
 import type { ResourceTransferTask } from "@/runtime/logistics/resourceTransferTasks";
 
 export function terminalFeedBoundTaskIdentity(task: ResourceTransferTask): string {
-  return JSON.stringify([task.id, task.createdAt, task.origin, task.fromRoomName, task.toRoomName, task.resource, task.reason ?? null, task.amount]);
+  return JSON.stringify([task.id, task.createdAt, task.origin, task.fromRoomName, task.toRoomName, task.resource, task.reason ?? null]);
 }
 
 interface PickupIntent { targetId: string; resource: ResourceConstant; amount: number }
@@ -61,14 +62,11 @@ export function getTerminalFeedRemainingTarget(
 ): number {
   const current = ledger();
   const cargoByActor = new Map<string, number>();
-  for (const creep of Object.values(Game.creeps)) {
-    if (creep.name === excludeCargoActor) continue;
-    const state = getCreepAssignmentState(creep.name);
-    if (state?.synthesisCarrierPendingToId === target.id && state.synthesisCarrierPendingResource === resource && !state.synthesisCarrierPendingReturnToId) {
-      const delivery = current.deliveredByActor.get(creep.name);
-      const accepted = delivery?.targetId === target.id && delivery.resource === resource ? delivery.amount : 0;
-      cargoByActor.set(creep.name, Math.max(0, creep.store.getUsedCapacity(resource) - accepted));
-    }
+  for (const [actor, amount] of getCarrierCargoByActor(target.id, resource)) {
+    if (actor === excludeCargoActor) continue;
+    const delivery = current.deliveredByActor.get(actor);
+    const accepted = delivery?.targetId === target.id && delivery.resource === resource ? delivery.amount : 0;
+    cargoByActor.set(actor, Math.max(0, amount - accepted));
   }
   for (const [actor, pickup] of current.pickups) {
     if (actor === excludeCargoActor || pickup.targetId !== target.id || pickup.resource !== resource) continue;

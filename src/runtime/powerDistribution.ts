@@ -37,7 +37,7 @@ export function runPowerDistribution(rooms: readonly Room[], processors: Readonl
     const inProcessor = processor?.store.getUsedCapacity(RESOURCE_POWER) ?? 0;
     const outgoing = index.getOutgoing(room.name, RESOURCE_POWER);
     const incoming = index.getPendingIncoming(room.name, RESOURCE_POWER);
-    return { room, surplus: Math.max(0, stored - Math.max(0, target - inProcessor) - outgoing),
+    return { room, surplus: Math.max(0, stored - Math.max(0, target - inProcessor) - outgoing - (processor ? 2 * MIN_BATCH : 0)),
       deficit: Math.max(0, target - stored - inProcessor + outgoing - incoming),
       capacity: Math.max(0, terminal.store.getFreeCapacity() - (capacityReserved.get(room.name) ?? 0)),
       feeEnergy: Math.max(0, terminal.store.getUsedCapacity(RESOURCE_ENERGY) - policy.terminalEnergyReserve - index.getOutgoing(room.name, RESOURCE_ENERGY) - (feeReserved.get(room.name) ?? 0)) };

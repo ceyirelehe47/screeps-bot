@@ -1,3 +1,4 @@
+import { getPlannedSourceContainerPos } from "@/runtime/sourceWorkPosition";
 import { getTickContextService } from "@/runtime/runtimeServices";
 
 const SOURCE_LINK_RANGE = 2;
@@ -31,8 +32,12 @@ export function getSourceAdjacentLinks(source: Source): StructureLink[] {
         filter: (structure) => structure.structureType === STRUCTURE_LINK,
       }) as StructureLink[]);
 
-  sourceAdjacentLinksBySourceId.set(source.id, { source, links });
-  return links;
+  const fallbackContainer = roomContext?.getContainers().find(container => container.pos.getRangeTo(source.pos) <= 1);
+  const workPos = getPlannedSourceContainerPos(source) ?? fallbackContainer?.pos;
+  const usable = links.filter(link => (typeof link.isActive !== "function" || link.isActive()) &&
+    link.pos.getRangeTo(workPos ?? source.pos) <= 1);
+  sourceAdjacentLinksBySourceId.set(source.id, { source, links: usable });
+  return usable;
 }
 
 export function getSourceAdjacentLink(source: Source): StructureLink | null {

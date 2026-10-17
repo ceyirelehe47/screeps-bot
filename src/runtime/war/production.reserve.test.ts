@@ -27,7 +27,9 @@ it("RESERVE 下在途搭档可由 war 生产者排队，陌生和新任务不排
   enqueueConfig(spawn, green, true);
   expect(spawn.memory.spawnList).toEqual([]);
   expect(Memory.data!.creepConfigs![green].spawnOnce!.queuedAt).toBeUndefined();
-  task.members = { [red]: { configName: red, creepNames: [], spawnedAt: Game.time - 1 } };
+  task.members = { [red]: { configName: red, creepNames: ["red"], spawnedAt: Game.time - 1 } };
+  Game.time++;
+  Game.creeps.red = { name: "red", room: { name: "W1N1" }, memory: { configName: red } } as Creep;
   enqueueConfig(spawn, green, true);
   expect(spawn.memory.spawnList).toEqual([green]);
   expect(Memory.data!.creepConfigs![green].spawnOnce!.queuedAt).toBe(Game.time);
@@ -41,7 +43,9 @@ it("已投入战争的强化准备可继续，新任务与防御模式仍保留�
   const prepare = jest.spyOn(boosts, "prepareBoosts").mockReturnValue({ status: "ready", labs: [] });
   expect(prepareCombatSquad(task)).toBe(false);
   expect(prepare).not.toHaveBeenCalled();
-  task.members = { [red]: { configName: red, creepNames: [], spawnedAt: Game.time - 1 } };
+  task.members = { [red]: { configName: red, creepNames: ["red"], spawnedAt: Game.time - 1 } };
+  Game.time++;
+  Game.creeps.red = { name: "red", room: { name: "W1N1" }, memory: { configName: red } } as Creep;
   expect(prepareCombatSquad(task)).toBe(true);
   expect(prepare).toHaveBeenCalledTimes(1);
   task.activeGeneration!.phase = "preparing";

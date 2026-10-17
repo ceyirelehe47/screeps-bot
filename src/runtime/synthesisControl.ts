@@ -1,3 +1,4 @@
+import { countCarrierCargo } from "@/runtime/carrierCargo";
 import { getTerminalAmountOutsideMarketSaleExposure } from "@/runtime/marketSaleExposure";
 import {
   countsResourceTransferTaskTowardDemand,
@@ -391,20 +392,7 @@ function roomTransferableAmount(room: Room, resource: ResourceConstant): number 
   return total;
 }
 
-function countInFlightSynthesisCargo(labId: string, resource: ResourceConstant): number {
-  let total = 0;
-  for (const creep of Object.values(Game.creeps)) {
-    const state = getCreepAssignmentState(creep.name);
-    if (!state) continue;
-    if (state.synthesisCarrierPendingToId !== labId) continue;
-    if (state.synthesisCarrierPendingResource !== resource) continue;
-    const carried = creep.store.getUsedCapacity(resource);
-    if (carried > 0) {
-      total += carried;
-    }
-  }
-  return total;
-}
+const countInFlightSynthesisCargo = countCarrierCargo;
 
 function getResourceReserve(roomName: string, resource: ResourceConstant): number {
   const roomCfg = Memory.cfg?.resourceControl?.rooms?.[roomName];
@@ -1121,7 +1109,8 @@ function maybeGenerateSupplyTasks(
 
       return sum + (lab.store.getUsedCapacity(reagent) ?? 0);
     }, 0);
-    const current = roomTransferableAmount(room, reagent) + bufferedInLabs;
+    const current = roomTransferableAmount(room, reagent) + bufferedInLabs +
+      topology.reagentLabs.reduce((sum, lab) => sum + countCarrierCargo(lab.id, reagent), 0);
     const incoming = transferTasks.getIncomingAmount(room.name, reagent);
     const deficit = Math.max(0, needAmount - current - incoming);
     const reason = `synthesis:${room.name}:${reactionPlan.product}`;

@@ -224,7 +224,9 @@ export function buildRoomWorkforceInventory(room: Room): RoomWorkforceInventory 
   }
 
   const reserveMode = isRoomInReserveMode(room.name);
-  const workerDecision: { count: number; constructionTierEffect: ConstructionTierEffect } = reserveMode
+  const criticalConstruction = reserveMode && room.find(FIND_MY_CONSTRUCTION_SITES).some(site =>
+    new Set<StructureConstant>([STRUCTURE_SPAWN, STRUCTURE_STORAGE, STRUCTURE_TOWER, STRUCTURE_EXTENSION]).has(site.structureType));
+  const workerDecision: { count: number; constructionTierEffect: ConstructionTierEffect } = reserveMode && !criticalConstruction
     ? { count: 1, constructionTierEffect: { kind: "preserve" } }
     : getDesiredWorkerCountDecision(room);
   const { constructionTierEffect } = workerDecision;
