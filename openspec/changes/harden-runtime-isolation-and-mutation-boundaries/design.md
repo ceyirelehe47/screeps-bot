@@ -31,4 +31,11 @@
 - 静态矩阵的 incomplete 且 ops 未耗尽，即使有非空 partial 也立即排除本跳转；只有动态 creep 绕行或确实预算不足时允许局部进展。缓存出口的重新搜索必须完整抵达，首次完整 verifiedPath 使用相同的完整性缓存键。
 - 地形成本集中解析并显式传给两个 API 与路径键。默认采用道路友好的 2/10，保持当前 PathFinder 分支和官方引擎 Room.findPath 的道路语义；显式业务成本保持原值。依据 https://github.com/screeps/engine/blob/master/src/game/rooms.js#L238-L246 。API 文档中的 1/5 与此包装行为有出入，本批以显式值消除隐式差异。
 - 塔的单塔计算和动作都隔离，失败的塔不阻断同房其他塔。房间级隔离继续处理共享防御数据错误。故障摘要由 runtimeIsolation 单写 Memory.runtime.defenseFaults，最多 8 条、TTL 1000 tick、消息至多 240 字符；healthy 路径不创建摘要，profiler 关闭时仍记录并清理，不增加通知副作用。
-- 本轮只修移动和防御。市场、RESERVE 在途 war/deposit 放行与其他业务政策保持现状。
+- bcd1d92 复核批次只修移动和防御，RESERVE 在途 war/deposit 放行当时未实施；该遗漏由本节之后的补员修订处理。市场与其他业务政策保持现状。
+
+
+## RESERVE 补员修订
+
+用户确认继续补齐已承诺任务。RESERVE 仍阻止启动新任务，防御模式保留原有拦截。war 必须匹配 source/target 和当前 generation，并具有既有排队、强化 gate、实际孵化/活体或成员出生记录；仅 staging/clearing 状态不足以证明投入，因为首个 Spawn 前也会进入这些状态。旧代配置不得借用当前代或相反。通用 spawnPlanner/mountSpawn、war 自有排队与强化准备共用判断，避免只修一个关口。
+
+Deposit 保持单代、单 creep 且死亡即结束的语义：仅已受理 spawning、g0、同源 taskId/configName/args 的 owner 免于 RESERVE 清队；原有 spawnReadyAt 当 tick、完整路径、经济性、body 和 spawnOnce 门继续执行，不新增死亡补产或第二代。

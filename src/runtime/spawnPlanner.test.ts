@@ -619,3 +619,25 @@ describe("spawnPlanner powerbank combat guard edge cases 重合同", () => {
     scenarioDefense();
   });
 });
+
+
+it("RESERVE 下调度已投入战争搭档，不启动同源新战争", () => {
+  resetScenarioWorld();
+  const room = createRoom("W1N1");
+  const spawn = createSpawn(room, "S");
+  Game.rooms = { W1N1: room }; Game.spawns = { S: spawn }; addLiveCarrier(room);
+  Game.flags = { RESERVE: { name: "RESERVE", pos: { roomName: room.name } } as Flag };
+  const red = "W1N1:war:W2N2:meleeAttacker:0", green = "W1N1:war:W2N2:healer:0", fresh = "W1N1:war:W3N3:healer:0";
+  Memory.data = { creepConfigs: {
+    [green]: { role: "healer", roomName: room.name, args: ["W2N2"], body: [HEAL, MOVE] },
+    [fresh]: { role: "healer", roomName: room.name, args: ["W3N3"], body: [HEAL, MOVE] },
+  }, war: {
+    W2N2: { targetRoom: "W2N2", sourceRoom: room.name, status: "clearing", reason: "manual", attempts: 1,
+      createdAt: Game.time - 1, updatedAt: Game.time, members: { [red]: { configName: red, creepNames: [], spawnedAt: Game.time - 1 } } },
+    W3N3: { targetRoom: "W3N3", sourceRoom: room.name, status: "clearing", reason: "manual", attempts: 1,
+      createdAt: Game.time, updatedAt: Game.time },
+  } };
+  scheduleSpawnTasks();
+  expect(spawn.memory.spawnList).toContain(green);
+  expect(spawn.memory.spawnList).not.toContain(fresh);
+});

@@ -23,3 +23,8 @@
 ## Impact
 
 涉及 movement routing/pathing、运输任务所有者、Hub、塔、本房防御与 CPU 采样。保持现有出征规则、市场 dryRun、物流 shadow 和主循环顺序；本批不实施市场切换或真实调度降载。部署证据保存在忽略目录，主分支与实际发布提交对齐。
+
+
+## RESERVE 补员补充
+
+补齐已承诺 war/deposit 被 RESERVE 清理出生队列的遗漏。war 排队和强化准备同步采用同一在途判断；新任务、防御模式、终态、旧代及错配所有权继续被阻止。Deposit 保留已受理单代配置，不修改死亡结束与 fresh 孵化门。市场继续 dryRun。

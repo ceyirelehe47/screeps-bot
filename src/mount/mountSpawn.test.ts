@@ -9,6 +9,8 @@ jest.mock("@/runtime/cpuPhaseProfiler", () => ({
 }));
 
 import { mountSpawn } from "@/mount/mountSpawn";
+import { DEPOSIT_BODY } from "@/runtime/depositViability";
+import type { DepositHarvestTask } from "@/runtime/depositHarvest";
 import { releaseWarTaskOwner } from "@/runtime/warControl";
 import {
   RCL8_UPGRADER_MAINTENANCE_BODY,
@@ -75,6 +77,35 @@ describe("mountSpawn", () => {
     expect(spawn.memory.spawnList).toEqual([]);
   });
 
+  it("RESERVE 下已出生 attacker 的 healer 搭档不会被队首清理", () => {
+    const room = { name: "W1N1", energyAvailable: 300, energyCapacityAvailable: 300 } as Room;
+    const red = "W1N1:war:W2N2:g1:meleeAttacker:0", green = "W1N1:war:W2N2:g1:healer:0";
+    Memory.data!.war = { W2N2: { targetRoom: "W2N2", sourceRoom: room.name, status: "clearing", reason: "manual", attempts: 1,
+      createdAt: Game.time, updatedAt: Game.time, members: { [red]: { configName: red, creepNames: ["red"], spawnedAt: Game.time - 1 } },
+      activeGeneration: { id: 1, phase: "assembling", createdAt: Game.time - 1, boostTaskId: "boost",
+        configNames: { meleeAttacker: red, healer: green } } } };
+    Memory.data!.creepConfigs![green] = { role: "healer", roomName: room.name, args: ["W2N2"], body: [HEAL, MOVE] };
+    Game.flags = { RESERVE: { name: "RESERVE", pos: { roomName: room.name } } as Flag };
+    const spawn = createSpawn("Spawn1", room, [green]);
+    Game.rooms = { W1N1: room }; Game.spawns = { Spawn1: spawn };
+    Object.setPrototypeOf(spawn, prototype); prototype.work.call(spawn);
+    expect(spawn.spawnCreep).toHaveBeenCalledWith([HEAL, MOVE], expect.any(String), expect.objectContaining({ memory: expect.objectContaining({ configName: green }) }));
+  });
+  it("RESERVE 下已受理 deposit 保留孵化资格，仍须当 tick fresh 路径门通过", () => {
+    const room = { name: "W1N1", energyAvailable: 3000, energyCapacityAvailable: 3000 } as Room;
+    const name = "W1N1:deposit:d:g0";
+    const task = { id: "d", sourceRoom: room.name, status: "spawning", generation: 0, configName: name, spawnReadyAt: Game.time } as DepositHarvestTask;
+    Memory.data!.depositHarvest = { d: task };
+    Memory.data!.creepConfigs![name] = { role: "depositHarvester", roomName: room.name, args: ["d", room.name], taskId: "d", spawnOnce: {}, body: [...DEPOSIT_BODY] };
+    Game.flags = { RESERVE: { name: "RESERVE", pos: { roomName: room.name } } as Flag };
+    const spawn = createSpawn("Spawn1", room, [name]);
+    Game.rooms = { W1N1: room }; Game.spawns = { Spawn1: spawn };
+    Object.setPrototypeOf(spawn, prototype); prototype.work.call(spawn);
+    expect(spawn.spawnCreep).toHaveBeenCalledTimes(1);
+    (spawn.spawnCreep as jest.Mock).mockClear();
+    Game.time++; spawn.memory.spawnList = [name]; prototype.work.call(spawn);
+    expect(spawn.spawnCreep).not.toHaveBeenCalled();
+  });
   it("战争孵化接受后同 tick 停止任务，尚未进入 Game.creeps 的 Memory 也会解绑", () => {
     const room = { name: "E1N57", controller: { my: true, level: 8 }, energyAvailable: 300, energyCapacityAvailable: 300 } as unknown as Room;
     const name = "E1N57:war:E3N57:meleeAttacker:0";

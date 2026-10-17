@@ -52,3 +52,20 @@
 #### Scenario: profiler 关闭且故障过期
 - **WHEN** 故障停止超过 1000 tick，profiler 仍关闭
 - **THEN** 防御入口按正常运行清除过期摘要，不依赖采样 flush
+
+
+### Requirement: RESERVE 不丢弃已承诺任务的合法补员
+
+系统 SHALL 在 RESERVE 下继续已投入 war 的当前代搭档与已受理 deposit 的单代孵化，MUST 保留新出征、防御模式、终态与所有权校验；war 生产者与通用出生队列 SHALL 使用一致规则。
+
+#### Scenario: attacker 已出生，healer 等待孵化
+- **WHEN** 源房进入 RESERVE，war 当前代已有出生证据，合法 healer 配置等待补齐
+- **THEN** war 排队和 Spawn 执行不因 RESERVE 丢弃配置，既有 oneShot/代际规则继续生效
+
+#### Scenario: 战争只有状态而没有投入
+- **WHEN** 新任务已进入 staging/clearing，但没有排队、强化 gate 或出生证据
+- **THEN** RESERVE 仍阻止开始生产；旧代、错来源/目标、终态与防御模式不得借用豁免
+
+#### Scenario: Deposit 已受理，尚未真正出生
+- **WHEN** 已受理 g0 任务的同源配置通过本 tick 的完整路径与经济性复核
+- **THEN** RESERVE 不清除队首，Spawn 仍须检查 fresh 证据、body、spawnOnce；死亡或终态不重新生产

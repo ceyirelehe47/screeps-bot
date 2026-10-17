@@ -1,4 +1,5 @@
 import { canSpawnDepositConfig, runDepositHarvest } from "@/runtime/depositHarvest";
+import { isSpawnConfigEconomicallyBlocked } from "@/runtime/outboundMissionPolicy";
 import { recordDepositDiscovery } from "@/runtime/depositDiscovery";
 import { measureDepositTravel, isDepositRoomSafe } from "@/runtime/depositPathDistance";
 import type { CreepConfig } from "@/types/system";
@@ -23,7 +24,7 @@ function deposit(): Deposit {
 }
 beforeEach(() => {
   jest.clearAllMocks(); Game.time = 100; Memory.cfg = {}; Memory.data = { creepConfigs: {} }; Memory.creeps = {};
-  Game.creeps = {};
+  Game.creeps = {}; Game.flags = {};
   const store = { getFreeCapacity: () => 1_000 };
   const source = { name: "E1N1", controller: { my: true }, energyAvailable: 3_000, energyCapacityAvailable: 3_000,
     storage: { id: "storage", pos: { x: 25, y: 25, roomName: "E1N1" }, store } } as unknown as Room;
@@ -94,4 +95,21 @@ it("新鲜 Deposit 视野可延长到期时间，不复活终态", () => {
   recordDepositDiscovery(deposit());
   expect(task.expiresAt).toBe(Game.time + 5_000);
   expect(task.status).toBe("failed");
+});
+
+
+it("RESERVE 保留已受理 deposit 的逐 tick 复核，但不准入新 deposit", () => {
+  runDepositHarvest();
+  const task = Memory.data!.depositHarvest!.d1;
+  const cfg = Memory.data!.creepConfigs![task.configName!];
+  Game.flags = { RESERVE: { name: "RESERVE", pos: { roomName: "E1N1" } } as Flag };
+  Game.time++; runDepositHarvest();
+  expect(task.status).toBe("spawning");
+  expect(canSpawnDepositConfig(task.configName!, cfg)).toBe(true);
+  expect(isSpawnConfigEconomicallyBlocked(task.configName!, cfg)).toBe(false);
+  task.status = "discovered"; task.sourceRoom = "";
+  delete Memory.data!.creepConfigs![task.configName!]; delete task.configName;
+  Game.time++; runDepositHarvest();
+  expect(task.status).toBe("discovered");
+  expect(Object.keys(Memory.data!.creepConfigs!)).toHaveLength(0);
 });

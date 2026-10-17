@@ -1,6 +1,6 @@
 import { selectLeastLoadedSpawn } from "@/runtime/spawnHelpers";
 export { getSpawnQueueLoad, selectLeastLoadedSpawn } from "@/runtime/spawnHelpers";
-import { canStartOutboundMission } from "@/runtime/outboundMissionPolicy";
+import { canContinueWarMission, canStartOutboundMission, isSpawnConfigEconomicallyBlocked } from "@/runtime/outboundMissionPolicy";
 import { cancelSpawning, invalidateWarSpawnQueues, queuedSpawns, spawningForConfig } from "./spawnIndex";
 import { getSquadPolicy } from "./squadPolicy/index";
 import { getTickContextService } from "@/runtime/runtimeServices";
@@ -94,9 +94,10 @@ export function isConfigSpawning(configName: string): boolean {
 }
 
 export function enqueueConfig(spawn: StructureSpawn, configName: string, toFront: boolean): void {
-  if (!canStartOutboundMission(spawn.room.name)) return;
-  const queue = spawn.memory.spawnList || [];
   const config = ensureConfigStore()[configName];
+  if (!canStartOutboundMission(spawn.room.name) && (!config || config.roomName !== spawn.room.name ||
+      isSpawnConfigEconomicallyBlocked(configName, config))) return;
+  const queue = spawn.memory.spawnList || [];
   if (toFront) {
     const next = [configName, ...queue.filter((name) => name !== configName)];
     if (!sameArray(queue, next)) { spawn.memory.spawnList = next; invalidateWarSpawnQueues(); }
@@ -537,7 +538,7 @@ export function prepareCombatSquad(task: WarTask): boolean {
 
   const generation = ensureActiveGeneration(task);
   if (generation.phase === "deployed") return true;
-  if (!canStartOutboundMission(task.sourceRoom)) return false;
+  if (!canStartOutboundMission(task.sourceRoom) && !canContinueWarMission(task)) return false;
   if (generation.boostGateOpenedAt !== undefined) {
     const remainingAmounts = getGenerationRemainingBoostAmounts(task, generation);
     const result = prepareBoosts(
