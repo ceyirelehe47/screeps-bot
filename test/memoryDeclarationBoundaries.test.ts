@@ -10,9 +10,11 @@ const MEMORY_BRANCHES = {
   cfg: {
     declaration: "src/types/memory/cfg.d.ts",
     interfaceName: "ScreepsMemoryConfig",
-    schemaFingerprint: "a866cfe37de387db185635412efe79e6fb11ad828a7cc701b5c09196435a852e",
-    imports: ["@/runtime/depositHarvest:DepositHarvestConfig", "@/types/system:RoomType"],
+    // 新增独立市场 dryRun 配置；原市场配置与许可结构保持不变。
+    schemaFingerprint: "e8ad238f00945eec1ac5c337b75517ee33783cbf4f238a7a023cc119c03ba9e4",
+    imports: ["@/runtime/depositHarvest:DepositHarvestConfig", "@/runtime/market/policy:CompactMarketConfig", "@/types/system:RoomType"],
     fields: [
+      "market",
       "colonizationSupport",
       "warRebuildWatch",
       "depositHarvest",
@@ -89,9 +91,10 @@ const MEMORY_BRANCHES = {
   data: {
     declaration: "src/types/memory/data.d.ts",
     interfaceName: "ScreepsMemoryData",
-    // 新增显式T3耗塔战术；现有NPC与搬运生命周期保持原字段。
-    schemaFingerprint: "6fdcf9cdb611e214203713930fe91702349187ad05619eaf1453b7b2fd84259a",
+    // 新增有界市场对照根；不迁移或修改旧市场根。
+    schemaFingerprint: "92fbab2b0c2ba2821878277259e599fefa0cf40b47ee357d12cf3afcffb382c4",
     imports: [
+      "@/runtime/market/state:CompactMarketState",
       "@/runtime/depositHarvest:DepositHarvestTask",
       "@/runtime/permitChainSegments:PermitChainStorageMemory",
       "@/runtime/marketActionArbiter:MarketAccountClaim",
@@ -108,6 +111,7 @@ const MEMORY_BRANCHES = {
       "@/types/system:CreepConfig",
     ],
     fields: [
+      "market",
       "permitChainSegments",
       "depositHarvest",
       "creepConfigs",
