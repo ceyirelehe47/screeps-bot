@@ -32,7 +32,8 @@ export interface ProductionSurplusObservation {
 /** 生产承诺、在途及市场暴露只认 Protection；增加配置储备时保守补足差额。 */
 export function productionSellableAmount(entry: MarketProtectionEntry, tick: number, reserve?: number): number {
   if (!isMarketProtectionEntryFresh(entry, tick)) return 0;
-  const extraReserve = Math.max(0, (reserve ?? entry.localReserve ?? 0) - (entry.localReserve ?? 0));
+  const existingReserve = Math.max(entry.localReserve ?? 0, entry.absoluteTarget ?? 0);
+  const extraReserve = Math.max(0, (reserve ?? existingReserve) - existingReserve);
   return Math.min(getMarketProtectionSellableAmount(entry, tick), Math.max(0,
     getMarketProtectionSellableAmount(entry, tick, { requireTerminalBacking: false }) - extraReserve));
 }
