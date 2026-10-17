@@ -82,7 +82,7 @@ function createRoom(options: {
       id: `${name}-storage`,
       structureType: STRUCTURE_STORAGE,
       store: {
-        getFreeCapacity: () => options.storageFree ?? 10000,
+        getFreeCapacity: () => options.storageFree ?? 300_000,
       },
     } as unknown as StructureStorage,
     find(type: FindConstant) {

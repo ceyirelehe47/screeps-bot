@@ -160,7 +160,7 @@ describe("bootstrapRooms", () => {
     expect(getCreepConfigService().get("W8N8:worker:1")).toBeUndefined();
   });
 
-  it("orphans a live mineral harvester and clears its replacement queue when native stock is over the buffer", () => {
+  it("orphans a live mineral harvester and clears its replacement queue when storage is under capacity pressure", () => {
     const room = createRoom({
       minerals: [createMineral("mineral-x", {
         hasExtractor: true,
@@ -169,7 +169,7 @@ describe("bootstrapRooms", () => {
       })],
     });
     room.storage = {
-      store: { getUsedCapacity: () => 2_942_223 },
+      store: { getUsedCapacity: () => 2_942_223, getFreeCapacity: () => 99_999 },
     } as unknown as StructureStorage;
     const configName = "W1N1:mineralHarvester:mineral-x";
     const spawn = createSpawn(room, [configName, "manual:keep"]);

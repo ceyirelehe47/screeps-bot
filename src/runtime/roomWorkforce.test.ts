@@ -295,7 +295,7 @@ describe("roomWorkforce", () => {
     ]);
   });
 
-  it("stops scheduling a replacement harvester while native X stock is over the buffer", () => {
+  it("stops scheduling a replacement harvester while storage is under capacity pressure", () => {
     const room = createRoom({
       minerals: [createMineral("mineral-x", {
         mineralType: RESOURCE_CATALYST,
@@ -304,7 +304,7 @@ describe("roomWorkforce", () => {
       })],
     });
     room.storage = {
-      store: { getUsedCapacity: () => 300_000 },
+      store: { getUsedCapacity: () => 300_000, getFreeCapacity: () => 99_999 },
     } as unknown as StructureStorage;
 
     expect(getInventoryConfigNames(room)).not.toContain("W1N1:mineralHarvester:mineral-x");

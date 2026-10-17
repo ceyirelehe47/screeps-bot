@@ -24,9 +24,18 @@ describe("外出 creep 与常驻 creep 的统一房内寻路", () => {
     const creep = createCreep("traveler", role as CreepMemory["role"], 10, 10, room);
     units.push(creep); Game.creeps[creep.name] = creep;
     const choose = jest.spyOn(creep.pos, "findClosestByPath").mockReturnValue(new MockRoomPosition(49, 10, room.name) as unknown as RoomPosition);
-    const search = jest.spyOn(creep.pos, "findPathTo").mockImplementation((_goal, options) => {
+    const search = jest.spyOn(creep.pos, "findPathTo").mockImplementation((goal, options) => {
       options?.costCallback?.(room.name, new PathFinder.CostMatrix());
-      return [{ x: 11, y: 10, dx: 1, dy: 0, direction: RIGHT }, { x: 12, y: 10, dx: 1, dy: 0, direction: RIGHT }];
+      // 本夹具只模拟无遮挡房间；成功结果必须完整抵达所请求的 range。
+      const target = "pos" in goal ? goal.pos : goal;
+      const path: PathStep[] = [];
+      let { x, y } = creep.pos;
+      while (Math.max(Math.abs(x - target.x), Math.abs(y - target.y)) > (options?.range ?? 1)) {
+        const dx = Math.sign(target.x - x), dy = Math.sign(target.y - y);
+        const direction = new MockRoomPosition(x, y, room.name).getDirectionTo(new MockRoomPosition(x + dx, y + dy, room.name));
+        x += dx; y += dy; path.push({ x, y, dx, dy, direction });
+      }
+      return path;
     });
     return { room, creep, choose, search, units };
   }

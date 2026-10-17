@@ -77,12 +77,12 @@ describe("mineralHarvesterRole", () => {
     expect(role.target(creep)).toBe(false);
   });
 
-  it("does not harvest or move toward X when protected room stock already exceeds the production buffer", () => {
+  it("does not harvest or move toward X when storage is under capacity pressure", () => {
     const mineral = createMineral("mineral-x", RESOURCE_CATALYST);
     (Game as Game & { getObjectById: Game["getObjectById"] }).getObjectById = jest.fn(() => mineral) as Game["getObjectById"];
     const creep = {
       room: {
-        storage: { store: { getUsedCapacity: () => 2_942_223 } },
+        storage: { store: { getUsedCapacity: () => 2_942_223, getFreeCapacity: () => 99_999 } },
         terminal: { store: { getUsedCapacity: () => 1_408 } },
       },
       pos: { isEqualTo: () => true },
