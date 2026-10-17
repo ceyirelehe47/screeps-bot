@@ -1398,6 +1398,17 @@ function appendPowerBankHarvestDemand(
       continue;
     }
     if (TERMINAL_POWER_BANK_STATUSES.has(task.status)) continue;
+    // Observer 的 discovered 目录尚未准入，也没有来源房间或原矿承诺。
+    // PB 准入先验证成品 Boost 的本地/在途/供给房库存，随后原子写入
+    // sourceRoom+tier 并进入 preparing_boosts；下次市场规划即保护该任务。
+    // 已分配的 Boost lab 仍由 collectBoost 独立保护。只放行规范的空来源
+    // 发现记录，半填状态和损坏任务继续阻止出售。
+    if (
+      task.status === "discovered" &&
+      typeof task.id === "string" && task.id.length > 0 &&
+      validRoomName(task.targetRoom) &&
+      task.sourceRoom === "" && task.tier === undefined
+    ) continue;
     if (
       typeof task.id !== "string" ||
       task.id.length === 0 ||
@@ -1405,9 +1416,7 @@ function appendPowerBankHarvestDemand(
       !Number.isSafeInteger(task.tier) ||
       (task.tier as number) <= 0
     ) {
-      // A discovered task is resolved by powerBankHarvest after market-sale
-      // in the main loop. Until its source/tier is known, block rather than
-      // expose a one-tick unprotected production window.
+      // 已准入任务必须具有完整来源和 tier，不能用发现目录规则绕过保护。
       complete = false;
       continue;
     }

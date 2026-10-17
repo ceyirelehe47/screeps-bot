@@ -185,6 +185,54 @@ beforeEach(() => {
 
 describe("collectLiveMarketSaleProtectionLedger", () => {
 
+  it("PB 未准入发现目录不阻塞原矿出售，已分配 Boost 仍完整保护", () => {
+    Game.rooms[ROOM] = createRoom(ROOM, { X: 30_000 }, { X: 1_000 });
+    mockFloors({ [ROOM]: {} });
+    Memory.data!.powerBankHarvest = {
+      discovery: { id: "discovery", status: "discovered", sourceRoom: "", targetRoom: "W0N1" } as PowerBankHarvestTask,
+    };
+    Memory.runtime!.powerBankBoost = {
+      existing: { taskId: "existing", sourceRoomName: ROOM,
+        labs: { tough: { labId: "boost-lab", compound: RESOURCE_CATALYZED_GHODIUM_ALKALIDE } } },
+    };
+    const ledger = collectLiveMarketSaleProtectionLedger(config({ X: 0 }), undefined, {
+      candidates: [{ roomName: ROOM, resource: RESOURCE_CATALYST }],
+    });
+    const entry = ledger.entries[getMarketProtectionEntryKey(ROOM, RESOURCE_CATALYST)];
+    expect(entry.blocked).toBe(false);
+    expect(entry.boostWar).toBe(3_000);
+  });
+
+  it("PB 准入后的来源和 tier 立即进入原矿保护", () => {
+    Game.rooms[ROOM] = createRoom(ROOM, { X: 30_000 }, { X: 1_000 });
+    mockFloors({ [ROOM]: {} });
+    Memory.data!.powerBankHarvest = {
+      admitted: { id: "admitted", status: "preparing_boosts", sourceRoom: ROOM, targetRoom: "W0N1", tier: 8 } as PowerBankHarvestTask,
+    };
+    const ledger = collectLiveMarketSaleProtectionLedger(config({ X: 0 }), undefined, {
+      candidates: [{ roomName: ROOM, resource: RESOURCE_CATALYST }],
+    });
+    const entry = ledger.entries[getMarketProtectionEntryKey(ROOM, RESOURCE_CATALYST)];
+    expect(entry.blocked).toBe(false);
+    expect(entry.boostWar).toBe(6_000);
+  });
+
+  it.each([
+    { status: "preparing_boosts", sourceRoom: "", targetRoom: "W0N1" },
+    { status: "discovered", sourceRoom: ROOM, targetRoom: "W0N1" },
+    { status: "discovered", sourceRoom: "", targetRoom: "invalid" },
+    { status: "discovered", sourceRoom: "", targetRoom: "W0N1", tier: 8 },
+  ])("PB 半填或损坏任务仍阻止出售：%p", partial => {
+    Game.rooms[ROOM] = createRoom(ROOM, { X: 30_000 }, { X: 1_000 });
+    mockFloors({ [ROOM]: {} });
+    Memory.data!.powerBankHarvest = { invalid: { id: "invalid", ...partial } as PowerBankHarvestTask };
+    const ledger = collectLiveMarketSaleProtectionLedger(config({ X: 0 }), undefined, {
+      candidates: [{ roomName: ROOM, resource: RESOURCE_CATALYST }],
+    });
+    expect(ledger.entries[getMarketProtectionEntryKey(ROOM, RESOURCE_CATALYST)].issues)
+      .toContainEqual(expect.objectContaining({ code: "protection_stale", sourceKind: "boost" }));
+  });
+
   it("OH 专用五万与 T3 周转生产目标分别进入 committed 保护", () => {
     Game.rooms[ROOM] = createRoom(ROOM, { OH: 70000, XGHO2: 30000 }, {}, true);
     mockFloors({ [ROOM]: {} });

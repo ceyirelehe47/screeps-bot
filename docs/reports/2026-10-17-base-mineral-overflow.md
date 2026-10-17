@@ -32,3 +32,8 @@
 ## 新房间兼容修复（2026.10.17-7）
 
 实服迁移发现 E3N54 在旧 permit 签收后新增了 7 条 shadow lane：当前 scope 为 63 条，旧 active grant 仅 56 条。旧迁移只重签历史 grant，因覆盖数不一致被完整校验拒绝，许可与 WAL 未改动。修复后仅为缺失的 shadow+suspended lane 补齐 suspended grant；未签名却已晋级的 lane 仍拒绝迁移，不授予新房间交易权限。已有 continuous/review 与成交历史照旧保留。
+
+
+## PowerBank 发现目录与生产承诺（2026.10.17-8）
+
+实服的未准入 discovered 记录没有来源房间和 tier，旧保护适配器将它们一律记为 Boost 源不完整，导致已授权市场通道长期停卖。仅排除拥有合法任务 ID/目标房间、sourceRoom 为空串且 tier 未设置的规范发现记录。PowerBank 准入先检查成品 Boost 的本地、在途或供给房库存，再同步写入来源和 tier 并进入 preparing_boosts，因此发现目录不代表原矿生产承诺。已准入任务和已分配 Boost lab 仍独立完整保护；半填、未知来源、损坏任务继续阻止出售。
