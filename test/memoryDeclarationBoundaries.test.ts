@@ -93,8 +93,8 @@ const MEMORY_BRANCHES = {
   data: {
     declaration: "src/types/memory/data.d.ts",
     interfaceName: "ScreepsMemoryData",
-    // 登记殖民阻塞原因与跨 shard 新鲜度、有限重试和已发队伍状态。
-    schemaFingerprint: "21f74759eb15f08cfa482582a00e3adca0bfef78c1c7850bf0703d061744ad88",
+    // 登记殖民 blockedUntil/scoutStartedAt 与战争 reserveContinuationUntil；其他分支边界不变。
+    schemaFingerprint: "539fe2006e621a1a25a787ada2c01c27a9bfaab43d2292fcf3d5272c75300061",
     imports: [
       "@/runtime/market/state:CompactMarketState",
       "@/runtime/depositHarvest:DepositHarvestTask",
