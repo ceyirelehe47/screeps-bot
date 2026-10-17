@@ -130,7 +130,7 @@ function mockFloors(
 }
 
 function catalystConfig(): MarketSaleAutomationConfig {
-  const resolved = config({ X: 0 });
+  const resolved = config({ X: 1_000 });
   resolved.sellResources = [RESOURCE_CATALYST];
   return resolved;
 }
@@ -205,7 +205,7 @@ describe("collectLiveMarketSaleProtectionLedger", () => {
       candidates: [{ roomName: ROOM, resource: RESOURCE_CATALYST }],
     });
     const entry = ledger.entries[getMarketProtectionEntryKey(ROOM, RESOURCE_CATALYST)];
-    expect(entry.blocked).toBe(false);
+    expect(entry.issues).toEqual([]);
     expect(entry.boostWar).toBe(3_000);
   });
 
@@ -219,7 +219,7 @@ describe("collectLiveMarketSaleProtectionLedger", () => {
       candidates: [{ roomName: ROOM, resource: RESOURCE_CATALYST }],
     });
     const entry = ledger.entries[getMarketProtectionEntryKey(ROOM, RESOURCE_CATALYST)];
-    expect(entry.blocked).toBe(false);
+    expect(entry.issues).toEqual([]);
     expect(entry.boostWar).toBe(6_000);
   });
 
