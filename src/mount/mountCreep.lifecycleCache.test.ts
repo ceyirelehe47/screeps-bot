@@ -1,3 +1,4 @@
+import { cadenceOffset, tickPhase } from "@/runtime/cadence";
 /**
  * RoleLifecycle 缓存回归测试（任务书阶段 D1）：
  * 同 config 的 factory 只执行一次并跨 tick 复用；
@@ -114,7 +115,7 @@ describe("role lifecycle cache", () => {
     expect(totals.roleLifecycleCacheHits).toBe(0);
 
     // 边界 tick 再命中一次：buffer 连同累计值整体落盘。
-    Game.time = (Math.floor(Game.time / 32) + 1) * 32;
+    Game.time += 32 - tickPhase(Game.time - cadenceOffset("roleLifecycle.metrics", 32), 32);
     work(second);
     expect(getMovementAnalyticsForTest().totals.roleLifecycleCacheHits).toBe(2);
   });

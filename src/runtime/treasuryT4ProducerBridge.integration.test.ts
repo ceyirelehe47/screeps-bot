@@ -1,3 +1,5 @@
+import { cadenceOffset } from "@/runtime/cadence";
+const cadenceTick = (tick: number): number => tick + cadenceOffset("resourceControl.plan", 10);
 import { getTreasuryService } from "@/runtime/runtimeServices";
 import { runSynthesisControl } from "@/runtime/synthesisControl";
 import { enableTreasuryContinuousOH, enableTreasuryContinuousOHFromDemand, acceptTreasuryContinuousOHPilot,
@@ -18,11 +20,12 @@ describe("T4真实synthesis producer采购桥接", () => {
   beforeEach(() => {
     enabledWall = Date.now(); clock = jest.spyOn(Date, "now").mockReturnValue(enabledWall);
     context = initializeT4(undefined); context.treasury = getTreasuryService();
+    Game.time = cadenceTick(100);
   });
   afterEach(() => { endTreasuryProductionTick(); clock.mockRestore(); });
 
   function at(tick: number): void {
-    Game.time = tick; clock.mockReturnValue(enabledWall + (tick - 100) * 1000);
+    Game.time = cadenceTick(tick); clock.mockReturnValue(enabledWall + (tick - 100) * 1000);
   }
   function dispatch(tick: number, task = t4CanonicalTask(context)): void {
     at(tick); beginTreasuryProductionTick();
@@ -47,7 +50,7 @@ describe("T4真实synthesis producer采购桥接", () => {
     expect(state()).toMatchObject({ sessionStatus: "pilot_complete_awaiting_release", currentCycle: null });
     expect(context.treasury.kernelJournal().active).toHaveLength(0);
     at(250); expect(acceptTreasuryContinuousOHPilot().ok).toBe(true);
-    expect(state()).toMatchObject({ sessionStatus: "running", pilot: { releasedAtTick: 250 } });
+    expect(state()).toMatchObject({ sessionStatus: "running", pilot: { releasedAtTick: cadenceTick(250) } });
   }
   function equipSynthesisLabs(): StructureLab[] {
     const labs = [1, 2, 3].map((index) => ({
@@ -96,7 +99,7 @@ describe("T4真实synthesis producer采购桥接", () => {
     expect(Memory.data!.resourceControl!.tasks[task.id]).toBe(task);
     expect(Memory.data!.resourceControl!.taskSchemaVersion).toBe(2);
     expect(task).toMatchObject({ origin: "automatic", reason: `synthesis:${T4_TARGET}:UH2O`,
-      amount: 10, remainingAmount: 10, createdAt: 260, status: "pending" });
+      amount: 10, remainingAmount: 10, createdAt: cadenceTick(260), status: "pending" });
     expect(context.source.terminal!.send).toHaveBeenCalledTimes(3);
     expect(state().consumption.map((entry) => entry.amount)).toEqual([10, 10, 6]);
   });
@@ -112,7 +115,7 @@ describe("T4真实synthesis producer采购桥接", () => {
     expect((context.source.terminal!.store as T4MutableStore)[RESOURCE_HYDROXIDE]).toBe(0);
     producer(260);
     expect(naturalTask()).toMatchObject({ amount: 1, remainingAmount: 1, origin: "automatic",
-      reason: `synthesis:${T4_TARGET}:UH2O`, createdAt: 260 });
+      reason: `synthesis:${T4_TARGET}:UH2O`, createdAt: cadenceTick(260) });
     expect(context.source.terminal!.send).toHaveBeenCalledTimes(3);
     expect(state().consumption.map((entry) => entry.amount)).toEqual([10, 10, 6]);
   });
@@ -137,7 +140,7 @@ describe("T4真实synthesis producer采购桥接", () => {
     (context.source.terminal!.store as T4MutableStore)[RESOURCE_HYDROXIDE] = 10;
     producer(260);
     const task = naturalTask();
-    expect(task).toMatchObject({ amount: 10, remainingAmount: 10, createdAt: 260 });
+    expect(task).toMatchObject({ amount: 10, remainingAmount: 10, createdAt: cadenceTick(260) });
     // 真实kernel调用产生未决attempt；source仍有887 Storage，旧Terminal路径足以错误合并。
     (context.source.terminal!.send as jest.Mock).mockImplementation(() => { context.nativeTicks.push(Game.time); return NaN; });
     dispatch(300, task);
@@ -161,7 +164,7 @@ describe("T4真实synthesis producer采购桥接", () => {
       pilot: { taskId: null, taskCreatedAt: null, taskAmount: null } });
     rebootService(); producer(110);
     let task = naturalTask();
-    expect(task).toMatchObject({ amount: 26, remainingAmount: 26, createdAt: 110, origin: "automatic",
+    expect(task).toMatchObject({ amount: 26, remainingAmount: 26, createdAt: cadenceTick(110), origin: "automatic",
       reason: `synthesis:${T4_TARGET}:UH2O` });
     expect(state().pilot.taskId).toBeNull();
     dispatch(111, task);
@@ -199,7 +202,7 @@ describe("T4真实synthesis producer采购桥接", () => {
     setT4Missing(context, 10); producer(270);
     const future = naturalTask();
     expect(future.id).not.toBe(task.id);
-    expect(future).toMatchObject({ amount: 10, remainingAmount: 10, origin: "automatic", createdAt: 270 });
+    expect(future).toMatchObject({ amount: 10, remainingAmount: 10, origin: "automatic", createdAt: cadenceTick(270) });
     expect(state().pilot).toMatchObject(identity);
     expect(JSON.stringify(t4CanonicalTask(context))).toBe(old);
     expect(context.source.terminal!.send).toHaveBeenCalledTimes(3);

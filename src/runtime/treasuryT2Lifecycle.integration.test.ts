@@ -1,3 +1,5 @@
+import { cadenceOffset } from "@/runtime/cadence";
+const cadenceTick = (tick: number): number => tick + cadenceOffset("resourceControl.plan", 10);
 import { reserveProductionResourceForOwner } from "@/runtime/resourceReservation";
 import { treasuryT1SerializedBytes } from "@/runtime/treasuryT1FirstLiveControl";
 import * as runtimeServices from "@/runtime/runtimeServices";
@@ -112,7 +114,7 @@ describe("production Treasury T2 real facade task path", () => {
     resetTreasuryCoreLifecycleFactsForTest();
     clearMarketActionArbiterForTest();
     (global as typeof global & { __DEPLOY_BUNDLE_HASH__?: string }).__DEPLOY_BUNDLE_HASH__ = "test-bundle";
-    Game.time = 100;
+    Game.time = cadenceTick(100);
     Game.shard = { name: "shard1" } as Game["shard"];
     Game.cpu = { getUsed: () => 0, tickLimit: 500, bucket: 10_000 } as Game["cpu"];
     source = makeRoom(sourceName, 4000, 10000);
@@ -134,7 +136,7 @@ describe("production Treasury T2 real facade task path", () => {
     } as unknown as Memory["cfg"];
     Memory.data = { resourceControl: { tasks: { [task.id]: task } } } as unknown as Memory["data"];
     Memory.runtime = { lastDeployTag: BUILD_INFO.tag,
-      lastDeployBundleHash: BUILD_INFO.bundleHash, synthesisControl: { updatedAt: 100, generatedTaskCount: 0,
+      lastDeployBundleHash: BUILD_INFO.bundleHash, synthesisControl: { updatedAt: Game.time, generatedTaskCount: 0,
       failedTaskCount: 0, successfulRunCount: 0, lastActions: [], bindings: {}, rooms: { [targetName]: {
         stage: "acquiring", activeProduct: RESOURCE_UTRIUM_ACID, reagentA: RESOURCE_UTRIUM_HYDRIDE,
         reagentB: RESOURCE_HYDROXIDE, targetAmount: 5000, batchSize: 2500, reagentLabIds: [], productLabIds: [],
@@ -166,7 +168,7 @@ describe("production Treasury T2 real facade task path", () => {
       } as unknown as Memory["cfg"];
       expect(armTreasuryT2FirstLive(task.id, task.createdAt).ok).toBe(true);
       clock.mockReturnValue(now + 60_000);
-      Game.time = 120;
+      Game.time = cadenceTick(120);
       // No operator close, heartbeat or status query drives this transition.
       expect(beginTreasuryProductionTick()).toBe(false);
       expect(readTreasuryT2FirstLiveControl()).toMatchObject({
@@ -192,7 +194,7 @@ describe("production Treasury T2 real facade task path", () => {
     try {
       expect(armTreasuryT2FirstLive(task.id, task.createdAt).ok).toBe(true);
       let cutoff = now + 60_000;
-      if (boundary === "tick") Game.time = 699;
+      if (boundary === "tick") Game.time = cadenceTick(699);
       if (boundary === "wall") {
         for (let elapsed = 30_000; elapsed < 30 * 60_000; elapsed += 30_000) {
           clock.mockReturnValue(now + elapsed);
@@ -202,7 +204,7 @@ describe("production Treasury T2 real facade task path", () => {
       }
       clock.mockReturnValue(boundary === "tick" ? now + 1 : cutoff - 1);
       expect(treasuryT2FirstLiveAllows(task, 100)).toBe(true);
-      if (boundary === "tick") Game.time = 700;
+      if (boundary === "tick") Game.time = cadenceTick(700);
       else clock.mockReturnValue(cutoff);
       expect(treasuryT2FirstLiveAllows(task, 100)).toBe(false);
       delete Memory.data!.resourceControl!.tasks[task.id];
@@ -382,7 +384,7 @@ describe("production Treasury T2 real facade task path", () => {
     (source.terminal!.store as unknown as {UH: number; energy: number}).UH -= 100;
     (source.terminal!.store as unknown as {energy: number}).energy -= 10;
     (target.terminal!.store as unknown as {UH: number}).UH += 100;
-    const tx = { transactionId: "cancelled-confirmed", time: 100, sender: {username: "forster"},
+    const tx = { transactionId: "cancelled-confirmed", time: cadenceTick(100), sender: {username: "forster"},
       recipient: {username: "forster"}, from: sourceName, to: targetName, resourceType: RESOURCE_UTRIUM_HYDRIDE,
       amount: 100, description } as Transaction;
     Game.market.incomingTransactions = [tx];
@@ -452,7 +454,7 @@ describe("production Treasury T2 real facade task path", () => {
     (source.terminal!.store as unknown as {UH: number; energy: number}).UH -= 100;
     (source.terminal!.store as unknown as {energy: number}).energy -= 10;
     (target.terminal!.store as unknown as {UH: number}).UH += 100;
-    const tx = {transactionId: "closing-version", time: 100, sender: {username: "forster"},
+    const tx = {transactionId: "closing-version", time: cadenceTick(100), sender: {username: "forster"},
       recipient: {username: "forster"}, from: sourceName, to: targetName, resourceType: RESOURCE_UTRIUM_HYDRIDE,
       amount: 100, description} as Transaction;
     Game.market.incomingTransactions = [tx]; Game.market.outgoingTransactions = [tx];
@@ -516,7 +518,7 @@ describe("production Treasury T2 real facade task path", () => {
     const description = (source.terminal!.send as jest.Mock).mock.calls[0][3] as string;
     const transaction = {
       transactionId: "engine-generated-id",
-      time: 100,
+      time: cadenceTick(100),
       sender: { username: "forster" }, recipient: { username: "forster" },
       from: sourceName, to: targetName,
       resourceType: RESOURCE_UTRIUM_HYDRIDE, amount: 100, description,
@@ -527,7 +529,7 @@ describe("production Treasury T2 real facade task path", () => {
     (target.terminal!.store as unknown as { UH: number }).UH += 100;
     Game.market.incomingTransactions = [transaction as unknown as Transaction];
     Game.market.outgoingTransactions = [transaction as unknown as Transaction];
-    Game.time = 101;
+    Game.time = cadenceTick(101);
     expect(beginTreasuryProductionTick()).toBe(true);
     expect(Memory.data?.resourceControl?.tasks[task.id].remainingAmount).toBe(150);
     expect(treasury.kernelJournal().active[0]).toMatchObject({ phase: "closing", outcome: "committed" });
@@ -570,14 +572,14 @@ describe("production Treasury T2 real facade task path", () => {
     (source.terminal!.store as unknown as { UH: number; energy: number }).energy -= 10;
     (target.terminal!.store as unknown as { UH: number }).UH += 100;
     const transaction = {
-      transactionId: "engine-generated-100", time: 100,
+      transactionId: "engine-generated-100", time: cadenceTick(100),
       sender: { username: "forster" }, recipient: { username: "forster" },
       from: sourceName, to: targetName,
       resourceType: RESOURCE_UTRIUM_HYDRIDE, amount: 100, description,
     } as unknown as Transaction;
     Game.market.incomingTransactions = [transaction];
     Game.market.outgoingTransactions = [transaction];
-    Game.time = 101;
+    Game.time = cadenceTick(101);
     expect(beginTreasuryProductionTick()).toBe(true);
     expect(Memory.data!.resourceControl!.tasks[task.id]).toMatchObject({
       status: "done", remainingAmount: 0,
@@ -592,7 +594,7 @@ describe("production Treasury T2 real facade task path", () => {
       ),
     });
     serviceSpy.mockReturnValue(treasury);
-    Game.time = 102;
+    Game.time = cadenceTick(102);
     expect(beginTreasuryProductionTick()).toBe(true);
     expect(Memory.data!.resourceControl!.tasks[task.id].remainingAmount).toBe(0);
     expect(source.terminal!.send).toHaveBeenCalledTimes(1);
@@ -628,7 +630,7 @@ describe("production Treasury T2 real facade task path", () => {
 
     // Rebuild the facade from persisted Memory while no engine transaction or
     // physical arrival exists. The old heap's dispatch permit is not reused.
-    Game.time = 101;
+    Game.time = cadenceTick(101);
     treasury = createTreasuryService({
       getRooms: () => Object.values(Game.rooms),
       getTasks: () => treasuryTaskCommitmentView(
@@ -646,7 +648,7 @@ describe("production Treasury T2 real facade task path", () => {
     Memory.cfg = { treasuryTerminalTransferT2: { mode: "off" }, synthesisControl: { enabled: true,
       rooms: { [targetName]: { enabled: true, reactions: [{ product: RESOURCE_UTRIUM_ACID, targetAmount: 5000, batchSize: 2500 }] } } },
     } as unknown as Memory["cfg"];
-    Game.time = 102;
+    Game.time = cadenceTick(102);
     expect(beginTreasuryProductionTick()).toBe(true);
     expect(runTreasuryTerminalTransferTask(task, ledger, true, jest.fn()).handled).toBe(true);
     expect(source.terminal!.send).toHaveBeenCalledTimes(1);
@@ -736,7 +738,7 @@ describe("production Treasury T2 real facade task path", () => {
 
   it("keeps the 600 tick cutoff after reset even with a fresh wall-clock lease", () => {
     expect(armTreasuryT2FirstLive(task.id, task.createdAt).ok).toBe(true);
-    Game.time = 700;
+    Game.time = cadenceTick(700);
     expect(heartbeatTreasuryT2FirstLive()).toEqual({ ok: false, reason: "expired_or_consumed" });
     expect(beginTreasuryProductionTick()).toBe(false);
     expect(runTreasuryTerminalTransferTask(task, makeLedger(target, task), true, jest.fn()))

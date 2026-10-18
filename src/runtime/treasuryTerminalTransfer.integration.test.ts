@@ -1,3 +1,5 @@
+import { cadenceOffset } from "@/runtime/cadence";
+const cadenceTick = (tick: number): number => tick + cadenceOffset("resourceControl.plan", 10);
 import * as runtimeServices from "@/runtime/runtimeServices";
 import { BUILD_INFO } from "@/buildMeta";
 import { createTreasuryService, type TreasuryService } from "@/runtime/treasury/facade";
@@ -109,7 +111,7 @@ describe("production Treasury T1 real facade task path", () => {
     resetTreasuryCoreLifecycleFactsForTest();
     clearMarketActionArbiterForTest();
     (global as typeof global & { __DEPLOY_BUNDLE_HASH__?: string }).__DEPLOY_BUNDLE_HASH__ = "test-bundle";
-    Game.time = 100;
+    Game.time = cadenceTick(100);
     Game.shard = { name: "shard1" } as Game["shard"];
     Game.cpu = { getUsed: () => 0, tickLimit: 500, bucket: 10_000 } as Game["cpu"];
     source = makeRoom(sourceName, 1000, 10000);
@@ -159,7 +161,7 @@ describe("production Treasury T1 real facade task path", () => {
       } as unknown as Memory["cfg"];
       expect(armTreasuryT1FirstLive(task.id, task.createdAt).ok).toBe(true);
       clock.mockReturnValue(now + 60_000);
-      Game.time = 120;
+      Game.time = cadenceTick(120);
       // No operator close, heartbeat or status query drives this transition.
       expect(beginTreasuryProductionTick()).toBe(false);
       expect(readTreasuryT1FirstLiveControl()).toMatchObject({
@@ -185,7 +187,7 @@ describe("production Treasury T1 real facade task path", () => {
     try {
       expect(armTreasuryT1FirstLive(task.id, task.createdAt).ok).toBe(true);
       let cutoff = now + 60_000;
-      if (boundary === "tick") Game.time = 699;
+      if (boundary === "tick") Game.time = cadenceTick(699);
       if (boundary === "wall") {
         for (let elapsed = 30_000; elapsed < 30 * 60_000; elapsed += 30_000) {
           clock.mockReturnValue(now + elapsed);
@@ -195,7 +197,7 @@ describe("production Treasury T1 real facade task path", () => {
       }
       clock.mockReturnValue(boundary === "tick" ? now + 1 : cutoff - 1);
       expect(treasuryT1FirstLiveAllows(task, 100)).toBe(true);
-      if (boundary === "tick") Game.time = 700;
+      if (boundary === "tick") Game.time = cadenceTick(700);
       else clock.mockReturnValue(cutoff);
       expect(treasuryT1FirstLiveAllows(task, 100)).toBe(false);
       delete Memory.data!.resourceControl!.tasks[task.id];
@@ -375,7 +377,7 @@ describe("production Treasury T1 real facade task path", () => {
     (source.terminal!.store as unknown as {H: number; energy: number}).H -= 100;
     (source.terminal!.store as unknown as {energy: number}).energy -= 10;
     (target.terminal!.store as unknown as {H: number}).H += 100;
-    const tx = { transactionId: "cancelled-confirmed", time: 100, sender: {username: "forster"},
+    const tx = { transactionId: "cancelled-confirmed", time: cadenceTick(100), sender: {username: "forster"},
       recipient: {username: "forster"}, from: sourceName, to: targetName, resourceType: RESOURCE_HYDROGEN,
       amount: 100, description } as Transaction;
     Game.market.incomingTransactions = [tx];
@@ -445,7 +447,7 @@ describe("production Treasury T1 real facade task path", () => {
     (source.terminal!.store as unknown as {H: number; energy: number}).H -= 100;
     (source.terminal!.store as unknown as {energy: number}).energy -= 10;
     (target.terminal!.store as unknown as {H: number}).H += 100;
-    const tx = {transactionId: "closing-version", time: 100, sender: {username: "forster"},
+    const tx = {transactionId: "closing-version", time: cadenceTick(100), sender: {username: "forster"},
       recipient: {username: "forster"}, from: sourceName, to: targetName, resourceType: RESOURCE_HYDROGEN,
       amount: 100, description} as Transaction;
     Game.market.incomingTransactions = [tx]; Game.market.outgoingTransactions = [tx];
@@ -509,7 +511,7 @@ describe("production Treasury T1 real facade task path", () => {
     const description = (source.terminal!.send as jest.Mock).mock.calls[0][3] as string;
     const transaction = {
       transactionId: "engine-generated-id",
-      time: 100,
+      time: cadenceTick(100),
       sender: { username: "forster" }, recipient: { username: "forster" },
       from: sourceName, to: targetName,
       resourceType: RESOURCE_HYDROGEN, amount: 100, description,
@@ -520,7 +522,7 @@ describe("production Treasury T1 real facade task path", () => {
     (target.terminal!.store as unknown as { H: number }).H += 100;
     Game.market.incomingTransactions = [transaction as unknown as Transaction];
     Game.market.outgoingTransactions = [transaction as unknown as Transaction];
-    Game.time = 101;
+    Game.time = cadenceTick(101);
     expect(beginTreasuryProductionTick()).toBe(true);
     expect(Memory.data?.resourceControl?.tasks[task.id].remainingAmount).toBe(150);
     expect(treasury.kernelJournal().active[0]).toMatchObject({ phase: "closing", outcome: "committed" });
@@ -561,14 +563,14 @@ describe("production Treasury T1 real facade task path", () => {
     (source.terminal!.store as unknown as { H: number; energy: number }).energy -= 10;
     (target.terminal!.store as unknown as { H: number }).H += 100;
     const transaction = {
-      transactionId: "engine-generated-100", time: 100,
+      transactionId: "engine-generated-100", time: cadenceTick(100),
       sender: { username: "forster" }, recipient: { username: "forster" },
       from: sourceName, to: targetName,
       resourceType: RESOURCE_HYDROGEN, amount: 100, description,
     } as unknown as Transaction;
     Game.market.incomingTransactions = [transaction];
     Game.market.outgoingTransactions = [transaction];
-    Game.time = 101;
+    Game.time = cadenceTick(101);
     expect(beginTreasuryProductionTick()).toBe(true);
     expect(Memory.data!.resourceControl!.tasks[task.id]).toMatchObject({
       status: "done", remainingAmount: 0,
@@ -583,7 +585,7 @@ describe("production Treasury T1 real facade task path", () => {
       ),
     });
     serviceSpy.mockReturnValue(treasury);
-    Game.time = 102;
+    Game.time = cadenceTick(102);
     expect(beginTreasuryProductionTick()).toBe(true);
     expect(Memory.data!.resourceControl!.tasks[task.id].remainingAmount).toBe(0);
     expect(source.terminal!.send).toHaveBeenCalledTimes(1);
@@ -617,7 +619,7 @@ describe("production Treasury T1 real facade task path", () => {
 
     // Rebuild the facade from persisted Memory while no engine transaction or
     // physical arrival exists. The old heap's dispatch permit is not reused.
-    Game.time = 101;
+    Game.time = cadenceTick(101);
     treasury = createTreasuryService({
       getRooms: () => [source, target],
       getTasks: () => treasuryTaskCommitmentView(
@@ -633,7 +635,7 @@ describe("production Treasury T1 real facade task path", () => {
     endTreasuryProductionTick();
 
     Memory.cfg = { treasuryTerminalTransferSlice0: { mode: "off" } } as unknown as Memory["cfg"];
-    Game.time = 102;
+    Game.time = cadenceTick(102);
     expect(beginTreasuryProductionTick()).toBe(true);
     expect(runTreasuryTerminalTransferTask(task, ledger, true, jest.fn()).handled).toBe(true);
     expect(source.terminal!.send).toHaveBeenCalledTimes(1);
@@ -681,7 +683,7 @@ describe("production Treasury T1 real facade task path", () => {
   );
 
   it("blocks third-room ingress to both endpoints after T1 admission and permits unrelated rooms", () => {
-    Game.time = 120;
+    Game.time = cadenceTick(120);
     const third = makeRoom("E1N57", 1000, 10000);
     Game.rooms.E1N57 = third;
     expect(armTreasuryT1FirstLive(task.id, task.createdAt)).toEqual({ ok: true, reason: "armed" });
@@ -764,7 +766,7 @@ describe("production Treasury T1 real facade task path", () => {
 
   it("keeps the 600 tick cutoff after reset even with a fresh wall-clock lease", () => {
     expect(armTreasuryT1FirstLive(task.id, task.createdAt).ok).toBe(true);
-    Game.time = 700;
+    Game.time = cadenceTick(700);
     expect(heartbeatTreasuryT1FirstLive()).toEqual({ ok: false, reason: "expired_or_consumed" });
     expect(beginTreasuryProductionTick()).toBe(false);
     expect(runTreasuryTerminalTransferTask(task, makeLedger(target, task), true, jest.fn()))

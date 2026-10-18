@@ -1,3 +1,5 @@
+import { cadenceOffset } from "@/runtime/cadence";
+const cadenceTick = (tick: number): number => tick + cadenceOffset("resourceControl.plan", 10);
 import { clearCarrierTaskBoardForTest, getCarrierTasksByRoom } from "@/runtime/carrierTaskBoard";
 import { createAutomaticResourceTransferTask, type ResourceTransferTask } from "@/runtime/logistics/resourceTransferTasks";
 import { clearLocalCarrierDestinationCapacityForTest, claimLocalCarrierDestinationCapacity } from "@/runtime/localCarrierDestinationCapacity";
@@ -110,7 +112,7 @@ describe("自动合成补料的实需与物理 staging", () => {
     Memory.data = undefined;
     Game.rooms = {};
     Game.creeps = {};
-    Game.time = 10;
+    Game.time = cadenceTick(10);
     (Game as unknown as { cpu: { getUsed(): number } }).cpu = { getUsed: jest.fn(() => 0) };
     Game.market = { calcTransactionCost: jest.fn(() => 2), getAllOrders: jest.fn(() => []), deal: jest.fn(() => OK) } as unknown as Market;
     source = createMutableRoom("E4N58", { energy: 1_315_864, OH: 913, Z: 6_530_607 }, { energy: 178_975, Z: 80_006 }, 8_000_000);
@@ -125,7 +127,7 @@ describe("自动合成补料的实需与物理 staging", () => {
         sampleInterval: 10, taskMaxPerRun: 5, market: { enabled: false },
         capacityBalancing: { enabled: false, terminalReliefTargetFreeCapacity: 60_000, receiverTerminalMinFreeCapacity: 40_000 },
       },
-      synthesisControl: { enabled: true, rooms: { E1N57: { enabled: true, reactions: [{ product: RESOURCE_UTRIUM_ACID, targetAmount: 2_385, batchSize: 1_000 }] } } },
+      synthesisControl: { enabled: true, sampleInterval: 10, rooms: { E1N57: { enabled: true, reactions: [{ product: RESOURCE_UTRIUM_ACID, targetAmount: 2_385, batchSize: 1_000 }] } } },
     } as unknown as Memory["cfg"];
     Memory.runtime = {
       resourceControl: { updatedAt: 0, rooms: { E4N58: { capacityState: "pressure" } }, lastActions: [], lastMarketActions: [] },
@@ -158,7 +160,7 @@ describe("自动合成补料的实需与物理 staging", () => {
     runResourceControl();
     expect(source.terminal!.send).toHaveBeenCalledWith(RESOURCE_HYDROXIDE, 26, target.name, expect.anything());
     expect(task).toMatchObject({ amount: 913, remainingAmount: 887, status: "pending" });
-    Game.time = 20;
+    Game.time = cadenceTick(20);
     resetRuntimeServices();
     runResourceControl();
     expect(task).toMatchObject({ amount: 913, remainingAmount: 887, status: "cancelled", lastError: "automatic_synthesis_need_covered" });
