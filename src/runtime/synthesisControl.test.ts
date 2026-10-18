@@ -39,6 +39,7 @@ import {
   getTerminalActionClaims,
 } from "@/runtime/marketActionArbiter";
 import { runResourceControl } from "@/runtime/resourceControl";
+import { resetRuntimeIsolationForTest } from "@/runtime/runtimeIsolation";
 
 type RuntimeGlobal = typeof global & {
   __runtimeServices?: unknown;
@@ -918,4 +919,44 @@ it("防御专用 boost lab 不会被常规合成抢占", () => {
   expect(Memory.runtime!.synthesisControl!.rooms.W1N1.lastError).toBe("lab_topology_unavailable");
   const { listCarrierTasksByRoom } = require("@/runtime/carrierTaskBoard");
   expect(listCarrierTasksByRoom(room.name)).toHaveLength(0);
+});
+
+it("真实合成入口在单房失败后撤回未执行 producer，保留已接受运输并继续健康房", () => {
+  resetRuntimeIsolationForTest();
+  runSynthesisResourceControlAuthorityTwin("shadow");
+  const before = peekLogisticsControlStore();
+  expect(before.ok).toBe(true);
+  if (!before.ok) throw new Error("missing initial logistics store");
+  expect(Object.values(before.store.producerSnapshots).some(s => s.producer === SYNTHESIS_ROOM_LOGISTICS_PRODUCER)).toBe(true);
+  const accepted = getResourceTransferTaskListSorted().map(task => ({ task, json: JSON.stringify(task) }));
+  expect(accepted.length).toBeGreaterThan(0);
+  const cursor = before.store.cursor;
+  const bad = Game.rooms.W1N1, oldFind = bad.find;
+  const good = createRoomWithResources({ name: "W3N1", mineralType: RESOURCE_CATALYST, storageEnergy: 300000 });
+  Game.rooms[good.name] = good;
+  Memory.cfg!.synthesisControl!.rooms![good.name] = {
+    enabled: true, reactions: [{ product: RESOURCE_UTRIUM_HYDRIDE, targetAmount: 5000 }],
+  };
+  bad.find = jest.fn(() => { throw new Error("synthesis lab input unavailable"); });
+  try {
+    Game.time = cadenceTick(530); resetRuntimeServices();
+    expect(() => runSynthesisControl()).not.toThrow();
+    const failed = peekLogisticsControlStore();
+    expect(failed.ok).toBe(true);
+    if (!failed.ok) throw new Error("producer invalidation damaged store");
+    expect(Object.values(failed.store.producerSnapshots).some(s => s.producer === SYNTHESIS_ROOM_LOGISTICS_PRODUCER)).toBe(false);
+    expect(Object.values(failed.store.latestIntents).some(i => i.producer === SYNTHESIS_ROOM_LOGISTICS_PRODUCER)).toBe(false);
+    expect(failed.store.cursor).toBe(cursor);
+    for (const { task, json } of accepted) expect(JSON.stringify(task)).toBe(json);
+    expect(Memory.runtime!.synthesisControl!.rooms[good.name].reagentLabIds).toHaveLength(2);
+
+    bad.find = oldFind;
+    Game.time = cadenceTick(550); resetRuntimeServices();
+    runSynthesisControl();
+    const recovered = peekLogisticsControlStore();
+    expect(recovered.ok).toBe(true);
+    if (!recovered.ok) throw new Error("missing recovered logistics store");
+    expect(Object.values(recovered.store.producerSnapshots).some(s =>
+      s.producer === SYNTHESIS_ROOM_LOGISTICS_PRODUCER && s.observedAt === Game.time)).toBe(true);
+  } finally { bad.find = oldFind; resetRuntimeIsolationForTest(); }
 });

@@ -6,6 +6,9 @@ import {
   POWER_SPAWN_HIGH_WATER_RATIO,
   runPowerSpawnControl,
 } from "@/runtime/powerSpawnControl";
+import * as powerDistribution from "@/runtime/powerDistribution";
+import { resetRuntimeServices } from "@mock/movement";
+import { resetRuntimeIsolationForTest } from "@/runtime/runtimeIsolation";
 
 type MutableStore = StoreDefinition & {
   set(resource: ResourceConstant, amount: number): void;
@@ -230,5 +233,37 @@ describe("powerSpawnControl", () => {
     runPowerSpawnControl();
 
     expect(listCarrierTasksByRoom(removed.room.name)).toHaveLength(0);
+  });
+
+  it("单房输入失败保留旧补给、继续健康房，暂停跨房分配并在恢复后重试", () => {
+    resetRuntimeServices(); resetRuntimeIsolationForTest();
+    const bad = createScenario({ roomName: "W1N1", power: 1, energy: 50 });
+    const good = createScenario({ roomName: "W2N2", power: 1, energy: 50 });
+    const distribution = jest.spyOn(powerDistribution, "runPowerDistribution").mockImplementation(() => undefined);
+    try {
+      runPowerSpawnControl();
+      const oldTasks = JSON.stringify(listCarrierTasksByRoom(bad.room.name));
+      expect(listCarrierTasksByRoom(bad.room.name)).toHaveLength(1);
+      expect(distribution).toHaveBeenCalledTimes(1);
+      distribution.mockClear();
+      const oldFind = bad.room.find;
+      bad.room.find = jest.fn(() => { throw new Error("power spawn input unavailable"); });
+      good.powerSpawnStore.set(RESOURCE_POWER, 100);
+      good.powerSpawnStore.set(RESOURCE_ENERGY, 5000);
+      Game.time++; resetRuntimeServices();
+
+      expect(() => runPowerSpawnControl()).not.toThrow();
+      expect(JSON.stringify(listCarrierTasksByRoom(bad.room.name))).toBe(oldTasks);
+      expect(bad.powerSpawn.processPower).toHaveBeenCalledTimes(1);
+      expect(good.powerSpawn.processPower).toHaveBeenCalledTimes(2);
+      expect(listCarrierTasksByRoom(good.room.name)).toHaveLength(0);
+      expect(distribution).not.toHaveBeenCalled();
+
+      bad.room.find = oldFind;
+      Game.time++; resetRuntimeServices();
+      runPowerSpawnControl();
+      expect(bad.powerSpawn.processPower).toHaveBeenCalledTimes(2);
+      expect(distribution).toHaveBeenCalledTimes(1);
+    } finally { distribution.mockRestore(); resetRuntimeIsolationForTest(); }
   });
 });

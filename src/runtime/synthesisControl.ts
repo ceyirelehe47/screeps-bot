@@ -451,37 +451,40 @@ function selectDonor(
   const candidates: DonorCandidate[] = [];
 
   for (const room of getTickContextService().getMyRooms()) {
-    if (room.name === targetRoom.name || !room.terminal || room.terminal.cooldown > 0) {
-      continue;
-    }
-    if (donorRoomNames.length > 0 && !donorRoomNames.includes(room.name)) {
-      continue;
-    }
+    const candidate = runIsolatedRoutineRoomOperation("synthesisDonor", room.name, () => {
+      if (room.name === targetRoom.name || !room.terminal || room.terminal.cooldown > 0) {
+        return undefined;
+      }
+      if (donorRoomNames.length > 0 && !donorRoomNames.includes(room.name)) {
+        return undefined;
+      }
 
-    const total = roomResourceAmount(room, resource);
-    const reserve = getResourceReserve(room.name, resource);
-    const outgoing = transferTasks.getOutgoingAmount(room.name, resource);
-    const holderId = `synthesis:${targetRoom.name}:${resource}`;
-    const reserved = getReservedProductionAmountExcludingHolder(room.name, resource, holderId);
-    const exportable = Math.max(0, total - reserve - outgoing - reserved);
-    if (exportable <= 0) {
-      continue;
-    }
+      const total = roomResourceAmount(room, resource);
+      const reserve = getResourceReserve(room.name, resource);
+      const outgoing = transferTasks.getOutgoingAmount(room.name, resource);
+      const holderId = `synthesis:${targetRoom.name}:${resource}`;
+      const reserved = getReservedProductionAmountExcludingHolder(room.name, resource, holderId);
+      const exportable = Math.max(0, total - reserve - outgoing - reserved);
+      if (exportable <= 0) {
+        return undefined;
+      }
 
-    const terminalAmount = room.terminal.store.getUsedCapacity(resource);
-    const continuous = inspectTreasuryContinuousOHProcurement(room.name, targetRoom.name, resource, product, amount);
-    const sendable = Math.min(exportable, continuous.ownsRoute ? continuous.amount : terminalAmount);
-    if (sendable <= 0) {
-      continue;
-    }
+      const terminalAmount = room.terminal.store.getUsedCapacity(resource);
+      const continuous = inspectTreasuryContinuousOHProcurement(room.name, targetRoom.name, resource, product, amount);
+      const sendable = Math.min(exportable, continuous.ownsRoute ? continuous.amount : terminalAmount);
+      if (sendable <= 0) {
+        return undefined;
+      }
 
-    const scoreAmount = Math.max(1, Math.min(amount, sendable));
-    const transferCost = Game.market.calcTransactionCost(scoreAmount, room.name, targetRoom.name);
-    const transferCostRatio = transferCost / scoreAmount;
-    const queuePenalty = transferTasks.getPendingOutgoingCount(room.name) * 0.6;
-    const stickyBonus = binding?.fromRoomName === room.name ? SYNTHESIS_BINDING_STICKY_BONUS : 0;
-    const score = sendable / scoreAmount - transferCostRatio * 6 - queuePenalty + stickyBonus;
-    candidates.push({ room, sendable, score });
+      const scoreAmount = Math.max(1, Math.min(amount, sendable));
+      const transferCost = Game.market.calcTransactionCost(scoreAmount, room.name, targetRoom.name);
+      const transferCostRatio = transferCost / scoreAmount;
+      const queuePenalty = transferTasks.getPendingOutgoingCount(room.name) * 0.6;
+      const stickyBonus = binding?.fromRoomName === room.name ? SYNTHESIS_BINDING_STICKY_BONUS : 0;
+      const score = sendable / scoreAmount - transferCostRatio * 6 - queuePenalty + stickyBonus;
+      return { room, sendable, score };
+    });
+    if (candidate) candidates.push(candidate);
   }
 
   if (candidates.length === 0) {
@@ -1919,9 +1922,10 @@ export function runSynthesisControl(): void {
     return;
   }
 
-  const shadowBatch: SynthesisLogisticsShadowBatch | undefined =
-    planningTick && shadowEnabled && resourceControlPlanningTick
-      ? measureLogisticsShadowCpu("producer", () => {
+  const needsShadowCapture = planningTick && shadowEnabled && resourceControlPlanningTick;
+  const capture = needsShadowCapture
+    ? runIsolatedRoutineRoomOperation("synthesisShadowCapture", "epoch", () => ({
+        batch: measureLogisticsShadowCpu("producer", () => {
           const captureResources = [...new Set(
             Object.values(cfg.rooms)
               .filter((room) => room.enabled)
@@ -1939,8 +1943,10 @@ export function runSynthesisControl(): void {
                 overflowCount: 0,
               }
             : undefined;
-        })
-      : undefined;
+        }),
+      }))
+    : undefined;
+  const shadowBatch: SynthesisLogisticsShadowBatch | undefined = capture?.batch;
   const roomEntries = new Map(Object.entries(cfg.rooms));
   const transferTasks = createSynthesisTransferTaskIndex(
     !!shadowBatch,
@@ -1951,7 +1957,8 @@ export function runSynthesisControl(): void {
   runtime.failedTaskCount = 0;
   runtime.successfulRunCount = 0;
 
-  let roomsComplete = true;
+  // 全局 shadow 输入未知时继续逐房业务，但旧 producer 不能继续代表完整规划。
+  let roomsComplete = !needsShadowCapture || !!shadowBatch;
   for (const [roomName, roomCfg] of roomEntries.entries()) {
     const result = runIsolatedRoutineRoomOperation("synthesisControl", roomName, () => handleRoom(
       roomName,
@@ -1974,12 +1981,12 @@ export function runSynthesisControl(): void {
   runtime.lastActions = limitActionLog(actions);
   if (!roomsComplete) invalidateLogisticsProducerSnapshot(SYNTHESIS_ROOM_LOGISTICS_PRODUCER);
   if (shadowBatch && roomsComplete) {
-    measureLogisticsShadowCpu("producer", () => {
+    const published = runIsolatedRoutineRoomOperation("synthesisShadowPublish", "epoch", () => measureLogisticsShadowCpu("producer", () => {
       const factBuild = shadowBatch.epochCapture.buildRoomFacts(
         [...new Set(shadowBatch.demands.map((demand) => demand.resource))].sort(),
       );
       if (factBuild.ok) {
-        replaceLatestLogisticsDemandsForProducer(
+        return replaceLatestLogisticsDemandsForProducer(
           SYNTHESIS_ROOM_LOGISTICS_PRODUCER,
           shadowBatch.demands,
           shadowBatch.observations,
@@ -2001,9 +2008,11 @@ export function runSynthesisControl(): void {
               ttl: Math.max(1, expiresAt - observedAt),
             })),
           },
-        );
+        ).ok;
       }
-    });
+      return false;
+    }));
+    if (!published) invalidateLogisticsProducerSnapshot(SYNTHESIS_ROOM_LOGISTICS_PRODUCER);
   }
 }
 
