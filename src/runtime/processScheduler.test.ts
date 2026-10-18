@@ -79,3 +79,19 @@ it("重建时延后规划两 tick，恢复后执行；累计摘要跨 heap 保�
   reset.runPhase("hubPlanner", planner); reset.finish();
   expect(Memory.runtime!.processScheduler!.deferred.hubPlanner).toBe(2);
 });
+
+it("引擎每 tick 更换 Game 对象时保持 heap 起点，T3/T4 只在真正重置后延迟两 tick", () => {
+  const originalGame = Game;
+  const planner = jest.fn(), observer = jest.fn();
+  try {
+    for (let tick = 100; tick < 105; tick++) {
+      Object.assign(global, { Game: { ...originalGame, time: tick } });
+      const runner = createProcessScheduler((_id, work) => work(), jest.fn());
+      runner.runPhase("hubPlanner", planner); runner.runPhase("externalTelemetryExport", observer); runner.finish();
+    }
+    expect(planner).toHaveBeenCalledTimes(3);
+    expect(observer).toHaveBeenCalledTimes(3);
+    expect(Memory.runtime!.processScheduler!.deferred.hubPlanner).toBe(2);
+    expect(Memory.runtime!.processScheduler!.lastDeferred).toEqual([]);
+  } finally { Object.assign(global, { Game: originalGame }); }
+});

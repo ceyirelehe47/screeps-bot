@@ -13,11 +13,11 @@ export interface ProcessSchedulerMemory {
 }
 let state: ProcessSchedulerMemory | undefined;
 let resetAt: number | undefined;
-let game: typeof Game | undefined;
 
 function ensureState(): ProcessSchedulerMemory {
-  if (!state || game !== Game || state.updatedAt > Game.time) {
-    game = Game; resetAt = Game.time;
+  // 引擎每 tick 重建 Game；对象身份变化不能证明 VM/heap 重置。
+  if (!state || state.updatedAt > Game.time) {
+    resetAt = Game.time;
     const stored = Memory.runtime?.processScheduler;
     const known = (source: Record<string, number> | undefined) => Object.fromEntries(
       Object.entries(source ?? {}).filter(([id, value]) => PROCESS_SPECS.has(id) && Number.isFinite(value) && value >= 0));
@@ -89,4 +89,4 @@ export function createProcessScheduler(measure: (phase: string, work: () => void
   };
 }
 
-export function resetProcessSchedulerForTest(): void { state = undefined; game = undefined; resetAt = undefined; }
+export function resetProcessSchedulerForTest(): void { state = undefined; resetAt = undefined; }
