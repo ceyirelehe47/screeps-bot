@@ -1,4 +1,4 @@
-import { runIsolatedRoomOperation } from "@/runtime/runtimeIsolation";
+import { runIsolatedRoutineRoomOperation } from "@/runtime/runtimeIsolation";
 
 export interface MemoryGcContext { ownedRooms: ReadonlySet<string> }
 export interface MemoryGcOwner { id: string; cleanup(context: MemoryGcContext): number }
@@ -14,7 +14,7 @@ export function registerMemoryGcOwner(owner: MemoryGcOwner): void {
 export function runRegisteredMemoryGc(context: MemoryGcContext): number {
   let removed = 0;
   for (const owner of owners.values()) {
-    removed += runIsolatedRoomOperation("memoryGc", owner.id, () => owner.cleanup(context)) ?? 0;
+    removed += runIsolatedRoutineRoomOperation("memoryGc", owner.id, () => owner.cleanup(context)) ?? 0;
   }
   return removed;
 }

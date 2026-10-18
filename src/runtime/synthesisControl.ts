@@ -1,4 +1,4 @@
-import { runIsolatedRoomOperation } from "@/runtime/runtimeIsolation";
+import { runIsolatedRoutineRoomOperation } from "@/runtime/runtimeIsolation";
 import { isDue } from "@/runtime/cadence";
 import { countCarrierCargo } from "@/runtime/carrierCargo";
 import { getTerminalAmountOutsideMarketSaleExposure } from "@/runtime/marketSaleExposure";
@@ -1953,7 +1953,7 @@ export function runSynthesisControl(): void {
 
   let roomsComplete = true;
   for (const [roomName, roomCfg] of roomEntries.entries()) {
-    const result = runIsolatedRoomOperation("synthesisControl", roomName, () => handleRoom(
+    const result = runIsolatedRoutineRoomOperation("synthesisControl", roomName, () => handleRoom(
       roomName,
       roomCfg,
       planningTick,

@@ -84,3 +84,22 @@ describe("关键房间异常隔离", () => {
   });
 
 });
+
+
+it("backs off ordinary room failures with a bounded half-open probe while critical rooms retry every tick", () => {
+  const { runIsolatedRoutineRoomOperation, runIsolatedRoomOperation, resetRuntimeIsolationForTest } = require("./runtimeIsolation") as typeof import("./runtimeIsolation");
+  resetRuntimeIsolationForTest();
+  const broken = jest.fn(() => { throw new Error("fault"); });
+  for (Game.time = 100; Game.time < 103; Game.time++) runIsolatedRoutineRoomOperation("factory", "W1N1", broken);
+  expect(broken).toHaveBeenCalledTimes(3);
+  runIsolatedRoutineRoomOperation("factory", "W1N1", broken);
+  expect(broken).toHaveBeenCalledTimes(3);
+  runIsolatedRoomOperation("defense", "W1N1", broken);
+  expect(broken).toHaveBeenCalledTimes(4);
+  Game.time = 104;
+  const restored = jest.fn(() => 1);
+  expect(runIsolatedRoutineRoomOperation("factory", "W1N1", restored)).toBe(1);
+  Game.time++;
+  expect(runIsolatedRoutineRoomOperation("factory", "W1N1", restored)).toBe(1);
+  expect(restored).toHaveBeenCalledTimes(2);
+});

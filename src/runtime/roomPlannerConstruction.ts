@@ -1,4 +1,4 @@
-import { runIsolatedRoomOperation } from "@/runtime/runtimeIsolation";
+import { runIsolatedRoutineRoomOperation } from "@/runtime/runtimeIsolation";
 export { getSourceContainerPositionsForRoom } from "@/runtime/sourceWorkPosition";
 import { searchRoomPath } from "@/movement/roomPath";
 import { getPlannedSourceContainerPos } from "@/runtime/sourceWorkPosition";
@@ -725,7 +725,7 @@ export function runRoomPlannerConstruction(): void {
   let roomsProcessed = 0;
 
   for (const room of rooms) {
-    const isolationResult = runIsolatedRoomOperation("runRoomPlannerConstruction", room.name, () => {
+    const isolationResult = runIsolatedRoutineRoomOperation("runRoomPlannerConstruction", room.name, () => {
     if (globalRemaining <= 0) {
       { return 2 as const; }
     }

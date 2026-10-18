@@ -15,6 +15,7 @@ export interface RoomFault {
   kind?: string;
   streak?: number;
   lastNotifiedAt?: number;
+  retryAt?: number;
 }
 export interface DefenseFaultSummary { updatedAt: number; faults: RoomFault[]; lastNotifiedAt?: number }
 const faults = new Map<string, RoomFault>();
@@ -98,7 +99,7 @@ function recordFault(scope: string, error: unknown): void {
 
 function recordSuccess(scope: string): void {
   const fault = faults.get(scope);
-  if (fault?.streak) { fault.streak = 0; persistFaults(); }
+  if (fault?.streak || fault?.retryAt) { fault.streak = 0; delete fault.retryAt; persistFaults(); }
 }
 
 /** 规划与动作均可包在单塔边界；失败仅跳过该塔当次操作，下 tick 继续尝试。 */
@@ -109,10 +110,27 @@ export function runIsolatedTowerOperation<T>(roomName: string, towerId: string, 
 }
 
 /** 可捕获的单房异常不得中断后续房间。关键防御每 tick 重试，不做熔断。 */
-export function runIsolatedRoomOperation<T>(phase: string, roomName: string, work: () => T): T | undefined {
+export function runIsolatedRoomOperation<T>(phase: string, roomName: string, work: () => T,
+  options: { circuit?: boolean } = {}): T | undefined {
   prepareFaultStore();
-  try { const result = work(); recordSuccess(`${phase}:${roomName}`.slice(0, 200)); return result; }
-  catch (error) { recordFault(`${phase}:${roomName}`.slice(0, 200), error); return undefined; }
+  const scope = `${phase}:${roomName}`.slice(0, 200);
+  const previous = faults.get(scope);
+  if (options.circuit && previous?.retryAt && previous.retryAt > Game.time && previous.retryAt <= Game.time + 100) return undefined;
+  try { const result = work(); recordSuccess(scope); return result; }
+  catch (error) {
+    recordFault(scope, error);
+    const fault = faults.get(scope);
+    if (options.circuit && fault && (fault.streak ?? 0) >= 3) {
+      fault.retryAt = Game.time + Math.min(100, 2 ** Math.min(7, (fault.streak ?? 3) - 2));
+      persistFaults();
+    }
+    return undefined;
+  }
+}
+
+/** T2–T4 房间连续失败时有界退避；成功探测立即恢复，T0/T1 入口不读取熔断许可。 */
+export function runIsolatedRoutineRoomOperation<T>(phase: string, roomName: string, work: () => T): T | undefined {
+  return runIsolatedRoomOperation(phase, roomName, work, { circuit: true });
 }
 
 export function forEachIsolatedRoom(phase: string, rooms: readonly Room[], work: (room: Room) => void): void {

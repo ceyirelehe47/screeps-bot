@@ -1125,7 +1125,7 @@ it("invalidates producer completeness without deleting accepted legacy cargo or 
   Game.time = 9000;
   const producer = "synthesisControl:room";
   const result = replaceLatestLogisticsDemandsForProducer(producer, [{
-    demandKey: "H:W2N2", destinationRoomName: "W2N2", resource: RESOURCE_HYDROGEN,
+    demandKey: "H:W2N2", targetRoomName: "W2N2", origin: "synthesis_room", resource: RESOURCE_HYDROGEN,
     desiredAmount: 100, priorityClass: "production", ttl: 100, active: true,
   }]);
   expect(result.ok).toBe(true);

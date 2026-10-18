@@ -1,4 +1,4 @@
-import { runIsolatedRoomOperation } from "@/runtime/runtimeIsolation";
+import { runIsolatedRoutineRoomOperation } from "@/runtime/runtimeIsolation";
 import { searchRoomPath } from "@/movement/roomPath";
 import { needsFactoryOperatePower } from "@/runtime/factoryControl";
 import { executeTreasuryFencedTerminalCargo } from "@/runtime/treasuryTerminalCargo";
@@ -131,7 +131,7 @@ function hasStrongerActivePowerEffect(
 function rebuildCapabilityCache(): void {
   const next: Record<string, PowerCreepRoomCapability> = {};
   for (const powerCreep of Object.values(Game.powerCreeps || {})) {
-    runIsolatedRoomOperation("rebuildCapabilityCache", powerCreep.name, () => {
+    runIsolatedRoutineRoomOperation("rebuildCapabilityCache", powerCreep.name, () => {
     const homeRoom = resolvePowerCreepHomeRoomName(powerCreep);
     const operateExtensionLevel = getPowerLevel(powerCreep, PWR_OPERATE_EXTENSION);
     const regenSourceLevel = getPowerLevel(powerCreep, PWR_REGEN_SOURCE);
@@ -719,7 +719,7 @@ function runPowerCreep(powerCreep: PowerCreep): void {
 export function runPowerCreepControl(): void {
   capabilityCacheTick = -1;
   for (const powerCreep of Object.values(Game.powerCreeps || {})) {
-    runIsolatedRoomOperation("runPowerCreepControl", powerCreep.name, () => {
+    runIsolatedRoutineRoomOperation("runPowerCreepControl", powerCreep.name, () => {
     runPowerCreep(powerCreep);
   
       return 0 as const;

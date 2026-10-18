@@ -1,4 +1,4 @@
-import { runIsolatedRoomOperation } from "@/runtime/runtimeIsolation";
+import { runIsolatedRoutineRoomOperation } from "@/runtime/runtimeIsolation";
 import { createTaskLifecycle } from "@/runtime/taskLifecycle";
 import { isDue } from "@/runtime/cadence";
 import { resolveMarketCreditReserve } from "@/runtime/marketActionArbiter";
@@ -1353,7 +1353,7 @@ export function runFactoryControl(): void {
   runtime.updatedAt = Game.time;
 
   for (const room of Object.values(Game.rooms)) {
-    runIsolatedRoomOperation("runFactoryControl", room.name, () => {
+    runIsolatedRoutineRoomOperation("runFactoryControl", room.name, () => {
     if (!isEligibleRoom(room)) return 0 as const;
 
     const roomName = room.name;

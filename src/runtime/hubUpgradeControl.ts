@@ -1,4 +1,4 @@
-import { runIsolatedRoomOperation } from "@/runtime/runtimeIsolation";
+import { runIsolatedRoutineRoomOperation } from "@/runtime/runtimeIsolation";
 import { replaceSpawnQueue } from "@/runtime/spawnRequests";
 import { getCreepConfigService, getTickContextService, getMemoryService } from "@/runtime/runtimeServices";
 
@@ -159,7 +159,7 @@ function ensureEligibleRoomUpgraderTasks(): { active: string[]; retained: string
 
   const failedRooms = new Set<string>();
   for (const room of Object.values(Game.rooms)) {
-    const completed = runIsolatedRoomOperation("hubUpgradeEligibility", room.name, () => {
+    const completed = runIsolatedRoutineRoomOperation("hubUpgradeEligibility", room.name, () => {
     const controller = room.controller;
     if (!controller?.my || !shouldMaintainDedicatedUpgrader(controller, !!tasks[room.name])) {
       return true;
@@ -273,7 +273,7 @@ export function runHubUpgradeControl(): void {
 
   const configs = getCreepConfigService().readStore();
   for (const roomName of activeRoomNames) {
-    runIsolatedRoomOperation("hubUpgradeControl", roomName, () => {
+    runIsolatedRoutineRoomOperation("hubUpgradeControl", roomName, () => {
     const configName = getConfigName(roomName);
     const boostTaskId = getBoostTaskId(roomName);
 

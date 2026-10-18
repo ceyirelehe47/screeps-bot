@@ -1,4 +1,4 @@
-import { runIsolatedRoomOperation } from "@/runtime/runtimeIsolation";
+import { runIsolatedRoutineRoomOperation } from "@/runtime/runtimeIsolation";
 import { isDue } from "@/runtime/cadence";
 import { countCarrierCargo } from "@/runtime/carrierCargo";
 import { limitActionLog } from "@/runtime/actionLog";
@@ -670,7 +670,7 @@ export function runNukerControl(): void {
 
   const failedRooms = new Set<string>();
   for (const room of getTickContextService().getMyRooms()) {
-    const completed = runIsolatedRoomOperation("nukerControl", room.name, () => {
+    const completed = runIsolatedRoutineRoomOperation("nukerControl", room.name, () => {
       const nuker = getOwnedNuker(room);
       if (!nuker) {
         replaceCarrierTasksForProducerRoom(NUKER_CARRIER_TASK_PRODUCER, room.name, []);

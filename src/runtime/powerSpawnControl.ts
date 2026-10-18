@@ -1,4 +1,4 @@
-import { runIsolatedRoomOperation } from "@/runtime/runtimeIsolation";
+import { runIsolatedRoutineRoomOperation } from "@/runtime/runtimeIsolation";
 import {
   listCarrierTasksByRoom,
   pruneCarrierTasksForProducer,
@@ -170,7 +170,7 @@ export function runPowerSpawnControl(): void {
   const rooms = Object.values(Game.rooms).sort((left, right) => left.name.localeCompare(right.name));
   let failed = false;
   for (const room of rooms) {
-    const completed = runIsolatedRoomOperation("powerSpawnControl", room.name, () => {
+    const completed = runIsolatedRoutineRoomOperation("powerSpawnControl", room.name, () => {
       if (!isPowerSpawnProcessingEnabledForRoom(room.name)) return true;
       const powerSpawn = getOwnedPowerSpawn(room);
       if (!powerSpawn) return true;
