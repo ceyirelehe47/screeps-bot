@@ -547,6 +547,43 @@ describe("powerBankHarvest", () => {
     expect(getPowerBankStageTimeout({ ...measuredTravel, combatTravelTicks: undefined })).toBe(300);
   });
 
+  it("近来源仅因预算未测量时先等待，不让已缓存的远来源抢先；补齐后选实测近来源", () => {
+    setupOwnedRoom(SOURCE_ROOM); setupOwnedRoom(SECONDARY_SOURCE_ROOM);
+    jest.spyOn(powerBankObserver, "hasPowerBankObserverCoverage").mockReturnValue(true);
+    const task = makeTask({ hits: 100_000, power: 1000, bankExpiresAt: Game.time + 5000 });
+    setupDiscoveredBank(task); addTask(task);
+    let ready = false;
+    jest.mocked(powerBankPathDistance.measurePowerBankTravel).mockImplementation(input => {
+      const primary = input.sourceSpawnPos.roomName === SOURCE_ROOM;
+      if (primary && !ready) return { status: "pending", reason: "budget", retryAt: Game.time + 1 };
+      const ticks = primary ? 40 : 120;
+      return { status: "ready", pathDistance: ticks, combatTravelTicks: ticks,
+        haulerOutboundTravelTicks: ticks, haulerReturnTravelTicks: ticks };
+    });
+    runPowerBankHarvest();
+    expect(task).toMatchObject({ status: "discovered", sourceRoom: "", blocker: "path_measurement_pending" });
+    ready = true; Game.time++;
+    runPowerBankHarvest();
+    expect(task).toMatchObject({ status: "preparing_boosts", sourceRoom: SOURCE_ROOM, combatTravelTicks: 40 });
+  });
+
+  it("均可完成时优先实测短行程，空闲但行程更远的来源不再凭时间余量抢单", () => {
+    setupOwnedRoom(SOURCE_ROOM); setupOwnedRoom(SECONDARY_SOURCE_ROOM);
+    for (const spawn of Object.values(Game.spawns).filter(spawn => spawn.room.name === SOURCE_ROOM)) {
+      Object.assign(spawn, { spawning: { remainingTime: 300 } });
+    }
+    jest.spyOn(powerBankObserver, "hasPowerBankObserverCoverage").mockReturnValue(true);
+    const task = makeTask({ hits: 100_000, power: 1000, bankExpiresAt: Game.time + 5000 });
+    setupDiscoveredBank(task); addTask(task);
+    jest.mocked(powerBankPathDistance.measurePowerBankTravel).mockImplementation(input => {
+      const ticks = input.sourceSpawnPos.roomName === SOURCE_ROOM ? 40 : 120;
+      return { status: "ready", pathDistance: ticks, combatTravelTicks: ticks,
+        haulerOutboundTravelTicks: ticks, haulerReturnTravelTicks: ticks };
+    });
+    runPowerBankHarvest();
+    expect(task).toMatchObject({ status: "preparing_boosts", sourceRoom: SOURCE_ROOM, combatTravelTicks: 40 });
+  });
+
   it("17 房走廊保留发现任务且在 100 tick 内不反复扫描资源与三个 Spawn", () => {
     const sourceName = "E0N44";
     const source = setupOwnedRoom(sourceName, { spawnCount: 3, energyCapacity: 12_900 });

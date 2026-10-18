@@ -1,4 +1,5 @@
 import { isDue } from "@/runtime/cadence";
+import { getPowerCreepOpsShipmentNeed } from "@/runtime/powerCreepOpsPolicy";
 import { utf8ByteLength } from "@/util/utf8";
 import { resolveMarketCreditReserve, getAvailableMarketCredits } from "@/runtime/marketActionArbiter";
 import { isDefenseMode } from "@/runtime/defenseMode";
@@ -131,7 +132,7 @@ import {
   isStorageConstrained,
   sortTransferTasksByPriority,
   inspectTaskSynthesisDemand,
-  isWarBoostShipment,
+  usesPhysicalTerminalHeadroom,
   syncTerminalFeedTasks,
 } from "@/runtime/resourceTerminalLogistics";
 import type {
@@ -2915,7 +2916,14 @@ function executeTransferTasks(
       syncResourceControlTransferTask(context, task);
     }
 
-    const usePhysicalTerminalHeadroom = isWarBoostShipment(task);
+    const opsNeed = getPowerCreepOpsShipmentNeed(task, getStock(receiver, task.resource));
+    if (opsNeed === 0) {
+      cancelResourceTransferTask(task.id);
+      patchResourceTransferTask(task, { lastError: "automatic_ops_need_covered" });
+      syncResourceControlTransferTask(context, task);
+      continue;
+    }
+    const usePhysicalTerminalHeadroom = usesPhysicalTerminalHeadroom(task, receiver);
     const taskAvailableCapacity = usePhysicalTerminalHeadroom
       ? context.receiverCapacityLedger.getTerminalAvailableAmount(
           receiver.roomName,
@@ -2966,6 +2974,8 @@ function executeTransferTasks(
       task.remainingAmount,
       donor.transferBatchSize,
       receiverCapacity,
+      opsNeed ?? Infinity,
+      opsNeed !== undefined ? getTotalMovableResourceAmount(donor, RESOURCE_OPS, capacityConfig, context, task.id) : Infinity,
       synthesisDemand.status === "bounded" ? synthesisDemand.amount : Number.POSITIVE_INFINITY,
       isHubBufferExport ? Math.max(0, getStock(donor, task.resource) - HUB_T3_SUPPLY_FLOOR -
         getProductionCommitmentAmount(donor.roomName, task.resource, context) -

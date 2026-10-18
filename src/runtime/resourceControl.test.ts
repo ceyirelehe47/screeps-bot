@@ -12,6 +12,7 @@ import {
 } from "@/runtime/dispatchOwnership/ref";
 import { reserveProductionResource } from "@/runtime/resourceReservation";
 import { createAutomaticResourceTransferTask } from "@/runtime/logistics/resourceTransferTasks";
+import { createMockStore } from "@mock/powerBank";
 import * as marketBaseResourceAutomationModule from "@/runtime/marketBaseResourceAutomation";
 import * as marketSaleProtectionAdapterModule from "@/runtime/marketSaleProtectionAdapter";
 import {
@@ -213,6 +214,69 @@ function getMarketEnergyReadinessObservation(
 }
 
 describe("runResourceControl terminal feed tasks", () => {
+  function installOpsConsumer(room: Room, ops = 54): void {
+    Game.shard = { name: "shard1", type: "normal", ptr: false };
+    Game.powerCreeps = { [room.name]: { name: room.name, room, pos: { roomName: room.name },
+      memory: { homeRoom: room.name }, ticksToLive: 1000, shard: "shard1", store: createMockStore({ ops }, 2600),
+      powers: { [PWR_OPERATE_STORAGE]: { level: 5, cooldown: 0 } },
+    } as unknown as PowerCreep };
+  }
+
+  it("OPS补给可为满仓E4N58搬入源房终端并实际发送，数量限于PC缺口", () => {
+    let source = createRoom({ name: "E5N59", storageResources: { energy: 300000, ops: 5000 }, terminalResources: { energy: 60000 } });
+    const target = createRoom({ name: "E4N58", storageResources: { X: 5000000 }, storageFreeCapacity: 0, terminalResources: { energy: 60000 } });
+    Game.rooms = { [source.name]: source, [target.name]: target }; installOpsConsumer(target);
+    createAutomaticResourceTransferTask(source.name, target.name, RESOURCE_OPS, 1946, "powerCreep:ops");
+    runResourceControl();
+    const feeds = Object.values(getCarrierTasksByRoom(source.name)).filter(task => task.type === "terminal_feed");
+    expect(feeds.flatMap(task => task.steps)).toEqual(expect.arrayContaining([expect.objectContaining({ resource: RESOURCE_OPS, amount: 1946 })]));
+    Game.time += 10; resetRuntimeServices(); clearMarketActionArbiterForTest();
+    source = createRoom({ name: source.name, storageResources: { energy: 300000, ops: 3054 }, terminalResources: { energy: 60000, ops: 1946 } });
+    Game.rooms[source.name] = source;
+    runResourceControl();
+    expect(source.terminal!.send).toHaveBeenCalledWith(RESOURCE_OPS, 1946, target.name, expect.any(String));
+  });
+
+  it("多个OPS补给同tick合计不超过PC储备目标，旧的大单在库存足够后取消", () => {
+    const source = createRoom({ name: "E5N59", storageResources: { energy: 300000 }, terminalResources: { energy: 60000, ops: 10000 } });
+    const second = createRoom({ name: "E6N59", storageResources: { energy: 300000 }, terminalResources: { energy: 60000, ops: 10000 } });
+    let target = createRoom({ name: "E4N58", storageFreeCapacity: 0, terminalResources: { energy: 60000 } });
+    Game.rooms = { [source.name]: source, [second.name]: second, [target.name]: target }; installOpsConsumer(target);
+    const task = createAutomaticResourceTransferTask(source.name, target.name, RESOURCE_OPS, 10000, "powerCreep:ops");
+    createAutomaticResourceTransferTask(second.name, target.name, RESOURCE_OPS, 10000, "powerCreep:ops");
+    runResourceControl();
+    const sent = [source, second].flatMap(room => jest.mocked(room.terminal!.send).mock.calls).filter(call => call[0] === RESOURCE_OPS);
+    expect(sent.reduce((sum, call) => sum + call[1], 0)).toBe(1946);
+    if (typeof task === "string") throw new Error(task);
+    Game.time += 10; resetRuntimeServices(); clearMarketActionArbiterForTest();
+    target = createRoom({ name: target.name, storageFreeCapacity: 0, terminalResources: { energy: 60000, ops: 1946 } });
+    Game.rooms[target.name] = target;
+    runResourceControl();
+    expect(task.task.status).toBe("cancelled");
+  });
+
+  it("没有现役PC时取消专用OPS补给，普通资源运输仍遵守满仓保护", () => {
+    const source = createRoom({ name: "E5N59", storageResources: { energy: 300000 }, terminalResources: { energy: 60000, ops: 10000 } });
+    const target = createRoom({ name: "E4N58", storageFreeCapacity: 0, terminalResources: { energy: 60000 } });
+    Game.rooms = { [source.name]: source, [target.name]: target }; Game.powerCreeps = {};
+    const task = createAutomaticResourceTransferTask(source.name, target.name, RESOURCE_OPS, 2000, "powerCreep:ops");
+    createAutomaticResourceTransferTask(source.name, target.name, RESOURCE_OPS, 2000, "ordinary");
+    runResourceControl();
+    expect(source.terminal!.send).not.toHaveBeenCalled();
+    if (typeof task === "string") throw new Error(task);
+    expect(task.task.status).toBe("cancelled");
+  });
+
+  it("OPS运输执行时重新保护供体本房储备，避免旧任务抽空后来减少的库存", () => {
+    const source = createRoom({ name: "E5N59", storageResources: { energy: 300000 }, terminalResources: { energy: 60000, ops: 2300 } });
+    const target = createRoom({ name: "E4N58", storageFreeCapacity: 0, terminalResources: { energy: 60000 } });
+    Game.rooms = { [source.name]: source, [target.name]: target }; installOpsConsumer(target);
+    const targetPc = Game.powerCreeps[target.name]; installOpsConsumer(source, 300); Game.powerCreeps[target.name] = targetPc;
+    createAutomaticResourceTransferTask(source.name, target.name, RESOURCE_OPS, 1946, "powerCreep:ops");
+    runResourceControl();
+    expect(source.terminal!.send).toHaveBeenCalledWith(RESOURCE_OPS, 300, target.name, expect.any(String));
+  });
+
   it("HUB T3 补库在途不阻断现货向缺口房发货，发货仍保留五千", () => {
     const resource = RESOURCE_CATALYZED_GHODIUM_ALKALIDE;
     const hub = createRoom({ name: "W1N1", storageResources: { energy: 200000, [resource]: 5000 }, terminalResources: { energy: 60000, [resource]: 15000 } });

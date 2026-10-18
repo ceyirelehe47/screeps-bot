@@ -1,4 +1,5 @@
 import { getMarketSaleTerminalExposure } from "@/runtime/marketSaleExposure";
+import { getPowerCreepOpsShipmentNeed } from "@/runtime/powerCreepOpsPolicy";
 import { DEFAULT_TERMINAL_ENERGY_RESERVE } from "@/runtime/roomEnergyPolicy";
 /** 从 resourceControl.ts 分离的独立职责模块；共享状态仅由此处持有。 */
 import { terminalFeedBoundTaskIdentity } from "@/runtime/terminalFeedTarget";
@@ -651,6 +652,11 @@ export function isWarBoostShipment(task: ResourceTransferTask): boolean {
   return (
     reason.startsWith("powerBankBoost:war:") || reason.startsWith("war boost ")
   );
+}
+
+/** 仅有现役 PC 且确有 OPS 缺口的专用补给可直达终端，不依赖 Storage 余量。 */
+export function usesPhysicalTerminalHeadroom(task: ResourceTransferTask, receiver: ResourceControlSnapshot): boolean {
+  return isWarBoostShipment(task) || (getPowerCreepOpsShipmentNeed(task, getStock(receiver, task.resource)) ?? 0) > 0;
 }
 
 export function inspectTaskSynthesisDemand(
@@ -1392,7 +1398,11 @@ function syncLegacyTerminalFeedTasks(
       continue;
     }
 
-    let pendingAmount = task.remainingAmount;
+    const receiverForOps = snapshotByRoom.get(task.toRoomName);
+    let pendingAmount = Math.min(task.remainingAmount, getPowerCreepOpsShipmentNeed(
+      task, receiverForOps ? getStock(receiverForOps, task.resource) : 0,
+    ) ?? Infinity);
+    if (pendingAmount <= 0) continue;
     if (task.reason?.startsWith("capacity:relief:")) {
       const source = snapshotByRoom.get(task.fromRoomName);
       const receiver = snapshotByRoom.get(task.toRoomName);
@@ -1615,6 +1625,7 @@ function assessTransferTaskStagingBatch(
     return { affordableAmount: 0, suppressedReason: "source_inventory" };
   }
   if (synthesisDemand.status === "bounded") maximumAmount = Math.min(maximumAmount, synthesisDemand.amount);
+  maximumAmount = Math.min(maximumAmount, getPowerCreepOpsShipmentNeed(task, getStock(receiver, task.resource)) ?? Infinity);
   if (maximumAmount <= 0) {
     return { affordableAmount: 0, suppressedReason: "source_depleted" };
   }
@@ -1631,7 +1642,7 @@ function assessTransferTaskStagingBatch(
   if (sourceSafeAmount <= 0) {
     return { affordableAmount: 0, suppressedReason: "source_inventory" };
   }
-  const usePhysicalTerminalHeadroom = isWarBoostShipment(task);
+  const usePhysicalTerminalHeadroom = usesPhysicalTerminalHeadroom(task, receiver);
   const receiverAllowance = usePhysicalTerminalHeadroom
     ? context.receiverCapacityLedger.getTerminalAvailableAmount(
         receiver.roomName,
@@ -1768,7 +1779,7 @@ function reserveTransferTaskStagingBatch(
     receiver.roomName,
     task.resource,
     assessment.affordableAmount,
-    isWarBoostShipment(task)
+    usesPhysicalTerminalHeadroom(task, receiver)
       ? { ownerTaskId: task.id, allowTerminalSafetyReserve: true }
       : { ownerTaskId: task.id },
   );
@@ -1781,7 +1792,7 @@ function reserveTransferTaskStagingBatch(
     receiver.roomName,
     task.resource,
     amount,
-    isWarBoostShipment(task)
+    usesPhysicalTerminalHeadroom(task, receiver)
       ? { ownerTaskId: task.id, allowTerminalSafetyReserve: true }
       : { ownerTaskId: task.id },
   );

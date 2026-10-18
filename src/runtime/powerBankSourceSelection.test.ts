@@ -31,6 +31,7 @@ interface Scenario {
   runUntilSelected(maximumTicks?: number): void;
   dropCompounds(): void;
   setThreat(): void;
+  setRoute(source: string, rooms: string[]): void;
 }
 
 const TARGET = "E0N57";
@@ -202,6 +203,7 @@ function scenario(
       }
     },
     setThreat: () => { threatened = true; },
+    setRoute: (source, rooms) => { routes[source] = rooms; },
   };
 }
 
@@ -211,6 +213,25 @@ function completeCombatOrigins(world: Scenario, room: string): number[] {
 }
 
 describe("PB 来源准入使用真实有界 PF 缓存", () => {
+  it("按实际安全路线限制高速入口：E1N57绕行五跳才上高速时由近来源生产", () => {
+    const world = scenario(() => false);
+    world.setRoute(SHORT_SOURCE, [SHORT_SOURCE, "E2N57", "E2N58", "E3N58", "E3N59", "E3N60", TARGET]);
+    world.runUntilSelected();
+    expect(world.task).toMatchObject({ status: "preparing_boosts", sourceRoom: NEAR_SOURCE });
+    expect(world.calls.some(call => call.origin.roomName === SHORT_SOURCE)).toBe(false);
+  });
+
+  it("只有远离高速的来源时不派新队，也不消耗原生测路预算", () => {
+    const world = scenario(() => false);
+    for (const source of [SHORT_SOURCE, NEAR_SOURCE, FAR_SOURCE]) {
+      world.setRoute(source, [source, "E2N57", "E2N58", "E3N58", "E3N59", "E3N60", TARGET]);
+    }
+    world.runTick();
+    expect(world.task).toMatchObject({ status: "failed", sourceRoom: "" });
+    expect(world.task.failReason).toContain("highway_approach_too_long");
+    expect(world.calls).toHaveLength(0);
+  });
+
   it("原生路径即使能穿过中转有主房，也不授予来源生产许可", () => {
     const world = scenario((origin, goal) => origin.roomName !== NEAR_SOURCE && goal.roomName === TARGET);
     Game.rooms.W0N57 = { name: "W0N57", controller: { my: false, owner: { username: "enemy" } }, find: jest.fn(() => []) } as unknown as Room;

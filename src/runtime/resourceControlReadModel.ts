@@ -1,4 +1,5 @@
 import { isDue } from "@/runtime/cadence";
+import { collectPowerCreepOpsRoomPolicies } from "@/runtime/powerCreepOpsPolicy";
 /** 从 resourceControl.ts 分离的独立职责模块；共享状态仅由此处持有。 */
 import { inspectSynthesisTransferNeed } from "@/runtime/synthesisReadModel";
 import { validateReservationStoreHealth } from "@/runtime/resourceReservation";
@@ -1262,6 +1263,9 @@ export function getProtectedResourceAmount(
   let safetyFloor = snapshot.mineralFloor[resource] || 0;
   const hub = Memory.cfg?.hub;
   const transfer = excludeTaskId ? context.taskById.get(excludeTaskId) : undefined;
+  if (resource === RESOURCE_OPS && transfer?.origin !== "manual") {
+    safetyFloor = Math.max(safetyFloor, collectPowerCreepOpsRoomPolicies().get(snapshot.roomName)?.target || 0);
+  }
   const isHubSupply = transfer?.reason?.startsWith("hub:export:") && !isHubOnlyReserveCompound(resource);
   if (hub?.enabled && hub.hubRoomName === snapshot.roomName && !isHubSupply) {
     if ((hub.targetCompounds ?? HUB_TARGET_COMPOUNDS).includes(resource)) safetyFloor = Math.max(safetyFloor,

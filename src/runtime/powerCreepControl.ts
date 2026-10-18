@@ -11,6 +11,7 @@ import type {
 import { ensureCreepMovementState } from "@/movement/creepState";
 import { issueMove, getMoveIntentDestination } from "@/movement/traffic";
 import { moveToTarget } from "@/movement/pathing";
+import { runOpsDistribution } from "@/runtime/opsDistribution";
 
 export const POWER_CREEP_RENEW_TTL = 200;
 export const POWER_CREEP_OPS_HIGH_WATER_RATIO = 0.9;
@@ -544,7 +545,7 @@ function finishSuccessfulTask(powerCreep: PowerCreep, task: PowerCreepTask): voi
     }
   }
   const movementState = ensureCreepMovementState(powerCreep);
-  delete movementState.movePathState;
+  if (task.type !== "generate_ops") delete movementState.movePathState;
   if (task.type === "operate_storage" || task.type === "regen_source") {
     delete movementState.workAnchor;
   }
@@ -570,7 +571,7 @@ function handleTaskResult(
   }
 }
 
-function executeTask(powerCreep: PowerCreep, task: PowerCreepTask): void {
+function executeTask(powerCreep: PowerCreep, task: PowerCreepTask): ScreepsReturnCode | undefined {
   const target = getTaskTarget(task);
   if (target && powerCreep.pos.getRangeTo(target.pos) <= getTaskRange(task)) {
     delete ensureCreepMovementState(powerCreep).movePathState;
@@ -624,6 +625,7 @@ function executeTask(powerCreep: PowerCreep, task: PowerCreepTask): void {
   }
 
   handleTaskResult(powerCreep, task, target, result);
+  return result;
 }
 
 function trySpawnPowerCreep(powerCreep: PowerCreep, room: Room): void {
@@ -711,8 +713,13 @@ function runPowerCreep(powerCreep: PowerCreep): void {
   if (!storageMaintenance && !prepositionTask && !task) {
     delete ensureCreepMovementState(powerCreep).movePathState;
   }
-  if (task) {
-    executeTask(powerCreep, task);
+  const result = task ? executeTask(powerCreep, task) : undefined;
+  // usePower 是同一原生 intent 槽位。保留已成功的技能；赶路或取放货时
+  // 则使用空闲槽位产 OPS，且不清掉主任务的路径与工作锚点。
+  const usedPower = task && POWER_TASKS[task.type] !== undefined && result === OK;
+  if (!usedPower && task?.type !== "generate_ops") {
+    const generateOps = ensureTaskQueue(powerCreep).find(candidate => candidate.type === "generate_ops");
+    if (generateOps && isTaskRunnable(powerCreep, generateOps)) executeTask(powerCreep, generateOps);
   }
 }
 
@@ -727,6 +734,7 @@ export function runPowerCreepControl(): void {
   }
   capabilityCacheTick = -1;
   ensureCapabilityCache();
+  runOpsDistribution();
 }
 
 export function resetPowerCreepControlCacheForTest(): void {

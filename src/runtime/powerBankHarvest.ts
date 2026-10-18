@@ -4,7 +4,7 @@ import { replaceSpawnQueue } from "@/runtime/spawnRequests";
 import { countBoostableParts, getBoostPartType } from "@/runtime/boostParts";
 import { canStartOutboundMission } from "@/runtime/outboundMissionPolicy";
 import { predictPowerBankRecovery, predictPowerBankFinishTicks, powerBankAttackSustainable } from "@/runtime/powerBankCapability";
-import { POWER_BANK_STATUS, POWER_BANK_BODY_TIERS, POWER_BANK_BOOST_REQUIREMENTS, POWER_BANK_MAX_ROUTE_ROOMS, getPowerBankConfigName, isPowerBankSearchRoom } from "@/runtime/powerBankConstants";
+import { POWER_BANK_STATUS, POWER_BANK_BODY_TIERS, POWER_BANK_BOOST_REQUIREMENTS, POWER_BANK_MAX_ROUTE_ROOMS, POWER_BANK_MAX_HIGHWAY_APPROACH, getPowerBankConfigName, isPowerBankSearchRoom } from "@/runtime/powerBankConstants";
 import { POWER_BANK_ROOM_TRAVEL_TICKS, POWER_BANK_COMBAT_TTL_MARGIN, derivePowerBankTierProfile, planPowerBankTimeline, selectBodyTier, assessViability, type PowerBankTierProfile } from "@/runtime/powerBankViability";
 import { findBestDonorRoom, prepareBoosts, releaseBoostLabs, type BoostPrepResult } from "@/runtime/powerBankBoost";
 import { getActivePowerBankBoostLabIds, getAssignedPowerBankBoostLabId, getPowerBankBoostPrep } from "@/runtime/powerBankBoostMemory";
@@ -594,6 +594,7 @@ function evaluateSourceCandidatesImpl(task: PowerBankHarvestTask): {
 } {
   const candidates: PowerBankSourceCandidate[] = [];
   const rejectionReasons: string[] = [];
+  const budgetPendingSources: Array<{ distance: number; minimumCombatTravelTicks: number }> = [];
   let pendingRetryAt: number | undefined;
   // 同步评估内没有危险记录 writer；各来源/Spawn 共用一次读取。惰性创建，
   // 无合格来源时不扫描 intel；下一次入口即使同 tick 也重新读取可变 Memory。
@@ -646,6 +647,11 @@ function evaluateSourceCandidatesImpl(task: PowerBankHarvestTask): {
         pendingRetryAt = Math.min(pendingRetryAt ?? Infinity, rememberUnsupportedRoute(unsupportedKey));
         continue;
       }
+      if (isPowerBankSearchRoom(task.targetRoom) &&
+          routeRooms.findIndex(isPowerBankSearchRoom) > POWER_BANK_MAX_HIGHWAY_APPROACH) {
+        rejectionReasons.push(`${room.name}:highway_approach_too_long`);
+        continue;
+      }
       sourceRoutes.push({ room, routeRooms, avoidRooms: danger.avoidRooms });
     }
     sourceRoutes.sort((left, right) => left.routeRooms.length - right.routeRooms.length ||
@@ -655,6 +661,7 @@ function evaluateSourceCandidatesImpl(task: PowerBankHarvestTask): {
   for (const { room, routeRooms, avoidRooms } of sourceRoutes) {
     if (!canMeasurePowerBankTravelThisTick() || !hasPlanningCpuHeadroom()) {
       pendingRetryAt = Math.min(pendingRetryAt ?? Infinity, Game.time + 1);
+      budgetPendingSources.push({ distance: routeRooms.length - 1, minimumCombatTravelTicks: 0 });
       break;
     }
     if (!room.controller || room.controller.level < 6) continue;
@@ -715,9 +722,11 @@ function evaluateSourceCandidatesImpl(task: PowerBankHarvestTask): {
       .filter(isSpawnActive);
     const measurements: Array<Extract<ReturnType<typeof measurePowerBankTravel>, { status: "ready" }>> = [];
     let sourcePending = false;
+    let sourceBudgetPending = false;
     for (const spawn of spawns) {
       if (!canMeasurePowerBankTravelThisTick() || !hasPlanningCpuHeadroom()) {
         sourcePending = true;
+        sourceBudgetPending = true;
         pendingRetryAt = Math.min(pendingRetryAt ?? Infinity, Game.time + 1);
         break;
       }
@@ -737,6 +746,7 @@ function evaluateSourceCandidatesImpl(task: PowerBankHarvestTask): {
       }));
       if (measurement.status === "pending") {
         sourcePending = true;
+        if (measurement.reason === "budget" || measurement.reason === "search_budget") sourceBudgetPending = true;
         pendingRetryAt = Math.min(pendingRetryAt ?? Infinity, measurement.retryAt);
         if (measurement.reason === "invalid_input") {
           rejectionReasons.push(`${room.name}:invalid_measurement_input`);
@@ -746,7 +756,11 @@ function evaluateSourceCandidatesImpl(task: PowerBankHarvestTask): {
         measurements.push(measurement);
       }
     }
-    if (sourcePending || measurements.length !== spawns.length) continue;
+    if (sourcePending || measurements.length !== spawns.length) {
+      if (sourceBudgetPending) budgetPendingSources.push({ distance: routeRooms.length - 1,
+        minimumCombatTravelTicks: Math.max(0, ...measurements.map(value => value.combatTravelTicks)) });
+      continue;
+    }
     // 任一 active Spawn 都可能承接配置；全部测完后取保守上界，不能只用
     // 最先命中预算的近 Spawn 掩盖另一个尚未证实的来源。
     const travel = {
@@ -811,12 +825,20 @@ function evaluateSourceCandidatesImpl(task: PowerBankHarvestTask): {
   }
 
   candidates.sort((left, right) =>
+    left.combatTravelTicks - right.combatTravelTicks ||
+    (left.haulerOutboundTravelTicks + left.haulerReturnTravelTicks) -
+      (right.haulerOutboundTravelTicks + right.haulerReturnTravelTicks) ||
     right.slack - left.slack ||
     right.receivingHeadroom - left.receivingHeadroom ||
     left.pathDistance - right.pathDistance ||
     left.distance - right.distance ||
     left.roomName.localeCompare(right.roomName),
   );
+  const best = candidates[0];
+  // 近来源仅因本 tick 配额不足而未测完时继续等待；实际 incomplete 的
+  // 负缓存仍允许其它可行来源，已测出更慢的来源也不阻止更快来源准入。
+  if (best && budgetPendingSources.some(source => source.distance <= best.distance &&
+      source.minimumCombatTravelTicks <= best.combatTravelTicks)) candidates.length = 0;
   return { candidates, rejectionReasons: [...new Set(rejectionReasons)], pendingRetryAt };
 }
 
@@ -1035,8 +1057,8 @@ function processDiscoveredImpl(task: PowerBankHarvestTask): void {
     return;
   }
 
-  // 只声明当前已证明候选中的最佳来源。其他来源尚未获得完整几何证据
-  // 不等于不可达，也不能无限否决此来源所有 Spawn 已完成的准入证明。
+  // 近来源的预算等待已在候选评估中处理；这里只提交完整几何与资源
+  // 均通过、且按实测行程排序后的来源。
 
   task.sourceRoom = selected.roomName;
   task.tier = selected.tier;

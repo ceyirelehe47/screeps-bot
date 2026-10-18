@@ -11,7 +11,7 @@ import {
   resetPowerCreepControlCacheForTest,
   runPowerCreepControl,
 } from "@/runtime/powerCreepControl";
-import { clearCreepMovementStateForTest } from "@/movement/creepState";
+import { clearCreepMovementStateForTest, ensureCreepMovementState } from "@/movement/creepState";
 
 type ResourceAmounts = Partial<Record<ResourceConstant, number>>;
 
@@ -276,7 +276,7 @@ describe("powerCreepControl", () => {
     expect(nanUnspawned.memory.lastControlTick).toBeUndefined();
   });
 
-  it("缺 OPS 时让 GENERATE_OPS 越过高优先任务，低寿命下一 tick 由 renew 抢占", () => {
+  it("缺 OPS 时产 OPS，低寿命下一 tick 续命并使用空闲技能槽产 OPS", () => {
     const storage = createStorage();
     const { room, powerSpawn } = createRoom({ storage });
     const powerCreep = createPowerCreep({
@@ -298,7 +298,39 @@ describe("powerCreepControl", () => {
     Game.time += 1;
     runPowerCreepControl();
     expect(powerCreep.renew).toHaveBeenCalledWith(powerSpawn);
-    expect(powerCreep.usePower).toHaveBeenCalledTimes(1);
+    expect(powerCreep.usePower).toHaveBeenCalledTimes(2);
+    expect(powerCreep.usePower).toHaveBeenLastCalledWith(PWR_GENERATE_OPS);
+  });
+
+  it("高优先级技能赶路时顺带产 OPS，保留路径与工作锚点，且不覆盖成功的技能", () => {
+    const storage = createStorage("E4N58", { energy: 100000 });
+    const { room, powerSpawn } = createRoom({ storage });
+    const pc = createPowerCreep({ room, ticksToLive: 1000, ops: 150, capacity: 300, rangeToTarget: 5,
+      powers: { [PWR_OPERATE_STORAGE]: { level: 5, cooldown: 0 }, [PWR_GENERATE_OPS]: { level: 5, cooldown: 0 } } });
+    installGameObjects([storage, powerSpawn]); installPowerCreeps(pc);
+    const path = { targetRoom: room.name } as NonNullable<ReturnType<typeof ensureCreepMovementState>["movePathState"]>;
+    ensureCreepMovementState(pc).movePathState = path;
+    jest.mocked(pc.usePower).mockImplementation(power => power === PWR_GENERATE_OPS ? OK : ERR_NOT_IN_RANGE);
+    runPowerCreepControl();
+    expect(pc.moveTo).toHaveBeenCalledWith(storage, { reusePath: 5, range: 3 });
+    expect(pc.usePower).toHaveBeenLastCalledWith(PWR_GENERATE_OPS);
+    expect(ensureCreepMovementState(pc).movePathState).toBe(path);
+    expect(ensureCreepMovementState(pc).workAnchor).toMatchObject({ range: 3 });
+    expect(pc.memory.tasks).toEqual([expect.objectContaining({ type: "operate_storage" })]);
+
+    jest.mocked(pc.usePower).mockClear().mockReturnValue(OK);
+    Game.time++;
+    runPowerCreepControl();
+    expect(pc.usePower).toHaveBeenCalledTimes(1);
+    expect(pc.usePower).toHaveBeenCalledWith(PWR_OPERATE_STORAGE, storage);
+  });
+
+  it.each([{ cooldown: 1, ops: 0 }, { cooldown: 0, ops: 100 }])("产 OPS 冷却或背包已满时不提交技能 %j", ({ cooldown, ops }) => {
+    const { room, powerSpawn } = createRoom();
+    const pc = createPowerCreep({ room, ticksToLive: 1000, ops, powers: { [PWR_GENERATE_OPS]: { level: 5, cooldown } } });
+    installGameObjects([powerSpawn]); installPowerCreeps(pc);
+    runPowerCreepControl();
+    expect(pc.usePower).not.toHaveBeenCalled();
   });
 
   it("Storage 与 Regen 同时就绪时按优先级跨 tick 执行并轮换 Source", () => {
