@@ -23,7 +23,7 @@ jest.mock("@/runtime/defenseMode", () => ({
   isDefenseMode: jest.fn(() => false),
 }));
 
-jest.mock("@/runtime/roomPlannerConstruction", () => ({
+jest.mock("@/runtime/sourceWorkPosition", () => ({
   getSourceContainerPositionsForRoom: jest.fn(() => []),
 }));
 

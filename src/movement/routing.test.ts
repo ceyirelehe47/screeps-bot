@@ -4,7 +4,7 @@ import { clearCreepMovementStateForTest } from "@/movement/creepState";
 import { moveToTargetRoom, clearRoutingCachesForTest } from "@/movement/routing";
 import { getMoveIntentReceipt } from "@/movement/traffic";
 
-jest.mock("@/runtime/roomPlannerConstruction", () => ({
+jest.mock("@/runtime/sourceWorkPosition", () => ({
   getSourceContainerPositionsForRoom: jest.fn(() => []),
 }));
 

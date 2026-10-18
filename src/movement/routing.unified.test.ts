@@ -5,7 +5,7 @@ import { moveToTarget, buildRoomMovementMatrix, getRoomStaticMatrix, clearRoomBa
 import { clearCreepMovementStateForTest, ensureCreepMovementState, getCreepMovementState } from "@/movement/creepState";
 import { MockRoomPosition, createRoom, createCreep, resetRuntimeServices, setupRoomPositionGlobal, setupPathFinderGlobal, setDefaultMapMocks } from "@mock/movement";
 
-jest.mock("@/runtime/roomPlannerConstruction", () => ({ getSourceContainerPositionsForRoom: jest.fn(() => []) }));
+jest.mock("@/runtime/sourceWorkPosition", () => ({ getSourceContainerPositionsForRoom: jest.fn(() => []) }));
 
 describe("外出 creep 与常驻 creep 的统一房内寻路", () => {
   beforeEach(() => {
