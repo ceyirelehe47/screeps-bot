@@ -2187,6 +2187,19 @@ function isSynthesisObservationRecord(value: unknown): value is SynthesisLogisti
     && optionalAmounts.every((amount) => amount === undefined || isStoredAmount(amount));
 }
 
+/** 输入收集失败只撤回新规划的完整快照凭据，保留已接受运输和 generation。 */
+export function invalidateLogisticsProducerSnapshot(producer: string): boolean {
+  const ensured = ensureLogisticsControlStore();
+  if (!ensured.ok) return false;
+  const key = encodeProducerSnapshotKey(producer);
+  if (!Object.prototype.hasOwnProperty.call(ensured.store.producerSnapshots, key)) return true;
+  const producerSnapshots = cloneRecord(ensured.store.producerSnapshots);
+  Reflect.deleteProperty(producerSnapshots, key);
+  const owner = readResourceControlOwner();
+  if (!owner) return false;
+  return attachLogisticsStore(owner, { ...ensured.store, producerSnapshots }).ok;
+}
+
 export function replaceLatestLogisticsDemandsForProducer(
   producer: string,
   drafts: readonly LatestLogisticsDemandDraft[],

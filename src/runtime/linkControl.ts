@@ -1,3 +1,4 @@
+import { runIsolatedRoomOperation } from "@/runtime/runtimeIsolation";
 import { hasSourceAdjacentLink } from "@/runtime/sourceLink";
 import { recordFixedCpuAction } from "@/runtime/cpuPhaseProfiler";
 import {
@@ -199,11 +200,12 @@ export function runLinkControl(): void {
   const myRooms = getTickContextService().getMyRooms();
 
   for (const room of myRooms) {
+    runIsolatedRoomOperation("runLinkControl", room.name, () => {
     cleanupLinkedSourceContainers(room);
 
     const roomData = getRoomLinkRuntime(room);
     if (roomData.senderIds.length === 0 || roomData.receiverIds.length === 0) {
-      continue;
+      return 0 as const;
     }
 
     const senderLinks = roomData.senderIds
@@ -214,7 +216,7 @@ export function runLinkControl(): void {
       .filter((link): link is StructureLink => !!link);
 
     if (senderLinks.length === 0 || receiverLinks.length === 0) {
-      continue;
+      return 0 as const;
     }
 
     const incoming = new Map<string, number>();
@@ -237,5 +239,8 @@ export function runLinkControl(): void {
         recordFixedCpuAction("linkControl");
       }
     }
+  
+      return 0 as const;
+    });
   }
 }

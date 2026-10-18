@@ -1,3 +1,4 @@
+import { runIsolatedRoomOperation } from "@/runtime/runtimeIsolation";
 import { searchRoomPath } from "@/movement/roomPath";
 import { getPlannedSourceContainerPos } from "@/runtime/sourceWorkPosition";
 export { getPlannedSourceContainerPos } from "@/runtime/sourceWorkPosition";
@@ -814,17 +815,18 @@ export function runRoomPlannerConstruction(): void {
   let roomsProcessed = 0;
 
   for (const room of rooms) {
+    const isolationResult = runIsolatedRoomOperation("runRoomPlannerConstruction", room.name, () => {
     if (globalRemaining <= 0) {
-      return;
+      { return 2 as const; }
     }
 
     if (!isRoomPlannerConstructionDue(room.name)) {
-      continue;
+      return 0 as const;
     }
 
     let roomPlan = Memory.data?.roomPlanner?.[room.name];
-    if (roomsProcessed >= 1 || !hasPlanningCpuHeadroom()) break;
-    if (!roomPlan?.layout && !claimHeavyPlanningSlot()) continue;
+    if (roomsProcessed >= 1 || !hasPlanningCpuHeadroom()) return 1 as const;
+    if (!roomPlan?.layout && !claimHeavyPlanningSlot()) return 0 as const;
     roomsProcessed += 1;
     markRoomPlannerConstructionRun(room.name);
 
@@ -841,7 +843,7 @@ export function runRoomPlannerConstruction(): void {
     }
 
     if (!roomPlan?.layout) {
-      continue;
+      return 0 as const;
     }
 
     const controllerLevel = room.controller?.level ?? 0;
@@ -855,7 +857,7 @@ export function runRoomPlannerConstruction(): void {
     const { allowedTypes, targetOverrides } = getBuildPolicy(room, layout, controllerLevel);
 
     if (allowedTypes.size === 0) {
-      continue;
+      return 0 as const;
     }
 
     let newSites = 0;
@@ -957,5 +959,51 @@ export function runRoomPlannerConstruction(): void {
       globalRemaining = rampartQueued.globalRemaining;
       console.log(`[roomPlanner] ${room.name} queued ${rampartQueued.roomAdded} rampart site(s)`);
     }
+  
+      return 0 as const;
+    });
+    if (isolationResult === 1) break;
+    if (isolationResult === 2) return;
   }
+}
+
+
+export function cleanupRoomPlannerMemory(ownedRooms: ReadonlySet<string>, colonizationTargets: ReadonlySet<string>): number {
+  if (!Memory.data?.roomPlanner) {
+    return 0;
+  }
+
+  let removed = 0;
+  for (const [roomName, data] of Object.entries(Memory.data.roomPlanner)) {
+    const staleByRoom = !ownedRooms.has(roomName) && !colonizationTargets.has(roomName);
+    const staleByTime = Game.time - data.savedAt > 50_000;
+
+    if (staleByRoom && staleByTime) {
+      delete Memory.data.roomPlanner[roomName];
+      removed += 1;
+    }
+  }
+
+  return removed;
+}
+
+export function cleanupRoomPlannerBuildRuntimeMemory(ownedRooms: ReadonlySet<string>): number {
+  const roomPlannerBuildRooms = Memory.runtime?.roomPlannerBuild?.rooms;
+  if (!roomPlannerBuildRooms) {
+    return 0;
+  }
+
+  let removed = 0;
+  for (const roomName of Object.keys(roomPlannerBuildRooms)) {
+    if (!ownedRooms.has(roomName)) {
+      delete roomPlannerBuildRooms[roomName];
+      removed += 1;
+    }
+  }
+
+  if (Object.keys(roomPlannerBuildRooms).length === 0 && Memory.runtime?.roomPlannerBuild) {
+    delete Memory.runtime.roomPlannerBuild;
+  }
+
+  return removed;
 }

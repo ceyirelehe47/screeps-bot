@@ -1,3 +1,4 @@
+import { runIsolatedRoomOperation } from "@/runtime/runtimeIsolation";
 import { replaceSpawnQueue } from "@/runtime/spawnRequests";
 import { getCreepConfigService, getTickContextService, getMemoryService } from "@/runtime/runtimeServices";
 
@@ -151,15 +152,17 @@ function isEligibleUpgraderRoom(roomName: string): boolean {
   );
 }
 
-function ensureEligibleRoomUpgraderTasks(): string[] {
+function ensureEligibleRoomUpgraderTasks(): { active: string[]; retained: string[] } {
   const tasks = getManualUpgraderStore();
   const configs = getCreepConfigService().readStore();
   const eligibleRoomNames: string[] = [];
 
+  const failedRooms = new Set<string>();
   for (const room of Object.values(Game.rooms)) {
+    const completed = runIsolatedRoomOperation("hubUpgradeEligibility", room.name, () => {
     const controller = room.controller;
     if (!controller?.my || !shouldMaintainDedicatedUpgrader(controller, !!tasks[room.name])) {
-      continue;
+      return true;
     }
 
     const roomName = room.name;
@@ -185,16 +188,19 @@ function ensureEligibleRoomUpgraderTasks(): string[] {
         existing.updatedAt = Game.time;
       }
     }
+    return true;
+    });
+    if (!completed) failedRooms.add(room.name);
   }
 
-  const eligibleRoomSet = new Set(eligibleRoomNames);
+  const eligibleRoomSet = new Set([...eligibleRoomNames, ...failedRooms]);
   for (const roomName of Object.keys(tasks)) {
     if (!eligibleRoomSet.has(roomName)) {
       delete tasks[roomName];
     }
   }
 
-  return eligibleRoomNames;
+  return { active: eligibleRoomNames, retained: [...eligibleRoomSet] };
 }
 
 export function startUpgrader(roomName: string): ManualUpgraderResult | string {
@@ -260,12 +266,14 @@ export function getUpgraderStatus(roomName?: string): ManualUpgraderResult[] | M
 
 export function runHubUpgradeControl(): void {
   const retiringRcl8MaintenanceConfigNames = getRetiringRcl8MaintenanceConfigNames();
-  const activeRoomNames = ensureEligibleRoomUpgraderTasks();
-  const keptConfigNames = new Set(activeRoomNames.map((roomName) => getConfigName(roomName)));
+  const eligibility = ensureEligibleRoomUpgraderTasks();
+  const activeRoomNames = eligibility.active;
+  const keptConfigNames = new Set(eligibility.retained.map((roomName) => getConfigName(roomName)));
   cleanupManagedUpgraders(keptConfigNames, retiringRcl8MaintenanceConfigNames);
 
   const configs = getCreepConfigService().readStore();
   for (const roomName of activeRoomNames) {
+    runIsolatedRoomOperation("hubUpgradeControl", roomName, () => {
     const configName = getConfigName(roomName);
     const boostTaskId = getBoostTaskId(roomName);
 
@@ -276,5 +284,6 @@ export function runHubUpgradeControl(): void {
     }
     if (Memory.runtime?.powerBankBoost?.[boostTaskId]) releaseBoostLabs(boostTaskId, roomName);
     if (Memory.runtime?.powerBankBoost?.[`hubUpgrade:${roomName}`]) releaseBoostLabs(`hubUpgrade:${roomName}`, roomName);
+    });
   }
 }

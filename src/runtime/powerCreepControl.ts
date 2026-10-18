@@ -1,3 +1,4 @@
+import { runIsolatedRoomOperation } from "@/runtime/runtimeIsolation";
 import { searchRoomPath } from "@/movement/roomPath";
 import { needsFactoryOperatePower } from "@/runtime/factoryControl";
 import { executeTreasuryFencedTerminalCargo } from "@/runtime/treasuryTerminalCargo";
@@ -130,11 +131,12 @@ function hasStrongerActivePowerEffect(
 function rebuildCapabilityCache(): void {
   const next: Record<string, PowerCreepRoomCapability> = {};
   for (const powerCreep of Object.values(Game.powerCreeps || {})) {
+    runIsolatedRoomOperation("rebuildCapabilityCache", powerCreep.name, () => {
     const homeRoom = resolvePowerCreepHomeRoomName(powerCreep);
     const operateExtensionLevel = getPowerLevel(powerCreep, PWR_OPERATE_EXTENSION);
     const regenSourceLevel = getPowerLevel(powerCreep, PWR_REGEN_SOURCE);
     if (!homeRoom || (operateExtensionLevel <= 0 && regenSourceLevel <= 0)) {
-      continue;
+      return 0 as const;
     }
 
     const existing = next[homeRoom];
@@ -142,7 +144,7 @@ function rebuildCapabilityCache(): void {
       existing.powerCreepNames.push(powerCreep.name);
       existing.operateExtensionLevel = Math.max(existing.operateExtensionLevel, operateExtensionLevel);
       existing.regenSourceLevel = Math.max(existing.regenSourceLevel, regenSourceLevel);
-      continue;
+      return 0 as const;
     }
 
     next[homeRoom] = {
@@ -151,6 +153,9 @@ function rebuildCapabilityCache(): void {
       operateExtensionLevel,
       regenSourceLevel,
     };
+  
+      return 0 as const;
+    });
   }
 
   for (const capability of Object.values(next)) {
@@ -714,7 +719,11 @@ function runPowerCreep(powerCreep: PowerCreep): void {
 export function runPowerCreepControl(): void {
   capabilityCacheTick = -1;
   for (const powerCreep of Object.values(Game.powerCreeps || {})) {
+    runIsolatedRoomOperation("runPowerCreepControl", powerCreep.name, () => {
     runPowerCreep(powerCreep);
+  
+      return 0 as const;
+    });
   }
   capabilityCacheTick = -1;
   ensureCapabilityCache();

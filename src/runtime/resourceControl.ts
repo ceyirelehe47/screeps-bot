@@ -3812,3 +3812,45 @@ export { inspectTreasuryResourceTransferReadiness } from "@/runtime/resourceCont
 export { inspectTreasuryResourceTransferPreparation } from "@/runtime/resourceControlReadModel";
 export { getResourceControlDonorAvailable } from "@/runtime/resourceControlReadModel";
 export { resolveRoomConfig } from "@/runtime/resourceControlRoomConfig";
+
+
+export function cleanupResourceControlMemory(ownedRooms: ReadonlySet<string>): number {
+  if (!Memory.runtime?.resourceControl) {
+    return 0;
+  }
+
+  let removed = 0;
+  for (const roomName of Object.keys(Memory.runtime.resourceControl.rooms)) {
+    if (!ownedRooms.has(roomName)) {
+      delete Memory.runtime.resourceControl.rooms[roomName];
+      removed += 1;
+    }
+  }
+
+  const synthesisBindings = Memory.runtime.resourceControl.synthesisBindings;
+  if (synthesisBindings) {
+    for (const [key, binding] of Object.entries(synthesisBindings)) {
+      const targetRoomName = key.split(":", 1)[0];
+      const donorRoomName = binding.fromRoomName;
+      const expired = binding.expiresAt < Game.time;
+      if (expired || !ownedRooms.has(targetRoomName) || !ownedRooms.has(donorRoomName)) {
+        delete synthesisBindings[key];
+        removed += 1;
+      }
+    }
+  }
+
+  const logistics = (
+    Memory.runtime.resourceControl as unknown as { logistics?: unknown }
+  ).logistics;
+
+  if (
+    Object.keys(Memory.runtime.resourceControl.rooms).length === 0 &&
+    (!synthesisBindings || Object.keys(synthesisBindings).length === 0) &&
+    logistics === undefined
+  ) {
+    delete Memory.runtime.resourceControl;
+  }
+
+  return removed;
+}

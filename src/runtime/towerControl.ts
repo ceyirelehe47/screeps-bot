@@ -656,3 +656,40 @@ function getTowerDamagedStructures(
 
   return scanDamagedStructures(room, roomContext);
 }
+
+
+export function cleanupTowerEmergencyMemory(ownedRooms: ReadonlySet<string>): number {
+  if (!Memory.runtime?.towerEmergencyRamparts) {
+    return 0;
+  }
+
+  let removed = 0;
+  for (const roomName of Object.keys(Memory.runtime.towerEmergencyRamparts)) {
+    if (!ownedRooms.has(roomName)) {
+      delete Memory.runtime.towerEmergencyRamparts[roomName];
+      removed += 1;
+    }
+  }
+
+  return removed;
+}
+
+export function cleanupTowerCombatMemory(ownedRooms: ReadonlySet<string>): number {
+  if (!Memory.runtime?.towerCombat) {
+    return 0;
+  }
+
+  let removed = 0;
+  for (const roomName of Object.keys(Memory.runtime.towerCombat)) {
+    if (!ownedRooms.has(roomName)) {
+      delete Memory.runtime.towerCombat[roomName];
+      removed += 1;
+    }
+  }
+
+  if (Object.keys(Memory.runtime.towerCombat).length === 0) {
+    delete Memory.runtime.towerCombat;
+  }
+
+  return removed;
+}

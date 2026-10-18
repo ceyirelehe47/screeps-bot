@@ -1,3 +1,4 @@
+import { runIsolatedRoomOperation } from "@/runtime/runtimeIsolation";
 import { createTaskLifecycle } from "@/runtime/taskLifecycle";
 import { isDue } from "@/runtime/cadence";
 import { resolveMarketCreditReserve } from "@/runtime/marketActionArbiter";
@@ -1352,17 +1353,18 @@ export function runFactoryControl(): void {
   runtime.updatedAt = Game.time;
 
   for (const room of Object.values(Game.rooms)) {
-    if (!isEligibleRoom(room)) continue;
+    runIsolatedRoomOperation("runFactoryControl", room.name, () => {
+    if (!isEligibleRoom(room)) return 0 as const;
 
     const roomName = room.name;
     const roomCfg = config.rooms[roomName];
     if (roomCfg && !roomCfg.enabled) {
       replaceCarrierTasksForProducerRoom(FACTORY_CARRIER_TASK_PRODUCER, roomName, []);
-      continue;
+      return 0 as const;
     }
 
     const factory = findFactoryInRoom(room);
-    if (!factory) continue;
+    if (!factory) return 0 as const;
 
     const state = getRoomState(runtime, roomName);
     const holderId = factory.id as string;
@@ -1371,7 +1373,7 @@ export function runFactoryControl(): void {
     const factoryTask = getActiveFactoryTaskForRoom(roomName);
     if (factoryTask) {
       executeBatteryDecompressTask(room, factory, state, factoryTask, config);
-      continue;
+      return 0 as const;
     }
 
     // 已产出的成品先卸出；总库存达到目标不能让最后一批留在工厂。
@@ -1406,19 +1408,19 @@ export function runFactoryControl(): void {
     const productionCaps = resolveProductionCaps(config, roomName);
 
     if (targetQueue.length === 0) {
-      if (unloadInventory()) continue;
+      if (unloadInventory()) return 0 as const;
       state.stage = "sleeping";
       state.sleepReason = "empty_target_queue";
       state.activeTarget = undefined;
       state.missing = undefined;
       state.lastTransitionAt = Game.time;
       replaceCarrierTasksForProducerRoom(FACTORY_CARRIER_TASK_PRODUCER, roomName, []);
-      continue;
+      return 0 as const;
     }
 
     // Check if currently sleeping
     if (state.sleepUntilTick && state.sleepUntilTick > Game.time) {
-      continue;
+      return 0 as const;
     }
 
     // Clear sleep if expired
@@ -1514,7 +1516,7 @@ export function runFactoryControl(): void {
       break;
     }
 
-    if (unloadInventory(planned ? state.activeTarget : undefined)) continue;
+    if (unloadInventory(planned ? state.activeTarget : undefined)) return 0 as const;
 
     if (!planned) {
       state.activeTarget = undefined;
@@ -1531,7 +1533,7 @@ export function runFactoryControl(): void {
         state.sleepUntilTick = Game.time + config.sleepSettings.maxSleepTicks;
       }
       replaceCarrierTasksForProducerRoom(FACTORY_CARRIER_TASK_PRODUCER, roomName, []);
-      continue;
+      return 0 as const;
     }
 
     if (state.stage === "blocked" && state.missing) {
@@ -1540,11 +1542,14 @@ export function runFactoryControl(): void {
 
     if (state.stage === "blocked") {
       replaceCarrierTasksForProducerRoom(FACTORY_CARRIER_TASK_PRODUCER, roomName, []);
-      continue;
+      return 0 as const;
     }
 
     executeProductionCycle(room, factory, state, config, roomName);
 
+  
+      return 0 as const;
+    });
   }
 }
 

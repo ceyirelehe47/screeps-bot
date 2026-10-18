@@ -20,7 +20,6 @@ import { isRoleName } from "@/types/roleCatalog";
 import { runRegisteredMemoryGc } from "@/runtime/memoryGcRegistry";
 
 const CLEANUP_INTERVAL = 17;
-const ROOM_PLANNER_TTL = 50000;
 const RESOURCE_CONTROL_TERMINAL_TASK_TTL = 200;
 const CARRIER_TASK_BOARD_TTL = 500;
 
@@ -28,14 +27,6 @@ function getOwnedRoomNameSet(): Set<string> {
   return new Set(getTickContextService().getMyRooms().map((room) => room.name));
 }
 
-function getColonizationTargetRoomNameSet(): Set<string> {
-  const colonization = Memory.data?.colonization;
-  if (!colonization) {
-    return new Set();
-  }
-
-  return new Set(Object.keys(colonization));
-}
 
 interface CreepConfigReferenceSnapshot {
   readonly configNames: ReadonlySet<string>;
@@ -187,238 +178,21 @@ function cleanupManagedCreepConfigs(referencedConfigNames: ReadonlySet<string>):
   return removed;
 }
 
-function cleanupRoomPlannerMemory(ownedRooms: Set<string>, colonizationTargets: Set<string>): number {
-  if (!Memory.data?.roomPlanner) {
-    return 0;
-  }
 
-  let removed = 0;
-  for (const [roomName, data] of Object.entries(Memory.data.roomPlanner)) {
-    const staleByRoom = !ownedRooms.has(roomName) && !colonizationTargets.has(roomName);
-    const staleByTime = Game.time - data.savedAt > ROOM_PLANNER_TTL;
 
-    if (staleByRoom && staleByTime) {
-      delete Memory.data.roomPlanner[roomName];
-      removed += 1;
-    }
-  }
 
-  return removed;
-}
 
-function cleanupRoomPlannerBuildRuntimeMemory(ownedRooms: Set<string>): number {
-  const roomPlannerBuildRooms = Memory.runtime?.roomPlannerBuild?.rooms;
-  if (!roomPlannerBuildRooms) {
-    return 0;
-  }
 
-  let removed = 0;
-  for (const roomName of Object.keys(roomPlannerBuildRooms)) {
-    if (!ownedRooms.has(roomName)) {
-      delete roomPlannerBuildRooms[roomName];
-      removed += 1;
-    }
-  }
 
-  if (Object.keys(roomPlannerBuildRooms).length === 0 && Memory.runtime?.roomPlannerBuild) {
-    delete Memory.runtime.roomPlannerBuild;
-  }
 
-  return removed;
-}
 
-function cleanupTowerEmergencyMemory(ownedRooms: Set<string>): number {
-  if (!Memory.runtime?.towerEmergencyRamparts) {
-    return 0;
-  }
 
-  let removed = 0;
-  for (const roomName of Object.keys(Memory.runtime.towerEmergencyRamparts)) {
-    if (!ownedRooms.has(roomName)) {
-      delete Memory.runtime.towerEmergencyRamparts[roomName];
-      removed += 1;
-    }
-  }
 
-  return removed;
-}
 
-function cleanupResourceControlMemory(ownedRooms: Set<string>): number {
-  if (!Memory.runtime?.resourceControl) {
-    return 0;
-  }
 
-  let removed = 0;
-  for (const roomName of Object.keys(Memory.runtime.resourceControl.rooms)) {
-    if (!ownedRooms.has(roomName)) {
-      delete Memory.runtime.resourceControl.rooms[roomName];
-      removed += 1;
-    }
-  }
 
-  const synthesisBindings = Memory.runtime.resourceControl.synthesisBindings;
-  if (synthesisBindings) {
-    for (const [key, binding] of Object.entries(synthesisBindings)) {
-      const targetRoomName = key.split(":", 1)[0];
-      const donorRoomName = binding.fromRoomName;
-      const expired = binding.expiresAt < Game.time;
-      if (expired || !ownedRooms.has(targetRoomName) || !ownedRooms.has(donorRoomName)) {
-        delete synthesisBindings[key];
-        removed += 1;
-      }
-    }
-  }
 
-  const logistics = (
-    Memory.runtime.resourceControl as unknown as { logistics?: unknown }
-  ).logistics;
 
-  if (
-    Object.keys(Memory.runtime.resourceControl.rooms).length === 0 &&
-    (!synthesisBindings || Object.keys(synthesisBindings).length === 0) &&
-    logistics === undefined
-  ) {
-    delete Memory.runtime.resourceControl;
-  }
-
-  return removed;
-}
-
-function cleanupSynthesisControlMemory(ownedRooms: Set<string>): number {
-  if (!Memory.runtime?.synthesisControl) {
-    return 0;
-  }
-
-  let removed = 0;
-  for (const roomName of Object.keys(Memory.runtime.synthesisControl.rooms)) {
-    if (!ownedRooms.has(roomName)) {
-      delete Memory.runtime.synthesisControl.rooms[roomName];
-      removed += 1;
-    }
-  }
-
-  for (const [key, binding] of Object.entries(Memory.runtime.synthesisControl.bindings)) {
-    const targetRoomName = key.split(":", 1)[0];
-    const donorRoomName = binding.fromRoomName;
-    const expired = binding.expiresAt < Game.time;
-    if (expired || !ownedRooms.has(targetRoomName) || !ownedRooms.has(donorRoomName)) {
-      delete Memory.runtime.synthesisControl.bindings[key];
-      removed += 1;
-    }
-  }
-
-  if (
-    Object.keys(Memory.runtime.synthesisControl.rooms).length === 0 &&
-    Object.keys(Memory.runtime.synthesisControl.bindings).length === 0
-  ) {
-    delete Memory.runtime.synthesisControl;
-  }
-
-  return removed;
-}
-
-function cleanupPowerBankBoostMemory(): number {
-  const runtime = Memory.runtime;
-  if (!runtime) {
-    return 0;
-  }
-
-  const powerBankTasks = Memory.data?.powerBankHarvest || {};
-  const activeTaskIds = new Set(Object.keys(powerBankTasks));
-  // 预留按世代归属；creep args 只有目标和路线，不能据此判定世代 owner 已消失。
-  // 只保留任务明确引用的 owner，避免同一 Bank 的退役世代通过前缀匹配被误保留。
-  for (const task of Object.values(powerBankTasks)) {
-    if (task.primaryBoostOwnerId) activeTaskIds.add(task.primaryBoostOwnerId);
-    if (task.reinforcement?.boostOwnerId) activeTaskIds.add(task.reinforcement.boostOwnerId);
-  }
-  for (const config of getCreepConfigService().getReadIndex().entries.map(([, config]) => config)) {
-    for (const arg of config.args || []) {
-      if (typeof arg === "string") activeTaskIds.add(arg);
-    }
-  }
-  for (const task of Object.values(Memory.data?.war || {})) {
-    if (task.activeGeneration?.boostTaskId) activeTaskIds.add(task.activeGeneration.boostTaskId);
-  }
-  let removed = 0;
-
-  if (runtime.powerBankBoost) {
-    for (const taskId of Object.keys(runtime.powerBankBoost)) {
-      if (activeTaskIds.has(taskId)) {
-        continue;
-      }
-      delete runtime.powerBankBoost[taskId];
-      removed += 1;
-    }
-
-    if (Object.keys(runtime.powerBankBoost).length === 0) {
-      delete runtime.powerBankBoost;
-    }
-  }
-
-  const synthesisRooms = runtime.synthesisControl?.rooms;
-  if (!synthesisRooms) {
-    return removed;
-  }
-
-  for (const roomState of Object.values(synthesisRooms)) {
-    const pause = roomState.boostPause;
-    if (!pause) continue;
-    const activePauseTaskIds = (pause.taskIds || [pause.taskId]).filter((taskId) => activeTaskIds.has(taskId));
-    if (activePauseTaskIds.length > 0) {
-      pause.taskId = activePauseTaskIds[0];
-      pause.taskIds = activePauseTaskIds;
-    } else {
-      delete roomState.boostPause;
-      removed += 1;
-    }
-  }
-
-  return removed;
-}
-
-function cleanupSpawnPlannerMemory(ownedRooms: Set<string>): number {
-  const commutes = Memory.runtime?.spawnPlanner?.sourceWorkerCommutes;
-  if (!commutes) {
-    return 0;
-  }
-
-  let removed = 0;
-  for (const [cacheKey, cache] of Object.entries(commutes)) {
-    const roomName = cacheKey.split(":", 1)[0];
-    const expired = Game.time - cache.updatedAt > 1000;
-    if (!ownedRooms.has(roomName) || expired) {
-      delete commutes[cacheKey];
-      removed += 1;
-    }
-  }
-
-  if (Object.keys(commutes).length === 0 && Memory.runtime?.spawnPlanner) {
-    delete Memory.runtime.spawnPlanner;
-  }
-
-  return removed;
-}
-
-function cleanupIllegalStructureCleanupMemory(ownedRooms: Set<string>): number {
-  const rooms = Memory.runtime?.illegalStructureCleanup?.rooms;
-  if (!rooms) {
-    return 0;
-  }
-
-  let removed = 0;
-  for (const roomName of Object.keys(rooms)) {
-    if (!ownedRooms.has(roomName)) {
-      delete rooms[roomName];
-      removed += 1;
-    }
-  }
-
-  if (Object.keys(rooms).length === 0 && Memory.runtime?.illegalStructureCleanup) {
-    delete Memory.runtime.illegalStructureCleanup;
-  }
-
-  return removed;
-}
 
 function cleanupResourceControlTaskMemory(ownedRooms: Set<string>): number {
   return cleanupResourceTransferTaskStore(
@@ -435,95 +209,12 @@ function cleanupWorkerTaskBoardMemory(ownedRooms: Set<string>): number {
   return cleanupWorkerTaskBoard(ownedRooms);
 }
 
-function cleanupTowerCombatMemory(ownedRooms: Set<string>): number {
-  if (!Memory.runtime?.towerCombat) {
-    return 0;
-  }
 
-  let removed = 0;
-  for (const roomName of Object.keys(Memory.runtime.towerCombat)) {
-    if (!ownedRooms.has(roomName)) {
-      delete Memory.runtime.towerCombat[roomName];
-      removed += 1;
-    }
-  }
 
-  if (Object.keys(Memory.runtime.towerCombat).length === 0) {
-    delete Memory.runtime.towerCombat;
-  }
 
-  return removed;
-}
 
-function cleanupDefenseCoordinationMemory(ownedRooms: Set<string>): number {
-  if (!Memory.runtime?.defenseCoordination) {
-    return 0;
-  }
 
-  let removed = 0;
-  for (const roomName of Object.keys(Memory.runtime.defenseCoordination)) {
-    if (!ownedRooms.has(roomName)) {
-      delete Memory.runtime.defenseCoordination[roomName];
-      removed += 1;
-    }
-  }
 
-  if (Object.keys(Memory.runtime.defenseCoordination).length === 0) {
-    delete Memory.runtime.defenseCoordination;
-  }
-
-  return removed;
-}
-
-const HUB_RUNTIME_ARRAY_CAP = 20;
-const HUB_DISTRIBUTED_SYNTHESIS_ARRAY_CAP = 100;
-
-function cleanupHubRuntimeMemory(ownedRooms: Set<string>): number {
-  const rt = Memory.runtime?.hub;
-  if (!rt) return 0;
-
-  const cfg = Memory.cfg?.hub;
-  if (!cfg?.enabled || !cfg.hubRoomName) return 0;
-
-  const hubRoom = Game.rooms[cfg.hubRoomName];
-  const roomLost = !hubRoom || !hubRoom.controller?.my;
-
-  if (roomLost) {
-    rt.status = "blocked";
-    rt.activeProduct = "";
-    rt.updatedAt = Game.time;
-  }
-
-  if (rt.lastPlanActions && rt.lastPlanActions.length > HUB_RUNTIME_ARRAY_CAP) {
-    rt.lastPlanActions = rt.lastPlanActions.slice(-HUB_RUNTIME_ARRAY_CAP);
-  }
-
-  if (rt.missingResources && rt.missingResources.length > HUB_RUNTIME_ARRAY_CAP) {
-    rt.missingResources = rt.missingResources.slice(0, HUB_RUNTIME_ARRAY_CAP);
-  }
-
-  const ds = rt.distributedSynthesis;
-  if (ds) {
-    if (ds.dispatchAssignments && ds.dispatchAssignments.length > HUB_DISTRIBUTED_SYNTHESIS_ARRAY_CAP) {
-      ds.dispatchAssignments = ds.dispatchAssignments.slice(-HUB_DISTRIBUTED_SYNTHESIS_ARRAY_CAP);
-    }
-    if (ds.routeDecisions && ds.routeDecisions.length > HUB_DISTRIBUTED_SYNTHESIS_ARRAY_CAP) {
-      ds.routeDecisions = ds.routeDecisions.slice(-HUB_DISTRIBUTED_SYNTHESIS_ARRAY_CAP);
-    }
-    if (ds.progressEdges && ds.progressEdges.length > HUB_DISTRIBUTED_SYNTHESIS_ARRAY_CAP) {
-      ds.progressEdges = ds.progressEdges.slice(-HUB_DISTRIBUTED_SYNTHESIS_ARRAY_CAP);
-    }
-    if (ds.roomCapabilities) {
-      for (const roomName of Object.keys(ds.roomCapabilities)) {
-        if (!ownedRooms.has(roomName)) {
-          delete ds.roomCapabilities[roomName];
-        }
-      }
-    }
-  }
-
-  return roomLost ? 1 : 0;
-}
 
 function cleanupNonOwnedRoomMemory(ownedRooms: Set<string>): number {
   if (!Memory.rooms) {
@@ -565,16 +256,7 @@ export function runMemoryCleanup(): void {
   cleanupUnknownRoleConfigMemory();
   cleanupManagedCreepConfigs(creepConfigReferences.configNames);
   const ownedRooms = getOwnedRoomNameSet();
-  const colonizationTargets = getColonizationTargetRoomNameSet();
-  cleanupSpawnPlannerMemory(ownedRooms);
-  cleanupRoomPlannerMemory(ownedRooms, colonizationTargets);
-  cleanupRoomPlannerBuildRuntimeMemory(ownedRooms);
-  cleanupIllegalStructureCleanupMemory(ownedRooms);
   pruneLinkNetworkRuntime(ownedRooms);
-  cleanupTowerEmergencyMemory(ownedRooms);
-  cleanupResourceControlMemory(ownedRooms);
-  cleanupSynthesisControlMemory(ownedRooms);
-  cleanupPowerBankBoostMemory();
   cleanupPowerBankRoomIntel();
   cleanupPickupReservationStore(ownedRooms);
   cleanupTerminalBootstrapRecoveryRuntime();
@@ -584,8 +266,5 @@ export function runMemoryCleanup(): void {
   cleanupLogisticsControlStore(ownedRooms);
   cleanupWorkerTaskBoardMemory(ownedRooms);
   cleanupCarrierTaskBoardMemory(ownedRooms);
-  cleanupTowerCombatMemory(ownedRooms);
-  cleanupDefenseCoordinationMemory(ownedRooms);
-  cleanupHubRuntimeMemory(ownedRooms);
   cleanupNonOwnedRoomMemory(ownedRooms);
 }

@@ -2816,3 +2816,51 @@ function runHubPlanningAttempt(
         : "fallback",
   };
 }
+
+
+export function cleanupHubRuntimeMemory(ownedRooms: ReadonlySet<string>): number {
+  const rt = Memory.runtime?.hub;
+  if (!rt) return 0;
+
+  const cfg = Memory.cfg?.hub;
+  if (!cfg?.enabled || !cfg.hubRoomName) return 0;
+
+  const hubRoom = Game.rooms[cfg.hubRoomName];
+  const roomLost = !hubRoom || !hubRoom.controller?.my;
+
+  if (roomLost) {
+    rt.status = "blocked";
+    rt.activeProduct = "";
+    rt.updatedAt = Game.time;
+  }
+
+  if (rt.lastPlanActions && rt.lastPlanActions.length > 20) {
+    rt.lastPlanActions = rt.lastPlanActions.slice(-20);
+  }
+
+  if (rt.missingResources && rt.missingResources.length > 20) {
+    rt.missingResources = rt.missingResources.slice(0, 20);
+  }
+
+  const ds = rt.distributedSynthesis;
+  if (ds) {
+    if (ds.dispatchAssignments && ds.dispatchAssignments.length > 100) {
+      ds.dispatchAssignments = ds.dispatchAssignments.slice(-100);
+    }
+    if (ds.routeDecisions && ds.routeDecisions.length > 100) {
+      ds.routeDecisions = ds.routeDecisions.slice(-100);
+    }
+    if (ds.progressEdges && ds.progressEdges.length > 100) {
+      ds.progressEdges = ds.progressEdges.slice(-100);
+    }
+    if (ds.roomCapabilities) {
+      for (const roomName of Object.keys(ds.roomCapabilities)) {
+        if (!ownedRooms.has(roomName)) {
+          delete ds.roomCapabilities[roomName];
+        }
+      }
+    }
+  }
+
+  return roomLost ? 1 : 0;
+}

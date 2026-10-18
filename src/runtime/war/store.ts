@@ -318,3 +318,8 @@ export function getLiveCreepsByConfig(configName: string): Creep[] {
 export function getControllerAttackConfigName(task: WarTask): string {
   return `${task.sourceRoom}:war:${task.targetRoom}:${WAR_CONTROLLER_ATTACK_CONFIG_SUFFIX}`;
 }
+
+export function getWarBoostOwnerReferences(): ReadonlySet<string> {
+  return new Set(Object.values(Memory.data?.war ?? {}).flatMap(task =>
+    task.activeGeneration?.boostTaskId ? [task.activeGeneration.boostTaskId] : []));
+}

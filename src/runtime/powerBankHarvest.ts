@@ -2285,3 +2285,14 @@ function runPowerBankHarvestImpl(): void {
 
   cleanupOrphanPowerBankConfigs(Object.values(store));
 }
+
+/** Boost 预约引用由任务 owner 解释，按精确世代保护。 */
+export function getPowerBankBoostOwnerReferences(): ReadonlySet<string> {
+  const tasks = Memory.data?.powerBankHarvest ?? {};
+  const refs = new Set(Object.keys(tasks));
+  for (const task of Object.values(tasks)) {
+    if (task.primaryBoostOwnerId) refs.add(task.primaryBoostOwnerId);
+    if (task.reinforcement?.boostOwnerId) refs.add(task.reinforcement.boostOwnerId);
+  }
+  return refs;
+}

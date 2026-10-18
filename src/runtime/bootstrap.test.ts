@@ -285,4 +285,34 @@ describe("bootstrapRooms", () => {
       roomName: "W1N1",
     });
   });
+  it("skips unchanged reconciliation but repairs owner revision changes and newly accepted queues", () => {
+    const room = createRoom({ sources: [createSource("source-a", "W1N1")] });
+    Game.rooms[room.name] = room;
+    const spawn = createSpawn(room); Game.spawns.Spawn1 = spawn;
+    bootstrapRooms();
+    const service = getCreepConfigService();
+    const spy = jest.spyOn(service, "upsert");
+    Game.time++;
+    bootstrapRooms();
+    expect(spy).not.toHaveBeenCalled();
+    service.remove("W1N1:harvester:source-a");
+    bootstrapRooms();
+    expect(service.get("W1N1:harvester:source-a")).toBeDefined();
+    spy.mockRestore();
+  });
+
+  it("continues later rooms after a workforce input fails, then retries the failed room", () => {
+    const bad = createRoom({ name: "W1N1", sources: [createSource("a", "W1N1")] });
+    const good = createRoom({ name: "W2N2", sources: [createSource("b", "W2N2")] });
+    const original = bad.find;
+    bad.find = jest.fn(() => { throw new Error("broken room input"); });
+    Game.rooms[bad.name] = bad; Game.rooms[good.name] = good;
+    bootstrapRooms();
+    expect(getCreepConfigService().get("W2N2:harvester:b")).toBeDefined();
+    expect(getCreepConfigService().get("W1N1:harvester:a")).toBeUndefined();
+    bad.find = original; Game.time++;
+    bootstrapRooms();
+    expect(getCreepConfigService().get("W1N1:harvester:a")).toBeDefined();
+  });
+
 });

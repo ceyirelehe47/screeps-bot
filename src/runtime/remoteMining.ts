@@ -1,3 +1,4 @@
+import { runIsolatedRoomOperation } from "@/runtime/runtimeIsolation";
 import { createTaskLifecycle } from "@/runtime/taskLifecycle";
 import { isDue } from "@/runtime/cadence";
 import { searchPlanningPath } from "@/movement/pathSearch";
@@ -589,36 +590,37 @@ function processScoutLifecycle(store: Record<string, RemoteMiningTask>, config: 
   const now = Game.time;
 
   for (const task of Object.values(store)) {
+    runIsolatedRoomOperation("processScoutLifecycle", `${task.sourceRoom}:${task.targetRoom}`, () => {
     if (task.status !== "scouting") {
-      continue;
+      return 0 as const;
     }
 
     if (now - task.assignedAt > config.scoutTimeout) {
       abandonTask(task, "scout_timeout");
       removeScoutFromSpawnQueues(task.sourceRoom, task.targetRoom);
       removeScoutConfig(task.sourceRoom, task.targetRoom);
-      continue;
+      return 0 as const;
     }
 
     upsertScoutConfig(task.sourceRoom, task.targetRoom);
 
     const visibleRoom = Game.rooms[task.targetRoom];
     if (!visibleRoom) {
-      continue;
+      return 0 as const;
     }
 
     if (!isRouteDirect(task.sourceRoom, task.targetRoom)) {
       abandonTask(task, "not_direct");
       removeScoutFromSpawnQueues(task.sourceRoom, task.targetRoom);
       removeScoutConfig(task.sourceRoom, task.targetRoom);
-      continue;
+      return 0 as const;
     }
 
     if (!isRoomStatusNormal(task.targetRoom)) {
       abandonTask(task, "not_normal");
       removeScoutFromSpawnQueues(task.sourceRoom, task.targetRoom);
       removeScoutConfig(task.sourceRoom, task.targetRoom);
-      continue;
+      return 0 as const;
     }
 
     const sources = visibleRoom.find(FIND_SOURCES);
@@ -626,21 +628,21 @@ function processScoutLifecycle(store: Record<string, RemoteMiningTask>, config: 
       abandonTask(task, "not_dual_source");
       removeScoutFromSpawnQueues(task.sourceRoom, task.targetRoom);
       removeScoutConfig(task.sourceRoom, task.targetRoom);
-      continue;
+      return 0 as const;
     }
 
     if (visibleRoom.controller?.my) {
       abandonTask(task, "owned_room");
       removeScoutFromSpawnQueues(task.sourceRoom, task.targetRoom);
       removeScoutConfig(task.sourceRoom, task.targetRoom);
-      continue;
+      return 0 as const;
     }
 
     if (!isRemoteRoomSafe(visibleRoom)) {
       abandonTask(task, "unsafe");
       removeScoutFromSpawnQueues(task.sourceRoom, task.targetRoom);
       removeScoutConfig(task.sourceRoom, task.targetRoom);
-      continue;
+      return 0 as const;
     }
 
     taskLifecycle.transition(task, "active");
@@ -650,6 +652,9 @@ function processScoutLifecycle(store: Record<string, RemoteMiningTask>, config: 
 
     removeScoutFromSpawnQueues(task.sourceRoom, task.targetRoom);
     removeScoutConfig(task.sourceRoom, task.targetRoom);
+  
+      return 0 as const;
+    });
   }
 }
 
@@ -923,12 +928,16 @@ export function processRemoteConstruction(
     sitesByPosition.set(key, entries);
   }
   for (const task of Object.values(store).filter(task => task.status === "abandoned")) {
+    runIsolatedRoomOperation("processRemoteConstruction", `${task.sourceRoom}:${task.targetRoom}`, () => {
     for (const pos of [...(task.roadPlan?.positions ?? []), ...Object.values(task.containerPositions ?? {})]) {
       if (Game.rooms[pos.roomName]?.controller?.my || activePositions.has(`${pos.roomName}:${pos.x}:${pos.y}`)) continue;
       for (const site of sitesByPosition.get(`${pos.roomName}:${pos.x}:${pos.y}`) ?? []) {
         if (site.structureType === STRUCTURE_ROAD || site.structureType === STRUCTURE_CONTAINER) site.remove();
       }
     }
+  
+      return 0 as const;
+    });
   }
   const globalSiteCount = Object.keys(Game.constructionSites ?? {}).length;
   if (globalSiteCount >= GLOBAL_SITE_SOFT_CAP) {
@@ -955,10 +964,11 @@ export function processRemoteConstruction(
   }
 
   for (const task of tasks) {
-    if (task.status !== "active") continue;
+    const isolationResult = runIsolatedRoomOperation("processRemoteConstruction", `${task.sourceRoom}:${task.targetRoom}`, () => {
+    if (task.status !== "active") return 0 as const;
 
     const visibleTarget = Game.rooms[task.targetRoom];
-    if (visibleTarget && visibleTarget.controller?.my) continue;
+    if (visibleTarget && visibleTarget.controller?.my) return 0 as const;
 
     if (task === selectedTask && claimHeavyPlanningSlot()) {
       roadPlanningCursor = candidates.indexOf(task) + 1;
@@ -989,7 +999,7 @@ export function processRemoteConstruction(
 
     const hasRoads = !!task.roadPlan && task.roadPlan.positions.length > 0;
     const hasContainers = !!task.containerPositions && Object.keys(task.containerPositions).length > 0;
-    if (!hasRoads && !hasContainers) continue;
+    if (!hasRoads && !hasContainers) return 0 as const;
 
     let sitesPlaced = 0;
     let globalRemaining = GLOBAL_SITE_SOFT_CAP - Object.keys(Game.constructionSites ?? {}).length;
@@ -1027,7 +1037,7 @@ export function processRemoteConstruction(
           sitesPlaced++;
           globalRemaining--;
         } else if (code === ERR_FULL) {
-          return;
+          { return 2 as const; }
         }
       }
     }
@@ -1049,9 +1059,13 @@ export function processRemoteConstruction(
         sitesPlaced++;
         globalRemaining--;
       } else if (code === ERR_FULL) {
-        return;
+        { return 2 as const; }
       }
     }
+  
+      return 0 as const;
+    });
+    if (isolationResult === 2) return;
   }
 }
 
@@ -1449,8 +1463,9 @@ export function processRemoteConfigLifecycle(
   config: RemoteMiningConfig,
 ): void {
   for (const task of Object.values(store)) {
+    runIsolatedRoomOperation("processRemoteConfigLifecycle", `${task.sourceRoom}:${task.targetRoom}`, () => {
     if (task.status === "scouting") {
-      continue;
+      return 0 as const;
     }
 
     if (task.status === "abandoned") {
@@ -1458,7 +1473,7 @@ export function processRemoteConfigLifecycle(
         cleanupAllRemoteConfigs(task);
         removeScoutConfigAndSpawnQueues(task.sourceRoom, task.targetRoom);
       }
-      continue;
+      return 0 as const;
     }
 
     // If a visible target room is owned by me, it must never be a remote mining target.
@@ -1482,7 +1497,7 @@ export function processRemoteConfigLifecycle(
       removeRemoteWorkerConfig(task.sourceRoom, task.targetRoom);
       removeRemoteDefenderConfig(task.sourceRoom, task.targetRoom);
       removeScoutConfigAndSpawnQueues(task.sourceRoom, task.targetRoom);
-      continue;
+      return 0 as const;
     }
 
     if (task.status === "suspended") {
@@ -1491,7 +1506,7 @@ export function processRemoteConfigLifecycle(
       if (task.suspendReason === "manual_war_pause") {
         removeScoutConfig(task.sourceRoom, task.targetRoom);
         removeScoutFromSpawnQueues(task.sourceRoom, task.targetRoom);
-        continue;
+        return 0 as const;
       }
 
       let resumed = false;
@@ -1509,7 +1524,7 @@ export function processRemoteConfigLifecycle(
           } else {
             maintainInvaderCoreClearance(task, supportedCore);
           }
-          continue;
+          return 0 as const;
         }
 
         const threatReason = getRemoteThreatReason(visibleTarget);
@@ -1544,7 +1559,7 @@ export function processRemoteConfigLifecycle(
         } else {
           removeScoutConfigAndSpawnQueues(task.sourceRoom, task.targetRoom);
         }
-        continue;
+        return 0 as const;
       }
     }
 
@@ -1567,7 +1582,7 @@ export function processRemoteConfigLifecycle(
         removeRemoteWorkerConfig(task.sourceRoom, task.targetRoom);
         removeRemoteDefenderConfig(task.sourceRoom, task.targetRoom);
         removeScoutConfigAndSpawnQueues(task.sourceRoom, task.targetRoom);
-        continue;
+        return 0 as const;
       }
 
       if (isDefenseMode(task.sourceRoom)) {
@@ -1586,7 +1601,7 @@ export function processRemoteConfigLifecycle(
         removeRemoteWorkerConfig(task.sourceRoom, task.targetRoom);
         removeRemoteDefenderConfig(task.sourceRoom, task.targetRoom);
         removeScoutConfigAndSpawnQueues(task.sourceRoom, task.targetRoom);
-        continue;
+        return 0 as const;
       }
 
       if (task.defenseReason === "npc_invader_core") {
@@ -1595,7 +1610,7 @@ export function processRemoteConfigLifecycle(
           removeRemoteWorkerConfig(task.sourceRoom, task.targetRoom);
           removeRemoteDefenderConfig(task.sourceRoom, task.targetRoom);
           upsertScoutConfig(task.sourceRoom, task.targetRoom);
-          continue;
+          return 0 as const;
         }
 
         const passiveThreat = getRemoteThreatReason(visibleTarget);
@@ -1606,7 +1621,7 @@ export function processRemoteConfigLifecycle(
           removeRemoteDefenderConfig(task.sourceRoom, task.targetRoom);
           removeScoutConfig(task.sourceRoom, task.targetRoom);
           removeScoutFromSpawnQueues(task.sourceRoom, task.targetRoom);
-          continue;
+          return 0 as const;
         }
 
         const supportedCore = getSupportedInvaderCore(visibleTarget);
@@ -1617,7 +1632,7 @@ export function processRemoteConfigLifecycle(
           } else {
             maintainInvaderCoreClearance(task, supportedCore);
           }
-          continue;
+          return 0 as const;
         }
 
         // Core absence is completion only because the target room is visible.
@@ -1630,7 +1645,7 @@ export function processRemoteConfigLifecycle(
           upsertRemoteDefenderConfig(task);
           removeScoutConfig(task.sourceRoom, task.targetRoom);
           removeScoutFromSpawnQueues(task.sourceRoom, task.targetRoom);
-          continue;
+          return 0 as const;
         }
 
         taskLifecycle.transition(task, "active");
@@ -1639,7 +1654,7 @@ export function processRemoteConfigLifecycle(
         removeRemoteDefenderConfig(task.sourceRoom, task.targetRoom);
         removeScoutConfig(task.sourceRoom, task.targetRoom);
         removeScoutFromSpawnQueues(task.sourceRoom, task.targetRoom);
-        continue;
+        return 0 as const;
       }
 
       if (visibleTarget) {
@@ -1661,7 +1676,7 @@ export function processRemoteConfigLifecycle(
           removeRemoteDefenderConfig(task.sourceRoom, task.targetRoom);
           removeScoutConfig(task.sourceRoom, task.targetRoom);
           removeScoutFromSpawnQueues(task.sourceRoom, task.targetRoom);
-          continue;
+          return 0 as const;
         }
 
         const defenseReason = getActiveDefenseReason(visibleTarget, task);
@@ -1683,7 +1698,7 @@ export function processRemoteConfigLifecycle(
             removeRemoteDefenderConfig(task.sourceRoom, task.targetRoom);
             removeScoutConfig(task.sourceRoom, task.targetRoom);
             removeScoutFromSpawnQueues(task.sourceRoom, task.targetRoom);
-            continue;
+            return 0 as const;
           }
 
           if (defenseReason === "npc_invader_core") {
@@ -1696,7 +1711,7 @@ export function processRemoteConfigLifecycle(
                 maintainInvaderCoreClearance(task, supportedCore);
               }
             }
-            continue;
+            return 0 as const;
           }
 
           enterRemoteDefense(task, defenseReason);
@@ -1705,7 +1720,7 @@ export function processRemoteConfigLifecycle(
           upsertRemoteDefenderConfig(task);
           removeScoutConfig(task.sourceRoom, task.targetRoom);
           removeScoutFromSpawnQueues(task.sourceRoom, task.targetRoom);
-          continue;
+          return 0 as const;
         } else {
           if (task.lastDefenseSafeAt === undefined) {
             task.lastDefenseSafeAt = Game.time;
@@ -1722,32 +1737,32 @@ export function processRemoteConfigLifecycle(
             removeRemoteDefenderConfig(task.sourceRoom, task.targetRoom);
             removeScoutConfig(task.sourceRoom, task.targetRoom);
             removeScoutFromSpawnQueues(task.sourceRoom, task.targetRoom);
-            continue;
+            return 0 as const;
           } else {
             task.updatedAt = Game.time;
             upsertRemoteDefenderConfig(task);
             removeScoutConfig(task.sourceRoom, task.targetRoom);
             removeScoutFromSpawnQueues(task.sourceRoom, task.targetRoom);
-            continue;
+            return 0 as const;
           }
         }
       } else {
         upsertScoutConfig(task.sourceRoom, task.targetRoom);
         upsertRemoteDefenderConfig(task);
-        continue;
+        return 0 as const;
       }
     }
 
     if (!isSourceRoomValidForRemote(task.sourceRoom)) {
       cleanupAllRemoteConfigs(task);
       removeScoutConfigAndSpawnQueues(task.sourceRoom, task.targetRoom);
-      continue;
+      return 0 as const;
     }
 
     if (isDefenseMode(task.sourceRoom)) {
       cleanupAllRemoteConfigs(task);
       removeScoutConfigAndSpawnQueues(task.sourceRoom, task.targetRoom);
-      continue;
+      return 0 as const;
     }
 
     const visibleTarget = Game.rooms[task.targetRoom];
@@ -1763,7 +1778,7 @@ export function processRemoteConfigLifecycle(
         cleanupAllRemoteConfigs(task);
         removeScoutConfig(task.sourceRoom, task.targetRoom);
         removeScoutFromSpawnQueues(task.sourceRoom, task.targetRoom);
-        continue;
+        return 0 as const;
       }
 
       // No passive threat; check for active defense
@@ -1779,14 +1794,14 @@ export function processRemoteConfigLifecycle(
               maintainInvaderCoreClearance(task, supportedCore);
             }
           }
-          continue;
+          return 0 as const;
         }
 
         enterRemoteDefense(task, defenseReason);
         cleanupRemoteConfigs(task);
         removeRemoteWorkerConfig(task.sourceRoom, task.targetRoom);
         upsertRemoteDefenderConfig(task);
-        continue;
+        return 0 as const;
       }
     }
 
@@ -1812,6 +1827,9 @@ export function processRemoteConfigLifecycle(
     } else {
       removeRemoteWorkerConfig(task.sourceRoom, task.targetRoom);
     }
+  
+      return 0 as const;
+    });
   }
 }
 
@@ -1861,14 +1879,15 @@ export function runRemoteMining(): void {
   // First-come-first-served: source rooms are sorted lexicographically; the first room
   // to claim an eligible target wins. This avoids coordination overhead between rooms.
   for (const sourceRoom of sourceRooms) {
+    runIsolatedRoomOperation("runRemoteMining", sourceRoom.name, () => {
     const currentCount = countSourceRoomRemotes(store, sourceRoom.name);
     if (currentCount >= config.maxRemoteRoomsPerSourceRoom) {
-      continue;
+      return 0 as const;
     }
 
     const exits = Game.map.describeExits(sourceRoom.name);
     if (!exits) {
-      continue;
+      return 0 as const;
     }
 
     for (const direction of CARDINAL_EXIT_DIRECTIONS) {
@@ -1933,6 +1952,9 @@ export function runRemoteMining(): void {
       };
       break;
     }
+  
+      return 0 as const;
+    });
   }
 }
 

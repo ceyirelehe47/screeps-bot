@@ -306,4 +306,26 @@ describe("nukerControl", () => {
       ghodiumTransfers.some((task) => task.id !== expired.task.id),
     ).toBe(true);
   });
+  it("preserves a failed room's tasks, reservations and global demand while continuing healthy rooms", () => {
+    const bad = createRoomScenario({ roomName: "W1N1", storageGhodium: 5000, storageEnergy: 500000 });
+    const good = createRoomScenario({ roomName: "W2N2", storageGhodium: 5000, storageEnergy: 500000 });
+    runNukerControl();
+    const previous = Memory.runtime!.nukerControl;
+    const tasks = listCarrierTasksByRoom(bad.room.name);
+    const reservations = listProductionReservations().filter(r => r.roomName === bad.room.name);
+    expect(tasks.length).toBeGreaterThan(0);
+    expect(reservations.length).toBeGreaterThan(0);
+    Game.time++;
+    resetRuntimeServices();
+    bad.room.find = jest.fn(() => { throw new Error("unavailable nuker input"); });
+    (good.nuker!.store as MutableStore).set(RESOURCE_GHODIUM, 5000);
+    runNukerControl();
+    expect(listCarrierTasksByRoom(bad.room.name)).toEqual(tasks);
+    expect(listProductionReservations().filter(r => r.roomName === bad.room.name)).toEqual(
+      expect.arrayContaining(reservations.map(r => expect.objectContaining({ holderId: r.holderId, amount: r.amount }))),
+    );
+    expect(listCarrierTasksByRoom(good.room.name).some(task => task.steps.some(step => step.resource === RESOURCE_GHODIUM))).toBe(false);
+    expect(Memory.runtime!.nukerControl).toBe(previous);
+  });
+
 });

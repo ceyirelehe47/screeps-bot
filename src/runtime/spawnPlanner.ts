@@ -1107,3 +1107,27 @@ export function scheduleSpawnTasks(): void {
     prioritizeSpawnQueue(spawn);
   }
 }
+
+
+export function cleanupSpawnPlannerMemory(ownedRooms: ReadonlySet<string>): number {
+  const commutes = Memory.runtime?.spawnPlanner?.sourceWorkerCommutes;
+  if (!commutes) {
+    return 0;
+  }
+
+  let removed = 0;
+  for (const [cacheKey, cache] of Object.entries(commutes)) {
+    const roomName = cacheKey.split(":", 1)[0];
+    const expired = Game.time - cache.updatedAt > 1000;
+    if (!ownedRooms.has(roomName) || expired) {
+      delete commutes[cacheKey];
+      removed += 1;
+    }
+  }
+
+  if (Object.keys(commutes).length === 0 && Memory.runtime?.spawnPlanner) {
+    delete Memory.runtime.spawnPlanner;
+  }
+
+  return removed;
+}

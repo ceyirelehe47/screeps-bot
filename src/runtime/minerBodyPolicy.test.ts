@@ -1,6 +1,6 @@
 import {
   doesCreepBodyMatch,
-  retireMismatchedMinersAfterHandoff,
+  getMismatchedMinerRetirements,
 } from "@/runtime/minerBodyPolicy";
 import { getLinkMinerBodyForRegenSourceLevel } from "@/config/spawnProfiles";
 
@@ -38,10 +38,10 @@ describe("minerBodyPolicy", () => {
     const oldMiner = createMiner("old", oldBody, true);
     const replacement = createMiner("replacement", newBody, true);
 
-    retireMismatchedMinersAfterHandoff([oldMiner, replacement], source, newBody);
+    expect(getMismatchedMinerRetirements([oldMiner, replacement], source, newBody)).toEqual([oldMiner]);
 
     expect(doesCreepBodyMatch(replacement, newBody)).toBe(true);
-    expect(oldMiner.suicide).toHaveBeenCalledTimes(1);
+    expect(oldMiner.suicide).not.toHaveBeenCalled();
     expect(replacement.suicide).not.toHaveBeenCalled();
   });
 
@@ -49,9 +49,18 @@ describe("minerBodyPolicy", () => {
     const oldMiner = createMiner("old", oldBody, true);
     const replacement = createMiner("replacement", newBody, false, ["old"]);
 
-    retireMismatchedMinersAfterHandoff([oldMiner, replacement], source, newBody);
+    expect(getMismatchedMinerRetirements([oldMiner, replacement], source, newBody)).toEqual([oldMiner]);
 
-    expect(oldMiner.suicide).toHaveBeenCalledTimes(1);
+    expect(oldMiner.suicide).not.toHaveBeenCalled();
     expect(replacement.suicide).not.toHaveBeenCalled();
   });
+  it("keeps the incumbent while the matching replacement is spawning or still travelling", () => {
+    const oldMiner = createMiner("old", oldBody, true);
+    const replacement = createMiner("replacement", newBody, false);
+    expect(getMismatchedMinerRetirements([oldMiner, replacement], source, newBody)).toEqual([]);
+    replacement.spawning = true;
+    replacement.pos.inRangeTo = jest.fn(() => true);
+    expect(getMismatchedMinerRetirements([oldMiner, replacement], source, newBody)).toEqual([]);
+  });
+
 });

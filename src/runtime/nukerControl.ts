@@ -1,3 +1,4 @@
+import { runIsolatedRoomOperation } from "@/runtime/runtimeIsolation";
 import { isDue } from "@/runtime/cadence";
 import { countCarrierCargo } from "@/runtime/carrierCargo";
 import { limitActionLog } from "@/runtime/actionLog";
@@ -667,23 +668,31 @@ export function runNukerControl(): void {
   const validHolderIds = new Set<string>();
   const actions: string[] = [];
 
+  const failedRooms = new Set<string>();
   for (const room of getTickContextService().getMyRooms()) {
-    const nuker = getOwnedNuker(room);
-    if (!nuker) {
-      replaceCarrierTasksForProducerRoom(
-        NUKER_CARRIER_TASK_PRODUCER,
-        room.name,
-        [],
-      );
-      continue;
+    const completed = runIsolatedRoomOperation("nukerControl", room.name, () => {
+      const nuker = getOwnedNuker(room);
+      if (!nuker) {
+        replaceCarrierTasksForProducerRoom(NUKER_CARRIER_TASK_PRODUCER, room.name, []);
+        return true;
+      }
+      const plan = planRoomNuker(room, nuker);
+      for (const holderId of publishRoomPlan(plan, actions)) validHolderIds.add(holderId);
+      validRoomNames.add(room.name);
+      plans.push(plan);
+      return true;
+    });
+    if (!completed) { failedRooms.add(room.name); validRoomNames.add(room.name); }
+  }
+  // 单房输入未知时保留其旧任务与预约；不把部分需求发布成新的全局基线。
+  if (failedRooms.size) {
+    for (const reservation of listProductionReservations()) {
+      if (failedRooms.has(reservation.roomName) && reservation.holderId.startsWith(NUKER_RESERVATION_PREFIX)) {
+        reserveProductionResource(reservation.roomName, reservation.resource, reservation.amount,
+          reservation.holderId, NUKER_RESERVATION_TTL);
+      }
     }
-
-    validRoomNames.add(room.name);
-    const plan = planRoomNuker(room, nuker);
-    plans.push(plan);
-    for (const holderId of publishRoomPlan(plan, actions)) {
-      validHolderIds.add(holderId);
-    }
+    return;
   }
 
   pruneCarrierTasksForProducer(

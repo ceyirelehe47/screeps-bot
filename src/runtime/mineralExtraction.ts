@@ -1,3 +1,4 @@
+import { runIsolatedRoomOperation } from "@/runtime/runtimeIsolation";
 import { isDue } from "@/runtime/cadence";
 import { normalizeCapacityHeadroomPolicy } from "@/runtime/logistics/capacityHeadroom";
 import {
@@ -106,11 +107,15 @@ export function runMineralExtraction(): void {
   }
 
   for (const room of rooms) {
+    runIsolatedRoomOperation("runMineralExtraction", room.name, () => {
     replaceCarrierTasksForProducerRoom(
       MINERAL_EXTRACTION_CARRIER_TASK_PRODUCER,
       room.name,
       createRoomTasks(room),
     );
+  
+      return 0 as const;
+    });
   }
 
   pruneCarrierTasksForProducer(MINERAL_EXTRACTION_CARRIER_TASK_PRODUCER, validRoomNames);

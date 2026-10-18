@@ -1,5 +1,5 @@
 import { retireCreep } from "@/runtime/retirement";
-import { replaceSpawnQueue } from "@/runtime/spawnRequests";
+import { getSpawnRequestRevision, replaceSpawnQueue } from "@/runtime/spawnRequests";
 import { upsertConfig } from "@/runtime/creepApi";
 import { getLinkMinerBody } from "@/config/spawnProfiles";
 import { isColonizationBootstrapRoom } from "@/runtime/colonization";
@@ -8,7 +8,9 @@ import { isOwnedManagedRoom } from "@/runtime/roomTypes";
 import { isRescueRoom } from "@/runtime/rescue";
 import { getCreepConfigService, getTickContextService } from "@/runtime/runtimeServices";
 import { type TickContextService } from "@/runtime/tickContext";
-import { retireMismatchedMinersAfterHandoff } from "@/runtime/minerBodyPolicy";
+import { getHandoffRetirements, getMismatchedMinerRetirements } from "@/runtime/minerBodyPolicy";
+import { forEachIsolatedRoom } from "@/runtime/runtimeIsolation";
+import { shouldReconcile, recordReconciled } from "@/runtime/reconciliationGate";
 
 function hasLiveCreepForConfig(configName: string, tickContext: TickContextService): boolean {
   return tickContext.getCreepsByConfigName(configName).length > 0;
@@ -118,7 +120,7 @@ function orphanDeprecatedSourceConfig(configName: string): void {
   getCreepConfigService().detachSpawn(configName);
 }
 
-function retireDeprecatedSourceWorkers(activeConfigName: string, deprecatedConfigName: string, tickContext: TickContextService): void {
+function retireDeprecatedSourceWorkers(activeConfigName: string, deprecatedConfigName: string, source: Source, tickContext: TickContextService): void {
   if (tickContext.getCreepsByConfigName(activeConfigName).length === 0) {
     return;
   }
@@ -129,7 +131,7 @@ function retireDeprecatedSourceWorkers(activeConfigName: string, deprecatedConfi
     return;
   }
 
-  for (const creep of deprecatedCreeps) {
+  for (const creep of getHandoffRetirements(deprecatedCreeps, tickContext.getCreepsByConfigName(activeConfigName), source)) {
     retireCreep(creep, { owner: "workforce", mode: "suicide" });
   }
 }
@@ -138,15 +140,36 @@ export function bootstrapRooms(): void {
   const tickContext = getTickContextService();
   const myRooms = tickContext.getMyRooms();
 
-  for (const room of myRooms) {
+  forEachIsolatedRoom("bootstrap", myRooms, room => {
     if (!isOwnedManagedRoom(room.name)) {
-      continue;
+      return;
     }
 
     const inventory = buildRoomWorkforceInventory(room);
     applyRoomWorkforceConstructionTierEffect(room, inventory.constructionTierEffect);
     const expectedConfigNames = new Set(inventory.configs.map((config) => config.configName));
     const isSupportedRoom = isColonizationBootstrapRoom(room.name) || isRescueRoom(room.name);
+    const service = getCreepConfigService();
+    const inputs = () => {
+      const configs = service.getReadIndex().entries.filter(([name]) => name.startsWith(`${room.name}:`));
+      const names = new Set([...configs.map(([name]) => name), ...inventory.configs.map(config => config.configName)]);
+      const actors = [...names].sort().map(name => [name,
+        tickContext.getCreepsByConfigName(name).map(creep => [creep.name, !!creep.spawning]).sort(),
+        tickContext.getSpawningByConfigName(name).map(creep => creep.name).sort(),
+      ]);
+      const handoffs = inventory.configs.filter(config => config.kind === "source").map(config => [
+        config.configName,
+        ...getHandoffRetirements(tickContext.getCreepsByConfigName(config.deprecatedConfigName),
+          tickContext.getCreepsByConfigName(config.configName), config.source).map(creep => creep.name),
+        ...(config.role === "miner" ? getMismatchedMinerRetirements(tickContext.getCreepsByConfigName(config.configName),
+          config.source, getLinkMinerBody(room)).map(creep => creep.name) : []),
+      ]);
+      return JSON.stringify([service.getReadIndex().revision, getSpawnRequestRevision(), inventory.roomName,
+        room.controller?.level, room.energyCapacityAvailable, isSupportedRoom, inventory.reserveMode,
+        inventory.configs.map(config => [config.kind, config.configName, config.role, config.args]), actors, handoffs]);
+    };
+    if (!shouldReconcile(service, room.name, inputs())) return;
+
 
     for (const config of inventory.configs) {
       if (config.kind !== "source") {
@@ -159,14 +182,14 @@ export function bootstrapRooms(): void {
       } else {
         upsertConfig(config.configName, config.role, [...config.args], inventory.roomName);
         if (config.role === "miner") {
-          retireMismatchedMinersAfterHandoff(
+          for (const creep of getMismatchedMinerRetirements(
             tickContext.getCreepsByConfigName(config.configName),
             config.source,
             getLinkMinerBody(room),
-          );
+          )) retireCreep(creep, { owner: "workforce", mode: "suicide" });
         }
         orphanDeprecatedSourceConfig(config.deprecatedConfigName);
-        retireDeprecatedSourceWorkers(config.configName, config.deprecatedConfigName, tickContext);
+        retireDeprecatedSourceWorkers(config.configName, config.deprecatedConfigName, config.source, tickContext);
       }
     }
 
@@ -193,6 +216,6 @@ export function bootstrapRooms(): void {
     }
 
     cleanupWorkerConfigs(room.name, expectedConfigNames, tickContext);
-
-  }
+    recordReconciled(service, room.name, inputs());
+  });
 }

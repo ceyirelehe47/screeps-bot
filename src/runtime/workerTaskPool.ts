@@ -1,3 +1,4 @@
+import { runIsolatedRoomOperation } from "@/runtime/runtimeIsolation";
 import { isDue } from "@/runtime/cadence";
 import type { WorkerTask } from "@/types/system";
 import {
@@ -508,6 +509,7 @@ export function refreshWorkerTasks(): void {
 
   const rooms = getTickContextService().getMyRooms();
   for (const room of rooms) {
+    runIsolatedRoomOperation("refreshWorkerTasks", room.name, () => {
     const roomContext = getTickContextService().getRoomContext(room);
     const tasks = ensureRoomTaskStore(room.name);
     const activeAssignedNormalRepairTask = Object.values(tasks).find(
@@ -563,6 +565,9 @@ export function refreshWorkerTasks(): void {
     }
 
     cleanupStaleTasks(room.name);
+  
+      return 0 as const;
+    });
   }
 }
 
@@ -791,4 +796,26 @@ export function clearWorkerTaskBoardForTest(): void {
 export function getAssignedWorkerTaskId(creepName: string): string | undefined {
   const taskId = ownDataValue<unknown>(getCreepAssignmentState(creepName), "taskId");
   return typeof taskId === "string" ? taskId : undefined;
+}
+
+
+export function cleanupIllegalStructureCleanupMemory(ownedRooms: ReadonlySet<string>): number {
+  const rooms = Memory.runtime?.illegalStructureCleanup?.rooms;
+  if (!rooms) {
+    return 0;
+  }
+
+  let removed = 0;
+  for (const roomName of Object.keys(rooms)) {
+    if (!ownedRooms.has(roomName)) {
+      delete rooms[roomName];
+      removed += 1;
+    }
+  }
+
+  if (Object.keys(rooms).length === 0 && Memory.runtime?.illegalStructureCleanup) {
+    delete Memory.runtime.illegalStructureCleanup;
+  }
+
+  return removed;
 }

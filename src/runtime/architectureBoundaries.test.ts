@@ -53,3 +53,9 @@ it.each([
 ])("任务状态通过生命周期所有者转移：%s", file => {
   expect(readFileSync(join(__dirname, "..", file), "utf8")).not.toMatch(/\.status\s*=[^=]/);
 });
+
+
+it("中央 GC 仅调度领域 owner，不读取领域数据或改写运行时子树", () => {
+  expect(readFileSync(join(__dirname, "memoryCleanup.ts"), "utf8")).not.toMatch(/Memory\.(data|runtime)/);
+  expect(readFileSync(join(__dirname, "minerBodyPolicy.ts"), "utf8")).not.toMatch(/\.suicide\(|retireCreep\(/);
+});

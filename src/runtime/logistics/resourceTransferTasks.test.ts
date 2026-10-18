@@ -15,6 +15,7 @@ import {
   peekLogisticsControlStore,
   readLogisticsControlStoreExact,
   replaceLatestLogisticsDemandsForProducer,
+  invalidateLogisticsProducerSnapshot,
   replaceLogisticsRoomFacts,
   resetLogisticsControlCodecDiagnosticsForTest,
   resolveLogisticsControlConfig,
@@ -1117,4 +1118,27 @@ describe("resource transfer task health v2", () => {
       reason: "malformed_store",
     }));
   });
+});
+
+
+it("invalidates producer completeness without deleting accepted legacy cargo or demand generations", () => {
+  Game.time = 9000;
+  const producer = "synthesisControl:room";
+  const result = replaceLatestLogisticsDemandsForProducer(producer, [{
+    demandKey: "H:W2N2", destinationRoomName: "W2N2", resource: RESOURCE_HYDROGEN,
+    desiredAmount: 100, priorityClass: "production", ttl: 100, active: true,
+  }]);
+  expect(result.ok).toBe(true);
+  const before = peekLogisticsControlStore();
+  expect(before.ok).toBe(true);
+  if (!before.ok) return;
+  const intents = JSON.stringify(before.store.latestIntents);
+  const generation = JSON.stringify(before.store.generation);
+  expect(invalidateLogisticsProducerSnapshot(producer)).toBe(true);
+  const after = peekLogisticsControlStore();
+  expect(after.ok).toBe(true);
+  if (!after.ok) return;
+  expect(Object.values(after.store.producerSnapshots).some(s => s.producer === producer)).toBe(false);
+  expect(JSON.stringify(after.store.latestIntents)).toBe(intents);
+  expect(JSON.stringify(after.store.generation)).toBe(generation);
 });

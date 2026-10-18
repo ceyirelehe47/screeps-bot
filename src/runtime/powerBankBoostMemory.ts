@@ -47,3 +47,28 @@ export function getAssignedPowerBankBoostLabId(
   }
   return undefined;
 }
+
+export function cleanupPowerBankBoostMemory(activeTaskIds: ReadonlySet<string>): number {
+  const runtime = Memory.runtime;
+  if (!runtime) {
+    return 0;
+  }
+
+  let removed = 0;
+
+  if (runtime.powerBankBoost) {
+    for (const taskId of Object.keys(runtime.powerBankBoost)) {
+      if (activeTaskIds.has(taskId)) {
+        continue;
+      }
+      delete runtime.powerBankBoost[taskId];
+      removed += 1;
+    }
+
+    if (Object.keys(runtime.powerBankBoost).length === 0) {
+      delete runtime.powerBankBoost;
+    }
+  }
+
+  return removed;
+}

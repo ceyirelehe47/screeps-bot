@@ -1,3 +1,4 @@
+import { runIsolatedRoomOperation } from "@/runtime/runtimeIsolation";
 import { isDue } from "@/runtime/cadence";
 import { countCarrierCargo } from "@/runtime/carrierCargo";
 import { getTerminalAmountOutsideMarketSaleExposure } from "@/runtime/marketSaleExposure";
@@ -14,6 +15,7 @@ import {
   mapLegacyTransferPriority,
   peekLogisticsControlStore,
   replaceLatestLogisticsDemandsForProducer,
+  invalidateLogisticsProducerSnapshot,
   resolveLogisticsControlConfig,
   type LatestLogisticsDemandDraft,
   type LogisticsPriorityClass,
@@ -1949,8 +1951,9 @@ export function runSynthesisControl(): void {
   runtime.failedTaskCount = 0;
   runtime.successfulRunCount = 0;
 
+  let roomsComplete = true;
   for (const [roomName, roomCfg] of roomEntries.entries()) {
-    const result = handleRoom(
+    const result = runIsolatedRoomOperation("synthesisControl", roomName, () => handleRoom(
       roomName,
       roomCfg,
       planningTick,
@@ -1959,7 +1962,8 @@ export function runSynthesisControl(): void {
       transferTasks,
       null,
       shadowBatch,
-    );
+    ));
+    if (!result) { roomsComplete = false; continue; }
     runtime.generatedTaskCount += result.generated;
     runtime.failedTaskCount += result.failed;
     runtime.successfulRunCount += result.runs;
@@ -1968,7 +1972,8 @@ export function runSynthesisControl(): void {
 
   runtime.updatedAt = Game.time;
   runtime.lastActions = limitActionLog(actions);
-  if (shadowBatch) {
+  if (!roomsComplete) invalidateLogisticsProducerSnapshot(SYNTHESIS_ROOM_LOGISTICS_PRODUCER);
+  if (shadowBatch && roomsComplete) {
     measureLogisticsShadowCpu("producer", () => {
       const factBuild = shadowBatch.epochCapture.buildRoomFacts(
         [...new Set(shadowBatch.demands.map((demand) => demand.resource))].sort(),
@@ -2000,4 +2005,63 @@ export function runSynthesisControl(): void {
       }
     });
   }
+}
+
+
+export function cleanupSynthesisControlMemory(ownedRooms: ReadonlySet<string>): number {
+  if (!Memory.runtime?.synthesisControl) {
+    return 0;
+  }
+
+  let removed = 0;
+  for (const roomName of Object.keys(Memory.runtime.synthesisControl.rooms)) {
+    if (!ownedRooms.has(roomName)) {
+      delete Memory.runtime.synthesisControl.rooms[roomName];
+      removed += 1;
+    }
+  }
+
+  for (const [key, binding] of Object.entries(Memory.runtime.synthesisControl.bindings)) {
+    const targetRoomName = key.split(":", 1)[0];
+    const donorRoomName = binding.fromRoomName;
+    const expired = binding.expiresAt < Game.time;
+    if (expired || !ownedRooms.has(targetRoomName) || !ownedRooms.has(donorRoomName)) {
+      delete Memory.runtime.synthesisControl.bindings[key];
+      removed += 1;
+    }
+  }
+
+  if (
+    Object.keys(Memory.runtime.synthesisControl.rooms).length === 0 &&
+    Object.keys(Memory.runtime.synthesisControl.bindings).length === 0
+  ) {
+    delete Memory.runtime.synthesisControl;
+  }
+
+  return removed;
+}
+
+export function cleanupSynthesisBoostPause(activeTaskIds: ReadonlySet<string>): number {
+  let removed = 0;
+  const runtime = Memory.runtime;
+  if (!runtime) return 0;
+  const synthesisRooms = runtime.synthesisControl?.rooms;
+  if (!synthesisRooms) {
+    return removed;
+  }
+
+  for (const roomState of Object.values(synthesisRooms)) {
+    const pause = roomState.boostPause;
+    if (!pause) continue;
+    const activePauseTaskIds = (pause.taskIds || [pause.taskId]).filter((taskId) => activeTaskIds.has(taskId));
+    if (activePauseTaskIds.length > 0) {
+      pause.taskId = activePauseTaskIds[0];
+      pause.taskIds = activePauseTaskIds;
+    } else {
+      delete roomState.boostPause;
+      removed += 1;
+    }
+  }
+
+  return removed;
 }

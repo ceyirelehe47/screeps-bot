@@ -1525,3 +1525,7 @@ export function runColonizationByFlag(): void {
 
 const TASK_STATUSES = ["claiming","clearing","waiting_plan","bootstrapping","managed"] as const;
 const taskLifecycle = createTaskLifecycle<ColonizationStatus, ColonizationTask>("colonization", { claiming: TASK_STATUSES, clearing: TASK_STATUSES, waiting_plan: TASK_STATUSES, bootstrapping: TASK_STATUSES, managed: TASK_STATUSES }, task => task.targetRoom);
+
+export function getColonizationTargetRoomNames(): ReadonlySet<string> {
+  return new Set(Object.keys(Memory.data?.colonization ?? {}));
+}

@@ -1,3 +1,4 @@
+import { runIsolatedRoomOperation } from "@/runtime/runtimeIsolation";
 import {
   listCarrierTasksByRoom,
   pruneCarrierTasksForProducer,
@@ -167,18 +168,19 @@ export function runPowerSpawnControl(): void {
   const validRoomNames = new Set<string>();
   const processors = new Map<string, StructurePowerSpawn>();
   const rooms = Object.values(Game.rooms).sort((left, right) => left.name.localeCompare(right.name));
+  let failed = false;
   for (const room of rooms) {
-    if (!isPowerSpawnProcessingEnabledForRoom(room.name)) {
-      continue;
-    }
-    const powerSpawn = getOwnedPowerSpawn(room);
-    if (!powerSpawn) {
-      continue;
-    }
-    validRoomNames.add(room.name);
-    processors.set(room.name, powerSpawn);
-    runRoomPowerSpawnControl(room, powerSpawn);
+    const completed = runIsolatedRoomOperation("powerSpawnControl", room.name, () => {
+      if (!isPowerSpawnProcessingEnabledForRoom(room.name)) return true;
+      const powerSpawn = getOwnedPowerSpawn(room);
+      if (!powerSpawn) return true;
+      validRoomNames.add(room.name);
+      processors.set(room.name, powerSpawn);
+      runRoomPowerSpawnControl(room, powerSpawn);
+      return true;
+    });
+    if (!completed) { validRoomNames.add(room.name); failed = true; }
   }
   pruneCarrierTasksForProducer(POWER_SPAWN_CARRIER_TASK_PRODUCER, validRoomNames);
-  runPowerDistribution(rooms, processors);
+  if (!failed) runPowerDistribution(rooms, processors);
 }

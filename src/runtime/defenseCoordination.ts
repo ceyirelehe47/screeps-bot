@@ -153,3 +153,24 @@ export function getTowerBurstTarget(roomName: string): string | undefined {
   const target = getRoomDefenseCoordination(roomName)?.towerBurstTarget;
   return target?.tick === Game.time ? target.id : undefined;
 }
+
+
+export function cleanupDefenseCoordinationMemory(ownedRooms: ReadonlySet<string>): number {
+  if (!Memory.runtime?.defenseCoordination) {
+    return 0;
+  }
+
+  let removed = 0;
+  for (const roomName of Object.keys(Memory.runtime.defenseCoordination)) {
+    if (!ownedRooms.has(roomName)) {
+      delete Memory.runtime.defenseCoordination[roomName];
+      removed += 1;
+    }
+  }
+
+  if (Object.keys(Memory.runtime.defenseCoordination).length === 0) {
+    delete Memory.runtime.defenseCoordination;
+  }
+
+  return removed;
+}
