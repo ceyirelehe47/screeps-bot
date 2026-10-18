@@ -1,3 +1,4 @@
+import { retireCreep } from "@/runtime/retirement";
 import { clearMovementState, moveToTarget, moveToTargetRoom } from "@/roles/shared";
 import { ensureCreepMovementState, getCreepMovementState } from "@/movement/creepState";
 import { isExitTile } from "@/movement/common";
@@ -62,10 +63,9 @@ export function retireOrphanedPowerBankCombatCreep(creep: Creep, encodedRoute?: 
   const source = creep.memory.configName?.split(":")[0] || encodedRoute?.split("|")[0];
   const sourceRoom = source && /^[WE]\d+[NS]\d+$/.test(source) ? source : creep.room.controller?.my ? creep.room.name : undefined;
   if (!sourceRoom) return;
-  creep.memory._recycleToRoom = sourceRoom;
+  retireCreep(creep, { owner: "powerBank", mode: "recycle", roomName: sourceRoom, releaseTask: true });
   creep.memory.working = false;
   delete (creep.memory as PowerBankCombatRuntimeMemory).taskId;
-  delete creep.memory.configName;
   clearMovementState(creep);
 }
 

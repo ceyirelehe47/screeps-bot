@@ -1,3 +1,4 @@
+import { createTaskLifecycle } from "@/runtime/taskLifecycle";
 import { replaceSpawnQueue } from "@/runtime/spawnRequests";
 import { canStartOutboundMission } from "@/runtime/outboundMissionPolicy";
 import { spawnProfiles } from "@/config/spawnProfiles";
@@ -92,8 +93,8 @@ function bodyMatches(config: CreepConfig): boolean {
 export function canSpawnDepositConfig(configName: string, config: CreepConfig): boolean {
   const task = config.taskId ? Memory.data?.depositHarvest?.[config.taskId] : undefined;
   return Boolean(task && task.status === "spawning" && task.spawnStartedAt === undefined &&
-    task.generation === 0 && task.configName === configName &&
-    configName === `${task.sourceRoom}:deposit:${task.id}:g0` && task.spawnReadyAt === Game.time &&
+    Number.isSafeInteger(task.generation) && task.generation >= 0 && task.configName === configName &&
+    configName === `${task.sourceRoom}:deposit:${task.id}:g${task.generation}` && task.spawnReadyAt === Game.time &&
     config.spawnOnce && configOwned(task, config) && bodyMatches(config));
 }
 /** 只删除本代 owner 的配置/排队；活货由 memory 角色继续返仓。 */
@@ -108,7 +109,7 @@ export function cleanupDepositSpawnOwner(task: DepositHarvestTask): void {
   if (cfg) service.remove(task.configName);
 }
 export function finishDepositTask(task: DepositHarvestTask, status: "complete" | "aborted" | "failed", reason?: string): void {
-  task.status = status; task.terminalAt ??= Game.time; task.stopReason = reason;
+  setDepositTaskStatus(task, status); task.terminalAt ??= Game.time; task.stopReason = reason;
   delete task.blocker; delete task.nextAttemptAt;
   cleanupDepositSpawnOwner(task);
 }
@@ -149,7 +150,7 @@ function bind(task: DepositHarvestTask, creep: Creep): void {
   creep.memory.role = "depositHarvester"; creep.memory.roleArgs = [task.id, task.sourceRoom];
   task.creepName = creep.name;
   if (creep.spawning) task.spawnStartedAt ??= Game.time;
-  else { task.bornAt ??= Game.time; task.spawnStartedAt ??= Game.time; if (task.status === "spawning") task.status = "outbound"; }
+  else { task.bornAt ??= Game.time; task.spawnStartedAt ??= Game.time; if (task.status === "spawning") setDepositTaskStatus(task, "outbound"); }
 }
 function actualSpawning(task: DepositHarvestTask): string | undefined {
   return Object.values(Game.spawns).find((spawn) => spawn.spawning &&
@@ -205,7 +206,7 @@ function reconcile(task: DepositHarvestTask, config: DepositHarvestConfig): void
   if (task.bornAt !== undefined) {
     // 过期或禁用只中止新增采集，货物的 returning/unloading 不受期限销毁。
     if ((!enabled || Game.time >= task.expiresAt) && task.status !== "returning" && task.status !== "unloading") {
-      task.status = "returning"; task.stopReason = enabled ? "deposit_expired" : "disabled";
+      setDepositTaskStatus(task, "returning"); task.stopReason = enabled ? "deposit_expired" : "disabled";
       if (creep) (creep.memory as CreepMemory & DepositHarvesterMemory).depositReturning = true;
     }
     cleanupDepositSpawnOwner(task);
@@ -283,7 +284,7 @@ function admit(task: DepositHarvestTask, tasks: DepositHarvestTask[], config: De
     if (getCreepConfigService().get(task.configName)) { finishDepositTask(task, "failed", "spawn_owner_conflict"); return; }
     getCreepConfigService().set(task.configName, { role: "depositHarvester", args: [task.id, room.name], roomName: room.name,
       body: [...DEPOSIT_BODY], taskId: task.id, spawnOnce: {} });
-    task.status = "spawning"; task.spawnReadyAt = Game.time; delete task.blocker; delete task.nextAttemptAt;
+    setDepositTaskStatus(task, "spawning"); task.spawnReadyAt = Game.time; delete task.blocker; delete task.nextAttemptAt;
     return;
   }
   if (pendingRetryAt !== undefined) block(task, pendingReason!, Math.max(1, pendingRetryAt - Game.time));
@@ -308,4 +309,15 @@ export function runDepositHarvest(): void {
     if (active >= config.maxActiveTasks) break;
     admit(task, tasks, config); if (task.status === "spawning") active += 1;
   }
+}
+
+const depositLifecycle = createTaskLifecycle<DepositHarvestStatus, DepositHarvestTask>("deposit", {
+  discovered: ["spawning", "aborted", "failed"], spawning: ["outbound", "harvesting", "unloading", "returning", "complete", "aborted", "failed"],
+  outbound: ["harvesting", "returning", "unloading", "complete", "aborted", "failed"],
+  harvesting: ["returning", "unloading", "complete", "aborted", "failed"],
+  returning: ["unloading", "complete", "aborted", "failed"], unloading: ["returning", "complete", "aborted", "failed"],
+  complete: ["complete"], aborted: ["aborted"], failed: ["failed"],
+}, task => task.id);
+export function setDepositTaskStatus(task: DepositHarvestTask, status: DepositHarvestStatus): void {
+  depositLifecycle.transition(task, status);
 }

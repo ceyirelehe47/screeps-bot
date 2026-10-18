@@ -8,7 +8,8 @@ import type { DepositHarvestTask } from "@/runtime/depositHarvest";
 jest.mock("@/roles", () => ({ roleRegistry: { depositHarvester: (...args: string[]) =>
   jest.requireActual("@/roles/depositHarvester").depositHarvesterRole(...args) } }));
 jest.mock("@/roles/shared", () => ({ clearMovementState: jest.fn(), moveToTarget: jest.fn(), moveToTargetRoom: jest.fn() }));
-jest.mock("@/runtime/runtimeServices", () => ({ getCreepConfigService: () => ({ get: () => undefined }) }));
+jest.mock("@/runtime/runtimeServices", () => ({
+  getMemoryService: () => jest.requireActual("@/runtime/memoryService").createRuntimeMemoryService(), getCreepConfigService: () => ({ get: () => undefined }) }));
 jest.mock("@/runtime/cpuPhaseProfiler", () => ({ isPerCreepPhaseTimingEnabled: () => false,
   measureCreepIntent: (fn: () => unknown) => fn(), measureCpuPhase: (_p: string, fn: () => unknown) => fn() }));
 jest.mock("@/movement/metrics", () => ({ recordMovementGauge: jest.fn(), recordMovementMetric: jest.fn() }));
@@ -18,9 +19,8 @@ jest.mock("@/runtime/depositHarvest", () => ({
   getDepositAvoidRooms: () => [], getDepositHarvestConfig: () => ({ enabled: true, maxCooldown: 80 }),
   findDepositSafeRoute: (from: string, to: string) => from === to ? [from] : [from, to],
   isDepositTerminal: (task: DepositHarvestTask) => ["complete", "failed", "aborted"].includes(task.status),
-  finishDepositTask: jest.fn((task: DepositHarvestTask, status: DepositHarvestTask["status"], reason?: string) => {
-    task.status = status; task.stopReason = reason;
-  }),
+  setDepositTaskStatus: jest.requireActual("@/runtime/depositHarvest").setDepositTaskStatus,
+  finishDepositTask: jest.fn(jest.requireActual("@/runtime/depositHarvest").finishDepositTask),
 }));
 let amount = 0;
 let cooldown = 0;

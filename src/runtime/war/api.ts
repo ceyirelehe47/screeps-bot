@@ -275,3 +275,23 @@ export function configureWarRebuildWatch(sourceRoom: string, targetRooms: string
   getMemoryService().ensureCfg().warRebuildWatch![id] = { sourceRoom, targetRooms: rooms, enemyUsername, intervalTicks: Math.floor(intervalTicks), ...(sharedSquad ? { sharedSquad: true } : {}) };
   return { ok: true, id };
 }
+
+export function cleanupWarTasks(ownedRooms: ReadonlySet<string>): number {
+  if (!Memory.data?.war) {
+    return 0;
+  }
+
+  let removed = 0;
+  for (const [targetRoom, task] of Object.entries(Memory.data.war)) {
+    const sourceRoomOwned = ownedRooms.has(task.sourceRoom);
+    const terminalDone = task.status === "done" || task.status === "failed";
+    const terminalAnchor = task.completedAt ?? task.statusSince ?? task.createdAt;
+    const expiredTerminal = terminalDone && Game.time - terminalAnchor > 200;
+    if (!sourceRoomOwned || expiredTerminal) {
+      const result = releaseWarTaskOwner(targetRoom);
+      if (typeof result !== "string" && result.removedTask) removed += 1;
+    }
+  }
+
+  return removed;
+}

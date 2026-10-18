@@ -160,7 +160,7 @@ describe("三个NPC目标共享一支清剿小队", () => {
     expect(Object.values(Memory.runtime!.warRebuildWatch!)[0].sharedSquadOwner).toBe("E2N54");
     expect(Game.creeps['E2N54-red'].memory.configName).toBeDefined();
     for (const name of ["E3N57", "E3N53"]) for (const role of ["red", "green"]) {
-      expect(Game.creeps[`${name}-${role}`].memory).toMatchObject({ _warDetached: true, _warRetireToRoom: "E1N57" });
+      expect(Game.creeps[`${name}-${role}`].memory).toMatchObject({ _warDetached: true, _recycleToRoom: "E1N57" });
       expect(Game.creeps[`${name}-${role}`].memory.configName).toBeUndefined();
     }
     expect(Memory.data!.creepConfigs![controllerName]).toBeUndefined();
@@ -177,7 +177,7 @@ describe("三个NPC目标共享一支清剿小队", () => {
     const owner = Memory.data!.war!.E3N53;
     expect(owner).toMatchObject({ squad: "towerDrainDuo", npcAuto: true });
     expect(owner.boostTier).toBeUndefined();
-    expect(Game.creeps['E3N53-red'].memory._warRetireToRoom).toBe("E1N57");
+    expect(Game.creeps['E3N53-red'].memory._recycleToRoom).toBe("E1N57");
     expect(Object.values(Memory.data!.war!).filter(t => t.activeGeneration)).toHaveLength(1);
   });
 
@@ -189,7 +189,7 @@ describe("三个NPC目标共享一支清剿小队", () => {
     room.controller!.owner = { username: "TooAngel" }; Game.rooms.E3N53 = room;
     runWarControl();
     expect(Memory.data!.war!.E3N53).toMatchObject({ squad: "t3Duo", boostTier: "t3" });
-    expect(Game.creeps['E3N53-red'].memory._warRetireToRoom).toBeUndefined();
+    expect(Game.creeps['E3N53-red'].memory._recycleToRoom).toBeUndefined();
   });
 
   it("清空一房后同一对成员原子换目标与搭档，不孵化另一队并等待自然降级", () => {
@@ -232,7 +232,7 @@ describe("三个NPC目标共享一支清剿小队", () => {
     const owner = Memory.data!.war![ownerName];
     expect(owner.squad).toBe("towerDrainDuo");
     expect(owner.activeGeneration?.phase).toBe("assembling");
-    expect(Game.creeps[`${ownerName}-green`].memory._warRetireToRoom).toBe("E1N57");
+    expect(Game.creeps[`${ownerName}-green`].memory._recycleToRoom).toBe("E1N57");
     expect(Object.values(Memory.data!.war!).filter((task) => task.activeGeneration)).toHaveLength(1);
     const id = owner.activeGeneration!.id; tick(); runWarControl();
     expect(owner.activeGeneration!.id).toBe(id);

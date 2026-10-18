@@ -1,3 +1,4 @@
+import { createTaskLifecycle } from "@/runtime/taskLifecycle";
 import { isDue } from "@/runtime/cadence";
 import { ensureConfigStore, getBodyCost, getLiveCreepsByConfig, isConfigSpawning as hasSpawningConfig, removeQueuedSpawnConfig } from "@/runtime/spawnHelpers";
 import { spawnProfiles } from "@/config/spawnProfiles";
@@ -93,7 +94,7 @@ function getTaskConfigNames(task: RescueTask): string[] {
   return Object.keys(getCreepConfigService().list(prefix));
 }
 
-function isConfigSpawning(configName: string): boolean { const context = getTickContextService(); return context.getMyRooms().some(room => hasSpawningConfig(configName, context.getSpawnsByRoom(room.name))); }
+function isConfigSpawning(configName: string): boolean { return hasSpawningConfig(configName, getTickContextService().getAllSpawns()); }
 
 function upsertConfig(configName: string, config: import("@/types/system").CreepConfig): void {
   getCreepConfigService().set(configName, config);
@@ -188,7 +189,7 @@ function processRescueTask(task: RescueTask): void {
   if (hasOwnedSpawnInTargetRoom(task)) {
     const targetRoomRcl = Game.rooms[task.targetRoom]?.controller?.level ?? 0;
     if (targetRoomRcl >= 3) {
-      task.status = "managed";
+      taskLifecycle.transition(task, "managed");
       const cleaned = cleanupRescueConfigs(task);
       if (cleaned) {
         const store = ensureRescueStore();
@@ -298,4 +299,18 @@ export function runRescueByFlag(): void {
     processRescueTask(task);
     task.updatedAt = Game.time;
   }
+}
+
+const TASK_STATUSES = ["bootstrapping","managed"] as const;
+const taskLifecycle = createTaskLifecycle<RescueStatus, RescueTask>("rescue", { bootstrapping: TASK_STATUSES, managed: TASK_STATUSES }, task => task.targetRoom);
+
+/** 母房消失先停止生产，保留活体/出生所有权，引用归零后才删除任务。 */
+export function cleanupRescueTasks(ownedRooms: ReadonlySet<string>): number {
+  const store = Memory.data?.rescue;
+  if (!store) return 0;
+  let removed = 0;
+  for (const [target, task] of Object.entries(store)) {
+    if (!ownedRooms.has(task.sourceRoom) && cleanupRescueConfigs(task)) { delete store[target]; removed++; }
+  }
+  return removed;
 }

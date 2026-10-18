@@ -1,3 +1,5 @@
+import { createTaskLifecycle } from "@/runtime/taskLifecycle";
+import type { OutboundMissionOwner } from "@/runtime/outboundMissionRegistry";
 import { getCreepConfigService, getTickContextService, getMemoryService } from "@/runtime/runtimeServices";
 import { hasTaskActors } from "@/runtime/taskActors";
 
@@ -322,7 +324,7 @@ function cleanupTaskConfigs(task: CrossShardColonizationTask): void {
 }
 
 function markClaimed(task: CrossShardColonizationTask, claimedAt: number): void {
-  task.status = "claimed";
+  taskLifecycle.transition(task, "claimed");
   task.claimedAt = claimedAt;
   task.reason = undefined;
 
@@ -333,7 +335,7 @@ function markClaimed(task: CrossShardColonizationTask, claimedAt: number): void 
 }
 
 function markCompleted(task: CrossShardColonizationTask): void {
-  task.status = "completed";
+  taskLifecycle.transition(task, "completed");
   task.completedAt = Game.time;
   task.reason = undefined;
   cleanupTaskConfigs(task);
@@ -359,10 +361,10 @@ function generateTravelerName(
 
 function ensureClaimer(task: CrossShardColonizationTask): void {
   if (Number.isFinite(Game.gcl?.level) && getGlobalOwnedRoomCount([task.targetShard]) >= Game.gcl.level) {
-    cleanupTaskConfigs(task); task.status = "blocked"; task.reason = "target_shard_gcl_not_enough"; return;
+    cleanupTaskConfigs(task); taskLifecycle.transition(task, "blocked"); task.reason = "target_shard_gcl_not_enough"; return;
   }
   if (!task.sourceRoom || !task.portalRoom) {
-    task.status = "blocked";
+    taskLifecycle.transition(task, "blocked");
     task.reason = "missing source room or portal room";
     return;
   }
@@ -373,13 +375,13 @@ function ensureClaimer(task: CrossShardColonizationTask): void {
   if (task.launchedAt && Game.time - task.launchedAt > CLAIM_RETRY_TTL) {
     task.claimAttempts = (task.claimAttempts ?? 0) + 1;
     if (task.claimAttempts >= 3) {
-      cleanupTaskConfigs(task); task.status = "failed"; task.reason = "claim_retry_limit"; task.completedAt = Game.time; return;
+      cleanupTaskConfigs(task); taskLifecycle.transition(task, "failed"); task.reason = "claim_retry_limit"; task.completedAt = Game.time; return;
     }
     removeQueuedConfig(task, configName);
     removeConfigWhenIdle(configName);
     task.launchedAt = undefined;
     task.claimerName = undefined;
-    task.status = "planning";
+    taskLifecycle.transition(task, "planning");
     task.reason = `claimer retry after ${CLAIM_RETRY_TTL} ticks without remote claim`;
   }
 
@@ -398,7 +400,7 @@ function ensureClaimer(task: CrossShardColonizationTask): void {
 
   const spawns = getSpawnsForRoom(task.sourceRoom);
   if (spawns.length === 0) {
-    task.status = "blocked";
+    taskLifecycle.transition(task, "blocked");
     task.reason = `source spawn missing in ${task.sourceRoom}`;
     return;
   }
@@ -409,19 +411,19 @@ function ensureClaimer(task: CrossShardColonizationTask): void {
       task.launchedAt = Game.time;
     }
     task.lastObservedAt = Game.time;
-    task.status = "spawning";
+    taskLifecycle.transition(task, "spawning");
     task.reason = undefined;
     return;
   }
 
   if (isConfigSpawning(configName) || isConfigQueued(task, configName)) {
-    task.status = "spawning";
+    taskLifecycle.transition(task, "spawning");
     task.reason = undefined;
     return;
   }
 
   if (task.launchedAt) {
-    task.status = "in_transit";
+    taskLifecycle.transition(task, "in_transit");
     task.reason = `claimer launched at ${task.launchedAt}, waiting remote claim`;
     if (configStore[configName]?.roomName) {
       getCreepConfigService().detachSpawn(configName);
@@ -433,20 +435,20 @@ function ensureClaimer(task: CrossShardColonizationTask): void {
 
   const targetSpawn = selectLeastLoadedSpawn(spawns);
   if (targetSpawn) enqueueConfig(targetSpawn, configName, true);
-  task.status = "ready";
+  taskLifecycle.transition(task, "ready");
   task.reason = undefined;
 }
 
 function ensureBootstrapSquad(task: CrossShardColonizationTask): void {
   if (!task.sourceRoom || !task.portalRoom) {
-    task.status = "blocked";
+    taskLifecycle.transition(task, "blocked");
     task.reason = "missing source room or portal room for bootstrap";
     return;
   }
 
   const spawns = getSpawnsForRoom(task.sourceRoom);
   if (spawns.length === 0) {
-    task.status = "blocked";
+    taskLifecycle.transition(task, "blocked");
     task.reason = `source spawn missing in ${task.sourceRoom}`;
     return;
   }
@@ -471,7 +473,7 @@ function ensureBootstrapSquad(task: CrossShardColonizationTask): void {
       task.reason = "bootstrap squad dispatched, waiting target shard spawn";
     }
 
-    task.status = "bootstrapping";
+    taskLifecycle.transition(task, "bootstrapping");
     return;
   }
 
@@ -507,7 +509,7 @@ function ensureBootstrapSquad(task: CrossShardColonizationTask): void {
   task.bootstrapConfigNames = bootstrapConfigNames;
   task.bootstrapDispatchedAt = Game.time;
   task.bootstrapLaunched = false;
-  task.status = "bootstrapping";
+  taskLifecycle.transition(task, "bootstrapping");
   task.reason = "bootstrap squad dispatched";
 }
 
@@ -521,7 +523,7 @@ function processTask(task: CrossShardColonizationTask): void {
   }
 
   if (task.targetShard === Game.shard.name) {
-    task.status = "failed";
+    taskLifecycle.transition(task, "failed");
     task.reason = "target shard equals current shard";
     return;
   }
@@ -536,7 +538,7 @@ function processTask(task: CrossShardColonizationTask): void {
 
   if ((task.status === "claimed" || task.status === "bootstrapping") && remoteState.fresh && remoteState.claimAt === undefined) {
     cleanupTaskConfigs(task);
-    task.status = "planning"; task.claimedAt = undefined;
+    taskLifecycle.transition(task, "planning"); task.claimedAt = undefined;
     task.bootstrapDispatchedAt = undefined; task.bootstrapConfigNames = undefined; task.bootstrapLaunched = undefined;
   }
   if (task.status === "claimed" || task.status === "bootstrapping") {
@@ -559,7 +561,7 @@ function processTask(task: CrossShardColonizationTask): void {
   const selected = selectSourceAndPortal(task.targetShard, task.preferredSourceRoom, task.targetRoom);
   if (!selected) {
     cleanupTaskConfigs(task);
-    task.status = "blocked";
+    taskLifecycle.transition(task, "blocked");
     task.reason = "no reachable source room or inter-shard portal";
     task.portalId = undefined;
     task.portalRoom = undefined;
@@ -670,7 +672,7 @@ export function runCrossShardColonizationByFlag(): void {
   const store = ensureTaskStore();
   for (const task of Object.values(store)) {
     if (task.status === "blocked" && Game.time - (task.lastReadyAt ?? task.createdAt) > 5000) {
-      cleanupTaskConfigs(task); task.status = "failed"; task.reason = "blocked_timeout"; task.completedAt = Game.time;
+      cleanupTaskConfigs(task); taskLifecycle.transition(task, "failed"); task.reason = "blocked_timeout"; task.completedAt = Game.time;
     }
     if (["completed", "failed"].includes(task.status)) { task.completedAt ??= Game.time; continue; }
     if ((task.bootstrapConfigNames ?? []).some(name => getLiveCreepsByConfig(name).length > 0 || isConfigSpawning(name))) task.bootstrapLaunched = true;
@@ -687,3 +689,20 @@ export function runCrossShardColonizationByFlag(): void {
     task.updatedAt = Game.time;
   }
 }
+
+/** 新 claim 不从 RESERVE 借款；已确认占领的跨 shard bootstrap 继续完成已投入任务。 */
+export const crossShardColonizationMissionOwner: OutboundMissionOwner = {
+  id: "crossShardColonization",
+  matches: (_name, config) => ["crossShardClaimer", "crossShardColonizerHarvester", "crossShardColonizerWorker"].includes(config.role),
+  evaluate(name, config, mode) {
+    const task = Object.values(Memory.data?.crossShardColonization ?? {}).find(task =>
+      task.sourceRoom === mode.sourceRoom && config.args[0] === task.targetShard && config.args[1] === task.targetRoom &&
+      config.args[2] === task.portalRoom && getAllTaskConfigNames(task).includes(name));
+    const bootstrap = config.role === "crossShardColonizerHarvester" || config.role === "crossShardColonizerWorker";
+    return { intent: "expedition", committed: !!task && bootstrap && task.claimedAt !== undefined &&
+      task.status !== "failed" && task.status !== "completed" && !!task.bootstrapConfigNames?.includes(name) };
+  },
+};
+
+const TASK_STATUSES = ["planning","ready","spawning","in_transit","claimed","bootstrapping","completed","blocked","failed"] as const;
+const taskLifecycle = createTaskLifecycle<CrossShardColonizationStatus, CrossShardColonizationTask>("crossShardColonization", { planning: TASK_STATUSES, ready: TASK_STATUSES, spawning: TASK_STATUSES, in_transit: TASK_STATUSES, claimed: TASK_STATUSES, bootstrapping: TASK_STATUSES, completed: ["completed"], blocked: TASK_STATUSES, failed: ["failed"] }, task => `${task.targetShard}:${task.targetRoom}`);

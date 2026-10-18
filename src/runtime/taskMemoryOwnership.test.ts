@@ -47,3 +47,17 @@ it("发现时的容量清理也保护 Deposit 在途货物，与中央 GC 使用
   expect(Memory.data!.depositHarvest!.old).toBeUndefined();
   expect(Memory.data!.depositHarvest!.new).toBeDefined();
 });
+
+it("救援母房消失先停止生产，活体消失后才清任务与配置", () => {
+  const name = "lost:rescue:W2N2:worker:0";
+  Memory.data!.rescue = { W2N2: { sourceRoom: "lost", targetRoom: "W2N2", status: "bootstrapping", flagName: "RESCUE", createdAt: 1, updatedAt: 1 } };
+  Memory.data!.creepConfigs = { [name]: { role: "colonizerWorker", roomName: "lost", args: ["W2N2"] } };
+  Game.creeps.actor = { name: "actor", room: { name: "W2N2" }, memory: { role: "colonizerWorker", configName: name } } as Creep;
+  runRegisteredMemoryGc({ ownedRooms: new Set() });
+  expect(Memory.data!.rescue.W2N2).toBeDefined();
+  expect(Memory.data!.creepConfigs[name].roomName).toBeUndefined();
+  Game.creeps = {}; Game.time++;
+  runRegisteredMemoryGc({ ownedRooms: new Set() });
+  expect(Memory.data!.rescue.W2N2).toBeUndefined();
+  expect(Memory.data!.creepConfigs[name]).toBeUndefined();
+});

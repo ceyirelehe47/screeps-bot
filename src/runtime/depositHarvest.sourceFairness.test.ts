@@ -14,6 +14,7 @@ jest.mock("@/runtime/defenseMode", () => ({ isDefenseMode: () => false }));
 jest.mock("@/runtime/powerBankObserver", () => ({ requestDepositObservation: () => true }));
 jest.mock("@/config/spawnProfiles", () => ({ spawnProfiles: {} }));
 jest.mock("@/runtime/runtimeServices", () => ({
+  getMemoryService: () => jest.requireActual("@/runtime/memoryService").createRuntimeMemoryService(),
   getTickContextService: () => ({ getMyRooms: () => Object.values(Game.rooms).filter((r) => r.controller?.my) }),
   getCreepConfigService: (() => {
     const { createCreepConfigService } = jest.requireActual("@/runtime/creepConfigService");

@@ -1,3 +1,4 @@
+import { appendRuntimeEvent } from "@/runtime/runtimeEvents";
 /** 孵化队列唯一写入者。调用方提交完整计划或单项请求，不保留可写数组。 */
 const EMPTY_QUEUE: readonly string[] = Object.freeze([]);
 let revision = 0;
@@ -45,7 +46,10 @@ export function rejectSpawnRequest(spawn: StructureSpawn, configName: string,
 
 export function recordAcceptedSpawn(spawn: StructureSpawn, configName: string, creepName: string): void {
   beginTick();
+  const previous = accepted.get(spawn.name);
+  if (previous?.configName === configName && previous.creepName === creepName) return;
   accepted.set(spawn.name, { spawnName: spawn.name, configName, creepName });
+  appendRuntimeEvent({ owner: "spawn", id: creepName, kind: "spawnAccepted", to: configName });
   revision++;
 }
 

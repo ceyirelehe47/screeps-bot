@@ -1,3 +1,4 @@
+import { createTaskLifecycle } from "@/runtime/taskLifecycle";
 import { POWER_BANK_STATUS } from "@/runtime/powerBankConstants";
 
 const DEFAULT_STAGE_TIMEOUTS: Partial<Record<PowerBankHarvestStatus, number>> = {
@@ -55,7 +56,7 @@ export function transitionPowerBankTask(
   reason?: string,
 ): void {
   if (task.status !== status) {
-    task.status = status;
+    lifecycle.transition(task, status);
     task.stageEnteredAt = Game.time;
     task.lastProgressAt = Game.time;
   }
@@ -183,3 +184,11 @@ export function updatePowerBankObservation(
   task.lastBankHits = bank.hits;
   task.hits = bank.hits;
 }
+
+const activeStates = Object.values(POWER_BANK_STATUS);
+const transitions: Record<PowerBankHarvestStatus, readonly PowerBankHarvestStatus[]> = {
+  discovered: activeStates, preparing_boosts: activeStates, spawning: activeStates, renewing: activeStates,
+  boosting: activeStates, travelling: activeStates, attacking: activeStates, hauling: activeStates,
+  complete: ["complete"], failed: ["failed"], aborted: ["aborted"],
+};
+const lifecycle = createTaskLifecycle<PowerBankHarvestStatus, PowerBankHarvestTask>("powerBank", transitions, task => task.id);

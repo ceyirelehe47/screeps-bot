@@ -1,3 +1,4 @@
+import { retireCreep } from "@/runtime/retirement";
 import { cancelSpawning } from "./spawnIndex";
 import { measureSampledCpuPhase } from "@/runtime/cpuPhaseProfiler";
 import { getCreepConfigService, getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
@@ -18,7 +19,7 @@ export function retireSharedCombat(task: WarTask): void {
   const names = new Set(getTaskConfigNames(task).filter((name) => name !== getControllerAttackConfigName(task)));
   const spawning = collectSpawningForConfigs(names);
   for (const creep of [...names].flatMap(getLiveCreepsByConfig)) {
-    creep.memory._warRetireToRoom = task.sourceRoom;
+    retireCreep(creep, { owner: "war", mode: "recycle", roomName: task.sourceRoom });
     resetWarCreepTargetState(creep);
   }
   detachWarTaskCreeps(task, names, false);
@@ -33,9 +34,8 @@ export function retireSharedController(task: WarTask): void {
   if (!ensureConfigStore()[name] && !getLiveCreepsByConfig(name).length && !isConfigSpawning(name) && !isConfigQueuedInSpawns(getSpawnsForRoom(task.sourceRoom), name) && task.controllerAttackerLastQueuedAt === undefined) return;
   const spawning = collectSpawningForConfigs(new Set([name]));
   for (const actor of getLiveCreepsByConfig(name)) {
-    actor.memory._recycleToRoom = task.sourceRoom;
+    retireCreep(actor, { owner: "war", mode: "recycle", roomName: task.sourceRoom });
     resetWarCreepTargetState(actor);
-    delete actor.memory.configName;
   }
   for (const spawn of spawning) cancelSpawning(spawn);
   clearControllerAttackConfig(task);

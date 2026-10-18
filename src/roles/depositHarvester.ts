@@ -1,3 +1,4 @@
+import { setDepositTaskStatus } from "@/runtime/depositHarvest";
 import { moveToTarget, moveToTargetRoom } from "@/roles/shared";
 import { measureCreepIntent } from "@/runtime/cpuPhaseProfiler";
 import { executeTreasuryFencedTerminalCargo } from "@/runtime/treasuryTerminalCargo";
@@ -40,7 +41,7 @@ function stop(creep: Creep, task: DepositHarvestTask | undefined, reason: string
   mem.depositReturning = true;
   if (task && !isDepositTerminal(task)) {
     // 同 tick 再次 mounted 调用仍在等 transfer 对账，不能降回 returning。
-    if (!mem.depositPendingTransfer) task.status = "returning";
+    if (!mem.depositPendingTransfer) setDepositTaskStatus(task, "returning");
     task.stopReason ??= reason;
   }
 }
@@ -111,7 +112,7 @@ function deliver(creep: Creep, task: DepositHarvestTask | undefined): boolean {
     return false;
   }
   mem.depositDeliveryTargetId = delivery.target.id;
-  if (task) { delete task.blocker; task.status = "returning"; }
+  if (task) { delete task.blocker; setDepositTaskStatus(task, "returning"); }
   if (creep.room.name !== delivery.target.pos.roomName) {
     moveToTargetRoom(creep, delivery.target.pos.roomName, delivery.routeRooms.join("|"),
       { profile: "travel", reusePath: 10, avoidRooms: getDepositAvoidRooms() });
@@ -126,7 +127,7 @@ function deliver(creep: Creep, task: DepositHarvestTask | undefined): boolean {
   mem.depositIntentTick = Game.time;
   if (code === OK) {
     mem.depositPendingTransfer = { tick: Game.time, before, amount, resource, targetId: delivery.target.id };
-    if (task) task.status = "unloading";
+    if (task) setDepositTaskStatus(task, "unloading");
   } else if (code === ERR_NOT_IN_RANGE) moveToTarget(creep, delivery.target, 1);
   return false;
 }
@@ -181,7 +182,7 @@ export const depositHarvesterRole: RoleFactory = (taskId?: string, homeRoom?: st
     if (free <= 0 || work === 0 || estimate.expectedAmount <= 0 || deposit.lastCooldown > config.maxCooldown) {
       stop(creep, task, free <= 0 ? "full" : "cooldown_or_ttl_exhausted"); return true;
     }
-    task.status = "harvesting";
+    setDepositTaskStatus(task, "harvesting");
     if (deposit.cooldown > 0) return false;
     const before = creep.store.getUsedCapacity(task.resourceType) || 0;
     const code = measureCreepIntent(() => creep.harvest(deposit));

@@ -179,7 +179,9 @@ describe("powerBankHaulerRole", () => {
       hauler.pos = new MockPos(20, 19, alternateRoom.name) as unknown as RoomPosition;
       expect(role.target(hauler)).toBe(false);
       expect(hauler.transfer).toHaveBeenCalledWith(alternateRoom.terminal, RESOURCE_POWER, 600);
-      expect((task as any).deliveredPower).toBe(600);
+      expect(task.deliveredPower ?? 0).toBe(0);
+      hauler.store[RESOURCE_POWER] = 0; Game.time += 1; role.target(hauler);
+      expect(task.deliveredPower).toBe(600);
       expect((task as any).lastProgressAt).toBe(Game.time);
       expect((hauler.memory as any).powerBankDeliveryRoom).toBe(alternateRoom.name);
     });
@@ -429,6 +431,8 @@ describe("powerBankHaulerRole", () => {
         advanceTick();
         expect(hauler.store.getUsedCapacity(RESOURCE_POWER)).toBe(0);
         expect(terminal.store.getUsedCapacity(RESOURCE_POWER) - initialPower).toBe(200);
+        expect(task.deliveredPower).toBe(100); // 最后一批还需由角色确认下一帧 cargo。
+        hauler.work();
         expect(task.deliveredPower).toBe(200);
         expect((hauler.memory as CreepMemory & { taskId?: string }).taskId).toBe(TASK_ID);
       } finally {
@@ -441,4 +445,19 @@ describe("powerBankHaulerRole", () => {
       }
     });
   });
+it("transfer OK 但下一 tick cargo 不变不会记交付，同 tick 也不重复提交", () => {
+  const task = setupTask("hauling", { deliveredPower: 0 }); Game.time = 100;
+  const home = createDeliveryRoom(SOURCE_ROOM, { terminalFree: 5000 }); Game.rooms[SOURCE_ROOM] = home;
+  const hauler = createHauler({ roomName: SOURCE_ROOM, store: { [RESOURCE_POWER]: 500 } });
+  hauler.room = home; hauler.pos = new MockPos(20, 19, SOURCE_ROOM) as unknown as RoomPosition;
+  const role = powerBankHaulerRole(TARGET_ROOM);
+  role.target(hauler); role.target(hauler);
+  expect(hauler.transfer).toHaveBeenCalledTimes(1); expect(task.deliveredPower).toBe(0);
+  Game.time++; role.target(hauler);
+  expect(hauler.transfer).toHaveBeenCalledTimes(2); expect(task.deliveredPower).toBe(0);
+  hauler.store[RESOURCE_POWER] = 0; Game.time++; role.target(hauler); role.target(hauler);
+  expect(task.deliveredPower).toBe(500);
+});
+
+
 });

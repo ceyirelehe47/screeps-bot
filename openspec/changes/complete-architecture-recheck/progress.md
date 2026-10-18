@@ -38,3 +38,22 @@
 - 运输执行器与读模型共用 key，合成规划同相以复用物流索引；CPU profiler 与 PB 诊断使用相同采样 key。独立任务的稳定哈希相位分散。
 - CPU summary 提供最多 100 个相位桶的样本数、均值和最大值；不把未采样相位记成零。console 与遥测可读取；采样窗口不等同于连续全 tick 性能证明。
 - 旧测试夹具迁移为明确的逻辑 tick 加稳定相位，保留执行点、非执行点、TTL、错相位和读取时钟反例。候选仍待完整回归和正式发布。
+
+## 完整项证据归并
+
+- 第 10、11 项：`57dbd79d` 的配置与出生请求生产迁移、revision 索引、类型/AST 边界、完整回归及 shard1 实际发布证据齐备，整项勾选；不是把部分实现算作完成。
+- 第 19 项是已上线能力的重新取证，不是本轮新增收益：shard1 在 tick 74402242 运行 `57dbd79d`，permitChain 分段 schema=1、mode=segments、active epoch=1，segment 81/82/83 承载 JSON 813797 字节。逻辑 Memory 1724280 字符，RawMemory.get() 910355 字符（落盘读数与控制台属于相邻帧，不能逐字节相减当成本轮收益）。
+- 现有 permitChainSegmentCodec、permitChainSegments 与 memoryStorage 套件覆盖校验、双 bank 未激活/下一 tick 读回、heap 重置恢复、预算与容量拒绝、投影失败保留内联数据。它们在 `57dbd79d` 的无过滤完整回归中通过；上线模块读回及实际执行证明也具备，因此第 19 项按既有实现完成验收。
+- 最大逻辑分支 marketSaleAutomation 约 1.10 MB，其中 directAutomation 约 1.02 MB；已分段的 permitChain 仍在业务 Memory 中水合，不能把逻辑体积误判为 RawMemory 内联体积。creep Memory 约 17 KB，后续瘦身优先保证任务与货物恢复，不为了减少字段破坏生命周期。
+- 其余复选项仍待整项生产证据；寻路/错峰候选与生命周期工作不会代替小队、执行协议/交通、市场等未完成项。
+
+## 任务生命周期与退役（候选版本 2026.10.18-8）
+
+- war、PB、Deposit、殖民/跨 shard、救援、外矿、殖民支援及 factory 的状态写入通过共同生命周期入口；合法状态由 owner 声明，转移统一记录时间及有界事件。资源运输 owner 的 patch/cancel 也登记转移并保留自动 revision bump，人工取消终态的既有 API 语义保留。
+- 状态相同不重置阶段时间；副作用 entry 仅在全部完成后提交，失败可重试。已有 war entry 接入；其他终态清理保持各 owner 的幂等重试路径。
+- 中央 GC 不再自行删除 war、rescue、Portal 或跨 shard 缓存，注册 owner 执行各自的删除规则。Rescue 母房消失先停止生产，活体与出生引用归零后再删除。
+- 跨 shard 配置缺少 roomName 时采用实际 Spawn 房间准入；新 claimer 在 RESERVE 下不放行，已占领 bootstrap 按 owner 证据继续，防御仍阻止外出。Deposit 资格匹配 owner 当前合法整数世代，不硬编码 g0，旧代配置不借用。
+- 共同退役入口迁移 war、PB、殖民与 workforce 编排；旧 _warRetireToRoom 迁移到 _recycleToRoom，保留角色参数。孵化中 suicide 请求保留到出生后，实际死亡前阻止继续业务，每个 actor 每 tick 最多提交一次。
+- PB transfer 的 OK 只记录待确认收据，下一 tick 按 cargo 减少计数；同 tick 不重复提交。终态 owner 在 cargo 或 transfer 收据未结算时保留，配置停止补员，结算后更新最终历史。
+- runtime.events 最多 128 条，TTL 5000；出生受理、死亡、退役和转移接入。只读消费者获得 sequence/cursor，容量淘汰、TTL 与 Memory 重置后的游标缺口明确返回 gap；这些事件是观察记录，不代替实时金融/出生授权。
+- 19 套件、290 用例的生命周期接入检查通过；PB 货物、共同退役、bootstrap 与 mount 的 6 套件、61 用例通过。最终退役幂等与货物确认改动再次通过 5 套件、58 用例及两套类型检查。本候选仍须按确切提交执行完整回归、构建与发布验收。

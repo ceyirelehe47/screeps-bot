@@ -675,6 +675,7 @@ declare global {
   interface PowerBankHaulerMemory {
     taskId: string;
     powerBankDeliveryRoom?: string;
+    powerBankPendingTransfer?: { tick: number; before: number; amount: number; taskId: string };
     capacityBlockedSince?: number;
   }
 
@@ -686,6 +687,7 @@ declare global {
   }
 
   interface CreepMemory extends DepositHarvesterMemory {
+    _retireSuicideOwner?: import("@/runtime/retirement").RetirementOwner;
     role?: RoleName;
     roleArgs?: string[];
     configName?: string;

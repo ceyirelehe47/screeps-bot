@@ -1,3 +1,4 @@
+import type { RuntimeEventState } from "@/runtime/runtimeEvents";
 import type {
   HubCommittedProtectionSnapshot,
   HubProtectionAttempt,
@@ -16,6 +17,7 @@ import type { CpuTickCheckpoint, CpuTickHealthSummary } from "@/runtime/cpuTickH
 
 declare global {
   interface ScreepsMemoryRuntime {
+    events?: RuntimeEventState;
     /** 防御故障单写摘要：最多八条，TTL 1000 tick，独立于 profiler。 */
     defenseFaults?: DefenseFaultSummary;
     processScheduler?: ProcessSchedulerMemory;

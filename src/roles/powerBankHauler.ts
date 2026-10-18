@@ -462,7 +462,19 @@ function recordDeliveredPower(task: PowerBankHaulerTask | null, amount: number):
   task.lastProgressAt = Game.time;
 }
 
+/** 原生 OK 只是提交；下一 tick 根据实际 cargo 减少确认，不重复计数。 */
+function settlePowerTransfer(creep: Creep): void {
+  const memory = creep.memory as PowerBankHaulerRuntimeMemory, pending = memory.powerBankPendingTransfer;
+  if (!pending || pending.tick === Game.time) return;
+  if (pending.tick > Game.time) { delete memory.powerBankPendingTransfer; return; }
+  const delivered = Math.min(pending.amount, Math.max(0, pending.before - getPowerUsed(creep)));
+  recordDeliveredPower((Memory.data?.powerBankHarvest?.[pending.taskId] as PowerBankHaulerTask | undefined) ?? null, delivered);
+  delete memory.powerBankPendingTransfer;
+}
+
 function deliverPower(creep: Creep, fallbackEncodedRoute?: string): boolean {
+  settlePowerTransfer(creep);
+  if ((creep.memory as PowerBankHaulerRuntimeMemory).powerBankPendingTransfer?.tick === Game.time) return false;
   const task = getTaskForCreep(creep);
   const power = getPowerUsed(creep);
   if (power <= 0) return true;
@@ -518,7 +530,7 @@ function deliverPower(creep: Creep, fallbackEncodedRoute?: string): boolean {
     moveToTarget(creep, candidate.target);
   } else if (code === OK) {
     reserveDeliveryHeadroom(candidate.target, transferable);
-    recordDeliveredPower(task, transferable);
+    if (task) memory.powerBankPendingTransfer = { tick: Game.time, before: power, amount: transferable, taskId: task.id };
     clearDeliveryBlocker(creep, task);
   }
 
@@ -529,7 +541,7 @@ function deliverPower(creep: Creep, fallbackEncodedRoute?: string): boolean {
 }
 
 function retireIfEmpty(creep: Creep): boolean {
-  if (getPowerUsed(creep) > 0) return false;
+  if (getPowerUsed(creep) > 0 || (creep.memory as PowerBankHaulerRuntimeMemory).powerBankPendingTransfer) return false;
   creep.suicide();
   return true;
 }
@@ -581,6 +593,7 @@ function salvagePower(creep: Creep, targetRoom?: string, encodedRouteRooms?: str
 
 export const powerBankHaulerRole: RoleFactory = (targetRoom?: string, encodedRouteRooms?: string) => ({
   prepare: (creep): boolean => {
+    settlePowerTransfer(creep);
     // Haulers are task-bound — skip generic energy assignments
     const task = getTaskForCreep(creep);
     if (!task) {
@@ -600,6 +613,7 @@ export const powerBankHaulerRole: RoleFactory = (targetRoom?: string, encodedRou
   },
 
   source: (creep): boolean => {
+    settlePowerTransfer(creep);
     const task = getTaskForCreep(creep);
 
     // No task — salvage dropped power for aborted/replaced squads.
@@ -667,6 +681,7 @@ export const powerBankHaulerRole: RoleFactory = (targetRoom?: string, encodedRou
   },
 
   target: (creep): boolean => {
+    settlePowerTransfer(creep);
     // Deliver held power to source room
     if (getPowerUsed(creep) > 0) {
       return deliverPower(creep, encodedRouteRooms);

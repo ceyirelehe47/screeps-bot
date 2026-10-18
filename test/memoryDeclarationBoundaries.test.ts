@@ -42,8 +42,8 @@ const MEMORY_BRANCHES = {
   runtime: {
     declaration: "src/types/memory/runtime.d.ts",
     interfaceName: "ScreepsMemoryRuntime",
-    // 登记实际调度摘要与独立 CPU 健康面包屑；均由各自 owner 单写。
-    schemaFingerprint: "41bacc8f8188197858677d6dfc8d9e943c0f51b4676adbc9409115ad61b6e678",
+    // 登记实际调度、独立 CPU 健康面包屑与有界生命周期事件；均由各自 owner 单写。
+    schemaFingerprint: "70e26069caebb63a263a7b57dd3e2bb4b7513ccf6ce8c749314a24ac7ffbc2ec",
     imports: [
       "@/runtime/cpuTickHealth:CpuTickCheckpoint",
       "@/runtime/cpuTickHealth:CpuTickHealthSummary",
@@ -56,9 +56,11 @@ const MEMORY_BRANCHES = {
       "@/runtime/hubProtectionSnapshot:HubProtectionAttempt",
       "@/runtime/processScheduler:ProcessSchedulerMemory",
       "@/runtime/resourceControl:MarketTerminalEnergyReadinessObservation",
+      "@/runtime/runtimeEvents:RuntimeEventState",
       "@/runtime/runtimeIsolation:DefenseFaultSummary",
     ],
     fields: [
+      "events",
       "defenseFaults",
       "processScheduler",
       "cpuTickHealth",

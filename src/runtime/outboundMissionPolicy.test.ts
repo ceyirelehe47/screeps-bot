@@ -5,7 +5,7 @@ jest.mock("@/runtime/defenseMode", () => ({ isDefenseMode: jest.fn(() => false) 
 jest.mock("@/runtime/roomReserve", () => ({ isRoomInReserveMode: jest.fn(() => false) }));
 import { isDefenseMode } from "@/runtime/defenseMode";
 import { isRoomInReserveMode } from "@/runtime/roomReserve";
-import { isSpawnConfigEconomicallyBlocked, canStartOutboundMission } from "@/runtime/outboundMissionPolicy";
+import { isSpawnConfigEconomicallyBlocked, canStartOutboundMission, getSpawnAdmission } from "@/runtime/outboundMissionPolicy";
 import type { WarTask } from "@/runtime/war/store";
 import type { DepositHarvestTask } from "@/runtime/depositHarvest";
 import { pushBlockingCreep } from "@/movement/traffic";
@@ -166,4 +166,23 @@ it("RESERVE 中交替补员不能刷新 standard 小队的固定续航期限，�
   jest.mocked(isRoomInReserveMode).mockReturnValue(false);
   expect(isSpawnConfigEconomicallyBlocked(green, { role: "healer", roomName: "W1N1", args: ["W2N2"] })).toBe(false);
   expect(task.reserveContinuationUntil).toBeUndefined();
+});
+
+it("没有 roomName 的跨 shard 配置仍使用实际 Spawn 房间准入；只有已占领 bootstrap 可续航", () => {
+  jest.mocked(isDefenseMode).mockReturnValue(false); jest.mocked(isRoomInReserveMode).mockReturnValue(true);
+  const claimer = "W1N1:cross-shard:claim", worker = "W1N1:cross-shard:worker";
+  const config = { role: "crossShardClaimer" as const, args: ["shard2", "W2N2", "W0N1", ""] };
+  Memory.data = { crossShardColonization: { target: { targetShard: "shard2", targetRoom: "W2N2", sourceRoom: "W1N1",
+    portalRoom: "W0N1", status: "ready", flagName: "CLX", createdAt: 1, updatedAt: 1,
+    claimerConfigName: claimer, bootstrapConfigNames: [worker] } } };
+  expect(getSpawnAdmission(claimer, config, "W1N1")).toEqual({ allowed: false, reason: "reserve" });
+  const task = Memory.data.crossShardColonization!.target;
+  task.claimedAt = Game.time; task.status = "bootstrapping";
+  const bootstrap = { ...config, role: "crossShardColonizerWorker" as const };
+  expect(getSpawnAdmission(worker, bootstrap, "W1N1").allowed).toBe(true);
+  expect(getSpawnAdmission(worker, bootstrap, "W3N3").allowed).toBe(false);
+  expect(getSpawnAdmission(claimer, config, "W1N1").allowed).toBe(false);
+  jest.mocked(isDefenseMode).mockReturnValue(true);
+  expect(getSpawnAdmission(worker, bootstrap, "W1N1")).toEqual({ allowed: false, reason: "defense" });
+  expect(getSpawnAdmission("scout", { role: "flagScout", args: [] }, "W1N1").allowed).toBe(false);
 });

@@ -1,3 +1,4 @@
+import { retireCreep } from "@/runtime/retirement";
 import { replaceSpawnQueue } from "@/runtime/spawnRequests";
 import { upsertConfig } from "@/runtime/creepApi";
 import { getLinkMinerBody } from "@/config/spawnProfiles";
@@ -129,7 +130,7 @@ function retireDeprecatedSourceWorkers(activeConfigName: string, deprecatedConfi
   }
 
   for (const creep of deprecatedCreeps) {
-    creep.suicide();
+    retireCreep(creep, { owner: "workforce", mode: "suicide" });
   }
 }
 

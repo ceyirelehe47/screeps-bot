@@ -353,7 +353,7 @@ export function mountSpawn(): void {
       const queue = readSpawnQueue(this);
       const config = getCreepConfigService().get(queue[0]);
       const exceedsCapacity = !!config && fixedBodyExceedsCapacity(config, this.room.energyCapacityAvailable);
-      const admission = config && getSpawnAdmission(queue[0], config);
+      const admission = config && getSpawnAdmission(queue[0], config, this.room.name);
       if (config && !exceedsCapacity && admission?.allowed) break;
       if (config && exceedsCapacity) {
         this.memory._lastSpawnFail = { tick: Game.time, spawnName: this.name, configName: queue[0], role: config.role,

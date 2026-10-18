@@ -92,3 +92,13 @@ export function runCrossShardSignals(): void {
     };
   }
 }
+
+export function cleanupCrossShardSignalMemory(): number {
+  let removed = 0;
+  for (const store of [Memory.runtime?.crossShard?.claims, Memory.runtime?.crossShard?.rooms]) {
+    for (const [room, summary] of Object.entries(store ?? {})) {
+      if (Game.time - summary.updatedAt > 5000) { delete store![room]; removed++; }
+    }
+  }
+  return removed;
+}

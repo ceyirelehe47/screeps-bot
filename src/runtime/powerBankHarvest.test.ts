@@ -1,3 +1,4 @@
+import { powerBankHaulerRole } from "@/roles/powerBankHauler";
 import { runPowerBankHarvest } from "@/runtime/powerBankHarvest";
 import {
   POWER_BANK_BODY_TIERS,
@@ -1452,4 +1453,28 @@ describe("powerBankHarvest", () => {
     expect(staleSpawn.memory.spawnList).not.toContain(staleHealer);
     expect(staleRoom).toBeDefined();
   });
+  it("终态保留在途 cargo 与未确认 transfer，停止补员；确认交付后再保存最终历史", () => {
+    setupSourceRoom();
+    const task = makeTask({ id: "cargo-owner", status: POWER_BANK_STATUS.FAILED, deliveredPower: 0 });
+    addTask(task);
+    const name = getPowerBankConfigName(SOURCE_ROOM, TARGET_ROOM, "hauler", 0, task.id, 0);
+    getCreepConfigService().set(name, { role: "powerBankHauler", roomName: SOURCE_ROOM, taskId: task.id, args: [TARGET_ROOM] });
+    const actor = createMockPowerBankCreep("powerBankHauler", { name: "cargo-live", roomName: SOURCE_ROOM,
+      store: { [RESOURCE_POWER]: 500 }, memory: { configName: name, taskId: task.id } as Partial<CreepMemory> });
+    Game.creeps[actor.name] = actor; resetRuntimeServices();
+    runPowerBankHarvest();
+    expect(Memory.data!.powerBankHarvest![task.id]).toBe(task);
+    expect(getCreepConfigService().get(name)?.roomName).toBeUndefined();
+    expect(actor.memory.configName).toBe(name);
+    (actor.memory as CreepMemory & PowerBankHaulerMemory).powerBankPendingTransfer = { tick: Game.time, before: 500, amount: 500, taskId: task.id };
+    actor.store[RESOURCE_POWER] = 0; Game.time++;
+    runPowerBankHarvest();
+    expect(Memory.data!.powerBankHarvest![task.id]).toBe(task);
+    powerBankHaulerRole(TARGET_ROOM).prepare!(actor);
+    expect(task.deliveredPower).toBe(500);
+    runPowerBankHarvest();
+    expect(Memory.data!.powerBankHarvest![task.id]).toBeUndefined();
+    expect(Memory.data!.powerBankHarvestHistory!.find(entry => entry.taskId === task.id)?.deliveredPower).toBe(500);
+  });
+
 });
