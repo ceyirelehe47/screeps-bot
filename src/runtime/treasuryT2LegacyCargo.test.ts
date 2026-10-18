@@ -173,7 +173,11 @@ describe("T2 guards real legacy terminal cargo execution points", () => {
       expect(getCreepAssignmentState(cargo.creep.name)?.energyPickupTargetId).toBe(Game.rooms[roomName].terminal!.id);
     }
     confirmAndRelease(); Game.time += 1; cargo.run(); expectNative(cargo, roomName);
-    if (cargo.task) expect(cargo.task.deliveredPower).toBe(100);
+    if (cargo.task) {
+      expect(cargo.task.deliveredPower ?? 0).toBe(0);
+      Game.time += 1; cargo.run();
+      expect(cargo.task.deliveredPower).toBe(100);
+    }
   });
 
   it.each([T2_SOURCE, T2_TARGET])("T2 keeps ordinary remoteMining Storage delivery runnable in %s", (roomName) => {
