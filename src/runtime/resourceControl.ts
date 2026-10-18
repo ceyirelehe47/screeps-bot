@@ -1,3 +1,4 @@
+import { isDue } from "@/runtime/cadence";
 import { utf8ByteLength } from "@/util/utf8";
 import { resolveMarketCreditReserve, getAvailableMarketCredits } from "@/runtime/marketActionArbiter";
 import { isDefenseMode } from "@/runtime/defenseMode";
@@ -3594,7 +3595,7 @@ export function runResourceControl(): void {
   }
 
   const interval = normalizeInterval(cfg?.sampleInterval);
-  const fullPlanningTick = Game.time % interval === 0;
+  const fullPlanningTick = isDue("resourceControl.plan", interval);
   const logisticsConfig = resolveLogisticsControlConfig();
   const previousLogistics = (
     Memory.runtime?.resourceControl as unknown as {

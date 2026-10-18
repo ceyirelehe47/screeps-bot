@@ -1,3 +1,4 @@
+import { isDue } from "@/runtime/cadence";
 import { getCpuMonitorHistory, normalizeCpuMonitorConfig } from "@/runtime/cpuMonitor";
 import { hasDiagnosticBudget } from "@/runtime/diagnosticBudget";
 import { requestMemorySegments } from "@/runtime/memorySegments";
@@ -109,6 +110,7 @@ interface CpuMonitorTelemetryEntry {
 }
 
 interface CpuMonitorTelemetrySummary {
+  cadencePhases?: CpuMonitorSummaryV2["cadencePhases"];
   ticks: number;
   avgTotalUsed: number;
   maxTotalUsed: number;
@@ -597,6 +599,7 @@ function buildCpuMonitorPayload(): CpuMonitorTelemetryPayload | undefined {
 
     summary = {
       ticks: persisted.ticks,
+      cadencePhases: persisted.cadencePhases,
       avgTotalUsed: persisted.avgTotalUsed,
       maxTotalUsed: persisted.maxTotalUsed,
       minBucket: persisted.minBucket,
@@ -970,7 +973,7 @@ export function runExternalTelemetryExport(): void {
   }
 
   const sampleInterval = toValidSampleInterval(cfg.sampleInterval);
-  if (Game.time % sampleInterval !== 0) {
+  if (!isDue("telemetry.export", sampleInterval)) {
     return;
   }
   if (!hasDiagnosticBudget(cfg.minBucket)) return;

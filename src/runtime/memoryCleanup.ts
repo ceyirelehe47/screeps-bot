@@ -1,3 +1,4 @@
+import { isDue } from "@/runtime/cadence";
 import { replaceSpawnQueue } from "@/runtime/spawnRequests";
 import { cleanupPowerBankRoomIntel } from "@/runtime/powerBankIntelCleanup";
 import { pruneDeadCreepMovementState } from "@/movement/creepState";
@@ -644,7 +645,7 @@ function cleanupNonOwnedRoomMemory(ownedRooms: Set<string>): number {
 }
 
 export function runMemoryCleanup(): void {
-  if (Game.time % CLEANUP_INTERVAL !== 0) {
+  if (!isDue("memory.cleanup", CLEANUP_INTERVAL)) {
     return;
   }
 

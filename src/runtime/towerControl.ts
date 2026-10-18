@@ -1,3 +1,4 @@
+import { isDue } from "@/runtime/cadence";
 import { forEachIsolatedRoom, runIsolatedTowerOperation } from "@/runtime/runtimeIsolation";
 import { setTowerBurstTarget } from "@/runtime/defenseCoordination";
 import { recordFixedCpuAction } from "@/runtime/cpuPhaseProfiler";
@@ -633,7 +634,7 @@ function getTowerDamagedStructures(
 ): Structure<StructureConstant>[] {
   const interval = TOWER_DAMAGED_SCAN_INTERVAL;
   const scanPhase = stableRoomNameHash(room.name) % interval;
-  const due = Game.time % interval === scanPhase;
+  const due = isDue(`tower.damage:${room.name}`, interval, Game.time, scanPhase);
   const cached = towerDamagedScanCache.get(room.name);
 
   if (cached && !due) {

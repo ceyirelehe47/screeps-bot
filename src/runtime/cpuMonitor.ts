@@ -1,3 +1,4 @@
+import { tickPhase } from "@/runtime/cadence";
 /**
  * CPU Monitor v2 — types, config defaults, normalization, and runtime store.
  *
@@ -104,7 +105,11 @@ export interface CpuMonitorHistoryEntryV2 extends CpuMonitorSnapshotV2 {}
 // ─── v2 Aggregated summary ────────────────────────────────────────────────────
 
 /** Aggregated statistics computed over recent history. */
+export interface CpuCadencePhaseSummary { samples: number; avgUsed: number; maxUsed: number }
+
 export interface CpuMonitorSummaryV2 {
+  /** 采样窗口按 tick 相位分桶；空相位不伪造零值，最多 100 桶。 */
+  cadencePhases?: Record<string, CpuCadencePhaseSummary>;
   ticks: number;
   avgTotalUsed: number;
   maxTotalUsed: number;
@@ -379,6 +384,18 @@ export function captureCpuMonitorHeap(config: CpuMonitorConfig): CpuMonitorHeapS
 
 // ─── Summary calculations ─────────────────────────────────────────────────────
 
+export function summarizeCpuCadencePhases(history: readonly Pick<CpuMonitorSnapshotV2, "tick" | "totalUsed">[]): Record<string, CpuCadencePhaseSummary> {
+  const buckets: Record<string, { samples: number; sum: number; max: number }> = {};
+  for (const entry of history) {
+    if (!Number.isFinite(entry.tick) || !Number.isFinite(entry.totalUsed)) continue;
+    const key = String(tickPhase(entry.tick, 100));
+    const bucket = buckets[key] ??= { samples: 0, sum: 0, max: -Infinity };
+    bucket.samples++; bucket.sum += entry.totalUsed; bucket.max = Math.max(bucket.max, entry.totalUsed);
+  }
+  return Object.fromEntries(Object.entries(buckets).map(([key, value]) => [key,
+    { samples: value.samples, avgUsed: value.sum / value.samples, maxUsed: value.max }]));
+}
+
 export function computeCpuMonitorSummary(history: CpuMonitorSnapshotV2[], emaTotalUsed: number): CpuMonitorSummaryV2 | null {
   if (history.length === 0) {
     return null;
@@ -425,6 +442,7 @@ export function computeCpuMonitorSummary(history: CpuMonitorSnapshotV2[], emaTot
 
   return {
     ticks,
+    cadencePhases: summarizeCpuCadencePhases(history),
     avgTotalUsed: sumTotalUsed / ticks,
     maxTotalUsed,
     minBucket,
@@ -476,6 +494,7 @@ function buildRollingCpuMonitorSummary(
 
   return {
     ticks,
+    cadencePhases: summarizeCpuCadencePhases(history),
     avgTotalUsed: rolling.sumTotalUsed / ticks,
     maxTotalUsed,
     minBucket,

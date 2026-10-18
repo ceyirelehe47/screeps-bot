@@ -1,3 +1,4 @@
+import { isDue } from "@/runtime/cadence";
 import {
   countPendingOutgoingResourceTransferTasksByRoom,
   createAutomaticResourceTransferTask,
@@ -303,7 +304,7 @@ export function runSynthesisTaskPlanningCompatibility(): string[] | null {
   }
 
   const interval = getResourceControlSampleInterval();
-  if (Game.time % interval !== 0) {
+  if (!isDue("synthesis.compatibility", interval)) {
     return null;
   }
 

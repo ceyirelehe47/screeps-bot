@@ -1,3 +1,4 @@
+import { isDue } from "@/runtime/cadence";
 /**
  * 市场低开销生产计数器（提交 D/F）：
  * - global heap 普通 Record 数字，记路径分桶（fast path / exposure /
@@ -50,7 +51,7 @@ export function clearMarketPerformanceCountersForTest(): void {
 
 /** 低频快照：由 automation 主路径每 tick 调用，内部按 interval 节流。 */
 export function snapshotMarketPerformanceCounters(): void {
-  if (Game.time % MARKET_PERF_SNAPSHOT_INTERVAL !== 0) {
+  if (!isDue("market.performance", MARKET_PERF_SNAPSHOT_INTERVAL)) {
     return;
   }
   const counters = runtimeGlobal.__marketPerformanceCounters;

@@ -1,3 +1,4 @@
+import { isDue } from "@/runtime/cadence";
 import { searchPlanningPath } from "@/movement/pathSearch";
 import { getCachedStaticTravelMatrix } from "@/movement/routing";
 import { getRoomTopologyRevision } from "@/movement/roomTopologyRevision";
@@ -101,7 +102,7 @@ function beginDiagnostic(input: PowerBankTravelMeasurementInput): DiagnosticCall
     if (diagnosticFrame?.game !== Game || diagnosticFrame.tick !== Game.time) {
       const config = normalizeCpuMonitorConfig(Memory.cfg?.cpuProfiler);
       diagnosticFrame = { game: Game, tick: Game.time, sampleInterval: config.sampleInterval,
-        sampled: config.enabled && Game.time % config.sampleInterval === 0 };
+        sampled: config.enabled && isDue("cpuProfiler.sample", config.sampleInterval) };
     }
     if (!diagnosticFrame.sampled) return undefined;
     const name = (value: unknown): string => typeof value === "string" && /^[EW]\d{1,6}[NS]\d{1,6}$/.test(value) ? value : "unknown";

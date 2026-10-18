@@ -1,3 +1,5 @@
+import { cadenceOffset, isDue } from "@/runtime/cadence";
+const cadenceTick = (tick: number): number => tick + cadenceOffset("resourceControl.plan", 10);
 import {
   getLastSynthesisTransferTaskIndexDiagnostics,
   runSynthesisControl,
@@ -238,7 +240,7 @@ function runSynthesisResourceControlAuthorityTwin(
   clearLocalCarrierDestinationCapacityForTest();
   resetLogisticsShadowCpuForTest();
   resetRuntimeServices();
-  Game.time = 10;
+  Game.time = cadenceTick(10);
   Memory.cfg = {
     synthesisControl: {
       enabled: true,
@@ -345,7 +347,7 @@ describe("runSynthesisControl hub import guard", () => {
   beforeEach(() => {
     resetLogisticsShadowCpuForTest();
     resetRuntimeServices();
-    Game.time = 10;
+    Game.time = cadenceTick(10);
     Memory.cfg = {
       synthesisControl: {
         enabled: true,
@@ -482,9 +484,9 @@ describe("runSynthesisControl hub import guard", () => {
     );
     expect(publishedSnapshot).toEqual(expect.objectContaining({
       producer: SYNTHESIS_ROOM_LOGISTICS_PRODUCER,
-      observedAt: 510,
-      expiresAt: 540,
-      epochRevision: expect.stringContaining("synthesis-room-epoch/v1:510:"),
+      observedAt: cadenceTick(510),
+      expiresAt: cadenceTick(540),
+      epochRevision: expect.stringContaining(`synthesis-room-epoch/v1:${cadenceTick(510)}:`),
       epochFingerprint: expect.stringContaining("synthesis-room-epoch/v1:"),
       captureCpuUsed: expect.any(Number),
       indexBuildCount: 1,
@@ -511,7 +513,7 @@ describe("runSynthesisControl hub import guard", () => {
       desiredAmount: 500,
       priorityClass: "production",
       revision: 1,
-      observedAt: 510,
+      observedAt: cadenceTick(510),
     }));
     expect(utriumObservation).toEqual(expect.objectContaining({
       localAmount: 0,
@@ -531,7 +533,7 @@ describe("runSynthesisControl hub import guard", () => {
       active: true,
       desiredAmount: 500,
       revision: 1,
-      observedAt: 510,
+      observedAt: cadenceTick(510),
     }));
     expect(hydrogenObservation).toEqual(expect.objectContaining({
       localAmount: 0,
@@ -546,7 +548,7 @@ describe("runSynthesisControl hub import guard", () => {
       legacyFeeDelta: 200,
     }));
 
-    Game.time = 520;
+    Game.time = cadenceTick(520);
     runSynthesisControl();
     const coveredShadow = peekLogisticsControlStore();
     expect(coveredShadow).toEqual(expect.objectContaining({ ok: true }));
@@ -559,7 +561,7 @@ describe("runSynthesisControl hub import guard", () => {
     );
     expect(coveredIntents).toHaveLength(2);
     expect(coveredIntents.every(
-      (intent) => intent.active && intent.revision === 1 && intent.observedAt === 520,
+      (intent) => intent.active && intent.revision === 1 && intent.observedAt === cadenceTick(520),
     )).toBe(true);
     expect(coveredObservations).toHaveLength(2);
     expect(coveredObservations.every(
@@ -572,7 +574,7 @@ describe("runSynthesisControl hub import guard", () => {
     expect(Object.values(coveredShadow.store.producerSnapshots).find(
       (snapshot) => snapshot.producer === SYNTHESIS_ROOM_LOGISTICS_PRODUCER,
     )).toEqual(expect.objectContaining({
-      observedAt: 520,
+      observedAt: cadenceTick(520),
       total: 2,
       emitted: 2,
       dropped: 0,
@@ -582,7 +584,7 @@ describe("runSynthesisControl hub import guard", () => {
     expect(mergeResult.task.amount).toBe(500);
 
     Memory.cfg.resourceControl!.sampleInterval = 15;
-    Game.time = 530;
+    Game.time = cadenceTick(530);
     runSynthesisControl();
     expect(getLastSynthesisTransferTaskIndexDiagnostics()).toEqual({
       storeScanCount: 1,
@@ -594,10 +596,11 @@ describe("runSynthesisControl hub import guard", () => {
     if (!misalignedShadow.ok) return;
     expect(Object.values(misalignedShadow.store.latestIntents)).toHaveLength(2);
     expect(Object.values(misalignedShadow.store.producerSnapshots)[0])
-      .toEqual(expect.objectContaining({ observedAt: 520, total: 2 }));
+      .toEqual(expect.objectContaining({ observedAt: cadenceTick(520), total: 2 }));
 
     Memory.cfg.synthesisControl!.rooms!.W1N1.reactions = [];
-    Game.time = 540;
+    const withdrawnAt = 540 + cadenceOffset("resourceControl.plan", 30);
+    Game.time = withdrawnAt;
     runSynthesisControl();
     const withdrawnShadow = peekLogisticsControlStore();
     expect(withdrawnShadow).toEqual(expect.objectContaining({ ok: true }));
@@ -611,7 +614,7 @@ describe("runSynthesisControl hub import guard", () => {
     expect(Object.values(withdrawnShadow.store.producerSnapshots).find(
       (snapshot) => snapshot.producer === SYNTHESIS_ROOM_LOGISTICS_PRODUCER,
     )).toEqual(expect.objectContaining({
-      observedAt: 540,
+      observedAt: withdrawnAt,
       total: 0,
       emitted: 0,
       dropped: 0,
@@ -633,14 +636,14 @@ describe("runSynthesisControl hub import guard", () => {
     expect(disabledAuthorityTwin.synthesisProducerCpuDiagnostics).toBeUndefined();
     expect(shadowAuthorityTwin.synthesisProducerCpu).toEqual(expect.objectContaining({
       attributionVersion: 2,
-      sampleTick: 510,
+      sampleTick: cadenceTick(510),
       measurementAvailable: true,
       producerUsed: expect.any(Number),
       consumerUsed: 0,
     }));
     expect(shadowAuthorityTwin.synthesisProducerCpu!.producerUsed).toBeGreaterThan(0);
     expect(shadowAuthorityTwin.synthesisProducerCpuDiagnostics).toEqual({
-      sampleTick: 510,
+      sampleTick: cadenceTick(510),
       measurementAvailable: true,
       producerSegmentCount: 12,
       consumerSegmentCount: 0,
@@ -660,7 +663,7 @@ describe("runSynthesisControl hub import guard", () => {
 
     // 同 segment 嵌套只由最外层计量；抛错仍通过 finally 守恒结算。
     resetLogisticsShadowCpuForTest();
-    Game.time = 900;
+    Game.time = cadenceTick(900);
     const cpuReadings = [0, 1, 2, 4, 5, 8];
     (Game as unknown as { cpu: { getUsed(): number } }).cpu = {
       getUsed: jest.fn(() => cpuReadings.shift()!),
@@ -674,13 +677,13 @@ describe("runSynthesisControl hub import guard", () => {
     })).toThrow("producer-meter-test");
     expect(peekLogisticsShadowCpuSnapshot()).toEqual({
       attributionVersion: 2,
-      sampleTick: 900,
+      sampleTick: cadenceTick(900),
       measurementAvailable: true,
       producerUsed: 6,
       consumerUsed: 0,
     });
 
-    Game.time = 901;
+    Game.time = cadenceTick(901);
     expect(peekLogisticsShadowCpuSnapshot()).toBeUndefined();
     const backwardsReadings = [5, 4];
     (Game as unknown as { cpu: { getUsed(): number } }).cpu = {
@@ -689,13 +692,13 @@ describe("runSynthesisControl hub import guard", () => {
     measureLogisticsShadowCpu("producer", () => undefined);
     expect(peekLogisticsShadowCpuSnapshot()).toEqual({
       attributionVersion: 2,
-      sampleTick: 901,
+      sampleTick: cadenceTick(901),
       measurementAvailable: false,
       producerUsed: 0,
       consumerUsed: 0,
     });
 
-    Game.time = 902;
+    Game.time = cadenceTick(902);
     (Game as unknown as { cpu: { getUsed(): number } }).cpu = {
       getUsed: () => {
         throw new Error("cpu-clock-unavailable");
@@ -705,14 +708,14 @@ describe("runSynthesisControl hub import guard", () => {
       .toBe("work-preserved");
     expect(peekLogisticsShadowCpuSnapshot()).toEqual({
       attributionVersion: 2,
-      sampleTick: 902,
+      sampleTick: cadenceTick(902),
       measurementAvailable: false,
       producerUsed: 0,
       consumerUsed: 0,
     });
 
     resetLogisticsShadowCpuForTest();
-    Game.time = 903;
+    Game.time = cadenceTick(903);
     const inFlightReadings = [0, 1];
     (Game as unknown as { cpu: { getUsed(): number } }).cpu = {
       getUsed: () => inFlightReadings.shift()!,
@@ -726,16 +729,16 @@ describe("runSynthesisControl hub import guard", () => {
       measurementAvailable: true,
       producerUsed: 1,
     }));
-    Game.time = Number.NaN;
+    Game.time = cadenceTick(Number.NaN);
     expect(measureLogisticsShadowCpu("producer", () => "tick-unavailable"))
       .toBe("tick-unavailable");
-    Game.time = 903;
+    Game.time = cadenceTick(903);
     expect(peekLogisticsShadowCpuSnapshot()).toEqual(expect.objectContaining({
       measurementAvailable: false,
     }));
 
     resetLogisticsShadowCpuForTest();
-    Game.time = 904;
+    Game.time = cadenceTick(904);
     const interSegmentBackwardsReadings = [5, 6, 4, 5];
     (Game as unknown as { cpu: { getUsed(): number } }).cpu = {
       getUsed: () => interSegmentBackwardsReadings.shift()!,
@@ -747,7 +750,7 @@ describe("runSynthesisControl hub import guard", () => {
     }));
 
     resetLogisticsShadowCpuForTest();
-    Game.time = 905;
+    Game.time = cadenceTick(905);
     const overlappingReadings = [0, 1];
     (Game as unknown as { cpu: { getUsed(): number } }).cpu = {
       getUsed: () => overlappingReadings.shift()!,
@@ -768,7 +771,7 @@ describe("synthesis boost pause/resume contract", () => {
   beforeEach(() => {
     resetLogisticsShadowCpuForTest();
     resetRuntimeServices();
-    Game.time = 100;
+    Game.time = cadenceTick(100);
     Memory.cfg = {
       synthesisControl: {
         enabled: true,
@@ -855,7 +858,7 @@ describe("synthesis boost pause/resume contract", () => {
 
 
 it("换配方重置补料超时，同份旧产物仅由一个清理任务认领", () => {
-  resetRuntimeServices(); clearCarrierTaskBoardForTest(); Game.time = 1000; Game.creeps = {};
+  resetRuntimeServices(); clearCarrierTaskBoardForTest(); Game.time = cadenceTick(1000); Game.creeps = {};
   Memory.cfg = { synthesisControl: { enabled: true, rooms: { W1N1: { enabled: true,
     reactions: [{ product: RESOURCE_HYDROXIDE, targetAmount: 5000, batchSize: 500 }] } } } };
   Memory.data = {};
@@ -887,7 +890,7 @@ it("合成补料比较可取库存，terminal 待售锁定后选择 storage", ()
   const { clearMarketSaleExposureReservationsForTest } = require("@/runtime/marketSaleExposure");
   const { listCarrierTasksByRoom } = require("@/runtime/carrierTaskBoard");
   resetRuntimeServices(); clearCarrierTaskBoardForTest(); clearMarketSaleExposureReservationsForTest();
-  Game.time = 1000; Game.creeps = {}; Memory.runtime = undefined;
+  Game.time = cadenceTick(1000); Game.creeps = {}; Memory.runtime = undefined;
   Memory.cfg = { synthesisControl: { enabled: true, rooms: { W1N1: { reactions: [{ product: RESOURCE_HYDROXIDE, targetAmount: 5000, batchSize: 500 }] } } } };
   const room = createRoomWithResources({ name: "W1N1", mineralType: RESOURCE_CATALYST, terminalResources: { H: 1000 } });
   Object.assign(room.storage!, { store: createMockStore({ energy: 300000, H: 500, O: 500 }) });
@@ -905,7 +908,7 @@ it("合成补料比较可取库存，terminal 待售锁定后选择 storage", ()
 
 
 it("防御专用 boost lab 不会被常规合成抢占", () => {
-  resetRuntimeServices(); clearCarrierTaskBoardForTest(); Game.time = 1000;
+  resetRuntimeServices(); clearCarrierTaskBoardForTest(); Game.time = cadenceTick(1000);
   const room = createRoomWithResources({ name: "W1N1", mineralType: RESOURCE_CATALYST });
   Game.rooms = { W1N1: room }; Memory.runtime = undefined; Memory.data = {};
   Memory.cfg = { homeDefense: { rooms: { W1N1: { boostLabId: "W1N1-lab-3" } } },

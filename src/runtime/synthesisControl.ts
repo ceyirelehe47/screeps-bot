@@ -1,3 +1,4 @@
+import { isDue } from "@/runtime/cadence";
 import { countCarrierCargo } from "@/runtime/carrierCargo";
 import { getTerminalAmountOutsideMarketSaleExposure } from "@/runtime/marketSaleExposure";
 import {
@@ -1889,7 +1890,8 @@ export function runSynthesisControl(): void {
   const cfg = normalizeConfig();
   const logisticsCfg = resolveLogisticsControlConfig();
   const actions: string[] = [];
-  const planningTick = Game.time % cfg.sampleInterval === 0;
+  // 与运输读模型同相，复用本 tick 的 transfer 索引；其它独立生产任务仍各自错峰。
+  const planningTick = isDue("resourceControl.plan", cfg.sampleInterval);
   const shadowEnabled = cfg.enabled
     && Memory.cfg?.resourceControl?.enabled !== false
     && logisticsCfg.valid

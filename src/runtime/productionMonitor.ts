@@ -1,3 +1,4 @@
+import { isDue } from "@/runtime/cadence";
 import { getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
 
 const SAMPLE_INTERVAL = 5;
@@ -306,7 +307,7 @@ export function runProductionMonitor(): void {
     return;
   }
 
-  if (Game.time % SAMPLE_INTERVAL !== 0) {
+  if (!isDue("production.sample", SAMPLE_INTERVAL)) {
     return;
   }
 

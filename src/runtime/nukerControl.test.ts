@@ -1,3 +1,5 @@
+import { cadenceOffset, isDue } from "@/runtime/cadence";
+const cadenceTick = (tick: number): number => tick + cadenceOffset("nuker.plan", 25);
 import {
   clearCarrierTaskBoardForTest,
   listCarrierTasksByRoom,
@@ -169,7 +171,7 @@ describe("nukerControl", () => {
     clearCarrierTaskBoardForTest();
     clearCreepAssignmentStateForTest();
     resetRuntimeServices();
-    Game.time = 100;
+    Game.time = cadenceTick(100);
     Game.rooms = {};
     Game.creeps = {};
     Game.flags = {};
@@ -286,10 +288,10 @@ describe("nukerControl", () => {
     );
     if (typeof expired === "string") throw new Error(expired);
     markResourceTransferTaskBlocked(expired.task, "receiver_capacity");
-    Game.time += 500;
+    Game.time += 501; // TTL 已过但尚未到新的错峰规划点。
     runNukerControl();
     expect(Object.values(ensureResourceTransferTaskStore())).toHaveLength(1);
-    Game.time = Math.ceil(Game.time / 25) * 25;
+    Game.time += (25 + cadenceOffset("nuker.plan", 25) - Game.time % 25) % 25;
     runNukerControl();
     const ghodiumTransfers = Object.values(
       ensureResourceTransferTaskStore(),

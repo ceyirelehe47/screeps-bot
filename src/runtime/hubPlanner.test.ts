@@ -1,3 +1,4 @@
+import { cadenceOffset } from "@/runtime/cadence";
 import { createTreasuryService } from "@/runtime/treasury/facade";
 import {
   createAutomaticResourceTransferTask,
@@ -1051,7 +1052,7 @@ describe("HUB lifecycle integration", () => {
     expect(Memory.runtime.hub!.committedProtectionSnapshot?.valid).toBe(false);
 
     Memory.runtime.synthesisControl!.rooms.W8N1.stage = "idle";
-    Game.time = 50;
+    Game.time = 50 + cadenceOffset("hubPlanner.cleanup", 50);
     runHubPlanner();
     const disabledIdleRuntime = Memory.runtime.hub!.distributedSynthesis as typeof distributedRuntime;
     expect(disabledIdleRuntime.configReconcile).toMatchObject({

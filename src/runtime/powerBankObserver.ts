@@ -1,3 +1,4 @@
+import { tickPhase } from "@/runtime/cadence";
 import { isPowerBankSearchRoom } from "@/runtime/powerBankConstants";
 import { recordPowerBankDiscovery } from "@/runtime/powerBankDiscovery";
 import { recordDepositDiscovery } from "@/runtime/depositDiscovery";
@@ -407,7 +408,7 @@ function runPowerBankObserverImpl(): void {
       }
     } else if (observers.length >= 2) {
       // 轮转保留普通巡逻的 Observer，避免固定保留者拥有独占覆盖范围时饿死请求。
-      const patrolObserver = observers[Game.time % observers.length];
+      const patrolObserver = observers[tickPhase(Game.time, observers.length)];
       const priorityObservers = available.filter((observer) => observer !== patrolObserver);
       for (let index = 0; index < priorityObservers.length; index += 1) {
         const observer = priorityObservers[index];

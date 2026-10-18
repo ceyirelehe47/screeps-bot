@@ -1,3 +1,4 @@
+import { isDue } from "@/runtime/cadence";
 import { countCarrierCargo } from "@/runtime/carrierCargo";
 import { limitActionLog } from "@/runtime/actionLog";
 import {
@@ -557,7 +558,7 @@ function planCrossRoomGhodiumTransfers(
   ]));
   if (![...remainingByRoom.values()].some((amount) => amount > 0)) return;
 
-  if (Game.time % 25 !== 0) return;
+  if (!isDue("nuker.plan", 25)) return;
   const snapshots = collectResourceControlSnapshots([RESOURCE_GHODIUM]);
   const planByRoom = new Map(
     plans.map((plan) => [plan.room.name, plan]),

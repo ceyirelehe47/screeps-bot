@@ -1,3 +1,5 @@
+import { cadenceOffset, isDue } from "@/runtime/cadence";
+const cadenceTick = (tick: number): number => tick + cadenceOffset("mineralExtraction.plan", 10);
 import { runMineralExtraction } from "@/runtime/mineralExtraction";
 import { clearCarrierTaskBoardForTest, getCarrierTasksByRoom } from "@/runtime/carrierTaskBoard";
 
@@ -100,7 +102,7 @@ describe("runMineralExtraction", () => {
   beforeEach(() => {
     clearCarrierTaskBoardForTest();
     resetRuntimeServices();
-    Game.time = 10;
+    Game.time = cadenceTick(10);
     Memory.rooms = {};
   });
 

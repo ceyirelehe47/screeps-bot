@@ -1,3 +1,4 @@
+import { isDue } from "@/runtime/cadence";
 import { getCrossShardColonizationSummaries } from "@/runtime/crossShardColonization";
 import { getCrossShardClaimSummaries, getCrossShardRoomSummaries } from "@/runtime/crossShardSignals";
 import { getMemoryService } from "@/runtime/runtimeServices";
@@ -192,7 +193,7 @@ export function runInterShardControl(): void {
 
   ensureCrossShardRuntimeStore();
 
-  if (Game.time % INTER_SHARD_SYNC_INTERVAL !== 0) {
+  if (!isDue("interShard.sync", INTER_SHARD_SYNC_INTERVAL)) {
     return;
   }
 

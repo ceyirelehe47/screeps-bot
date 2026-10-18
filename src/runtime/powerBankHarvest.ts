@@ -1,3 +1,4 @@
+import { isDue } from "@/runtime/cadence";
 import { replaceSpawnQueue } from "@/runtime/spawnRequests";
 import { countBoostableParts, getBoostPartType } from "@/runtime/boostParts";
 import { canStartOutboundMission } from "@/runtime/outboundMissionPolicy";
@@ -1688,7 +1689,7 @@ function processAttacking(task: PowerBankHarvestTask): void {
     delete task.combatRecoveryHits; delete task.combatRecoveryProgressAt;
     if (task.blocker === "active_pair_recovering") delete task.blocker;
   }
-  if (task.blocker === "attack_no_progress" && Game.time % REINFORCEMENT_REPATH_COOLDOWN === 0) {
+  if (task.blocker === "attack_no_progress" && isDue(`powerBank.reinforcement:${task.id}`, REINFORCEMENT_REPATH_COOLDOWN)) {
     clearMovementState(pair.attacker); clearMovementState(pair.healer);
   }
   processReinforcement(task);

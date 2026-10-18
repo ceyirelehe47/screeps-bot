@@ -1,3 +1,5 @@
+import { cadenceOffset, isDue } from "@/runtime/cadence";
+const cadenceTick = (tick: number): number => tick + cadenceOffset("resourceControl.plan", 10);
 import {
   clearCarrierTaskBoardForTest,
   getCarrierTasksByRoom,
@@ -199,12 +201,12 @@ function createShadowMatcherRoom(
     epochFingerprint: "capacity-regression:fingerprint",
     revision: `${roomName}:1`,
     observedAt: 100,
-    expiresAt: 200,
+    expiresAt: cadenceTick(200),
     owned: true,
     hasStorage: true,
     hasTerminal: true,
     terminalReachable: true,
-    terminalReadyAt: 100,
+    terminalReadyAt: cadenceTick(100),
     transferBatchSize: 100,
     capacityState: "normal",
     receiverEligible: true,
@@ -317,7 +319,7 @@ function runResourceControlAuthorityTwin(
   Memory.data = undefined;
   Memory.runtime = undefined;
   Memory.rooms = {};
-  Game.time = 100;
+  Game.time = cadenceTick(100);
   const room = createMutableRoom(
     "W84N1",
     { [RESOURCE_ENERGY]: 200_000, [RESOURCE_HYDROGEN]: 10_000 },
@@ -442,13 +444,13 @@ describe("resource control live-like capacity recovery", () => {
     // Storage 尚未达到恢复水位；承接已有 relief，而不是本轮新规划责任。
     Memory.runtime = {
       resourceControl: {
-        updatedAt: 0,
+        updatedAt: cadenceTick(0),
         rooms: { [pressureRoom.name]: { capacityState: "pressure" } },
         lastActions: [],
         lastMarketActions: [],
       },
     } as any;
-    Game.time = 1;
+    Game.time = cadenceTick(1);
     const relief = createAutomaticResourceTransferTask(
       pressureRoom.name,
       donor.name,
@@ -465,7 +467,7 @@ describe("resource control live-like capacity recovery", () => {
     );
     if (typeof relief === "string") throw new Error(relief);
     if (typeof synthesis === "string") throw new Error(synthesis);
-    Game.time = 10;
+    Game.time = cadenceTick(10);
     return { pressureRoom, donor, synthesisReceiver, relief: relief.task, synthesis: synthesis.task };
   }
 
@@ -501,7 +503,7 @@ describe("resource control live-like capacity recovery", () => {
     }],
     ["expired", (task: ReturnType<typeof createOutgoingEnergyReliefScenario>["relief"]) => {
       task.lastProgressAt = 0;
-      Game.time = 5_010;
+      Game.time = cadenceTick(5_010);
     }],
     ["done", (task: ReturnType<typeof createOutgoingEnergyReliefScenario>["relief"]) => {
       task.status = "done";
@@ -552,7 +554,7 @@ describe("resource control live-like capacity recovery", () => {
     };
     Memory.runtime = {
       resourceControl: {
-        updatedAt: 0,
+        updatedAt: cadenceTick(0),
         rooms: { [room.name]: { capacityState: "pressure" } },
         lastActions: [],
         lastMarketActions: [],
@@ -561,7 +563,7 @@ describe("resource control live-like capacity recovery", () => {
 
     let originalCreatedAt: number | undefined;
     for (const [index, expectedFreeCapacity] of [60_000, 70_000, 80_000].entries()) {
-      Game.time = 10 + index * 10;
+      Game.time = cadenceTick(10 + index * 10);
       resetRuntimeServices();
       runResourceControl();
 
@@ -579,13 +581,13 @@ describe("resource control live-like capacity recovery", () => {
       expect(room.terminal!.store.getFreeCapacity()).toBe(expectedFreeCapacity);
     }
 
-    Game.time = 40;
+    Game.time = cadenceTick(40);
     resetRuntimeServices();
     runResourceControl();
     expect(Memory.runtime?.resourceControl?.rooms[room.name]?.capacityState).toBe("normal");
     expect(getCarrierTasksByRoom(room.name)).toEqual({});
 
-    Game.time = 50;
+    Game.time = cadenceTick(50);
     resetRuntimeServices();
     runResourceControl();
     expect(room.terminal!.store.getFreeCapacity()).toBe(80_000);
@@ -596,8 +598,8 @@ describe("resource control live-like capacity recovery", () => {
       available: true,
       complete: true,
       requestedMode: "shadow",
-      updatedAt: 50,
-      expiresAt: 999,
+      updatedAt: cadenceTick(50),
+      expiresAt: cadenceTick(999),
     };
     (Memory.cfg!.resourceControl as unknown as {
       logistics: { schemaVersion: 1; mode: "canary"; canaryScopes: [] };
@@ -606,7 +608,7 @@ describe("resource control live-like capacity recovery", () => {
       mode: "canary",
       canaryScopes: [],
     };
-    Game.time = 51;
+    Game.time = cadenceTick(51);
     resetRuntimeServices();
     runResourceControl();
     expect((Memory.runtime!.resourceControl as unknown as {
@@ -620,18 +622,18 @@ describe("resource control live-like capacity recovery", () => {
       available: false,
       blocker: "matcher_unavailable",
       requestedMode: "canary",
-      updatedAt: 51,
+      updatedAt: cadenceTick(51),
     }));
 
     (Memory.runtime!.resourceControl as unknown as { logistics: unknown }).logistics = {
       available: true,
       complete: true,
       requestedMode: "shadow",
-      updatedAt: 51,
-      expiresAt: 999,
+      updatedAt: cadenceTick(51),
+      expiresAt: cadenceTick(999),
     };
     Memory.cfg!.resourceControl!.enabled = false;
-    Game.time = 52;
+    Game.time = cadenceTick(52);
     const disabledSendCalls = (room.terminal!.send as jest.Mock).mock.calls.length;
     const disabledDealCalls = (Game.market.deal as jest.Mock).mock.calls.length;
     resetRuntimeServices();
@@ -647,13 +649,13 @@ describe("resource control live-like capacity recovery", () => {
     }).logistics).toEqual(expect.objectContaining({
       available: false,
       blocker: "mode_disabled",
-      updatedAt: 52,
-      expiresAt: 72,
+      updatedAt: cadenceTick(52),
+      expiresAt: cadenceTick(72),
     }));
 
     Memory.cfg!.resourceControl!.enabled = true;
     Game.rooms = {};
-    Game.time = 60;
+    Game.time = cadenceTick(60);
     resetRuntimeServices();
     runResourceControl();
     expect((Memory.runtime!.resourceControl as unknown as {
@@ -661,12 +663,12 @@ describe("resource control live-like capacity recovery", () => {
     }).logistics).toEqual(expect.objectContaining({
       available: false,
       blocker: "input_unavailable",
-      updatedAt: 60,
-      expiresAt: 80,
+      updatedAt: cadenceTick(60),
+      expiresAt: cadenceTick(80),
     }));
 
     Memory.runtime = undefined;
-    Game.time = 70;
+    Game.time = cadenceTick(70);
     resetRuntimeServices();
     runResourceControl();
     expect((Memory.runtime!.resourceControl as unknown as {
@@ -674,7 +676,7 @@ describe("resource control live-like capacity recovery", () => {
     }).logistics).toEqual(expect.objectContaining({
       available: false,
       blocker: "input_unavailable",
-      updatedAt: 70,
+      updatedAt: cadenceTick(70),
     }));
 
     const reservationRoom = createMutableRoom(
@@ -694,7 +696,7 @@ describe("resource control live-like capacity recovery", () => {
       mode: "shadow",
       canaryScopes: [],
     };
-    Game.time = 80;
+    Game.time = cadenceTick(80);
     resetRuntimeServices();
     const baselineCapture = beginSynthesisShadowEpochCapture([
       RESOURCE_HYDROGEN,
@@ -912,7 +914,7 @@ describe("resource control live-like capacity recovery", () => {
     };
     (Game.market.calcTransactionCost as jest.Mock).mockReturnValue(2_000);
 
-    Game.time = 1;
+    Game.time = cadenceTick(1);
     const created = createAutomaticResourceTransferTask(
       source.name,
       receiver.name,
@@ -932,7 +934,7 @@ describe("resource control live-like capacity recovery", () => {
     if (typeof expired === "string") throw new Error(expired);
     markResourceTransferTaskBlocked(expired.task, "receiver_capacity");
 
-    Game.time = 509;
+    Game.time = cadenceTick(509);
     const saturatedFeeTask = createAutomaticResourceTransferTask(
       source.name,
       shadowReceiver.name,
@@ -941,7 +943,7 @@ describe("resource control live-like capacity recovery", () => {
       `synthesis:${shadowReceiver.name}:${RESOURCE_HYDROXIDE}`,
     );
     if (typeof saturatedFeeTask === "string") throw new Error(saturatedFeeTask);
-    Game.time = 510;
+    Game.time = cadenceTick(510);
     Memory.data = Memory.data || {};
     (Memory.data as unknown as {
       marketSaleAutomation: unknown;
@@ -1299,7 +1301,7 @@ describe("resource control live-like capacity recovery", () => {
       );
       expect(receiverFact?.receiverTerminalHeadroom).toBe(0);
       expect(receiverFact?.terminalStagingFreeCapacity).toBe(0);
-      expect(receiverFact?.terminalReadyAt).toBe(510);
+      expect(receiverFact?.terminalReadyAt).toBe(cadenceTick(510));
     }
     expect(Memory.runtime?.resourceControl?.rooms[source.name]?.staging).toMatchObject({
       admittedAmount: 2_500,
@@ -1320,7 +1322,7 @@ describe("resource control live-like capacity recovery", () => {
     )).toBe(false);
 
     expect(executeTerminalFeedTasks(source)).toBe(2_000);
-    Game.time = 520;
+    Game.time = cadenceTick(520);
     const coveredCapture = beginSynthesisShadowEpochCapture([
       RESOURCE_KEANIUM,
     ]);
@@ -1413,7 +1415,7 @@ describe("resource control live-like capacity recovery", () => {
       }),
     }));
 
-    Game.time = 530;
+    Game.time = cadenceTick(530);
     const emptyCapture = beginSynthesisShadowEpochCapture([
       RESOURCE_KEANIUM,
     ]);
@@ -1468,13 +1470,13 @@ describe("resource control live-like capacity recovery", () => {
       }),
       cpu: expect.objectContaining({
         attributionVersion: 2,
-        sampleTick: 530,
+        sampleTick: cadenceTick(530),
         measurementAvailable: false,
         producerUsed: 0,
       }),
     }));
 
-    Game.time = 540;
+    Game.time = cadenceTick(540);
     const unavailableCapture = beginSynthesisShadowEpochCapture([
       RESOURCE_KEANIUM,
       RESOURCE_HYDROGEN,
@@ -1605,7 +1607,7 @@ describe("resource control live-like capacity recovery", () => {
       (amount: number) => Math.ceil(amount / 2),
     );
 
-    Game.time = 1;
+    Game.time = cadenceTick(1);
     const created = createAutomaticResourceTransferTask(
       source.name,
       receiver.name,
@@ -1615,7 +1617,7 @@ describe("resource control live-like capacity recovery", () => {
     );
     if (typeof created === "string") throw new Error(created);
 
-    Game.time = 10;
+    Game.time = cadenceTick(10);
     resetRuntimeServices();
     runResourceControl();
 
@@ -1654,7 +1656,7 @@ describe("resource control live-like capacity recovery", () => {
     Game.rooms[receiver.name] = receiver;
     Game.rooms[saturated.name] = saturated;
 
-    Game.time = 10;
+    Game.time = cadenceTick(10);
     resetRuntimeServices();
     runResourceControl();
 
@@ -1679,7 +1681,7 @@ describe("resource control live-like capacity recovery", () => {
     });
 
     expect(executeTerminalFeedTasks(source)).toBe(50_000);
-    Game.time = 20;
+    Game.time = cadenceTick(20);
     resetRuntimeServices();
     runResourceControl();
 
@@ -1717,7 +1719,7 @@ describe("resource control live-like capacity recovery", () => {
       firstObservedAt: 100,
       decisionOrder,
       observedAt: 100,
-      expiresAt: 200,
+      expiresAt: cadenceTick(200),
       allowedSourceRooms,
     });
     const xResource = RESOURCE_CATALYST;
@@ -1785,7 +1787,7 @@ describe("resource control live-like capacity recovery", () => {
         coverage: amount >= demand.desiredAmount ? "covered" : "partial",
         capacity,
         predictedStagingEligibility: staging,
-        terminalReadyAt: 100,
+        terminalReadyAt: cadenceTick(100),
         transactionCost: 0,
         requiredEnergy: 0,
         energyCommitmentAmount: 0,
@@ -2462,7 +2464,7 @@ describe("resource control live-like capacity recovery", () => {
           coverage: "covered",
           capacity: "eligible",
           predictedStagingEligibility: "eligible",
-          terminalReadyAt: 100,
+          terminalReadyAt: cadenceTick(100),
           transactionCost: 0,
           requiredEnergy: 0,
           energyCommitmentAmount: 0,

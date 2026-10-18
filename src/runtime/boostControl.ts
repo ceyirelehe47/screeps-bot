@@ -1,3 +1,4 @@
+import { isDue } from "@/runtime/cadence";
 import { resolveMarketCreditReserve, getAvailableMarketCredits } from "@/runtime/marketActionArbiter";
 import { createResourceTransferTaskAmountIndex, ensureResourceTransferTaskStore, cancelResourceTransferTask, createAutomaticResourceTransferTask } from "@/runtime/logistics/resourceTransferTasks";
 import { isDefenseMode } from "@/runtime/defenseMode";
@@ -121,7 +122,7 @@ function findBestSellOrder(roomName: string, amount: number): Order | null {
 export function buyBoostIfNeeded(room: Room): void {
   if (!room.terminal) return;
   if (room.terminal.cooldown !== 0) return;
-  if (Game.time % 5 !== 0) return;
+  if (!isDue("boost.plan", 5)) return;
 
   if (isDefenseMode(room.name)) for (const task of Object.values(ensureResourceTransferTaskStore())) {
     if (task.origin === "automatic" && task.status === "pending" && task.fromRoomName === room.name &&

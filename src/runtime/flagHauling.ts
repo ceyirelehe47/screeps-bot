@@ -1,3 +1,4 @@
+import { isDue } from "@/runtime/cadence";
 import { getCreepConfigService, getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
 import { getBodyCost, getLiveCreepsByConfig, isConfigSpawning as hasSpawningConfig, removeQueuedSpawnConfig } from "@/runtime/spawnHelpers";
 import { isDefenseMode } from "@/runtime/defenseMode";
@@ -490,7 +491,7 @@ export function runFlagHaulingByFlag(): void {
     if (!targetRoom?.controller?.my) {
       remoteFlagNames.add(flag.name);
     }
-    if (!scheduled && Game.time % 100 === 0) {
+    if (!scheduled && isDue(`flagHauling.retry:${flag.name}`, 100)) {
       console.log(`[flag-haul] flag pending: ${flag.name} room=${flag.pos.roomName} reason=no_source_room`);
     }
   }

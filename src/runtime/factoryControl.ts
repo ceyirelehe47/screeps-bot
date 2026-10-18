@@ -1,3 +1,4 @@
+import { isDue } from "@/runtime/cadence";
 import { resolveMarketCreditReserve } from "@/runtime/marketActionArbiter";
 import { resolveRoomEnergyPolicyForRoom } from "@/runtime/roomEnergyPolicy";
 import { isRoomInReserveMode } from "@/runtime/roomReserve";
@@ -1331,7 +1332,7 @@ function attemptRegionalRawPurchase(
 // ---------------------------------------------------------------------------
 
 export function runFactoryControl(): void {
-  if (Game.time % 100 === 0) {
+  if (isDue("factory.terminalGc", 100)) {
     const tasks = Memory.data?.factoryTasks;
     for (const [id, task] of Object.entries(tasks ?? {})) {
       if (["done", "cancelled", "failed"].includes(task.status) && Game.time - (task.completedAt ?? task.updatedAt) > 5000) delete tasks![id];

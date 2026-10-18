@@ -1,3 +1,4 @@
+import { tickPhase } from "@/runtime/cadence";
 import { searchMovementPath } from "@/movement/pathSearch";
 import { getTickContextService } from "@/runtime/runtimeServices";
 import { executeTreasuryFencedTerminalCargo, isTerminalCargoBlocked } from "@/runtime/treasuryTerminalCargo";
@@ -79,7 +80,7 @@ function moveSalvageSafely(creep: Creep, goal: RoomPosition, range = 1): void {
     const participants = getTickContextService().getAllCreeps().filter((actor) => !actor.spawning && !actor.memory._recycleToRoom && actor.memory.role === "remoteCarrier"
       && (actor.memory.roleArgs?.[2] === SALVAGE_MODE || (actor.memory.configName && getCreepConfigService().get(actor.memory.configName)?.args[2] === SALVAGE_MODE)))
       .map((actor) => actor.name).sort();
-    const start = participants.length ? Game.time % participants.length : 0;
+    const start = participants.length ? tickPhase(Game.time, participants.length) : 0;
     salvageTurnNames = [...participants.slice(start), ...participants.slice(0, start)].slice(0, 2);
   }
   if (salvageTurnNames.length && !salvageTurnNames.includes(creep.name)) return;

@@ -1,3 +1,4 @@
+import { isDue } from "@/runtime/cadence";
 import { queuedConfigNames, queuedSpawns, spawningForConfig } from "./spawnIndex";
 import { getSquadPolicy, getHealerCount, getMeleeCount } from "./squadPolicy/index";
 import { getCreepConfigService, getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
@@ -229,7 +230,7 @@ export function warOffset(name: string, period: number): number { let hash = 0; 
 
 export function warPeriodicDue(last: number | undefined, room: string): boolean {
   if (last === undefined || last <= 0) return true;
-  return Game.time - last >= 100 || Game.time > last && Game.time % 100 === warOffset(room, 100);
+  return Game.time - last >= 100 || Game.time > last && isDue(`war.periodic:${room}`, 100, Game.time, warOffset(room, 100));
 }
 
 export function ensureWarStore(): Record<string, WarTask> {

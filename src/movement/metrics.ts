@@ -1,3 +1,4 @@
+import { isDue } from "@/runtime/cadence";
 type MovementMetricName =
   | "pathBudgetDenied"
   | "exitPolicyDenied"
@@ -389,7 +390,7 @@ export function recordMovementMetric(metric: MovementMetricName, roomName?: stri
   }
 
   // 区间边界 tick 也只 flush 一次：pending 跨 tick 聚合，读数为空时跳过。
-  if (Game.time % MOVEMENT_METRICS_FLUSH_INTERVAL === 0 && lastMovementMetricsFlushTick !== Game.time && pendingMovementMetrics) {
+  if (isDue("movement.metrics.flush", MOVEMENT_METRICS_FLUSH_INTERVAL) && lastMovementMetricsFlushTick !== Game.time && pendingMovementMetrics) {
     flushPendingMovementMetrics();
   }
 }

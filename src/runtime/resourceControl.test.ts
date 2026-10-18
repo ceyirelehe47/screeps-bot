@@ -1,3 +1,5 @@
+import { cadenceOffset, isDue } from "@/runtime/cadence";
+const cadenceTick = (tick: number): number => tick + cadenceOffset("resourceControl.plan", 10);
 import {
   clearCarrierTaskBoardForTest,
   getCarrierTasksByRoom,
@@ -245,7 +247,7 @@ describe("runResourceControl terminal feed tasks", () => {
     clearCarrierTaskBoardForTest();
     clearMarketActionArbiterForTest();
     resetRuntimeServices();
-    Game.time = 10;
+    Game.time = cadenceTick(10);
     Memory.cfg = {
       resourceControl: {
         sampleInterval: 10,
@@ -576,7 +578,7 @@ describe("runResourceControl terminal feed tasks", () => {
         steps: [expect.objectContaining({ resource: RESOURCE_ENERGY, amount: 1_000 })],
       });
 
-      Game.time = 20;
+      Game.time = cadenceTick(20);
       const nextRoom = createRoom({
         name: room.name,
         storageResources: {
@@ -608,7 +610,7 @@ describe("runResourceControl terminal feed tasks", () => {
       });
 
       // 下一 tick 已有 carrier 把整批 1k 取在路上时，不再重建第二批备货。
-      Game.time = 21;
+      Game.time = cadenceTick(21);
       Game.creeps = {
         "market-cargo-carrier": {
           name: "market-cargo-carrier",
@@ -626,7 +628,7 @@ describe("runResourceControl terminal feed tasks", () => {
       expect(getCarrierTasksByRoom(room.name)[
         `resourceControl:terminal_feed:${room.name}:${RESOURCE_CATALYST}`
       ]).toBeUndefined();
-      Game.time = 40;
+      Game.time = cadenceTick(40);
       Game.creeps = {};
       const backedRoom = createRoom({ name: room.name, storageFreeCapacity: 800_000,
         storageResources: { energy: 100_000, X: 200_000 },

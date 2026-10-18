@@ -1,3 +1,5 @@
+import { cadenceOffset, isDue } from "@/runtime/cadence";
+const cadenceTick = (tick: number): number => tick + cadenceOffset("powerDistribution.plan", 25);
 import { runPowerDistribution } from "@/runtime/powerDistribution";
 import { createMockStore } from "@mock/powerBank";
 
@@ -12,7 +14,7 @@ describe("Power就近分发加工", () => {
   }
   const tasks = () => Object.values(Memory.data?.resourceControl?.tasks ?? {});
   beforeEach(() => {
-    processors.clear(); Game.time = 100; Memory.cfg = { resourceControl: { enabled: true } }; Memory.data = {};
+    processors.clear(); Game.time = cadenceTick(100); Memory.cfg = { resourceControl: { enabled: true } }; Memory.data = {};
     Game.market = { calcTransactionCost: jest.fn((amount: number) => Math.ceil(amount / 10)), orders: {} } as unknown as Market;
     Game.map = { ...Game.map, getRoomLinearDistance: jest.fn((from: string, to: string) => from === "E1N1" && to === "E2N1" ? 1 : 5) } as GameMap;
   });

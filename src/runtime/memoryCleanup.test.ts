@@ -1,3 +1,5 @@
+import { cadenceOffset, isDue } from "@/runtime/cadence";
+const cadenceTick = (tick: number): number => tick + cadenceOffset("memory.cleanup", 17);
 import { runMemoryCleanup } from "@/runtime/memoryCleanup";
 import {
   clearPickupReservationStoreForTest,
@@ -119,7 +121,7 @@ describe("runMemoryCleanup", () => {
   beforeEach(() => {
     resetRuntimeServices();
     clearPickupReservationStoreForTest();
-    Game.time = 17;
+    Game.time = cadenceTick(17);
     Game.rooms = { W1N1: createOwnedRoom("W1N1") };
     Game.creeps = {};
     Game.spawns = {};
@@ -146,7 +148,7 @@ describe("runMemoryCleanup", () => {
   });
 
   it("does not prune link-network cache outside the 17-tick cadence", () => {
-    Game.time = 18;
+    Game.time = cadenceTick(18);
     Memory.runtime = {
       linkNetwork: {
         W1N1: { updatedAt: 10, senderIds: ["owned-sender"], receiverIds: ["owned-receiver"] },
@@ -163,7 +165,7 @@ describe("runMemoryCleanup", () => {
   });
 
   it("expires terminal War owners by completedAt with legacy statusSince fallback", () => {
-    Game.time = 221;
+    Game.time = cadenceTick(221);
     const configName = "W1N1:war:W2N2:meleeAttacker:0";
     const survivor = {
       name: "war-survivor",
@@ -370,7 +372,7 @@ describe("runMemoryCleanup", () => {
     } as unknown as Memory["runtime"];
 
     for (const tick of [17, 34]) {
-      Game.time = tick;
+      Game.time = cadenceTick(tick);
       resetRuntimeServices();
       runMemoryCleanup();
       expect(Object.keys(Memory.runtime!.powerBankBoost!)).toEqual([primary, reinforcement]);
@@ -380,14 +382,14 @@ describe("runMemoryCleanup", () => {
     }
 
     delete Memory.data!.powerBankHarvest!["pb-live"].reinforcement;
-    Game.time = 51;
+    Game.time = cadenceTick(51);
     resetRuntimeServices();
     runMemoryCleanup();
     expect(Object.keys(Memory.runtime!.powerBankBoost!)).toEqual([primary]);
     expect(Memory.runtime!.synthesisControl!.rooms.W1N1.boostPause!.taskIds).toEqual([primary]);
 
     delete Memory.data!.powerBankHarvest!["pb-live"];
-    Game.time = 68;
+    Game.time = cadenceTick(68);
     resetRuntimeServices();
     runMemoryCleanup();
     expect(Memory.runtime!.powerBankBoost).toBeUndefined();
@@ -494,7 +496,7 @@ describe("runMemoryCleanup", () => {
 
 it("布局 TTL 只淘汰失去所有权且过期的房间", () => {
   resetRuntimeServices();
-  Game.time = 51000;
+  Game.time = cadenceTick(51000);
   Game.rooms = { W1N1: createOwnedRoom("W1N1") };
   Game.spawns = {};
   Memory.cfg = {};

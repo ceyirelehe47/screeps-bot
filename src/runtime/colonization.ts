@@ -1,3 +1,4 @@
+import { isDue } from "@/runtime/cadence";
 import { searchPlanningPath } from "@/movement/pathSearch";
 import { replaceSpawnQueue } from "@/runtime/spawnRequests";
 import { getGlobalOwnedRoomCount } from "@/runtime/globalRoomCount";
@@ -1490,7 +1491,7 @@ export function runColonizationByFlag(): void {
   const flags = getColonizationFlags();
   for (const flag of flags) {
     const scheduled = upsertColonizationTask(flag);
-    if (!scheduled && Game.time % 100 === 0) {
+    if (!scheduled && isDue(`colonization.retry:${flag.name}`, 100)) {
       console.log(`[colonization] flag pending: ${flag.name} room=${flag.pos.roomName} reason=no_source_room`);
     }
   }

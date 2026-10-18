@@ -1,3 +1,4 @@
+import { isDue } from "@/runtime/cadence";
 import { getCreepConfigService, getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
 import { requestCombatObservation, OBSERVATION_REQUEST_TTL } from "@/runtime/powerBankObserver";
 import type { WarTask } from "./store";
@@ -37,7 +38,7 @@ export function runWarRebuildWatches(store: Record<string, WarTask>): void {
       const interval = Math.max(1, Math.floor(config.intervalTicks));
       if (target.pendingObservationAt === undefined) {
         if (Game.time < (target.nextObservationAt ?? Game.time)) continue;
-        if (Game.cpu?.bucket < 2000 && Game.time % 10 !== warOffset(name, 10)) continue;
+        if (Game.cpu?.bucket < 2000 && !isDue(`war.rebuild:${name}`, 10, Game.time, warOffset(name, 10))) continue;
         target.nextObservationAt = Game.time + interval;
         if (!requestCombatObservation(name)) { target.blocker = "observer_unavailable"; continue; }
         target.pendingObservationAt = Game.time;

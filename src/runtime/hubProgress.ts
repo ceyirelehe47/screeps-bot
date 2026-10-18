@@ -1,3 +1,4 @@
+import { isDue } from "@/runtime/cadence";
 import { getTickContextService } from "@/runtime/runtimeServices";
 import { getCreepConfigService, getMemoryService } from "@/runtime/runtimeServices";
 import { hasDiagnosticBudget } from "@/runtime/diagnosticBudget";
@@ -1370,7 +1371,7 @@ export function runHubProgressAnalytics(): void {
   const hubRuntime = Memory.runtime?.hub;
   const needsPlan = hubRuntime?.needsPlan === true;
 
-  if (!needsPlan && Game.time % ANALYTICS_SAMPLE_INTERVAL !== 0) {
+  if (!needsPlan && !isDue("hubProgress.analytics", ANALYTICS_SAMPLE_INTERVAL)) {
     return;
   }
 
@@ -1450,7 +1451,7 @@ export function renderHubProgressOverlays(): HubOverlayRenderStats | null {
     satellitePanels++;
   }
 
-  if (skippedSatellitePanels > 0 && Game.time % 100 === 0) {
+  if (skippedSatellitePanels > 0 && isDue("hubProgress.overlay", 100)) {
     console.log(`[hub-visual] skipped ${skippedSatellitePanels} satellite panels; calls=${callsUsed}/${MAX_HUB_VISUAL_CALLS}`);
   }
 

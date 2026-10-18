@@ -1,3 +1,4 @@
+import { isDue } from "@/runtime/cadence";
 import { normalizeCapacityHeadroomPolicy } from "@/runtime/logistics/capacityHeadroom";
 import {
   pruneCarrierTasksForProducer,
@@ -99,7 +100,7 @@ export function runMineralExtraction(): void {
   const rooms = getTickContextService().getMyRooms();
   const validRoomNames = new Set(rooms.map((room) => room.name));
 
-  if (Game.time % MINERAL_EXTRACTION_SAMPLE_INTERVAL !== 0) {
+  if (!isDue("mineralExtraction.plan", MINERAL_EXTRACTION_SAMPLE_INTERVAL)) {
     pruneCarrierTasksForProducer(MINERAL_EXTRACTION_CARRIER_TASK_PRODUCER, validRoomNames);
     return;
   }

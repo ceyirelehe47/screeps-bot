@@ -1,6 +1,7 @@
 import { jsonCommand } from "@/runtime/console/jsonCommand";
 import {
   normalizeCpuMonitorConfig,
+  computeCpuMonitorSummary,
   getCpuMonitorHistory,
   CPU_MONITOR_DEFAULTS,
 } from "@/runtime/cpuMonitor";
@@ -229,58 +230,7 @@ export function statusCpuProfilerRaw(): CpuProfilerControlResult {
 export const statusCpuProfilerCommand = jsonCommand(() => statusCpuProfilerRaw(), undefined, true);
 
 function computeSummaryFromHistory(recentHistory: CpuMonitorSnapshotV2[]): CpuMonitorSummaryV2 | null {
-  if (recentHistory.length === 0) return null;
-
-  let sumTotalUsed = 0;
-  let maxTotalUsed = -Infinity;
-  let sumBucket = 0;
-  let minBucket = Infinity;
-  let maxBucket = -Infinity;
-  let sumUntracked = 0;
-  const phaseSums: Record<string, number> = {};
-  const fixedActionSums: Record<string, number> = {};
-  let lastEma = 0;
-
-  for (const entry of recentHistory) {
-    sumTotalUsed += entry.totalUsed;
-    if (entry.totalUsed > maxTotalUsed) maxTotalUsed = entry.totalUsed;
-    sumBucket += entry.bucket;
-    if (entry.bucket < minBucket) minBucket = entry.bucket;
-    if (entry.bucket > maxBucket) maxBucket = entry.bucket;
-    sumUntracked += entry.untracked;
-
-    for (const [phase, used] of Object.entries(entry.phases)) {
-      phaseSums[phase] = (phaseSums[phase] || 0) + used;
-    }
-    for (const [action, count] of Object.entries(entry.fixedActionCounts)) {
-      fixedActionSums[action] = (fixedActionSums[action] || 0) + count;
-    }
-
-    lastEma = entry.emaTotalUsed;
-  }
-
-  const ticks = recentHistory.length;
-  const avgPhases: Record<string, number> = {};
-  for (const [phase, sum] of Object.entries(phaseSums)) {
-    avgPhases[phase] = sum / ticks;
-  }
-  const avgFixedActionCounts: Record<string, number> = {};
-  for (const [action, sum] of Object.entries(fixedActionSums)) {
-    avgFixedActionCounts[action] = sum / ticks;
-  }
-
-  return {
-    ticks,
-    avgTotalUsed: sumTotalUsed / ticks,
-    maxTotalUsed,
-    minBucket,
-    maxBucket,
-    avgBucket: sumBucket / ticks,
-    avgUntracked: sumUntracked / ticks,
-    avgPhases,
-    avgFixedActionCounts,
-    emaTotalUsed: lastEma,
-  };
+  return computeCpuMonitorSummary(recentHistory, recentHistory[recentHistory.length - 1]?.emaTotalUsed ?? 0);
 }
 
 export function cpuMonitorRaw(): CpuMonitorResult {

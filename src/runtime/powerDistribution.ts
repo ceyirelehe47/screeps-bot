@@ -1,3 +1,4 @@
+import { isDue } from "@/runtime/cadence";
 import { createAutomaticResourceTransferTask, createResourceTransferTaskAmountIndex, ensureResourceTransferTaskStore } from "@/runtime/logistics/resourceTransferTasks";
 import { getTerminalAmountOutsideMarketSaleExposure } from "@/runtime/marketSaleExposure";
 import { resolveRoomConfig } from "@/runtime/resourceControlRoomConfig";
@@ -8,7 +9,7 @@ const MAX_NEW_TASKS = 4;
 
 /** 只发布普通运输任务：搬入terminal、费用及实际send仍由既有调度执行。 */
 export function runPowerDistribution(rooms: readonly Room[], processors: ReadonlyMap<string, StructurePowerSpawn>): void {
-  if (Game.time % 25 !== 0 || Memory.cfg?.resourceControl?.enabled === false) return;
+  if (!isDue("powerDistribution.plan", 25) || Memory.cfg?.resourceControl?.enabled === false) return;
   if (rooms.filter((room) => room.controller?.my && room.terminal).length < 2) return;
   const index = createResourceTransferTaskAmountIndex();
   const capacityReserved = new Map<string, number>();

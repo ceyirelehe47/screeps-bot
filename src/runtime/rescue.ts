@@ -1,3 +1,4 @@
+import { isDue } from "@/runtime/cadence";
 import { ensureConfigStore, getBodyCost, getLiveCreepsByConfig, isConfigSpawning as hasSpawningConfig, removeQueuedSpawnConfig } from "@/runtime/spawnHelpers";
 import { spawnProfiles } from "@/config/spawnProfiles";
 import { getCreepConfigService, getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
@@ -274,7 +275,7 @@ export function runRescueByFlag(): void {
   const flags = getRescueFlags();
   for (const flag of flags) {
     const scheduled = upsertRescueTask(flag);
-    if (!scheduled && Game.time % 100 === 0) {
+    if (!scheduled && isDue(`rescue.retry:${flag.name}`, 100)) {
       console.log(`[rescue] flag pending: ${flag.name} room=${flag.pos.roomName} reason=no_source_room`);
     }
   }

@@ -39,3 +39,9 @@ it("显式寻路统一经过 ops 账本，生产调用方不绕过内核使用�
     .filter(path => /PathFinder\.search\(|\.findPathTo\(/.test(readFileSync(path, "utf8")));
   expect(violations).toEqual([]);
 });
+
+it("周期生产任务通过 cadence 入口错峰，禁止恢复裸 Game.time 取模调度", () => {
+  const violations = productionFiles(join(__dirname, "..")).filter(path => !path.endsWith("/cadence.ts"))
+    .filter(path => /Game\s*\.\s*time\s*%/.test(readFileSync(path, "utf8")));
+  expect(violations).toEqual([]);
+});

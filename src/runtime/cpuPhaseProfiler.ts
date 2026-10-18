@@ -1,3 +1,4 @@
+import { isDue } from "@/runtime/cadence";
 import {
   normalizeCpuMonitorConfig,
   persistCpuMonitorSample,
@@ -73,7 +74,7 @@ let phaseTimingContext: CpuPhaseTimingContext | undefined;
 function getCpuPhaseTimingContext(): CpuPhaseTimingContext {
   if (!phaseTimingContext || phaseTimingContext.game !== Game || phaseTimingContext.tick !== Game.time) {
     const config = normalizeCpuMonitorConfig(Memory.cfg?.cpuProfiler);
-    const sampled = config.enabled && Game.time % config.sampleInterval === 0;
+    const sampled = config.enabled && isDue("cpuProfiler.sample", config.sampleInterval);
     phaseTimingContext = {
       game: Game,
       tick: Game.time,
@@ -155,7 +156,7 @@ export function createTickCpuProfiler(): TickCpuProfiler {
   }
 
   // Zero-overhead: enabled but non-sample tick never calls Game.cpu.getUsed()
-  if (Game.time % config.sampleInterval !== 0) {
+  if (!isDue("cpuProfiler.sample", config.sampleInterval)) {
     return createNoopProfiler(true);
   }
 

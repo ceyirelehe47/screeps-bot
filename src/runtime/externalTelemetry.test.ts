@@ -1,3 +1,5 @@
+import { cadenceOffset, isDue } from "@/runtime/cadence";
+const cadenceTick = (tick: number): number => tick + cadenceOffset("telemetry.export", 5);
 import { clearCreepMovementStateForTest, clearMovementAnalyticsForTest, ensureCreepMovementState, getMovementAnalyticsForTest } from "@/movement";
 import { recordMovementMetric } from "@/movement/metrics";
 import { runExternalTelemetryExport } from "@/runtime/externalTelemetry";
@@ -41,7 +43,7 @@ function makeV2Snapshot(overrides: Partial<{
 
 function setupBasicEnv() {
   clearWorkerTaskBoardForTest();
-  Game.time = 5;
+  Game.time = cadenceTick(5);
   Memory.cfg = {
     telemetry: {
       enabled: true,

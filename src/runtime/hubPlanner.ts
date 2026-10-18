@@ -1,3 +1,4 @@
+import { isDue } from "@/runtime/cadence";
 import { getActivePowerBankBoostLabIds } from "@/runtime/powerBankBoostMemory";
 /**
  * Hub planner config schema, defaults, runtime state, and chain planning.
@@ -2484,7 +2485,7 @@ export function runHubPlanner(): void {
       ? [cfg.hubRoomName]
       : ownedHubRoomNames;
     const cleanupCadence = Math.max(1, cfg?.planInterval || HUB_PLAN_INTERVAL);
-    const cleanupDue = cleanupHubRoomNames.length > 0 && Game.time % cleanupCadence === 0;
+    const cleanupDue = cleanupHubRoomNames.length > 0 && isDue("hubPlanner.cleanup", cleanupCadence);
     if (configObservation.changed || cleanupDue) {
       const disabledAttempt = beginHubProtectionAttempt(
         protectionRuntime,
@@ -2520,7 +2521,7 @@ export function runHubPlanner(): void {
     return;
   }
 
-  const onCadence = Game.time % (cfg.planInterval || 50) === 0;
+  const onCadence = isDue("hubPlanner.plan", cfg.planInterval || 50);
   if (
     !configObservation.changed &&
     !onCadence &&

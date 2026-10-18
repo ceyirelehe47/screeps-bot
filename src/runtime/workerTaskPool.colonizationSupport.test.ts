@@ -1,8 +1,10 @@
+import { cadenceOffset, isDue } from "@/runtime/cadence";
+const cadenceTick = (tick: number): number => tick + cadenceOffset("workerTasks.refresh", 3);
 import { refreshWorkerTasks, getWorkerTasksByRoom, clearWorkerTaskBoardForTest } from "@/runtime/workerTaskPool";
 
 it("专用殖民 upgrader 不领取 worker 席位，实际 bootstrap worker 仍计入", () => {
   delete (global as typeof global & { __runtimeServices?: unknown }).__runtimeServices;
-  clearWorkerTaskBoardForTest(); Game.time = 3;
+  clearWorkerTaskBoardForTest(); Game.time = cadenceTick(3);
   const room = { name: "E4N57", memory: {}, controller: { id: "controller", my: true, level: 2 }, find: () => [] } as unknown as Room;
   Game.rooms = { E4N57: room };
   Memory.cfg = { colonizationSupport: { E4N57: { enabled: true, sourceRoom: "E1N57" } } };
@@ -16,6 +18,6 @@ it("专用殖民 upgrader 不领取 worker 席位，实际 bootstrap worker 仍�
   };
   refreshWorkerTasks();
   expect(getWorkerTasksByRoom(room.name)["upgrade:controller"].maxAssignees).toBe(2);
-  Game.time = 6; Memory.cfg!.colonizationSupport!.E4N57.enabled = false; refreshWorkerTasks();
+  Game.time = cadenceTick(6); Memory.cfg!.colonizationSupport!.E4N57.enabled = false; refreshWorkerTasks();
   expect(getWorkerTasksByRoom(room.name)["upgrade:controller"].maxAssignees).toBe(1);
 });

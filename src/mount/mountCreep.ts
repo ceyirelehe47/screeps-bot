@@ -1,3 +1,4 @@
+import { isDue } from "@/runtime/cadence";
 import { issueMove } from "@/movement/traffic";
 import { roleRegistry } from "@/roles";
 import { clearMovementState, moveToTarget, moveToTargetRoom } from "@/roles/shared";
@@ -74,7 +75,7 @@ function flushBufferedRoleLifecycleCacheHits(): void {
 
 function bufferRoleLifecycleCacheHit(): void {
   roleLifecycleCacheHitBuffer += 1;
-  if ((Game.time & (ROLE_LIFECYCLE_HIT_FLUSH_INTERVAL_TICKS - 1)) === 0) {
+  if (isDue("roleLifecycle.metrics", ROLE_LIFECYCLE_HIT_FLUSH_INTERVAL_TICKS)) {
     flushBufferedRoleLifecycleCacheHits();
   }
 }

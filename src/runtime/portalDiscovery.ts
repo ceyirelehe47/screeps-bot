@@ -1,3 +1,4 @@
+import { isDue } from "@/runtime/cadence";
 import { getMemoryService } from "@/runtime/runtimeServices";
 
 const PORTAL_SCAN_INTERVAL = 11;
@@ -66,7 +67,7 @@ export function runPortalDiscovery(): void {
     return;
   }
 
-  if (Game.time % PORTAL_SCAN_INTERVAL !== 0) {
+  if (!isDue("portal.scan", PORTAL_SCAN_INTERVAL)) {
     return;
   }
 

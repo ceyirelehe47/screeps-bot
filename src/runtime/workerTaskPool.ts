@@ -1,3 +1,4 @@
+import { isDue } from "@/runtime/cadence";
 import type { WorkerTask } from "@/types/system";
 import {
   getPlannedControllerLinkPos,
@@ -501,7 +502,7 @@ function cleanupStaleTasks(roomName: string): void {
 }
 
 export function refreshWorkerTasks(): void {
-  if (Game.time % TASK_REFRESH_INTERVAL !== 0) {
+  if (!isDue("workerTasks.refresh", TASK_REFRESH_INTERVAL)) {
     return;
   }
 

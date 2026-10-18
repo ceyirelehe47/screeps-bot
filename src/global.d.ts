@@ -344,6 +344,7 @@ declare global {
     summary:
       | {
           ticks: number;
+          cadencePhases?: Record<string, { samples: number; avgUsed: number; maxUsed: number }>;
           avgTotalUsed: number;
           maxTotalUsed: number;
           minBucket: number;

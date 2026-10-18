@@ -1,3 +1,4 @@
+import { isDue } from "@/runtime/cadence";
 import { searchPlanningPath } from "@/movement/pathSearch";
 import { replaceSpawnQueue } from "@/runtime/spawnRequests";
 import { getCreepConfigService, getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
@@ -1452,7 +1453,7 @@ export function processRemoteConfigLifecycle(
     }
 
     if (task.status === "abandoned") {
-      if (Game.time % 50 === 0 || task.updatedAt === Game.time) {
+      if (isDue("remoteMining.abandonedGc", 50) || task.updatedAt === Game.time) {
         cleanupAllRemoteConfigs(task);
         removeScoutConfigAndSpawnQueues(task.sourceRoom, task.targetRoom);
       }
@@ -1831,7 +1832,7 @@ export function runRemoteMining(): void {
   syncRemoteObserverLeases(store);
 
   processScoutLifecycle(store, config);
-  if (Game.time % 25 === 0 || Object.values(store).some(task => task.assignedAt === Game.time)) processRemoteConstruction(store, config);
+  if (isDue("remoteMining.construction", 25) || Object.values(store).some(task => task.assignedAt === Game.time)) processRemoteConstruction(store, config);
   processRemoteConfigLifecycle(store, config);
 
   const lastScanAt = Memory.runtime.remoteMining.lastScanAt;

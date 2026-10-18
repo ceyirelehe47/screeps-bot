@@ -1,3 +1,5 @@
+import { cadenceOffset, isDue } from "@/runtime/cadence";
+const cadenceTick = (tick: number): number => tick + cadenceOffset("workerTasks.refresh", 3);
 jest.mock("@/runtime/defenseMode", () => ({
   isDefenseMode: jest.fn(() => false),
 }));
@@ -208,7 +210,7 @@ describe("workerTaskPool legacy dispatch characterization", () => {
   }
 
   it("无路工地仅对失败工人暂停 50 tick，其它工人可接手且到期重试", () => {
-    Game.time = 100;
+    Game.time = cadenceTick(100);
     const worker = createCreep("blocked-worker", "W1N1");
     const other = createCreep("other-worker", "W1N1");
     Game.creeps = { [worker.name]: worker, [other.name]: other };
@@ -217,12 +219,12 @@ describe("workerTaskPool legacy dispatch characterization", () => {
     deferUnreachableWorkerTask(worker, task);
     expect(task.assignedCreeps).not.toContain(worker.name);
     for (const tick of [101, 120, 149]) {
-      Game.time = tick;
+      Game.time = cadenceTick(tick);
       expect(assignWorkerTask(worker)).toBeNull();
     }
     expect(assignWorkerTask(other)).toBe(task);
     releaseWorkerTask(other);
-    Game.time = 150;
+    Game.time = cadenceTick(150);
     expect(assignWorkerTask(worker)).toBe(task);
   });
 
@@ -355,7 +357,7 @@ describe("workerTaskPool legacy refresh and cleanup characterization", () => {
 
   it("honors refresh cadence and stable identity across reset while cleaning dead ownership", () => {
     resetRefreshScenario();
-    Game.time = 3;
+    Game.time = cadenceTick(3);
     const cadenceSites: ConstructionSite[] = [];
     const cadenceRoom = createOwnedRoom("W1N1", {
       level: 5,
@@ -369,19 +371,19 @@ describe("workerTaskPool legacy refresh and cleanup characterization", () => {
 
     clearWorkerTaskBoardForTest();
     delete (global as RuntimeGlobal).__runtimeServices;
-    Game.time = 4;
+    Game.time = cadenceTick(4);
     refreshWorkerTasks();
     expect((global as RuntimeGlobal).__workerTaskBoard).toBeUndefined();
     expect(peekWorkerTaskBoard()).toEqual({});
-    Game.time = 6;
+    Game.time = cadenceTick(6);
     refreshWorkerTasks();
     expect(getWorkerTasksByRoom(cadenceRoom.name)["build:cadence-site"]).toMatchObject({
       id: "build:cadence-site",
-      updatedAt: 6,
+      updatedAt: cadenceTick(6),
     });
 
     resetRefreshScenario();
-    Game.time = 3;
+    Game.time = cadenceTick(3);
     const stableSites: ConstructionSite[] = [];
     const stableRoom = createOwnedRoom("W2N2", {
       level: 5,
@@ -400,16 +402,16 @@ describe("workerTaskPool legacy refresh and cleanup characterization", () => {
     ensureCreepAssignmentState(creep.name).taskId = original.id;
     original.assignedCreeps = [creep.name];
     (stableSite as ConstructionSite & { progress: number }).progress = 1_500;
-    Game.time = 6;
+    Game.time = cadenceTick(6);
     refreshWorkerTasks();
     const refreshed = getWorkerTasksByRoom(stableRoom.name)[original.id];
     expect(refreshed).toBe(original);
-    expect(refreshed).toMatchObject({ requiredWork: 1_500, updatedAt: 6 });
+    expect(refreshed).toMatchObject({ requiredWork: 1_500, updatedAt: cadenceTick(6) });
     expect(refreshed.assignedCreeps).toEqual([creep.name]);
     expect(getAssignedWorkerTaskId(creep.name)).toBe(original.id);
 
     resetRefreshScenario();
-    Game.time = 3;
+    Game.time = cadenceTick(3);
     const cleanupSites: ConstructionSite[] = [];
     const cleanupRoom = createOwnedRoom("W3N3", { constructionSites: cleanupSites });
     const cleanupSite = createConstructionSite("cleanup-site", cleanupRoom, 20, 20);
@@ -424,7 +426,7 @@ describe("workerTaskPool legacy refresh and cleanup characterization", () => {
       "W9N9",
       "missing-target",
     );
-    Game.time = 6;
+    Game.time = cadenceTick(6);
     refreshWorkerTasks();
     expect(cleanupTask.assignedCreeps).toEqual([]);
     expect(getCreepAssignmentState("DeadWorker")?.taskId).toBe(cleanupTask.id);

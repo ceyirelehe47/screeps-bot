@@ -1,3 +1,4 @@
+import { isDue } from "@/runtime/cadence";
 /** 从 resourceControl.ts 分离的独立职责模块；共享状态仅由此处持有。 */
 import { inspectSynthesisTransferNeed } from "@/runtime/synthesisReadModel";
 import { validateReservationStoreHealth } from "@/runtime/resourceReservation";
@@ -340,7 +341,7 @@ export function getResourceControlSampleInterval(): number {
 }
 
 export function isResourceControlFullPlanningTick(): boolean {
-  return Game.time % getResourceControlSampleInterval() === 0;
+  return isDue("resourceControl.plan", getResourceControlSampleInterval());
 }
 
 function resolveState(
