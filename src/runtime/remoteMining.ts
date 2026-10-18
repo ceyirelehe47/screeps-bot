@@ -1,3 +1,4 @@
+import { searchPlanningPath } from "@/movement/pathSearch";
 import { replaceSpawnQueue } from "@/runtime/spawnRequests";
 import { getCreepConfigService, getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
 import { isOwnedManagedRoom } from "@/runtime/roomTypes";
@@ -847,7 +848,7 @@ function generateRoadPlan(
     };
 
     if (!hasPlanningCpuHeadroom()) return null;
-    const result = PathFinder.search(
+    const result = searchPlanningPath(
       startPos,
       { pos: source.pos, range: 1 },
       {

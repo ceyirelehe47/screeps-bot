@@ -1,12 +1,12 @@
 import type { MovePathState, TravelState, WorkAnchor } from "@/movement/types";
 import { isStandardCreep } from "@/movement/common";
-import { recordMovementMetric } from "@/movement/metrics";
 
 export interface CreepMovementState {
   movePathState?: MovePathState;
   travelState?: TravelState;
   movementPushedAt?: number;
   pathingRequestedAt?: number;
+  lastPathFailure?: { at: number; reason: "staticBlocked" | "dynamicBlocked" | "policyDenied" | "budgetExhausted" | "invalidPath" };
   /** 业务下一步许可暂未满足；观察等待不等同于几何卡死。 */
   stepPolicyWaitAt?: number;
   workAnchor?: WorkAnchor;
@@ -69,20 +69,7 @@ function pruneLiveTravelState(state: CreepMovementState, roomName: string): void
     delete state.travelState;
     return;
   }
-  const segment = travelState.multiRoomSegment;
-  if (
-    segment &&
-    (
-      segment.currentRoom !== roomName ||
-      !Number.isFinite(segment.expiresAt) ||
-      !Number.isFinite(segment.hardExpiresAt) ||
-      segment.expiresAt <= Game.time ||
-      segment.hardExpiresAt <= Game.time
-    )
-  ) {
-    delete travelState.multiRoomSegment;
-    recordMovementMetric("multiRoomSegmentInvalidations", roomName);
-  }
+
 }
 
 export function pruneDeadCreepMovementState(): number {

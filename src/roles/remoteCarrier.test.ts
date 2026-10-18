@@ -431,7 +431,7 @@ describe("remoteCarrierRole", () => {
     const prepared = remoteCarrierRole("W5N7").prepare?.(creep);
 
     expect(creep.suicide).not.toHaveBeenCalled();
-    expect(moveToTargetRoom).toHaveBeenCalledWith(creep, "W5N7", undefined, { travelRange: 3, reusePath: 10 });
+    expect(moveToTargetRoom).toHaveBeenCalledWith(creep, "W5N7", undefined, { profile: "travel", reusePath: 10 });
     expect(prepared).toBe(false);
   });
 
@@ -448,7 +448,7 @@ describe("remoteCarrierRole", () => {
     const delivered = remoteCarrierRole("W5N5").target?.(creep);
 
     expect(creep.suicide).not.toHaveBeenCalled();
-    expect(moveToTargetRoom).toHaveBeenCalledWith(creep, "W1N1", undefined, { travelRange: 3, reusePath: 10 });
+    expect(moveToTargetRoom).toHaveBeenCalledWith(creep, "W1N1", undefined, { profile: "travel", reusePath: 10 });
     expect(delivered).toBe(false);
   });
 });

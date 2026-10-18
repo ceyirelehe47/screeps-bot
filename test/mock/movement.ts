@@ -1,3 +1,5 @@
+import { findSingleRoomPath, searchSingleRoom } from "@mock/roomPathFinder";
+
 /**
  * Shared movement test helpers for Jest.
  *
@@ -46,8 +48,8 @@ export class MockRoomPosition {
     return this as unknown as RoomPosition;
   }
 
-  public findPathTo(): PathStep[] {
-    return [];
+  public findPathTo(target: RoomPosition | { pos: RoomPosition }, options: FindPathOpts = {}): PathStep[] {
+    return findSingleRoomPath(this as unknown as RoomPosition, target, options);
   }
 }
 
@@ -124,7 +126,7 @@ export function setDefaultMapMocks(): void {
 export function setupPathFinderGlobal(costMatrixClass: new () => CostMatrix = MockCostMatrix as unknown as new () => CostMatrix): void {
   Object.assign(global, {
     PathFinder: {
-      search: jest.fn(() => ({ path: [], incomplete: true, ops: 0, cost: 0 })),
+      search: jest.fn(searchSingleRoom),
       CostMatrix: costMatrixClass,
     },
   });

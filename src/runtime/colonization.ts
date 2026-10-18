@@ -1,3 +1,4 @@
+import { searchPlanningPath } from "@/movement/pathSearch";
 import { replaceSpawnQueue } from "@/runtime/spawnRequests";
 import { getGlobalOwnedRoomCount } from "@/runtime/globalRoomCount";
 import { enqueueConfig, ensureConfigStore, getBodyCost, getLiveCreepsByConfig, isConfigQueuedInSpawns, isConfigSpawning as hasSpawningConfig, removeQueuedSpawnConfig, selectLeastLoadedSpawn } from "@/runtime/spawnHelpers";
@@ -479,7 +480,7 @@ function estimateRouteLengthInner(task: ColonizationTask, routeRooms: string[]):
   const startPos = spawn ? spawn.pos : new RoomPosition(25, 25, task.sourceRoom);
   const targetPos = new RoomPosition(25, 25, task.targetRoom);
 
-  const search = PathFinder.search(
+  const search = searchPlanningPath(
     startPos,
     { pos: targetPos, range: 20 },
     {
@@ -714,7 +715,7 @@ function cacheColonizationTravelPath(task: ColonizationTask): void {
 
   const startPos = getColonizationStartPos(task);
   const targetPos = new RoomPosition(25, 25, task.targetRoom);
-  const search = PathFinder.search(startPos, { pos: targetPos, range: 1 }, {
+  const search = searchPlanningPath(startPos, { pos: targetPos, range: 1 }, {
     maxOps: 20000,
     maxRooms: Math.max(1, routeRooms.length),
     plainCost: 2,
@@ -725,7 +726,7 @@ function cacheColonizationTravelPath(task: ColonizationTask): void {
   if (search.incomplete || search.path.length === 0) {
     delete task.cachedTravelPath;
     task.travelPathRetryKey = expectedKey;
-    task.travelPathRetryAt = Game.time + COLONIZATION_TRAVEL_PATH_RETRY_INTERVAL;
+    task.travelPathRetryAt = Game.time + (search.reason === "budgetExhausted" && search.globalBudgetLimited ? 1 : COLONIZATION_TRAVEL_PATH_RETRY_INTERVAL);
     return;
   }
 

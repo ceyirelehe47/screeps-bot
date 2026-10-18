@@ -1,3 +1,4 @@
+import { setupPathFinderGlobal } from "@mock/movement";
 jest.mock("@/runtime/powerBankObserver", () => ({ requestCombatObservation: jest.fn(() => true) }));
 jest.mock("@/runtime/cpuPhaseProfiler", () => ({
   ...jest.requireActual("@/runtime/cpuPhaseProfiler"),
@@ -106,6 +107,7 @@ function expectOldEntry(state: TowerDrainPairState): void {
 
 describe("towerDrainDuo 死袋入口重选策略", () => {
   beforeEach(() => {
+  setupPathFinderGlobal();
     Object.assign(global, { RoomPosition: MockPos });
   });
 

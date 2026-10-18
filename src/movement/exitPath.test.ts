@@ -86,7 +86,7 @@ describe("出口搜索的引擎语义边界", () => {
     expect(creep.move).not.toHaveBeenCalled();
     expect(getCreepMovementState(creep)!.travelState!.rejectedTransitions?.["W1N1->W0N1"]).toBe(Game.time + 20);
   });
-  it("搜索器报告预算耗尽时有界重试；半截路径继续推进，不缓存伪出口或排除跳转", () => {
+  it("搜索器预算耗尽不隐式重试；半截路径继续推进，不缓存伪出口或排除跳转", () => {
     const creep = unit();
     (PathFinder.search as jest.Mock).mockImplementation((origin, goals, opts) => {
       const partial = searchSingleRoom(origin, goals, { ...opts, maxOps: 3 });
@@ -94,8 +94,8 @@ describe("出口搜索的引擎语义边界", () => {
       return { ...partial, ops: opts.maxOps };
     });
     expect(moveToTargetRoom(creep, "W0N1", "W1N1|W0N1")).toBe(OK);
-    expect(PathFinder.search).toHaveBeenCalledTimes(2);
-    expect((PathFinder.search as jest.Mock).mock.calls.map(call => call[2].maxOps)).toEqual([8000, 16000]);
+    expect(PathFinder.search).toHaveBeenCalledTimes(1);
+    expect((PathFinder.search as jest.Mock).mock.calls.map(call => call[2].maxOps)).toEqual([8000]);
     expect(creep.move).toHaveBeenCalledWith(RIGHT);
     expect(getCreepMovementState(creep)!.travelState).toMatchObject({ targetRoom: "W0N1" });
     expect(getCreepMovementState(creep)!.travelState!.exitTarget).toBeUndefined();

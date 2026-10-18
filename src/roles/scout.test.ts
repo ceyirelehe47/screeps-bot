@@ -45,7 +45,7 @@ describe("scoutRole", () => {
       plainCost: 2,
       swampCost: 10,
       reusePath: 5,
-      travelRange: 3,
+      profile: "travel",
     });
   });
 

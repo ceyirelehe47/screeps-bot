@@ -4,7 +4,8 @@ jest.mock("@/runtime/cpuPhaseProfiler", () => ({
   ...jest.requireActual("@/runtime/cpuPhaseProfiler"), measureCreepIntent: (fn: () => unknown) => fn(), measureCreepDecision: (fn: () => unknown) => fn() }));
 jest.mock("@/movement/traffic", () => ({ ...jest.requireActual("@/movement/traffic"), moveOffExit: jest.fn(() => OK) }));
 
-import { constrainTowerDrainBreachPath, runTowerDrainPair, towerDrainPairRange, type TowerDrainPairState } from "@/roles/towerDrainPair";
+import { constrainTowerDrainBreachPath, runTowerDrainPair, towerDrainPairRange, towerDrainMovementPolicy, type TowerDrainPairState } from "@/roles/towerDrainPair";
+import { setupPathFinderGlobal } from "@mock/movement";
 import { meleeAttackerRole } from "@/roles/meleeAttacker";
 import * as meleeModule from "@/roles/meleeAttacker";
 import { healerRole } from "@/roles/healer";
@@ -107,6 +108,7 @@ function deferredBorderFrame(actors: Creep[]): () => void {
 
 describe("towerDrainDuo 公共战术门", () => {
   beforeEach(() => {
+    setupPathFinderGlobal();
     clearWarGeometryForTest();
     jest.clearAllMocks();
     moveToTarget.mockImplementation(() => OK);
@@ -407,6 +409,24 @@ describe("towerDrainDuo 公共战术门", () => {
     const second = { set: jest.fn() } as unknown as CostMatrix;
     constrainTowerDrainBreachPath(attacker, TARGET, second);
     expect(second.set).toHaveBeenCalledWith(20, 25, 255);
+  });
+
+  it("稳定约束跨 tick 复用；同 tick 塔补能和身体变化换 key，已取得的下一步门仍重新读取", () => {
+    const stock = { structureType: STRUCTURE_STORAGE, pos: new MockPos(22, 26, TARGET), store: createMockStore({ [RESOURCE_ENERGY]: 1971 }) } as unknown as StructureStorage;
+    const towers = [tower("cache-a", 9, 24, 28), tower("cache-b", 3, 14, 6), tower("cache-c", 1, 13, 8)];
+    const { attacker, healer } = pair(false, [...towers, stock], [carrier(18, 27, 50)]);
+    attacker.memory._warTowerDrain = state("breaching");
+    const initial = towerDrainMovementPolicy(attacker);
+    const step = new MockPos(20, 25, TARGET) as unknown as RoomPosition;
+    expect(initial.canMoveStep!(step)).toBe(true);
+    Game.time++;
+    expect(towerDrainMovementPolicy(attacker).cacheKey).toBe(initial.cacheKey);
+    towers.forEach(actor => { actor.store[RESOURCE_ENERGY] = 1000; });
+    const refilled = towerDrainMovementPolicy(attacker);
+    expect(refilled.cacheKey).not.toBe(initial.cacheKey);
+    expect(initial.canMoveStep!(step)).toBe(false);
+    healer.body.find(part => part.type === HEAL)!.hits = 0;
+    expect(towerDrainMovementPolicy(attacker).cacheKey).not.toBe(refilled.cacheKey);
   });
 
   it("坐标相邻却无实际地图出口时清除旧入口，继续路线而非永久等待不存在的双格出口", () => {

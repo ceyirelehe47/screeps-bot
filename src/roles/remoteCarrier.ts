@@ -1,3 +1,4 @@
+import { searchMovementPath } from "@/movement/pathSearch";
 import { getTickContextService } from "@/runtime/runtimeServices";
 import { executeTreasuryFencedTerminalCargo, isTerminalCargoBlocked } from "@/runtime/treasuryTerminalCargo";
 import { moveToTarget, moveToTargetRoom } from "@/roles/shared";
@@ -304,7 +305,7 @@ function estimateOutboundTravelTicks(startPos: RoomPosition, targetRoom: string)
     return cached.ticks;
   }
 
-  const search = PathFinder.search(startPos, { pos: new RoomPosition(25, 25, targetRoom), range: 1 }, {
+  const search = searchMovementPath(startPos, { pos: new RoomPosition(25, 25, targetRoom), range: 1 }, {
     maxOps: 10000,
     maxRooms: 16,
     plainCost: 2,
@@ -348,7 +349,7 @@ export const remoteCarrierRole: RoleFactory = (targetRoom: string, targetX?: str
         return false;
       }
 
-      moveToTargetRoom(creep, targetRoom, undefined, { travelRange: 3, reusePath: 10 });
+      moveToTargetRoom(creep, targetRoom, undefined, { profile: "travel", reusePath: 10 });
       return false;
     }
 
@@ -386,7 +387,7 @@ export const remoteCarrierRole: RoleFactory = (targetRoom: string, targetX?: str
         return false;
       }
 
-      moveToTargetRoom(creep, targetRoom, undefined, { travelRange: 3, reusePath: 10 });
+      moveToTargetRoom(creep, targetRoom, undefined, { profile: "travel", reusePath: 10 });
       return false;
     }
 
@@ -479,7 +480,7 @@ export const remoteCarrierRole: RoleFactory = (targetRoom: string, targetX?: str
     const homeRoomName = getHomeRoomName(creep);
     if (creep.room.name !== homeRoomName) {
       if (salvage) moveSalvageSafely(creep, new RoomPosition(25, 25, homeRoomName), 20);
-      else moveToTargetRoom(creep, homeRoomName, undefined, { travelRange: 3, reusePath: 10 });
+      else moveToTargetRoom(creep, homeRoomName, undefined, { profile: "travel", reusePath: 10 });
       return false;
     }
 

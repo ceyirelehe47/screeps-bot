@@ -51,6 +51,7 @@ function foldTopologyObject(total: number, code: number, x: number, y: number, w
 
 interface RoomTopologyRevisionCache {
   tick: number;
+  game?: typeof Game;
   revisions: Map<string, string>;
 }
 
@@ -62,8 +63,8 @@ let revisionCache: RoomTopologyRevisionCache = { tick: -1, revisions: new Map() 
 const lastSeenRevisions = new Map<string, string>();
 
 export function getRoomTopologyRevision(roomName: string): string {
-  if (revisionCache.tick !== Game.time) {
-    revisionCache = { tick: Game.time, revisions: new Map() };
+  if (revisionCache.tick !== Game.time || revisionCache.game !== Game) {
+    revisionCache = { tick: Game.time, game: Game, revisions: new Map() };
   }
 
   const cached = revisionCache.revisions.get(roomName);

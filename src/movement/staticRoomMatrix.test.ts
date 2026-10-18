@@ -110,17 +110,12 @@ function setupStaticRoom(): StaticHarness {
   return { room, structures, sites, sources, minerals, deposits, creeps, hostileCreeps, hostilePowerCreeps };
 }
 
-function wireFindPathCapture(creep: Creep): () => RealCostMatrix | undefined {
-  let captured: RealCostMatrix | undefined;
-  (creep.pos as unknown as { findPathTo: jest.Mock }).findPathTo = jest.fn(
-    (
-      _target: unknown,
-      opts: { costCallback?: (roomName: string, matrix: CostMatrix) => CostMatrix },
-    ) => {
-      captured = opts.costCallback?.(ROOM_NAME, new RealCostMatrix() as unknown as CostMatrix) as unknown as RealCostMatrix;
-      return [{ x: 11, y: 10, dx: 1, dy: 0, direction: RIGHT }];
-    },
-  );
+function wireFindPathCapture(creep: Creep): () => CostMatrix | undefined {
+  let captured: CostMatrix | undefined;
+  jest.mocked(PathFinder.search).mockImplementation((origin, _target, opts) => {
+    captured = opts?.roomCallback?.(ROOM_NAME) as CostMatrix;
+    return { path: [new RoomPosition(origin.x + 1, origin.y, origin.roomName)], incomplete: true, cost: 2, ops: 5 };
+  });
   return () => captured;
 }
 
@@ -140,6 +135,16 @@ describe("static room cost matrix", () => {
     setupPathFinderGlobal(RealCostMatrix as unknown as new () => CostMatrix);
     setDefaultMapMocks();
     (getSourceContainerPositionsForRoom as jest.Mock).mockReturnValue([]);
+  });
+
+  it("动态单位所在的敌方 rampart 格保持 255，不因动态障碍层降为可通行", () => {
+    const harness = setupStaticRoom();
+    const creep = createCreep("mover", "worker", 10, 10, harness.room);
+    harness.structures.push(makeStructure(STRUCTURE_RAMPART, 12, 10, { my: false, isPublic: false }));
+    harness.hostileCreeps.push({ name: "hostile", pos: new MockRoomPosition(12, 10, ROOM_NAME) } as unknown as Creep);
+    const capture = wireFindPathCapture(creep);
+    moveToTarget(creep, new MockRoomPosition(15, 10, ROOM_NAME) as unknown as RoomPosition, 1, { ignoreCreeps: false });
+    expect(capture()?.get(12, 10)).toBe(255);
   });
 
   it("复刻引擎默认静态障碍：wall/Source/Mineral/Deposit/Controller/不可走结构与工地/Portal 阻挡，road=1，公共 rampart 可走", () => {

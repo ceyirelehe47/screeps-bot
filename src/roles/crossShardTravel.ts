@@ -42,7 +42,7 @@ export function moveToCrossShardTarget(
 ): boolean {
   if (Game.shard.name !== targetShard) {
     if (creep.room.name !== portalRoom) {
-      moveToTargetRoom(creep, portalRoom, undefined, { plainCost: 2, swampCost: 8, travelRange: 3 });
+      moveToTargetRoom(creep, portalRoom, undefined, { plainCost: 2, swampCost: 8, profile: "travel" });
       return false;
     }
 

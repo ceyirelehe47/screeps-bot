@@ -237,7 +237,7 @@ export const remoteDefenderRole: RoleFactory = (...args: string[]) => {
         moveToTargetRoom(creep, resolvedTargetRoom, undefined, {
           plainCost: 2,
           swampCost: 10,
-          travelRange: 3 as const,
+          profile: "travel" as const,
           reusePath: 10,
         });
         return false;

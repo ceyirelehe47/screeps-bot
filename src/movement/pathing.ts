@@ -1,3 +1,7 @@
+import { readMatrixLayer, clearMatrixLayer, matrixLayerSize } from "@/movement/matrixCache";
+import { applySourceContainerLayer, blockRoomExits } from "@/movement/matrixLayers";
+import { searchMovementPath } from "@/movement/pathSearch";
+import { resolveMoveProfile } from "@/movement/moveProfile";
 import { measureCreepPathing } from "@/runtime/cpuPhaseProfiler";
 import { clearCreepMovementState, ensureCreepMovementState } from "@/movement/creepState";
 import { recordMovementMetric } from "@/movement/metrics";
@@ -9,14 +13,11 @@ import { applySafeZoneLayer } from "@/movement/safeZoneLayer";
 import { getPosKey, getTargetPos, isExitTile, isStandardCreep } from "@/movement/common";
 import { getMoveIntentDestination, moveOffExit, moveToAdjacentPosition } from "@/movement/traffic";
 import { buildStaticRoomCostMatrix, collectStaticRoomMatrixSources } from "@/movement/staticRoomMatrix";
-import { getSourceContainerPositionsForRoom } from "@/runtime/roomPlannerConstruction";
 import { resolveTerrainCosts } from "@/movement/terrainCosts";
-import type { MovePathState, MoveToTargetOptions, RoomCostMatrixCacheEntry, WorkAnchor } from "@/movement/types";
+import type { MovePathState, MoveToTargetOptions, WorkAnchor } from "@/movement/types";
 
-const MOVE_PATH_CACHE_TTL = 20;
 // 单次 ERR_BUSY 只累计 soft-stuck；连续多个 tick 无位置进展才重新寻路。
 const PATH_STUCK_REPATH_THRESHOLD = 3;
-const roomBaseCostMatrixCache = new Map<string, RoomCostMatrixCacheEntry>();
 // 指纹正常情况下覆盖所有拓扑变化，TTL 仅作为指纹碰撞/漏检的兜底。
 const ROOM_BASE_COST_MATRIX_CACHE_TTL = 100;
 const ROOM_BASE_COST_MATRIX_CACHE_MAX = 100;
@@ -54,6 +55,7 @@ export function moveToTarget(
   recordMovementMetric("pathRequests", room.name);
 
   const movementState = ensureCreepMovementState(creep);
+  delete movementState.lastPathFailure;
   if (movementState.travelState?.targetRoom !== options.travelTargetRoom) {
     delete movementState.travelState;
   }
@@ -76,6 +78,7 @@ export function moveToTarget(
 
   if (isStandardCreep(creep) && shouldRestrictToSafeZone(creep) && !isPositionAllowedForCreep(creep, targetPos)) {
     delete movementState.movePathState;
+    movementState.lastPathFailure = { at: Game.time, reason: "policyDenied" };
     return ERR_NO_PATH;
   }
 
@@ -90,7 +93,9 @@ export function moveToTarget(
     }
   }
 
-  const reusePath = options.reusePath ?? 5;
+  const profile = resolveMoveProfile(options);
+  const completeRequired = profile.completeness === "complete";
+  const reusePath = profile.reusePath;
   const terrainCosts = resolveTerrainCosts(options);
   // 卡死恢复：连续无进展达到阈值后强制绕开 creep 重新寻路（与跨房 travel 的
   // stuckTicks>=2 → ignoreCreeps:false 策略一致）。判定用"上一 tick 结束时的
@@ -106,12 +111,12 @@ export function moveToTarget(
     ignoreCreeps ? 1 : 0
   }:s${terrainCosts.swampCost}:p${terrainCosts.plainCost}:m${options.maxRooms ?? "d"}:e${options.avoidExitTiles ? 1 : 0}:sc${
     options.allowSourceContainerTarget ? 1 : 0
-  }:pt${options.allowPortalTarget ? 1 : 0}:full${options.requireCompletePath ? 1 : 0}:c${options.cacheKey ?? ""}:layout${getRoomTopologyRevision(room.name)}`;
+  }:pt${options.allowPortalTarget ? 1 : 0}:full${completeRequired ? 1 : 0}:c${options.cacheKey ?? ""}:layout${getRoomTopologyRevision(room.name)}`;
 
   {
     const currentPosKey = getPosKey(creep.pos);
     const movePathState = movementState.movePathState;
-    const canReuse = !noCacheReuse && !options.verifiedPath;
+    const canReuse = reusePath > 0 && !noCacheReuse && !options.verifiedPath;
     const isMatchingState =
       canReuse &&
       movePathState &&
@@ -149,51 +154,41 @@ export function moveToTarget(
 
     recordMovementMetric("pathRepaths", room.name);
 
-    const path = options.verifiedPath ?? measureCreepPathing(() => {
-      if (options.requireCompletePath) {
-        const search = (maxOps: number) => {
-          const found = PathFinder.search(creep.pos, { pos: targetPos, range }, {
-            ...terrainCosts, maxRooms: options.maxRooms ?? 1, maxOps,
-            roomCallback: roomName => roomName === room.name
-              ? buildRoomMovementMatrix(creep, room, roomName, new PathFinder.CostMatrix(), { ...options, ignoreCreeps }, targetPos)
-              : false,
-          });
-          recordMovementMetric("pathSearchOps", room.name, found.ops);
-          return found;
-        };
-        let result = search(8000);
-        // incomplete 既可能是物理无路，也可能是预算不足；只对耗尽 ops 有界重试一次。
-        if (result.incomplete && result.ops >= 8000) {
-          recordMovementMetric("pathBudgetRetries", room.name);
-          result = search(16000);
-        }
-        return result.incomplete ? [] : result.path;
-      }
-      return creep.pos.findPathTo(targetPos, {
-        range,
-        ...terrainCosts,
-        ignoreCreeps,
-        maxRooms: options.maxRooms,
-        costCallback: (roomName, matrix) => buildRoomMovementMatrix(creep, room, roomName, matrix, { ...options, ignoreCreeps }, targetPos),
-      });
-    });
+    const result = options.verifiedPath ? undefined : measureCreepPathing(() => searchMovementPath(creep.pos, { pos: targetPos, range }, {
+      ...terrainCosts, maxRooms: options.maxRooms ?? 1, maxOps: profile.maxOps,
+      roomCallback: roomName => roomName === room.name
+        ? buildRoomMovementMatrix(creep, room, roomName, new PathFinder.CostMatrix(), { ...options, ignoreCreeps }, targetPos)
+        : false,
+    }));
+    const path = options.verifiedPath ?? result!.path;
+    const failureReason = result?.reason === "budgetExhausted" ? "budgetExhausted" :
+      options.safeZone ? "policyDenied" : ignoreCreeps ? "staticBlocked" : "dynamicBlocked";
+    if (result?.incomplete && completeRequired) {
+      delete movementState.movePathState;
+      movementState.lastPathFailure = { at: Game.time, reason: failureReason };
+      if (result.reason === "budgetExhausted") movementState.stepPolicyWaitAt = Game.time;
+      return result.reason === "budgetExhausted" ? ERR_BUSY : ERR_NO_PATH;
+    }
 
     const end = path[path.length - 1];
-    if (end && !options.requireCompletePath && !options.verifiedPath &&
+    if (end && !completeRequired && !options.verifiedPath &&
         Math.max(Math.abs(end.x - targetPos.x), Math.abs(end.y - targetPos.y)) > range) {
       recordMovementMetric("pathPartialPaths", room.name);
     }
     // 普通旅行保留局部进展；只有显式战斗证明或已验证路径必须完整抵达 range。
-    if (!end || ((options.requireCompletePath || options.verifiedPath) &&
+    if (!end || ((completeRequired || options.verifiedPath) &&
         Math.max(Math.abs(end.x - targetPos.x), Math.abs(end.y - targetPos.y)) > range)) {
       delete movementState.movePathState;
-      return ERR_NO_PATH;
+      movementState.lastPathFailure = { at: Game.time, reason: result?.incomplete ? failureReason : "invalidPath" };
+      if (failureReason === "budgetExhausted") movementState.stepPolicyWaitAt = Game.time;
+      return failureReason === "budgetExhausted" ? ERR_BUSY : ERR_NO_PATH;
     }
     if (options.verifiedPath) {
       let previous = creep.pos;
       for (const step of options.verifiedPath) {
         if (step.roomName !== room.name || Math.max(Math.abs(step.x - previous.x), Math.abs(step.y - previous.y)) !== 1) {
           delete movementState.movePathState;
+          movementState.lastPathFailure = { at: Game.time, reason: "invalidPath" };
           return ERR_NO_PATH;
         }
         previous = new RoomPosition(step.x, step.y, step.roomName);
@@ -214,7 +209,7 @@ export function moveToTarget(
         observedAt: Game.time,
         stuckTicks: 0,
         expiresAt: noCacheReuse || reusePath === 0 ? Game.time : Game.time + (
-          Math.max(Math.abs(end.x - targetPos.x), Math.abs(end.y - targetPos.y)) > range ? 2 : Math.max(MOVE_PATH_CACHE_TTL, reusePath)),
+          Math.max(Math.abs(end.x - targetPos.x), Math.abs(end.y - targetPos.y)) > range ? Math.min(profile.partialTtl, reusePath) : reusePath),
       };
 
       const followPathCode = followStoredRoomPath(creep, movementState.movePathState, targetPos, range, options);
@@ -280,10 +275,10 @@ export function buildRoomMovementMatrix(
   }
 
   if (options.avoidExitTiles) {
-    applyExitTileAvoidance(roomMatrix, targetPos, roomName);
+    blockRoomExits(roomMatrix, targetPos.roomName === roomName ? [targetPos] : []);
   }
 
-  applySourceContainerPositionAvoidance(roomMatrix, roomName, targetPos, options);
+  applySourceContainerLayer(roomMatrix, roomName, options.allowSourceContainerTarget ? targetPos : undefined);
 
   if (!(options.ignoreCreeps ?? true)) applyMovementCreepObstacles(roomMatrix, creep, roomName);
 
@@ -295,43 +290,6 @@ export function buildRoomMovementMatrix(
   return applySafeZoneLayer(result, options.safeZone, layerKey);
 }
 
-function applyExitTileAvoidance(matrix: CostMatrix, targetPos: RoomPosition, roomName: string): void {
-  for (let index = 0; index < 50; index += 1) {
-    blockExitTile(matrix, 0, index, targetPos, roomName);
-    blockExitTile(matrix, 49, index, targetPos, roomName);
-    blockExitTile(matrix, index, 0, targetPos, roomName);
-    blockExitTile(matrix, index, 49, targetPos, roomName);
-  }
-}
-
-function blockExitTile(matrix: CostMatrix, x: number, y: number, targetPos: RoomPosition, roomName: string): void {
-  if (targetPos.roomName === roomName && targetPos.x === x && targetPos.y === y) {
-    return;
-  }
-
-  matrix.set(x, y, 0xff);
-}
-
-function applySourceContainerPositionAvoidance(
-  matrix: CostMatrix,
-  roomName: string,
-  targetPos: RoomPosition,
-  options: MoveToTargetOptions,
-): void {
-  for (const pos of getSourceContainerPositionsForRoom(roomName)) {
-    if (
-      options.allowSourceContainerTarget &&
-      targetPos.roomName === roomName &&
-      targetPos.x === pos.x &&
-      targetPos.y === pos.y
-    ) {
-      continue;
-    }
-    if (matrix.get(pos.x, pos.y) < 0xfe) {
-      matrix.set(pos.x, pos.y, 0xfe);
-    }
-  }
-}
 
 export function getRoomStaticMatrix(roomName: string): CostMatrix {
   const room = Game.rooms[roomName];
@@ -339,33 +297,12 @@ export function getRoomStaticMatrix(roomName: string): CostMatrix {
     structures: [], constructionSites: [], sources: [], minerals: [], deposits: [], controller: undefined,
   });
   const roomContext = getTickContextService().getRoomContext(room);
-  // 静态层不含 plain/swamp 参数；房内与跨房共享同一拓扑缓存，业务只改 clone。
-  const cacheKey = roomName;
-  // 拓扑指纹跨 tick 复用静态矩阵：结构/工地/RCL/planner 保存时间不变即命中，
-  // 指纹变化或 TTL 到期才重建。矩阵只含静态信息（terrain 自行从
-  // Game.map.getRoomTerrain 读取，与引擎 fallbackMatrix 完全隔离——后者在
-  // ignoreCreeps=false 时被引擎写入当 tick 的 creep 障碍，缓存它会跨 tick
-  // 污染 ignoreCreeps=true 的请求），creep 等动态障碍由调用方在 clone 上
-  // 叠加，PathFinder 可能修改返回值，因此命中与新建都返回 clone，缓存原件
-  // 永不外露。
-  const revision = getRoomTopologyRevision(room.name);
-  const cached = roomBaseCostMatrixCache.get(cacheKey);
-  if (cached && cached.revision === revision && Game.time - cached.builtAt <= ROOM_BASE_COST_MATRIX_CACHE_TTL) {
-    recordMovementMetric("staticMatrixCacheHits", room.name);
-    return cached.matrix.clone();
-  }
-
-  pruneRoomBaseCostMatrixCache();
-
-  const baseMatrix = buildStaticRoomCostMatrix(room.name, collectStaticRoomMatrixSources(room, roomContext));
-
-  roomBaseCostMatrixCache.set(cacheKey, {
-    revision,
-    builtAt: Game.time,
-    matrix: baseMatrix,
-  });
-  roomBaseCostMatrixBuildCount += 1;
-  return baseMatrix.clone();
+  const result = readMatrixLayer("static", roomName, getRoomTopologyRevision(roomName),
+    () => buildStaticRoomCostMatrix(roomName, collectStaticRoomMatrixSources(room, roomContext)),
+    ROOM_BASE_COST_MATRIX_CACHE_MAX, ROOM_BASE_COST_MATRIX_CACHE_TTL);
+  if (result.built) roomBaseCostMatrixBuildCount++;
+  else recordMovementMetric("staticMatrixCacheHits", roomName);
+  return result.matrix;
 }
 
 /** 房内、跨房和卡路重寻路使用相同动态障碍层，不写入静态缓存。 */
@@ -380,7 +317,7 @@ export function applyMovementCreepObstacles(matrix: CostMatrix, creep: AnyCreep,
     ...Object.values(Game.powerCreeps || {}).filter(unit => unit.ticksToLive != null && unit.room?.name === roomName),
   ];
   for (const unit of units) {
-    if (unit !== creep) matrix.set(unit.pos.x, unit.pos.y, 0xfe);
+    if (unit !== creep) matrix.set(unit.pos.x, unit.pos.y, Math.max(matrix.get(unit.pos.x, unit.pos.y), 0xfe));
   }
   return matrix;
 }
@@ -473,29 +410,9 @@ function getNextStoredPathStep(creep: AnyCreep, movePathState: MovePathState): R
   return new RoomPosition(nextStep.x, nextStep.y, creep.pos.roomName);
 }
 
-function pruneRoomBaseCostMatrixCache(): void {  if (roomBaseCostMatrixCache.size === 0) {
-    return;
-  }
-
-  for (const [key, entry] of roomBaseCostMatrixCache.entries()) {
-    if (Game.time - entry.builtAt > ROOM_BASE_COST_MATRIX_CACHE_TTL) {
-      roomBaseCostMatrixCache.delete(key);
-    }
-  }
-
-  if (roomBaseCostMatrixCache.size <= ROOM_BASE_COST_MATRIX_CACHE_MAX) {
-    return;
-  }
-
-  const oldestEntries = [...roomBaseCostMatrixCache.entries()].sort((left, right) => left[1].builtAt - right[1].builtAt);
-  const overflow = roomBaseCostMatrixCache.size - ROOM_BASE_COST_MATRIX_CACHE_MAX;
-  for (const [key] of oldestEntries.slice(0, overflow)) {
-    roomBaseCostMatrixCache.delete(key);
-  }
-}
 
 export function getRoomBaseCostMatrixCacheSizeForTest(): number {
-  return roomBaseCostMatrixCache.size;
+  return matrixLayerSize("static");
 }
 
 export function getRoomBaseCostMatrixBuildCountForTest(): number {
@@ -503,6 +420,6 @@ export function getRoomBaseCostMatrixBuildCountForTest(): number {
 }
 
 export function clearRoomBaseCostMatrixCacheForTest(): void {
-  roomBaseCostMatrixCache.clear();
+  clearMatrixLayer("static");
   roomBaseCostMatrixBuildCount = 0;
 }

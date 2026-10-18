@@ -1,3 +1,6 @@
+import { blockRoomExits } from "@/movement/matrixLayers";
+import { searchMovementPath } from "@/movement/pathSearch";
+import { resolveMoveProfile } from "@/movement/moveProfile";
 import { buildRoomMovementMatrix, resolveMovementPolicy } from "@/movement/pathing";
 import { isExitTile } from "@/movement/common";
 import { recordMovementMetric } from "@/movement/metrics";
@@ -32,10 +35,7 @@ export function searchRoomExitPath(creep: Creep, direction: ExitConstant, option
       costs.push(cost);
     }
   }
-  for (let index = 0; index < 50; index++) {
-    matrix.set(0, index, 255); matrix.set(49, index, 255);
-    matrix.set(index, 0, 255); matrix.set(index, 49, 255);
-  }
+  blockRoomExits(matrix);
   goals.forEach((goal, index) => matrix.set(goal.pos.x, goal.pos.y, costs[index]));
   const failureReason = (budgetExhausted: boolean): ExitPathResult["reason"] => budgetExhausted ? "budgetExhausted" :
     policy.safeZone ? "policyDenied" : (policy.ignoreCreeps ?? true) ? "staticBlocked" : "dynamicBlocked";
@@ -48,22 +48,14 @@ export function searchRoomExitPath(creep: Creep, direction: ExitConstant, option
     recordMovementMetric("exitSelectFailures", roomName);
     return blocked(false);
   }
-  const result = measureCreepPathing(() => {
-    const search = (maxOps: number) => {
-      const found = PathFinder.search(creep.pos, goals, {
-        maxRooms: 1, maxOps, ...resolveTerrainCosts(policy),
-        roomCallback: name => name === roomName ? matrix.clone() : false,
-      });
-      recordMovementMetric("exitSearchOps", roomName, found.ops);
-      return found;
-    };
-    // 单房通常先穷尽候选节点；仍保留真实预算不足的有界兜底，不能把两者混淆。
-    const first = search(8000);
-    if (!first.incomplete || first.ops < 8000) return { found: first, budgetExhausted: false };
-    recordMovementMetric("exitBudgetRetries", roomName);
-    const second = search(16000);
-    return { found: second, budgetExhausted: second.incomplete && second.ops >= 16000 };
-  });
+  const profile = resolveMoveProfile(policy);
+  const found = measureCreepPathing(() => searchMovementPath(creep.pos, goals, {
+    maxRooms: 1, maxOps: profile.maxOps, ...resolveTerrainCosts(policy),
+    roomCallback: name => name === roomName ? matrix.clone() : false,
+  }));
+  recordMovementMetric("exitSearchOps", roomName, found.ops);
+  const result = { found, budgetExhausted: found.reason === "budgetExhausted" };
+
   let previous = creep.pos;
   for (let index = 0; index < result.found.path.length; index++) {
     const step = result.found.path[index];
@@ -88,7 +80,7 @@ export function searchRoomExitPath(creep: Creep, direction: ExitConstant, option
     recordMovementMetric("exitInvalidPaths", roomName);
     return blocked(true, "invalidPath");
   }
-  if (!end || (!complete && options.requireCompletePath)) {
+  if (!end || (!complete && profile.completeness === "complete")) {
     recordMovementMetric("exitPathFailures", roomName);
     recordMovementMetric("exitIncompleteRejected", roomName);
     return blocked(result.budgetExhausted);

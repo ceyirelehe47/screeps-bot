@@ -1,3 +1,4 @@
+import { searchRoomPath } from "@/movement/roomPath";
 import { replaceSpawnQueue, readSpawnQueue } from "@/runtime/spawnRequests";
 import { selectLeastLoadedSpawn as selectSpawnByLoad } from "@/runtime/spawnHelpers";
 import { isSpawnActive } from "@/runtime/tickContext";
@@ -320,13 +321,13 @@ function baseSourceWorkerPreSpawnThreshold(
     return threshold;
   }
 
-  const path = anchor.findPathTo(workPos, { ignoreCreeps: true, swampCost: 2 });
-  const commuteTime = path.length + anchorBuffer;
+  const result = searchRoomPath(anchor, workPos, { swampCost: 2 });
+  const commuteTime = (result.incomplete ? anchor.getRangeTo(workPos) : result.path.length) + anchorBuffer;
   const produceTime = getSpawnTime(spawn, configName, context);
   const threshold = commuteTime + produceTime;
 
   context?.sourceWorkerThresholdByKey.set(cacheKey, threshold);
-  setCachedSourceWorkerCommute(cacheKey, commuteTime - anchorBuffer);
+  if (!result.incomplete) setCachedSourceWorkerCommute(cacheKey, commuteTime - anchorBuffer);
 
   return threshold;
 }

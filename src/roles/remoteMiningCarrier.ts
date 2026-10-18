@@ -309,7 +309,7 @@ export const remoteMiningCarrierRole: RoleFactory = (targetRoom: string, sourceI
       if (isRemoteSuspendedOrDangerous(targetRoom)) {
         delete creep.memory._rmcSelectedSource;
         if (creep.room.name !== homeRoomName) {
-          moveToTargetRoom(creep, homeRoomName, getRetreatEncodedRoute(homeRoomName, targetRoom), { plainCost: 2, swampCost: 10, travelRange: 3, reusePath: 10 });
+          moveToTargetRoom(creep, homeRoomName, getRetreatEncodedRoute(homeRoomName, targetRoom), { plainCost: 2, swampCost: 10, profile: "travel", reusePath: 10 });
           return false;
         }
         clearMovementState(creep);
@@ -323,7 +323,7 @@ export const remoteMiningCarrierRole: RoleFactory = (targetRoom: string, sourceI
       }
 
       if (creep.room.name !== targetRoom) {
-        moveToTargetRoom(creep, targetRoom, getOutboundEncodedRoute(homeRoomName, targetRoom), { plainCost: 2, swampCost: 10, travelRange: 3, reusePath: 10 });
+        moveToTargetRoom(creep, targetRoom, getOutboundEncodedRoute(homeRoomName, targetRoom), { plainCost: 2, swampCost: 10, profile: "travel", reusePath: 10 });
         if (getCarriedEnergy(creep) > MAINTENANCE_RESERVE_ENERGY) {
           runMaintenance(creep);
         }
@@ -426,7 +426,7 @@ export const remoteMiningCarrierRole: RoleFactory = (targetRoom: string, sourceI
       if (isEmpty(creep)) {
         if (suspended) {
           if (creep.room.name !== homeRoomName) {
-            moveToTargetRoom(creep, homeRoomName, getRetreatEncodedRoute(homeRoomName, targetRoom), { plainCost: 2, swampCost: 10, travelRange: 3, reusePath: 10 });
+            moveToTargetRoom(creep, homeRoomName, getRetreatEncodedRoute(homeRoomName, targetRoom), { plainCost: 2, swampCost: 10, profile: "travel", reusePath: 10 });
           } else {
             clearMovementState(creep);
           }
@@ -439,12 +439,12 @@ export const remoteMiningCarrierRole: RoleFactory = (targetRoom: string, sourceI
       }
 
       if (suspended && creep.room.name !== homeRoomName) {
-        moveToTargetRoom(creep, homeRoomName, getRetreatEncodedRoute(homeRoomName, targetRoom), { plainCost: 2, swampCost: 10, travelRange: 3, reusePath: 10 });
+        moveToTargetRoom(creep, homeRoomName, getRetreatEncodedRoute(homeRoomName, targetRoom), { plainCost: 2, swampCost: 10, profile: "travel", reusePath: 10 });
         return false;
       }
 
       if (!suspended && creep.room.name !== homeRoomName) {
-        moveToTargetRoom(creep, homeRoomName, getRetreatEncodedRoute(homeRoomName, targetRoom), { plainCost: 2, swampCost: 10, travelRange: 3, reusePath: 10 });
+        moveToTargetRoom(creep, homeRoomName, getRetreatEncodedRoute(homeRoomName, targetRoom), { plainCost: 2, swampCost: 10, profile: "travel", reusePath: 10 });
         if (getCarriedEnergy(creep) > MAINTENANCE_RESERVE_ENERGY) {
           runMaintenance(creep);
         }

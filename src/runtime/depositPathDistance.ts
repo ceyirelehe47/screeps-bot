@@ -1,3 +1,4 @@
+import { searchPlanningPath } from "@/movement/pathSearch";
 import { getCachedStaticTravelMatrix } from "@/movement/routing";
 import { getRoomTopologyRevision } from "@/movement/roomTopologyRevision";
 
@@ -125,15 +126,17 @@ function measure(input: DepositPathInput, returnOnly: boolean): DepositTravelRes
     return m;
   };
   const allowed = new Set(input.routeRooms);
+  let globalBudgetWait = false;
   const search = (origin: RoomPosition, target: RoomPosition, weight: number): RoomPosition[] | undefined => {
     if (searches >= 2) return undefined;
     searches += 1;
-    const result = PathFinder.search(origin, { pos: target, range: 1 }, {
+    const result = searchPlanningPath(origin, { pos: target, range: 1 }, {
       plainCost: Math.max(1, Math.ceil(weight * 2 / (moves * 2))),
       swampCost: Math.max(1, Math.ceil(weight * 10 / (moves * 2))), maxOps: 6_000,
       maxRooms: input.routeRooms.length,
       roomCallback: (r) => allowed.has(r) && safe(r) ? matrix(r).clone() : false,
     });
+    if (result.reason === "budgetExhausted" && result.globalBudgetLimited) globalBudgetWait = true;
     if (result.incomplete || !Array.isArray(result.path)) return undefined;
     let previous = origin;
     for (const step of result.path) {
@@ -158,11 +161,11 @@ function measure(input: DepositPathInput, returnOnly: boolean): DepositTravelRes
     (sum, p) => sum + Math.max(1, Math.ceil(weight * fatigue(p) / (moves * 2))), 0);
   try {
     const outbound = returnOnly ? [] : search(input.origin, input.target, emptyWeight);
-    if (!outbound) return remember(pending("path_incomplete"));
+    if (!outbound) return remember(globalBudgetWait ? pending("budget", 1) : pending("path_incomplete"));
     const harvestPos = outbound[outbound.length - 1] ?? input.origin;
     const loadedWeight = emptyWeight + Math.ceil(input.loadedAmount / CARRY_CAPACITY);
     const returned = search(harvestPos, input.returnTarget, loadedWeight);
-    if (!returned) return remember(pending("path_incomplete"));
+    if (!returned) return remember(globalBudgetWait ? pending("budget", 1) : pending("path_incomplete"));
     return remember({ status: "ready", pathDistance: outbound.length,
       outboundTravelTicks: ticks(outbound, emptyWeight), returnTravelTicks: ticks(returned, loadedWeight),
       harvestPos: { x: harvestPos.x, y: harvestPos.y, roomName: harvestPos.roomName } });

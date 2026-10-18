@@ -33,3 +33,9 @@ it("出生执行只分发 owner 生命周期，配置规划使用 revision 索�
   expect(planner).not.toMatch(/\.list\(|\.readStore\(/);
   expect(planner).toContain(".getReadIndex()");
 });
+
+it("显式寻路统一经过 ops 账本，生产调用方不绕过内核使用原生 findPathTo", () => {
+  const violations = productionFiles(join(__dirname, "..")).filter(path => !path.endsWith("/pathSearch.ts"))
+    .filter(path => /PathFinder\.search\(|\.findPathTo\(/.test(readFileSync(path, "utf8")));
+  expect(violations).toEqual([]);
+});

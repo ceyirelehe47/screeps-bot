@@ -2,10 +2,13 @@ import { getMemoryService } from "@/runtime/runtimeServices";
 
 /** 独立健康记录。只恢复已保存的面包屑；硬终止丢弃整帧且 heap 丢失时只能推断缺口。 */
 export interface CpuTickHealthSummary {
+  version?: 2;
   globalStarts: number;
   lastGlobalStartAt: number;
   lastCompletedAt?: number;
   lastGap?: { afterTick: number; resumedAt: number; skippedTicks: number };
+  /** 旧恢复逻辑留下的缺口未经新检查点交叉确认，保留追溯但不当作新的中断证据。 */
+  legacyGap?: { afterTick: number; resumedAt: number; skippedTicks: number };
   lastIncomplete?: { tick: number; phase: string; creep?: string };
 }
 
@@ -22,9 +25,17 @@ let summary: CpuTickHealthSummary | undefined;
 export function beginCpuTickHealth(): void {
   if (!summary) {
     const persisted = Memory.runtime?.cpuTickHealth;
-    const previous = persisted?.summary ?? Memory.analytics?.cpuMonitor?.health;
-    summary = { ...previous, globalStarts: (previous?.globalStarts ?? 0) + 1, lastGlobalStartAt: Game.time };
-    if (persisted?.checkpoint && !persisted.checkpoint.completed && persisted.checkpoint.tick < Game.time) {
+    const independent = persisted?.summary, monitor = Memory.analytics?.cpuMonitor?.health;
+    // 回滚到旧版后只有 profiler 记录仍在推进；取最新的完成证据，不能优先采用陈旧子树。
+    const previous = (monitor?.lastCompletedAt ?? -1) > (independent?.lastCompletedAt ?? -1) ? monitor : independent ?? monitor;
+    summary = { ...previous, version: 2,
+      globalStarts: Math.max(independent?.globalStarts ?? 0, monitor?.globalStarts ?? 0) + 1, lastGlobalStartAt: Game.time };
+    if (previous?.version !== 2 && previous?.lastGap) {
+      summary.legacyGap = { ...previous.lastGap };
+      delete summary.lastGap;
+    }
+    if (persisted?.checkpoint && !persisted.checkpoint.completed && persisted.checkpoint.tick < Game.time &&
+        persisted.checkpoint.tick > (previous?.lastCompletedAt ?? -1)) {
       summary.lastIncomplete = { tick: persisted.checkpoint.tick, phase: persisted.checkpoint.phase, creep: persisted.checkpoint.creep };
     }
     if (previous?.lastCompletedAt !== undefined && Game.time > previous.lastCompletedAt + 1) {

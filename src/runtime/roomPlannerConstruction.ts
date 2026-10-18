@@ -1,3 +1,4 @@
+import { searchRoomPath } from "@/movement/roomPath";
 import { getPlannedSourceContainerPos } from "@/runtime/sourceWorkPosition";
 export { getPlannedSourceContainerPos } from "@/runtime/sourceWorkPosition";
 import { runPlannerForRoom, savePlannerForRoom } from "@/modules/autoplanner";
@@ -222,7 +223,8 @@ function getPrimaryRoomAnchor(room: Room, layout: PlannedLayout): RoomPosition {
 }
 
 function getPathDistance(from: RoomPosition, to: RoomPosition): number {
-  const path = from.findPathTo(to, { ignoreCreeps: true, swampCost: 2, maxOps: 2000 });
+  const result = searchRoomPath(from, to, { swampCost: 2, maxOps: 2000 });
+  const path = result.incomplete ? [] : result.path;
   if (path.length > 0) {
     return path.length;
   }

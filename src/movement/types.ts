@@ -1,3 +1,4 @@
+import type { MoveProfile, MoveProfileName } from "@/movement/moveProfile";
 export interface StoredPathStep {
   x: number;
   y: number;
@@ -18,24 +19,12 @@ export interface CachedTravelPath {
   generatedAt: number;
 }
 
-export interface MultiRoomTravelSegment {
-  key: string;
-  currentRoom: string;
-  positions: StoredRoomPosition[];
-  transitionIndex: number;
-  cursor: number;
-  reuseTtl: number;
-  generatedAt: number;
-  expiresAt: number;
-  hardExpiresAt: number;
-}
 
 export interface SafeZoneConstraint { roomName: string; revision: number | null; zone: ReadonlySet<number> }
-export interface MoveToTargetOptions {
+export interface MoveToTargetOptions extends Partial<MoveProfile> {
+  profile?: MoveProfileName;
   /** 由 resolveMovementPolicy 生成的内部安全区层，必须在业务 callback 之后应用。 */
   safeZone?: SafeZoneConstraint;
-  /** 战斗证明或缓存出口重搜要求完整抵达；普通房内移动仍允许局部进展。 */
-  requireCompletePath?: boolean;
   /** 业务本 tick 已证明完整的房内路径；直接交给交通层，不再另做寻路。 */
   verifiedPath?: readonly StoredRoomPosition[];
   /** 业务安全策略检查实际下一步；寻路、缓存和交通仍由共用引擎执行。 */
@@ -64,7 +53,6 @@ export interface MoveToRoomOptions extends MoveToTargetOptions {
   allowSourceKeeperRooms?: boolean;
   /** 清剿按当前战斗威胁续路；经济角色保持控制器/结构避让。 */
   routePurpose?: "normal" | "combat";
-  travelRange?: 1 | 3;
   avoidRooms?: string[];
 }
 
@@ -81,22 +69,7 @@ export interface TravelState {
   /** 位置停滞按帧观察；同 tick 的策略重试不能增加停滞次数。 */
   observedAt?: number;
   stuckTicks: number;
-  multiRoomSegment?: MultiRoomTravelSegment;
-  /** colonization 共享缓存路径的 per-creep 游标（路径对象本身跨 creep 共享，不能存游标）。 */
-  cachedPathCursor?: number;
-  /** 上次跟随的 colonization 缓存路径 key；key 变化（版本升级或重新生成）时重置 cachedPathCursor。 */
-  cachedPathKey?: string;
-  /**
-   * 完整跨房搜索的退避状态（防 stuck 期逐 tick 10000-op 重搜）：
-   * - fullSearchBackoffUntil：下一次允许完整搜索的 tick；
-   * - fullSearchBackoffLevel：连续无进展的搜索级别，驱动 1/2/4/8/16 指数间隔；
-   * - fullSearchSignature：上次搜索的输入签名（route/danger/target/options 折叠），
-   *   变化（如危险房集合更新）时立即清零退避允许重试。
-   * creep 位置恢复移动（stuckTicks 归零）时整体清除。
-   */
-  fullSearchBackoffUntil?: number;
-  fullSearchBackoffLevel?: number;
-  fullSearchSignature?: string;
+
 }
 
 export interface MovePathState {
@@ -120,12 +93,6 @@ export interface DynamicRouteCacheEntry {
   expiresAt: number;
 }
 
-export interface RoomCostMatrixCacheEntry {
-  /** 建立缓存时的房间拓扑指纹；变化即失效重建。 */
-  revision: string;
-  builtAt: number;
-  matrix: CostMatrix;
-}
 
 export interface WorkAnchor {
   x: number;

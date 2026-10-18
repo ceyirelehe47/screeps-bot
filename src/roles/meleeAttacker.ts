@@ -1,3 +1,5 @@
+import { getRoomStaticMatrix } from "@/movement/pathing";
+import { searchMovementPath } from "@/movement/pathSearch";
 import { getTickContextService } from "@/runtime/runtimeServices";
 import { warGeometry } from "@/roles/warGeometry";
 import { getRefillableHostileTowers } from "@/runtime/combatTowerThreat";
@@ -7,7 +9,7 @@ import { isWalkableConstructionSite, isWalkableStructure, parseEncodedRouteRooms
 import { cancelMoveIntent, getMoveIntentReceipt, hasMoveDestinationConflict, issueMove, moveOffExit } from "@/movement/traffic";
 import { getCreepMovementState } from "@/movement/creepState";
 import { prepareWarCombatBoost } from "@/runtime/war/boostPreparation";
-import { constrainTowerDrainBreachPath, moveTowerDrainBorderAttack, runTowerDrainPair } from "@/roles/towerDrainPair";
+import { constrainTowerDrainBreachPath, moveTowerDrainBorderAttack, runTowerDrainPair, towerDrainMovementPolicy } from "@/roles/towerDrainPair";
 import { measureCreepDecision, measureCreepIntent, measureSampledCpuPhase } from "@/runtime/cpuPhaseProfiler";
 import type { RoleFactory } from "@/types/system";
 import { canUseNeutralWallsAsWarObjectives, getCreepRebuildIgnoredStructures, isRebuildStructureRelevant } from "@/runtime/warRebuildScope";
@@ -21,7 +23,7 @@ const TARGET_ROOM_MOVE_OPTIONS = {
   ignoreCreeps: false,
 } as const;
 const ROUTE_BREACH_RESUME_TICKS = 5;
-const COMBAT_APPROACH_MAX_OPS = 8000;
+const COMBAT_APPROACH_MAX_OPS = 16000;
 const COUNTERSTRIKE_RANGE = 2;
 const COUNTERSTRIKE_SWAP_GRACE_TICKS = 1;
 
@@ -36,7 +38,7 @@ function moveWarAttackerToTarget(
   const wasOutOfRange = creep.pos.getRangeTo(targetPos) > range;
   const previousIntent = getMoveIntentReceipt(creep);
   const drainMove = towerDrain ? moveTowerDrainBorderAttack(creep, targetPos, range) : undefined;
-  const code = drainMove === undefined ? moveToTarget(creep, target, range, { ...options, requireCompletePath: true }) : drainMove;
+  const code = drainMove === undefined ? moveToTarget(creep, target, range, { profile: "combat", ...options }) : drainMove;
   if (code === OK && wasOutOfRange) {
     creep.memory._warMoveIntentAt = Game.time;
     const intent = getMoveIntentReceipt(creep);
@@ -237,18 +239,10 @@ function searchCombatApproach(creep: Creep, target: Creep | Structure, towerDrai
   if (covering) return { open: false, breach: covering };
   if (creep.pos.getRangeTo(target.pos) <= 1) return { open: true, breach: null };
   if (barriers.length === 0 && !towerDrain) return { open: true, breach: null };
-  const naturals = geometry.naturals;
-  const geometryMatrix = (): CostMatrix => {
-    const result = new PathFinder.CostMatrix();
-    for (const structure of structures) if (structure.structureType === STRUCTURE_ROAD) result.set(structure.pos.x, structure.pos.y, 1);
-    for (const structure of structures) if (!isWalkableStructure(structure)) result.set(structure.pos.x, structure.pos.y, 0xff);
-    for (const natural of naturals) result.set(natural.pos.x, natural.pos.y, 0xff);
-    return result;
-  };
   const memo = approachTickMemo();
   const geometryKey = `${creep.room.name}:${geometry.signature}`;
   let base = memo.matrices.get(geometryKey);
-  if (!base) { base = geometryMatrix(); memo.matrices.set(geometryKey, base); }
+  if (!base) { base = getRoomStaticMatrix(creep.room.name); memo.matrices.set(geometryKey, base); }
   const matrix = base.clone();
   const healer = findPairedWarHealer(creep);
   for (const site of creep.room.find(FIND_CONSTRUCTION_SITES)) {
@@ -263,15 +257,10 @@ function searchCombatApproach(creep: Creep, target: Creep | Structure, towerDrai
     }
   }
   if (towerDrain) constrainTowerDrainBreachPath(creep, creep.room.name, matrix);
-  const search = (costs: CostMatrix) => {
-    const run = (maxOps: number) => PathFinder.search(creep.pos, { pos: target.pos, range: 1 }, {
-      plainCost: 2, swampCost: 8, maxRooms: 1, maxOps,
-      roomCallback: (roomName) => roomName === creep.room.name ? costs.clone() : false,
-    });
-    let result = run(COMBAT_APPROACH_MAX_OPS);
-    if (result.incomplete && result.ops >= COMBAT_APPROACH_MAX_OPS) result = run(COMBAT_APPROACH_MAX_OPS * 2);
-    return result;
-  };
+  const search = (costs: CostMatrix) => searchMovementPath(creep.pos, { pos: target.pos, range: 1 }, {
+    plainCost: 2, swampCost: 8, maxRooms: 1, maxOps: COMBAT_APPROACH_MAX_OPS,
+    roomCallback: roomName => roomName === creep.room.name ? costs.clone() : false,
+  });
   const openPath = search(matrix);
   const end = openPath.path[openPath.path.length - 1];
   if (!openPath.incomplete && end && Math.max(Math.abs(end.x - target.pos.x), Math.abs(end.y - target.pos.y)) <= 1
@@ -741,7 +730,7 @@ function attackRouteBreachWhileTraveling(creep: Creep): boolean {
 
     const attackCode = measureCreepIntent(() => creep.attack(tracked));
     if (attackCode === ERR_NOT_IN_RANGE) {
-      moveToTarget(creep, tracked, 1, { plainCost: 2, swampCost: 8, reusePath: 3, maxRooms: 1, requireCompletePath: true });
+      moveToTarget(creep, tracked, 1, { plainCost: 2, swampCost: 8, reusePath: 3, maxRooms: 1, completeness: "complete" });
     }
     return true;
   }
@@ -825,18 +814,8 @@ export function followMovingWarAttacker(healer: Creep, attacker: Creep): boolean
 }
 
 function getTargetRoomMoveOptions(creep: Creep, towerDrain = false) {
-  const baseOptions = { ...TARGET_ROOM_MOVE_OPTIONS, reusePath: towerDrain ? 0 : 3 };
-  if (!towerDrain) {
-    return baseOptions;
-  }
-
-  return {
-    ...baseOptions,
-    costCallback: (roomName: string, matrix: CostMatrix): CostMatrix => {
-      // 配对成员使用通用占位/让路代价，不能把搭档所在格人为降到道路代价。
-      return towerDrain ? constrainTowerDrainBreachPath(creep, roomName, matrix) : matrix;
-    },
-  };
+  const baseOptions = { ...TARGET_ROOM_MOVE_OPTIONS, reusePath: 3 };
+  return towerDrain ? { ...baseOptions, ...towerDrainMovementPolicy(creep) } : baseOptions;
 }
 
 function expectsWarHealer(creep: Creep): boolean {

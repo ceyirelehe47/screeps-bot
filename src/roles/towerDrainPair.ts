@@ -14,6 +14,7 @@ import { measureCreepIntent, measureCreepDecision, measureSampledCpuPhase } from
 import { damageAfterTough } from "@/runtime/powerBankCapability";
 import { requestCombatObservation } from "@/runtime/powerBankObserver";
 import { isRebuildStructureRelevant } from "@/runtime/warRebuildScope";
+import type { MoveToTargetOptions } from "@/movement/types";
 
 export interface TowerDrainPairState {
   targetRoom: string;
@@ -33,7 +34,7 @@ export interface TowerDrainPairState {
   entrySelectedAt?: number;
 }
 
-const MOVE_OPTIONS = { plainCost: 2, swampCost: 8, reusePath: 0, maxRooms: 1, ignoreCreeps: false, avoidExitTiles: false } as const;
+const MOVE_OPTIONS = { profile: "formation", plainCost: 2, swampCost: 8, reusePath: 3, maxRooms: 1, ignoreCreeps: false, avoidExitTiles: false } as const;
 const RETREAT_RATIO = 0.75;
 const plainSwamps = new WeakMap<Uint8Array, number[]>();
 // 退路预算至少保留1000HP，并按可能受损后的真实MOVE/HEAL重算。
@@ -281,6 +282,51 @@ export function constrainTowerDrainBreachPath(creep: Creep, roomName: string, ma
     if (!greenReachable || (incoming > 0 && incoming >= heal) || !evaluate(redSteps, greenSteps, peak, linked)) matrix.set(x, y, 0xff);
   }
   return matrix;
+}
+
+interface ConstraintLayer { at: number; blocked: readonly number[]; matrix: CostMatrix }
+const constraintLayers = new Map<string, ConstraintLayer>();
+function constraintLayer(creep: Creep, roomName: string, plain: boolean): { key: string; layer: ConstraintLayer } {
+  const state = (creep.memory as DrainMemory)._warTowerDrain, room = Game.rooms[roomName];
+  const needsConstraint = plain || !!state && state.phase === "breaching" && state.targetRoom === roomName && !!state.attackerEntry;
+  const partner = needsConstraint ? warPartner(creep) : undefined;
+  const body = (actor: Creep | null | undefined) => actor ? [actor.name, actor.memory.role, actor.room.name,
+    actor.hits, actor.hitsMax, actor.fatigue, actor.body.map(part => [part.type, part.hits, part.boost])] : null;
+  const threats = room && needsConstraint ? towerThreats(room).filter(threat => Number.isFinite(threat.refillAt)) : [];
+  // 自身坐标只影响能否近身互疗；用该布尔事实，允许队伍正常前进时复用同一约束。
+  const linked = !!partner && partner.room.name === creep.room.name && towerDrainPairRange(creep.pos, partner.pos) <= 1;
+  const key = JSON.stringify(["towerDrain", roomName, plain, state?.phase, state?.targetRoom, state?.strictT3,
+    state?.exitDirection, state?.attackerEntry, state?.healerEntry, needsConstraint ? body(creep) : null, body(partner), linked,
+    room && needsConstraint && warGeometry(room, true).signature,
+    threats.map(threat => [towerDamageKey(threat.tower), threat.live, threat.refillAt]),
+    needsConstraint && room?.find(FIND_HOSTILE_CREEPS).map(actor => [actor.id, actor.pos.x, actor.pos.y, actor.fatigue,
+      actor.body.map(part => [part.type, part.hits, part.boost])]),
+  ]);
+  const old = constraintLayers.get(key);
+  if (old && old.at <= Game.time && Game.time - old.at < 5) return { key, layer: old };
+  const matrix = new PathFinder.CostMatrix();
+  if (plain) plainOnlyMatrix(roomName, matrix);
+  constrainTowerDrainBreachPath(creep, roomName, matrix);
+  const blocked: number[] = [];
+  for (let x = 0; x < 50; x++) for (let y = 0; y < 50; y++) if (matrix.get(x, y) >= 255) blocked.push(x * 50 + y);
+  if (constraintLayers.size >= 16) constraintLayers.delete(constraintLayers.keys().next().value!);
+  const layer = { at: Game.time, matrix, blocked };
+  constraintLayers.set(key, layer);
+  return { key, layer };
+}
+
+/** 跨 tick 复用稳定退路约束；身体、塔、守军或几何变化后换 key，实际下一步再次核对。 */
+export function towerDrainMovementPolicy(creep: Creep, plain = false): Pick<MoveToTargetOptions, "cacheKey" | "costCallback" | "canMoveStep"> {
+  const initial = constraintLayer(creep, creep.room.name, plain);
+  return {
+    cacheKey: initial.key,
+    costCallback: (roomName, matrix) => {
+      const { layer } = constraintLayer(creep, roomName, plain);
+      for (const at of layer.blocked) matrix.set(Math.floor(at / 50), at % 50, 255);
+      return matrix;
+    },
+    canMoveStep: position => constraintLayer(creep, position.roomName, plain).layer.matrix.get(position.x, position.y) < 255,
+  };
 }
 
 /** 通用moveTo在出口会先moveOffExit再执行costCallback；新模式首步必须直接受本门约束。 */
@@ -735,7 +781,7 @@ export function runTowerDrainPair(creep: Creep, targetRoom: string, partnerConfi
       publish(state, attacker, healer);
       if (creep === healer) {
         const borderMove = moveTowerDrainBorderAttack(healer, attacker.pos, 1);
-        if (borderMove === undefined) moveToTarget(healer, attacker, 1, { ...MOVE_OPTIONS, costCallback: (roomName, matrix) => constrainTowerDrainBreachPath(healer, roomName, plainOnlyMatrix(roomName, matrix)) });
+        if (borderMove === undefined) moveToTarget(healer, attacker, 1, { ...MOVE_OPTIONS, ...towerDrainMovementPolicy(healer, true) });
       }
       publish(state, attacker, healer);
       return true;

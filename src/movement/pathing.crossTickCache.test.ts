@@ -54,25 +54,20 @@ interface Harness {
   creeps: Creep[];
   hostileCreeps: Creep[];
   hostilePowerCreeps: PowerCreep[];
-  findPathTo: jest.Mock;
+  search: jest.Mock;
   capturedMatrices: CostMatrix[];
 }
 
-function wireFindPathTo(creep: Creep, harness?: Harness): jest.Mock {
+function wirePathSearch(creep: Creep, harness?: Harness): jest.Mock {
   const captured = harness?.capturedMatrices ?? [];
-  const impl = jest.fn(
-    (
-      _target: RoomPosition,
-      opts: { costCallback?: (roomName: string, matrix: CostMatrix) => CostMatrix },
-    ) => {
-      if (opts.costCallback) {
-        const matrix = opts.costCallback(creep.room.name, new RealCostMatrix() as unknown as CostMatrix);
-        captured.push(matrix);
-      }
-      return CORRIDOR_STEPS.map((step) => ({ ...step, dx: 1, dy: 0 })) as PathStep[];
-    },
-  );
-  (creep.pos as unknown as Record<string, unknown>).findPathTo = impl;
+  const impl = jest.fn((origin: RoomPosition, _goals: Parameters<PathFinder["search"]>[1], options: PathFinderOpts) => {
+    const matrix = options.roomCallback?.(origin.roomName);
+    if (matrix && matrix !== true) captured.push(matrix);
+    return { path: CORRIDOR_STEPS.map(step => new RoomPosition(step.x, step.y, origin.roomName)), ops: 5, cost: 10, incomplete: false };
+  });
+  const previous = jest.mocked(PathFinder.search).getMockImplementation()!;
+  jest.mocked(PathFinder.search).mockImplementation((origin, goals, options) =>
+    origin === creep.pos ? impl(origin, goals, options!) : previous(origin, goals, options));
   return impl;
 }
 
@@ -81,16 +76,12 @@ function relocate(creep: Creep, x: number, y: number): void {
   creep.pos = pos as unknown as RoomPosition;
 }
 
-/** 把 harness 的 findPathTo 桩重新挂到（relocate 替换过的）当前位置上。 */
-function rewire(harness: Harness): void {
-  (harness.creep.pos as unknown as Record<string, unknown>).findPathTo = harness.findPathTo;
-}
 
-function addSecondCreep(harness: Harness, name = "second"): { creep: Creep; findPathTo: jest.Mock } {
+function addSecondCreep(harness: Harness, name = "second"): { creep: Creep; search: jest.Mock } {
   const creep = createCreep(name, "worker", 10, 10, harness.room);
   harness.creeps.push(creep);
   Game.creeps[name] = creep;
-  return { creep, findPathTo: wireFindPathTo(creep, harness) };
+  return { creep, search: wirePathSearch(creep, harness) };
 }
 
 function buildHarness(): Harness {
@@ -125,9 +116,9 @@ function buildHarness(): Harness {
   const capturedMatrices: CostMatrix[] = [];
   const harness: Harness = {
     room, creep, structures, sites, creeps, hostileCreeps, hostilePowerCreeps,
-    findPathTo: jest.fn(), capturedMatrices,
+    search: jest.fn(), capturedMatrices,
   };
-  harness.findPathTo = wireFindPathTo(creep, harness);
+  harness.search = wirePathSearch(creep, harness);
   return harness;
 }
 
@@ -162,18 +153,17 @@ describe("pathing cross-tick caching", () => {
     (getSourceContainerPositionsForRoom as jest.Mock).mockReturnValue([]);
   });
 
-  it("缓存路径在下一 tick 仍有效时不再次调用 findPathTo", () => {
+  it("缓存路径在下一 tick 仍有效时不再次调用 search", () => {
     const harness = buildHarness();
     const target = addTarget();
 
     expect(moveToTarget(harness.creep, target, 0)).toBe(OK);
-    expect(harness.findPathTo).toHaveBeenCalledTimes(1);
+    expect(harness.search).toHaveBeenCalledTimes(1);
 
     relocate(harness.creep, 11, 10);
-    rewire(harness);
     advanceTick();
     expect(moveToTarget(harness.creep, target, 0)).toBe(OK);
-    expect(harness.findPathTo).toHaveBeenCalledTimes(1);
+    expect(harness.search).toHaveBeenCalledTimes(1);
     expect(getMovementAnalyticsForTest().totals.pathCacheHits).toBeGreaterThanOrEqual(1);
   });
 
@@ -181,7 +171,7 @@ describe("pathing cross-tick caching", () => {
     const harness = buildHarness();
     const firstCosts = { plainCost: 2, swampCost: 8 };
     moveToTarget(harness.creep, addTarget(), 0, firstCosts);
-    expect(harness.findPathTo.mock.calls[0][1]).toEqual(expect.objectContaining(firstCosts));
+    expect(harness.search.mock.calls[0][2]).toEqual(expect.objectContaining(firstCosts));
     expect(getRoomBaseCostMatrixBuildCountForTest()).toBe(1);
     harness.capturedMatrices[0].set(5, 5, 0xff);
     expect(getRoomStaticMatrix(harness.room.name).get(5, 5)).toBe(0);
@@ -190,8 +180,8 @@ describe("pathing cross-tick caching", () => {
     const sameTick = addSecondCreep(harness, "same-tick");
     const sameTickCosts = { plainCost: 1, swampCost: 5 };
     moveToTarget(sameTick.creep, addTarget(14), 0, sameTickCosts);
-    expect(sameTick.findPathTo).toHaveBeenCalledTimes(1);
-    expect(sameTick.findPathTo.mock.calls[0][1]).toEqual(expect.objectContaining(sameTickCosts));
+    expect(sameTick.search).toHaveBeenCalledTimes(1);
+    expect(sameTick.search.mock.calls[0][2]).toEqual(expect.objectContaining(sameTickCosts));
     expect(harness.capturedMatrices[1].get(5, 5)).toBe(0);
     expect(getRoomBaseCostMatrixBuildCountForTest()).toBe(1);
     harness.capturedMatrices[1].set(6, 6, 0xff);
@@ -200,8 +190,8 @@ describe("pathing cross-tick caching", () => {
     const nextTickCosts = { plainCost: 3, swampCost: 12 };
     advanceTick();
     moveToTarget(nextTick.creep, addTarget(13), 0, nextTickCosts);
-    expect(nextTick.findPathTo).toHaveBeenCalledTimes(1);
-    expect(nextTick.findPathTo.mock.calls[0][1]).toEqual(expect.objectContaining(nextTickCosts));
+    expect(nextTick.search).toHaveBeenCalledTimes(1);
+    expect(nextTick.search.mock.calls[0][2]).toEqual(expect.objectContaining(nextTickCosts));
     expect(harness.capturedMatrices[2].get(5, 5)).toBe(0);
     expect(harness.capturedMatrices[2].get(6, 6)).toBe(0);
     expect(getRoomBaseCostMatrixBuildCountForTest()).toBe(1);
@@ -277,7 +267,7 @@ describe("pathing cross-tick caching", () => {
     const second = addSecondCreep(harness);
     advanceTick();
     moveToTarget(second.creep, addTarget(14), 0);
-    const secondMatrix = second.findPathTo.mock.calls[0][1] as unknown as {
+    const secondMatrix = second.search.mock.calls[0][2] as unknown as {
       costCallback: (roomName: string, matrix: CostMatrix) => CostMatrix;
     };
     void secondMatrix;
@@ -294,19 +284,16 @@ describe("pathing cross-tick caching", () => {
     expect(getCreepMovementState(harness.creep)?.movePathState?.cursor).toBe(0);
 
     relocate(harness.creep, 11, 10);
-    rewire(harness);
     advanceTick();
     moveToTarget(harness.creep, target, 0);
     expect(getCreepMovementState(harness.creep)?.movePathState?.cursor).toBe(0);
 
     relocate(harness.creep, 12, 10);
-    rewire(harness);
     advanceTick();
     moveToTarget(harness.creep, target, 0);
     expect(getCreepMovementState(harness.creep)?.movePathState?.cursor).toBe(1);
 
     relocate(harness.creep, 13, 10);
-    rewire(harness);
     advanceTick();
     moveToTarget(harness.creep, target, 0);
     expect(getCreepMovementState(harness.creep)?.movePathState?.cursor).toBe(2);
@@ -318,12 +305,11 @@ describe("pathing cross-tick caching", () => {
 
     moveToTarget(harness.creep, target, 0);
     relocate(harness.creep, 11, 11);
-    rewire(harness);
 
     advanceTick();
     expect(moveToTarget(harness.creep, target, 0)).toBe(OK);
     // 未重新寻路，走的是最近路径步恢复分支。
-    expect(harness.findPathTo).toHaveBeenCalledTimes(1);
+    expect(harness.search).toHaveBeenCalledTimes(1);
     const state = getCreepMovementState(harness.creep)?.movePathState;
     expect(state).toBeDefined();
     expect(state?.cursor).toBeGreaterThanOrEqual(0);
@@ -336,7 +322,7 @@ describe("pathing cross-tick caching", () => {
 
     // tick1：开阔地形下推开 blocker 成功前进。
     expect(moveToTarget(harness.creep, target, 0)).toBe(OK);
-    expect(harness.findPathTo).toHaveBeenCalledTimes(1);
+    expect(harness.search).toHaveBeenCalledTimes(1);
 
     // blocker 就位并把周围全部封死（含 mover 自己的格子，防止换位让路）。
     harness.creeps.push(blocker);
@@ -345,7 +331,7 @@ describe("pathing cross-tick caching", () => {
 
     advanceTick();
     expect(moveToTarget(harness.creep, target, 0)).toBe(ERR_BUSY);
-    expect(harness.findPathTo).toHaveBeenCalledTimes(1);
+    expect(harness.search).toHaveBeenCalledTimes(1);
     // 路径仍被保留，等待暂时性阻塞解除。
     expect(getCreepMovementState(harness.creep)?.movePathState).toBeDefined();
 
@@ -353,7 +339,7 @@ describe("pathing cross-tick caching", () => {
     restorePlains();
     advanceTick();
     expect(moveToTarget(harness.creep, target, 0)).toBe(OK);
-    expect(harness.findPathTo).toHaveBeenCalledTimes(1);
+    expect(harness.search).toHaveBeenCalledTimes(1);
   });
 
   it("连续阻塞后重新寻路叠加动态障碍且不污染静态缓存", () => {
@@ -387,15 +373,14 @@ describe("pathing cross-tick caching", () => {
     expect(moveToTarget(harness.creep, target, 0)).toBe(ERR_BUSY);
     advanceTick();
     expect(moveToTarget(harness.creep, target, 0)).toBe(ERR_BUSY);
-    expect(harness.findPathTo).toHaveBeenCalledTimes(1);
+    expect(harness.search).toHaveBeenCalledTimes(1);
 
     // tick 4：stuckTicks 达到 3，路径失效并重新寻路（ignoreCreeps 强制关闭）。
     advanceTick();
     moveToTarget(harness.creep, target, 0);
-    expect(harness.findPathTo).toHaveBeenCalledTimes(2);
-    expect((harness.findPathTo.mock.calls[1][1] as { ignoreCreeps?: boolean }).ignoreCreeps).toBe(false);
+    expect(harness.search).toHaveBeenCalledTimes(2);
     expect(getMovementAnalyticsForTest().totals.pathRepaths).toBe(2);
-    // 检查实际 callback 矩阵，不能只检查 findPathTo 收到的 ignoreCreeps。
+    // 检查实际 callback 矩阵，不能只检查 search 收到的 ignoreCreeps。
     const recoveryMatrix = harness.capturedMatrices[1];
     expect(recoveryMatrix.get(11, 10)).toBe(0xfe);
     expect(recoveryMatrix.get(12, 11)).toBe(0xfe);
@@ -418,7 +403,7 @@ describe("pathing cross-tick caching", () => {
     restorePlains();
     advanceTick();
     moveToTarget(harness.creep, addTarget(14), 0, { ignoreCreeps: false });
-    expect(harness.findPathTo).toHaveBeenCalledTimes(3);
+    expect(harness.search).toHaveBeenCalledTimes(3);
     const clearedMatrix = harness.capturedMatrices[2];
     expect(clearedMatrix.get(11, 10)).toBe(0);
     expect(clearedMatrix.get(12, 11)).toBe(0);
@@ -432,16 +417,15 @@ describe("pathing cross-tick caching", () => {
     const target = addTarget();
 
     moveToTarget(harness.creep, target, 0);
-    expect(harness.findPathTo).toHaveBeenCalledTimes(1);
+    expect(harness.search).toHaveBeenCalledTimes(1);
 
     // 模拟 global reset：heap 状态清空，cursor/movePathState 全部丢失。
     clearCreepMovementStateForTest();
     relocate(harness.creep, 12, 10);
-    rewire(harness);
     advanceTick();
 
     expect(moveToTarget(harness.creep, target, 0)).toBe(OK);
-    expect(harness.findPathTo).toHaveBeenCalledTimes(2);
+    expect(harness.search).toHaveBeenCalledTimes(2);
     // 重寻路后 creep 位于 (12,10)=steps[1]，立即 follow 时精确命中并把 cursor 推进到 1。
     expect(getCreepMovementState(harness.creep)?.movePathState?.cursor).toBe(1);
   });

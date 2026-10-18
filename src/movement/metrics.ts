@@ -1,4 +1,5 @@
 type MovementMetricName =
+  | "pathBudgetDenied"
   | "exitPolicyDenied"
   | "moveIntentOverwrites"
   | "exitReselectByKey"
@@ -51,6 +52,7 @@ type MovementMetricName =
 type MovementGaugeName = "roleLifecycleCacheSize";
 
 export interface MovementMetricBucket {
+  pathBudgetDenied: number;
   exitPolicyDenied: number;
   moveIntentOverwrites: number;
   exitReselectByKey: number;
@@ -263,6 +265,7 @@ function recordMovementMetricIntoSnapshot(
 
 function createEmptyBucket(): MovementMetricBucket {
   return {
+    pathBudgetDenied: 0,
     moveIntentOverwrites: 0,
     exitReselectByKey: 0,
     exitTargetSwitches: 0,

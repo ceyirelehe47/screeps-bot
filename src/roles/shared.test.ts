@@ -1,3 +1,4 @@
+import { searchSingleRoom } from "@mock/roomPathFinder";
 import {
   clearMovementAnalyticsForTest,
   clearRoomBaseCostMatrixCacheForTest,
@@ -138,7 +139,7 @@ describe("moveToTarget yielding", () => {
     };
     Object.assign(global, {
       PathFinder: {
-        search: jest.fn(() => ({ path: [], incomplete: true, ops: 0, cost: 0 })),
+        search: jest.fn(searchSingleRoom),
         CostMatrix: MockCostMatrix,
       },
     });

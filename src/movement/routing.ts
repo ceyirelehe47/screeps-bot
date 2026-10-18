@@ -1,3 +1,5 @@
+import { readMatrixLayer, clearMatrixLayer } from "@/movement/matrixCache";
+import { applyControllerZoneLayer, applySourceContainerLayer } from "@/movement/matrixLayers";
 import { searchRoomExitPath } from "@/movement/exitPath";
 import { resolveTerrainCosts } from "@/movement/terrainCosts";
 import { measureCreepPathing } from "@/runtime/cpuPhaseProfiler";
@@ -8,7 +10,6 @@ import { getPosKey, isExitTile, parseEncodedRouteRooms } from "@/movement/common
 import { recordMovementMetric } from "@/movement/metrics";
 import { clearRoomBaseCostMatrixCacheForTest, getRoomStaticMatrix, moveToTarget, resolveMovementPolicy } from "@/movement/pathing";
 import { getMoveIntentDestination, issueMove, moveOffExit } from "@/movement/traffic";
-import { getSourceContainerPositionsForRoom } from "@/runtime/roomPlannerConstruction";
 import type {
   DynamicRouteCacheEntry,
   MoveToRoomOptions,
@@ -28,10 +29,6 @@ let liveRoomSafetyCache: Record<string, boolean> = {};
 // ignoreCreeps=false 时的 creep/PowerCreep 动态障碍。
 const TRAVEL_MATRIX_CACHE_MAX = 64;
 const TRAVEL_MATRIX_CACHE_TTL = 100;
-const travelMatrixCache = new Map<
-  string,
-  { revision: string; builtAt: number; matrix: CostMatrix }
->();
 // 仅供测试观测缓存重建次数，生产路径不读取。
 let travelMatrixBuildCount = 0;
 
@@ -41,7 +38,7 @@ export function clearRoutingCachesForTest(): void {
   }
   liveRoomSafetyCacheTick = -1;
   liveRoomSafetyCache = {};
-  travelMatrixCache.clear();
+  clearMatrixLayer("travel");
   travelMatrixBuildCount = 0;
   clearRoomBaseCostMatrixCacheForTest();
 }
@@ -115,7 +112,9 @@ export function moveToTargetRoom(
   if (movementState.travelState?.targetRoom !== targetRoom) delete movementState.movePathState;
   const travelState = getTravelState(creep, targetRoom);
   delete travelState.lastFailure;
-  delete travelState.multiRoomSegment;
+  // 旧 heap 字段只做一次兼容清理，不再保留废弃多房段执行器或搜索退避。
+  const legacy = travelState as TravelState & Record<string, unknown>;
+  for (const key of ["multiRoomSegment", "fullSearchBackoffUntil", "fullSearchBackoffLevel", "fullSearchSignature", "cachedPathCursor", "cachedPathKey"]) delete legacy[key];
   movementState.pathingRequestedAt = Game.time;
   const currentPosKey = getPosKey(creep.pos);
   const currentOnExit = isExitTile(creep.pos);
@@ -128,9 +127,6 @@ export function moveToTargetRoom(
       if (travelState.stuckTicks !== 0) {
         travelState.stuckTicks = 0;
       }
-      delete travelState.fullSearchBackoffUntil;
-      delete travelState.fullSearchBackoffLevel;
-      delete travelState.fullSearchSignature;
     }
     travelState.lastPosKey = currentPosKey;
     travelState.lastWasExit = currentOnExit;
@@ -197,6 +193,7 @@ export function moveToTargetRoom(
 
   // 跨房仅选择下一房与出口；房内步骤统一交给常驻 creep 的 pathing/traffic。
   const moveOptions: MoveToTargetOptions = {
+    profile: "travel",
     ...options,
     ...resolveTerrainCosts(options),
     travelTargetRoom: targetRoom,
@@ -245,7 +242,7 @@ export function moveToTargetRoom(
   const needsSelection = !exit || exit.key !== key || exit.expiresAt <= Game.time || !!policy.costCallback && !policy.cacheKey;
   let result: ScreepsReturnCode = ERR_NO_PATH;
   if (!needsSelection && exit) {
-    result = moveToTarget(creep, new RoomPosition(exit.x, exit.y, creep.room.name), 0, { ...moveOptions, requireCompletePath: true });
+    result = moveToTarget(creep, new RoomPosition(exit.x, exit.y, creep.room.name), 0, { ...moveOptions, completeness: "complete" });
     if (result === ERR_NO_PATH) recordMovementMetric("exitCachedReplans", creep.room.name);
   }
   // 失效的缓存出口也用相同矩阵重选一次，避免原地重复同一失败目标。
@@ -268,7 +265,7 @@ export function moveToTargetRoom(
       exit = { key, x: end.x, y: end.y, expiresAt: Game.time + 20 };
       travelState.exitTarget = exit;
     }
-    result = moveToTarget(creep, end, 0, { ...moveOptions, requireCompletePath: selected.complete || moveOptions.requireCompletePath, verifiedPath: selected.path });
+    result = moveToTarget(creep, end, 0, { ...moveOptions, completeness: selected.complete ? "complete" : moveOptions.completeness, verifiedPath: selected.path });
     if (result === ERR_NO_PATH) {
       recordMovementMetric("exitExecutionFailures", creep.room.name);
       delete travelState.exitTarget;
@@ -299,75 +296,17 @@ export function getColonizationTravelPathKey(sourceRoom: string, targetRoom: str
 // 跨房移动（buildMultiRoomTravelMatrix）与 colonization 持久路径生成
 // （createTravelPathRoomCallback）共用的静态旅行矩阵：共用静态障碍层 +
 // controller 周边回避 + source container 预留，按拓扑指纹跨 tick 复用。
-// 返回缓存中的原矩阵，仅供只读检查；传给 PathFinder 前必须 clone。
+// 对外只返回 clone，调用方不能改写缓存原矩阵。
 export function getCachedStaticTravelMatrix(roomName: string): CostMatrix {
-  const revision = getRoomTopologyRevision(roomName);
-  let cached = travelMatrixCache.get(roomName);
-  if (!cached || cached.revision !== revision || Game.time - cached.builtAt > TRAVEL_MATRIX_CACHE_TTL) {
-    const room = Game.rooms[roomName];
-    // 与单房移动共用同一套静态障碍语义（terrain wall / Source / Mineral /
-    // Deposit / Controller / Portal / 不可通行结构与工地 / road 成本），
-    // 跨房矩阵在此基础上叠加 controller 周边回避与 source container 预留。
-    const matrix = getRoomStaticMatrix(roomName);
-    if (room) {
-      applyControllerZoneAvoidance(matrix, room);
-      applySourceContainerAvoidance(matrix, roomName);
-    }
-    cached = { revision, builtAt: Game.time, matrix };
-    travelMatrixBuildCount += 1;
-    if (travelMatrixCache.size >= TRAVEL_MATRIX_CACHE_MAX) {
-      // 淘汰最旧条目而不是全清，保住其余房间的跨 tick 命中。
-      let oldestKey: string | null = null;
-      let oldestBuiltAt = Infinity;
-      for (const [key, entry] of travelMatrixCache.entries()) {
-        if (entry.builtAt < oldestBuiltAt) {
-          oldestBuiltAt = entry.builtAt;
-          oldestKey = key;
-        }
-      }
-      if (oldestKey !== null) {
-        travelMatrixCache.delete(oldestKey);
-      }
-    }
-    travelMatrixCache.set(roomName, cached);
-  } else {
-    recordMovementMetric("staticMatrixCacheHits", roomName);
-  }
-
-  return cached.matrix;
+  const result = readMatrixLayer("travel", roomName, getRoomTopologyRevision(roomName), () => {
+    const matrix = getRoomStaticMatrix(roomName), room = Game.rooms[roomName];
+    if (room) { applyControllerZoneLayer(matrix, room); applySourceContainerLayer(matrix, roomName); }
+    return matrix;
+  }, TRAVEL_MATRIX_CACHE_MAX, TRAVEL_MATRIX_CACHE_TTL);
+  if (result.built) travelMatrixBuildCount++;
+  else recordMovementMetric("staticMatrixCacheHits", roomName);
+  return result.matrix;
 }
-
-// controller 是我方时回避其周边区域，避免远行 creep 停在 controller 附近
-// 堵塞升级位（跨房矩阵特有叠加，单房移动不含）。
-function applyControllerZoneAvoidance(matrix: CostMatrix, room: Room): void {
-  if (!room.controller?.my) {
-    return;
-  }
-  const cPos = room.controller.pos;
-  for (let dx = -3; dx <= 3; dx += 1) {
-    for (let dy = -3; dy <= 3; dy += 1) {
-      if (Math.max(Math.abs(dx), Math.abs(dy)) > 3) continue;
-      const x = cPos.x + dx;
-      const y = cPos.y + dy;
-      if (x < 1 || x > 48 || y < 1 || y > 48) continue;
-      if (matrix.get(x, y) < 0xfe) {
-        matrix.set(x, y, 0xfe);
-      }
-    }
-  }
-}
-
-function applySourceContainerAvoidance(matrix: CostMatrix, roomName: string): void {
-  for (const pos of getSourceContainerPositionsForRoom(roomName)) {
-    if (matrix.get(pos.x, pos.y) < 0xfe) {
-      matrix.set(pos.x, pos.y, 0xfe);
-    }
-  }
-}
-
-// ignoreCreeps=false：在 clone 上叠加当 tick全部动态障碍——己方/敌方普通
-// creep 与己方/敌方 PowerCreep。缓存中的静态矩阵绝不携带这些值，creep
-// 消失后下一 tick 的 clone 自动恢复正确静态成本。
 
 function getTravelState(creep: Creep, targetRoom: string): TravelState {
   const memoryState = ensureCreepMovementState(creep.name).travelState;

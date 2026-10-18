@@ -1,3 +1,4 @@
+import { searchPlanningPath } from "@/movement/pathSearch";
 import { getRoomStaticMatrix } from "@/movement/pathing";
 import { getMemoryService } from "@/runtime/runtimeServices";
 import type { CreepConfig } from "@/types/system";
@@ -37,7 +38,7 @@ export function colonizationHarvesterPreSpawnThreshold(
       searches += 1;
       const matrices = new Map<string, CostMatrix>();
       const terrains = new Map<string, ReturnType<GameMap["getRoomTerrain"]>>();
-      const result = PathFinder.search(spawn.pos, { pos: goal, range: 1 }, {
+      const result = searchPlanningPath(spawn.pos, { pos: goal, range: 1 }, {
         plainCost: 2, swampCost: 10, maxRooms: Math.min(16, allowedRooms.size), maxOps: 2000,
         roomCallback: roomName => {
           if (!allowedRooms.has(roomName)) return false;

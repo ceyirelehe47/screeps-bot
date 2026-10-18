@@ -1,3 +1,4 @@
+import { setupPathFinderGlobal } from "@mock/movement";
 jest.mock("@/runtime/defenseMode", () => ({ isDefenseMode: jest.fn(() => false) }));
 import { addRemoteEntranceLinkPlans, getRemoteEntranceDeliveryLink, isRemoteEntranceLink, REMOTE_ENTRANCE_LINK_LAYOUT_KEY } from "@/runtime/remoteEntranceLink";
 
@@ -7,7 +8,7 @@ class Pos {
   getRangeTo(value: { pos?: RoomPosition; x?: number; y?: number }): number {
     const p = value.pos ?? value; return Math.max(Math.abs(this.x - p.x!), Math.abs(this.y - p.y!));
   }
-  findPathTo(target: RoomPosition, opts: FindPathOpts): PathStep[] {
+  fixturePath(target: RoomPosition, opts: FindPathOpts): PathStep[] {
     expect(opts.swampCost).toBe(10);
     if (this.x === 49 && this.y === 20) {
       if (this.getRangeTo(target) <= 6) {
@@ -45,6 +46,14 @@ beforeEach(() => {
   delete (global as typeof global & { __runtimeServices?: unknown }).__runtimeServices;
   Game.time++; Memory.runtime = {}; Game.creeps = {}; Game.spawns = {};
   Object.assign(global, { RoomPosition: Pos });
+  setupPathFinderGlobal();
+  jest.mocked(PathFinder.search).mockImplementation((origin, input, options) => {
+    expect(options?.swampCost).toBe(10);
+    const goal = Array.isArray(input) ? input[0] : input;
+    const target = "pos" in goal ? goal.pos : goal;
+    const positions = (origin as unknown as Pos).fixturePath(target, { swampCost: options?.swampCost });
+    return { path: positions.map(p => new RoomPosition(p.x, p.y, origin.roomName)), incomplete: false, cost: positions.length * 2, ops: positions.length };
+  });
   Game.map = { describeExits: () => ({ [RIGHT]: "W2N1" }), getRoomTerrain: () => ({ get: () => 0 }) } as unknown as GameMap;
 });
 

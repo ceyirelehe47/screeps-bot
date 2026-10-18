@@ -1,3 +1,4 @@
+import { searchRoomPath } from "@/movement/roomPath";
 import { needsFactoryOperatePower } from "@/runtime/factoryControl";
 import { executeTreasuryFencedTerminalCargo } from "@/runtime/treasuryTerminalCargo";
 import type {
@@ -7,7 +8,7 @@ import type {
   PowerCreepTaskType,
 } from "@/runtime/powerCreepTypes";
 import { ensureCreepMovementState } from "@/movement/creepState";
-import { issueMove } from "@/movement/traffic";
+import { issueMove, getMoveIntentDestination } from "@/movement/traffic";
 import { moveToTarget } from "@/movement/pathing";
 
 export const POWER_CREEP_RENEW_TTL = 200;
@@ -480,8 +481,14 @@ function movePowerCreepToTarget(
   range: 1 | 2 | 3,
 ): void {
   if (powerCreep.room?.name !== target.pos.roomName) {
-    const step = powerCreep.pos.findPathTo(target.pos, { range, maxRooms: 16, ignoreCreeps: false })[0];
-    if (step) issueMove(powerCreep, step.direction);
+    const step = searchRoomPath(powerCreep.pos, target.pos, { range, maxRooms: 16, maxOps: 8000, mover: powerCreep }, "execution").path[0];
+    if (step) {
+      const direction = ([TOP, TOP_RIGHT, RIGHT, BOTTOM_RIGHT, BOTTOM, BOTTOM_LEFT, LEFT, TOP_LEFT] as const).find(value => {
+        const destination = getMoveIntentDestination(powerCreep.pos, value);
+        return destination?.x === step.x && destination.y === step.y && destination.roomName === step.roomName;
+      });
+      if (direction) issueMove(powerCreep, direction);
+    }
     return;
   }
   moveToTarget(powerCreep, target, range, { reusePath: 5, ignoreCreeps: true });

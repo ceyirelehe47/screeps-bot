@@ -3,7 +3,7 @@ import { moveOffExit } from "@/movement/traffic";
 
 import type { RoleFactory } from "@/types/system";
 
-const TRAVEL_OPTS = { plainCost: 2, swampCost: 10, travelRange: 3 as const, reusePath: 10 };
+const TRAVEL_OPTS = { plainCost: 2, swampCost: 10, profile: "travel" as const, reusePath: 10 };
 
 function idleInsideRoom(creep: Creep): void {
   clearMovementState(creep);

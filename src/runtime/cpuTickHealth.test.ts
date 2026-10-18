@@ -72,4 +72,17 @@ describe("CPU 中断与重建诊断", () => {
     expect(Memory.runtime!.cpuTickHealth!.summary.lastGap).toEqual({ afterTick: 99, resumedAt: 101, skippedTicks: 1 });
     expect(Memory.runtime!.cpuTickHealth!.summary.lastIncomplete).toBeUndefined();
   });
+
+  it("跨旧版回滚后选择较新的 profiler 完成证据，旧检查点不伪造缺口或中断", () => {
+    Memory.runtime!.cpuTickHealth = { checkpoint: { tick: 50, phase: "stale", completed: false },
+      summary: { globalStarts: 2, lastGlobalStartAt: 40, lastCompletedAt: 49 } };
+    Memory.analytics = { cpuMonitor: { health: { globalStarts: 3, lastGlobalStartAt: 60, lastCompletedAt: 100,
+      lastGap: { afterTick: 40, resumedAt: 60, skippedTicks: 19 } } } } as NonNullable<Memory["analytics"]>;
+    Memory.cfg = { cpuProfiler: { enabled: false } }; Game.time = 101;
+    createTickCpuProfiler().flush();
+    const health = Memory.runtime!.cpuTickHealth!.summary;
+    expect(health).toMatchObject({ version: 2, globalStarts: 4, lastCompletedAt: 101,
+      legacyGap: { afterTick: 40, resumedAt: 60, skippedTicks: 19 } });
+    expect(health.lastGap).toBeUndefined(); expect(health.lastIncomplete).toBeUndefined();
+  });
 });

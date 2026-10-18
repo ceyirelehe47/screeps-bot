@@ -61,7 +61,7 @@ describe("外出 creep 与常驻 creep 的统一房内寻路", () => {
     expect(creep.move).toHaveBeenCalledWith(RIGHT);
     expect(PathFinder.search).toHaveBeenCalledTimes(1);
     expect(getCreepMovementState(creep)?.movePathState?.targetX).toBe(49);
-    expect(getCreepMovementState(creep)?.travelState?.multiRoomSegment).toBeUndefined();
+    expect((getCreepMovementState(creep)?.travelState as unknown as { multiRoomSegment?: unknown })?.multiRoomSegment).toBeUndefined();
   });
 
   it("有效有序路线重复选择与行军不调用原生findRoute或findExitTo", () => {
@@ -97,20 +97,20 @@ describe("外出 creep 与常驻 creep 的统一房内寻路", () => {
     Game.time += 1;
     moveToTarget(creep, new MockRoomPosition(20, 20, creep.room.name) as unknown as RoomPosition, 1);
     expect(getCreepMovementState(creep)?.travelState).toBeUndefined();
-    expect(search).toHaveBeenLastCalledWith(expect.objectContaining({ x: 20, y: 20 }), expect.objectContaining({ range: 1 }));
+    expect(PathFinder.search).toHaveBeenLastCalledWith(creep.pos, { pos: expect.objectContaining({ x: 20, y: 20 }), range: 1 }, expect.objectContaining({ maxRooms: 1 }));
   });
 
   it("改为撤退时清理旧房内目标和旧私有segment，选择返程出口", () => {
     const { creep, room, search, choose } = traveler();
     moveToTargetRoom(creep, "W0N1", "W1N1|W0N1");
     const state = ensureCreepMovementState(creep);
-    state.travelState!.multiRoomSegment = { key: "stale" } as never;
+    (state.travelState as unknown as { multiRoomSegment: unknown }).multiRoomSegment = { key: "stale" };
     room.findExitTo = jest.fn(() => TOP);
     Game.time += 1;
     moveToTargetRoom(creep, "W1N2", "W1N1|W1N2");
     expect(PathFinder.search).toHaveBeenLastCalledWith(creep.pos, expect.arrayContaining([expect.objectContaining({ pos: expect.objectContaining({ y: 0 }) })]), expect.objectContaining({ maxRooms: 1 }));
     expect(state.travelState?.targetRoom).toBe("W1N2");
-    expect(state.travelState?.multiRoomSegment).toBeUndefined();
+    expect((state.travelState as unknown as { multiRoomSegment?: unknown })?.multiRoomSegment).toBeUndefined();
   });
 
   it("常驻与外出共用静态矩阵clone，动态障碍不污染缓存", () => {

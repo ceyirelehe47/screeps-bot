@@ -17,7 +17,15 @@ jest.mock("@/movement/traffic", () => ({ ...jest.requireActual("@/movement/traff
 import { meleeAttackerRole, findWarObjectiveTarget } from "@/roles/meleeAttacker";
 import * as towerDrainPair from "@/roles/towerDrainPair";
 import { setDefaultMapMocks, RealCostMatrix } from "@mock/movement";
-import { createMockPowerBankCreep, MockPos } from "@mock/powerBank";
+import { createMockPowerBankCreep as createCombatCreep, createMockStore, MockPos } from "@mock/powerBank";
+
+function createMockPowerBankCreep(...args: Parameters<typeof createCombatCreep>): Creep {
+  const creep = createCombatCreep(...args);
+  const room = Game.rooms[creep.room.name];
+  if (room) Object.assign(creep, { room });
+  else Game.rooms[creep.room.name] = creep.room;
+  return creep;
+}
 
 const { moveToTarget, moveToTargetRoom } = jest.requireMock("@/roles/shared") as {
   moveToTarget: jest.Mock;
@@ -42,6 +50,7 @@ function hostileStructure(type: StructureConstant, id: string, x: number, y: num
   return {
     id: id as Id<Structure>,
     structureType: type,
+    ...(type === STRUCTURE_TOWER ? { store: createMockStore({ [RESOURCE_ENERGY]: 1000 }) } : {}),
     hits,
     hitsMax: hits,
     pos: new MockPos(x, y, TARGET_ROOM) as unknown as RoomPosition,
@@ -149,7 +158,7 @@ describe("meleeAttackerRole 目标策略与移动请求安全边界", () => {
       expect(attacker.attack).toHaveBeenCalledWith(wall);
       expect(attacker.attack).not.toHaveBeenCalledWith(incidental);
       expect(attacker.memory._warBreachTargetId).toBe(wall.id);
-      expect(moveToTarget).toHaveBeenCalledWith(attacker, wall, 1, expect.objectContaining({ requireCompletePath: true, reusePath: towerDrain ? 0 : 3 }));
+      expect(moveToTarget).toHaveBeenCalledWith(attacker, wall, 1, expect.objectContaining({ profile: "combat", reusePath: 3 }));
       if (towerDrain) expect(jest.mocked(moveToTarget).mock.calls[0][3]?.costCallback).toEqual(expect.any(Function));
       else expect(jest.mocked(moveToTarget).mock.calls[0][3]?.costCallback).toBeUndefined();
       if (towerDrain) expect(safePath).toHaveBeenCalledWith(attacker, TARGET_ROOM, expect.any(Object));
@@ -304,7 +313,7 @@ describe("meleeAttackerRole 目标策略与移动请求安全边界", () => {
     expect(attacker.memory._warBreachTargetId).toBeUndefined();
     expect(PathFinder.search).toHaveBeenCalledTimes(1);
     const options = (PathFinder.search as jest.Mock).mock.calls[0][2];
-    expect(options).toMatchObject({ maxRooms: 1, maxOps: 8000 });
+    expect(options).toMatchObject({ maxRooms: 1, maxOps: 16000 });
     expect(options.roomCallback(TARGET_ROOM).get(2, 28)).toBe(255);
     expect(moveToTarget).toHaveBeenCalledWith(attacker, spawn, 1, expect.any(Object));
   });
@@ -437,7 +446,7 @@ describe("meleeAttackerRole 目标策略与移动请求安全边界", () => {
     expect(moveToTarget).not.toHaveBeenCalled();
     expect(attacker.move).not.toHaveBeenCalled();
     expect(attacker.memory._warBreachTargetId).toBeUndefined();
-    expect(PathFinder.search).toHaveBeenCalledTimes(ops === 8000 ? 3 : 2);
+    expect(PathFinder.search).toHaveBeenCalledTimes(2);
 
     // 另一单位拆掉屏障是实际世界变化；不靠单纯流逝一 tick 假称能够恢复。
     Game.time += 1;
@@ -448,7 +457,7 @@ describe("meleeAttackerRole 目标策略与移动请求安全边界", () => {
     expect(attacker.attack).toHaveBeenCalledWith(spawn);
     expect(moveToTarget).toHaveBeenCalledWith(attacker, spawn, 1, expect.any(Object));
     expect(attacker.attack).not.toHaveBeenCalledWith(wall);
-    expect(PathFinder.search).toHaveBeenCalledTimes(ops === 8000 ? 3 : 2);
+    expect(PathFinder.search).toHaveBeenCalledTimes(2);
   });
 
   it.each([undefined, TARGET_ROOM])("战争目标本帧失效后下一帧重选；普通角色同帧回退（targetRoom=%s）", (targetRoom) => {

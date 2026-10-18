@@ -1,3 +1,4 @@
+import { searchRoomPath } from "@/movement/roomPath";
 import { getTickContextService } from "@/runtime/runtimeServices";
 import { isDefenseMode } from "@/runtime/defenseMode";
 
@@ -8,11 +9,13 @@ const MIN_SAVED_STEPS = 30;
 type Layout = Record<string, { x: number; y: number }[]>;
 interface Entrance { targetRoom: string; pos: RoomPosition }
 const same = (a: { x: number; y: number }, b: { x: number; y: number }): boolean => a.x === b.x && a.y === b.y;
-const WALK_OPTIONS: FindPathOpts = { range: 1, maxRooms: 1, ignoreCreeps: true, plainCost: 2, swampCost: 10, maxOps: 2000 };
+const WALK_OPTIONS = { range: 1, maxRooms: 1, plainCost: 2, swampCost: 10, maxOps: 2000 };
 
 function walkingDistance(origin: RoomPosition, target: RoomPosition): number | null {
   if (origin.getRangeTo(target) <= 1) return 0;
-  const path = origin.findPathTo(target, WALK_OPTIONS);
+  const result = searchRoomPath(origin, target, WALK_OPTIONS);
+  if (result.incomplete) return null;
+  const path = result.path;
   const last = path[path.length - 1];
   if (!last || new RoomPosition(last.x, last.y, origin.roomName).getRangeTo(target) > 1) return null;
   return path.length;
@@ -84,8 +87,10 @@ export function addRemoteEntranceLinkPlans(room: Room, layout: Layout): boolean 
       if (!markers.some(p => same(p, known))) { markers.push({ ...known }); changed = true; }
       continue;
     }
-    if (spare <= 0 || typeof room.storage.pos.findPathTo !== "function") continue;
-    const path = room.storage.pos.findPathTo(entry.pos, WALK_OPTIONS);
+    if (spare <= 0) continue;
+    const result = searchRoomPath(room.storage.pos, entry.pos, WALK_OPTIONS);
+    if (result.incomplete) continue;
+    const path = result.path;
     if (path.length < MIN_SAVED_STEPS) continue;
     const homeDistance = walkingDistance(entry.pos, room.storage.pos);
     // 可建位置离边界至少两格，走到卸货范围至少还要一步。

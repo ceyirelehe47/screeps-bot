@@ -75,3 +75,19 @@ export function searchSingleRoom(
   path.reverse();
   return { path, incomplete: !complete, ops, cost: costs[best] };
 }
+
+/** findPathTo 与 PathFinder 夹具共用 A*，仅转换调用形状与返回的方向字段。 */
+export function findSingleRoomPath(origin: RoomPosition, target: RoomPosition | { pos: RoomPosition }, options: FindPathOpts = {}): PathStep[] {
+  const pos = "pos" in target ? target.pos : target;
+  const result = searchSingleRoom(origin, { pos, range: options.range ?? 0 }, {
+    maxOps: options.maxOps, maxRooms: options.maxRooms, plainCost: options.plainCost, swampCost: options.swampCost,
+    roomCallback: name => { const matrix = new PathFinder.CostMatrix(); return options.costCallback?.(name, matrix) || matrix; },
+  });
+  let previous = origin;
+  return result.path.map(step => {
+    const dx = step.x - previous.x, dy = step.y - previous.y;
+    const direction = previous.getDirectionTo(step);
+    previous = step;
+    return { x: step.x, y: step.y, dx, dy, direction };
+  });
+}

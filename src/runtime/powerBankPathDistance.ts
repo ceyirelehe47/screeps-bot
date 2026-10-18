@@ -1,3 +1,4 @@
+import { searchPlanningPath } from "@/movement/pathSearch";
 import { getCachedStaticTravelMatrix } from "@/movement/routing";
 import { getRoomTopologyRevision } from "@/movement/roomTopologyRevision";
 import { getTickContextService } from "@/runtime/runtimeServices";
@@ -443,6 +444,7 @@ function measurePowerBankTravelImpl(input: PowerBankTravelMeasurementInput, call
     ) <= 1;
   });
   let engineIncomplete = false;
+  let globalBudgetWait = false;
   const search = (origin: RoomPosition, goal: RoomPosition, plainCost: number, swampCost: number, stage: SearchStage): RoomPosition[] | undefined => {
     if (searchesThisTick >= MAX_SEARCHES_PER_TICK || !hasPlanningCpuHeadroom()) {
       diagnostic(call, searchesThisTick >= MAX_SEARCHES_PER_TICK ? "searchBudgetWait" : "searchHeadroomWait");
@@ -450,9 +452,9 @@ function measurePowerBankTravelImpl(input: PowerBankTravelMeasurementInput, call
     }
     searchesThisTick += 1;
     diagnostic(call, stage === "combat" ? "searchCombat" : stage === "outbound" ? "searchOutbound" : "searchReturn");
-    let result: PathFinderPath;
+    let result: ReturnType<typeof searchPlanningPath>;
     try {
-      result = measureSampledCpuPhase("search.native", () => PathFinder.search(origin, { pos: goal, range: 1 }, {
+      result = measureSampledCpuPhase("search.native", () => searchPlanningPath(origin, { pos: goal, range: 1 }, {
         plainCost,
         swampCost,
         maxOps: SEARCH_MAX_OPS,
@@ -466,6 +468,7 @@ function measurePowerBankTravelImpl(input: PowerBankTravelMeasurementInput, call
     const incomplete = result.incomplete;
     recordSearchResult(call, stage, result, incomplete);
     if (incomplete) {
+      if (result.reason === "budgetExhausted" && result.globalBudgetLimited) { globalBudgetWait = true; return undefined; }
       engineIncomplete = incomplete === true;
       return undefined;
     }
@@ -508,8 +511,8 @@ function measurePowerBankTravelImpl(input: PowerBankTravelMeasurementInput, call
     (total, pos) => total + Math.max(1, Math.ceil(body.weight * terrainFatigue(pos) / (body.moves * 2))), 0,
   ));
   const incompleteResult = (): PowerBankTravelMeasurementResult => remember(key, worldKey,
-    pending("path_incomplete", engineIncomplete ? ENGINE_INCOMPLETE_HOLD_TICKS : RETRY_TICKS), call,
-    engineIncomplete ? true : undefined);
+    pending(globalBudgetWait ? "search_budget" : "path_incomplete", globalBudgetWait ? 1 : engineIncomplete ? ENGINE_INCOMPLETE_HOLD_TICKS : RETRY_TICKS), call,
+    engineIncomplete && !globalBudgetWait ? true : undefined);
   try {
     const combat = search(input.sourceSpawnPos, input.bankPos, 2, 8, "combat");
     if (!combat) return incompleteResult();

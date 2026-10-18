@@ -172,7 +172,7 @@ describe("powerBankHaulerRole", () => {
         hauler,
         alternateRoom.name,
         undefined,
-        expect.objectContaining({ travelRange: 3, reusePath: 10 }),
+        expect.objectContaining({ profile: "travel", reusePath: 10 }),
       );
 
       hauler.room = alternateRoom;
@@ -212,7 +212,7 @@ describe("powerBankHaulerRole", () => {
         hauler,
         routeSource,
         expectedRoute,
-        expect.objectContaining({ travelRange: 3, reusePath: 10, avoidRooms: [] }),
+        expect.objectContaining({ profile: "travel", reusePath: 10, avoidRooms: [] }),
       );
       expect(hauler.transfer).not.toHaveBeenCalled();
       expect(hauler.store.getUsedCapacity(RESOURCE_POWER)).toBe(100);
@@ -235,7 +235,7 @@ describe("powerBankHaulerRole", () => {
       expect(role.target(hauler)).toBe(false);
       expect(moveToTargetRoom).toHaveBeenCalledTimes(1);
       expect(moveToTargetRoom).toHaveBeenCalledWith(
-        hauler, routeSource, expectedRoute, expect.objectContaining({ travelRange: 3, avoidRooms: [] }),
+        hauler, routeSource, expectedRoute, expect.objectContaining({ profile: "travel", avoidRooms: [] }),
       );
       expect(hauler.transfer).not.toHaveBeenCalled();
       expect(hauler.store.getUsedCapacity(RESOURCE_POWER)).toBe(100);
@@ -264,7 +264,7 @@ describe("powerBankHaulerRole", () => {
       expect(moveToTargetRoom).toHaveBeenCalledTimes(1);
       expect(moveToTargetRoom).toHaveBeenCalledWith(
         hauler, routeSource, [middleRoom, routeSource].join("|"),
-        expect.objectContaining({ travelRange: 3, reusePath: 10, avoidRooms: [] }),
+        expect.objectContaining({ profile: "travel", reusePath: 10, avoidRooms: [] }),
       );
       expect(hauler.transfer).not.toHaveBeenCalled();
       expect(hauler.suicide).not.toHaveBeenCalled();
@@ -396,7 +396,7 @@ describe("powerBankHaulerRole", () => {
 
         hauler.work();
         expect(moveToTargetRoom).toHaveBeenLastCalledWith(
-          hauler, TARGET_ROOM, corridor.join("|"), expect.objectContaining({ travelRange: 3 }),
+          hauler, TARGET_ROOM, corridor.join("|"), expect.objectContaining({ profile: "travel" }),
         );
         expect(hauler.memory.working).toBe(true);
         expect(hauler.pickup).not.toHaveBeenCalled();

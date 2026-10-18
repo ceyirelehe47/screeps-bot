@@ -480,7 +480,7 @@ function deliverPower(creep: Creep, fallbackEncodedRoute?: string): boolean {
     if (!Game.rooms[sourceRoom] && creep.room.name !== sourceRoom) {
       const route = getPowerBankEncodedRouteBetween(task, creep.room.name, sourceRoom, fallbackEncodedRoute);
       moveToTargetRoom(creep, sourceRoom, route, powerBankTransitOptions(creep, {
-        travelRange: 3,
+        profile: "travel",
         reusePath: 10,
         avoidRooms: getTaskDangerRooms(task),
       }));
@@ -500,7 +500,7 @@ function deliverPower(creep: Creep, fallbackEncodedRoute?: string): boolean {
       ? getPowerBankEncodedRouteBetween(task, creep.room.name, sourceRoom, fallbackEncodedRoute)
       : undefined;
     moveToTargetRoom(creep, candidate.roomName, encodedRoute, powerBankTransitOptions(creep, {
-      travelRange: 3,
+      profile: "travel",
       reusePath: 10,
       avoidRooms: getTaskDangerRooms(task),
     }));
@@ -553,7 +553,7 @@ function salvagePower(creep: Creep, targetRoom?: string, encodedRouteRooms?: str
   }
 
   if (creep.room.name !== resolvedTargetRoom) {
-    moveToTargetRoom(creep, resolvedTargetRoom, getTaskEncodedRoute(null, encodedRouteRooms), powerBankTransitOptions(creep, { travelRange: 3, reusePath: 10 }));
+    moveToTargetRoom(creep, resolvedTargetRoom, getTaskEncodedRoute(null, encodedRouteRooms), powerBankTransitOptions(creep, { profile: "travel", reusePath: 10 }));
     return false;
   }
 
@@ -620,7 +620,7 @@ export const powerBankHaulerRole: RoleFactory = (targetRoom?: string, encodedRou
     // Travel to target room
     if (targetRoom && creep.room.name !== targetRoom) {
       moveToTargetRoom(creep, targetRoom, getTaskEncodedRoute(task, encodedRouteRooms), powerBankTransitOptions(creep, {
-        travelRange: 3,
+        profile: "travel",
         reusePath: 10,
         avoidRooms: getTaskDangerRooms(task),
       }));
@@ -687,7 +687,7 @@ export const powerBankHaulerRole: RoleFactory = (targetRoom?: string, encodedRou
 
       if (creep.room.name !== targetRoom) {
         moveToTargetRoom(creep, targetRoom, getTaskEncodedRoute(task, encodedRouteRooms), powerBankTransitOptions(creep, {
-          travelRange: 3,
+          profile: "travel",
           reusePath: 10,
           avoidRooms: getTaskDangerRooms(task),
         }));

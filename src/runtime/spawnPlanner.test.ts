@@ -1,3 +1,4 @@
+import { setupPathFinderGlobal, setupRoomPositionGlobal, setDefaultMapMocks } from "@mock/movement";
 import { readSpawnQueue, consumeSpawnRequest } from "@/runtime/spawnRequests";
 import { registerSpawnRequestOwners } from "@/runtime/registerSpawnRequestOwners";
 registerSpawnRequestOwners();
@@ -36,7 +37,8 @@ function createRoom(name: string, level = 6): Room {
     } as unknown as StructureStorage,
     energyAvailable: 300,
     energyCapacityAvailable: 300,
-  } as Room;
+    find: jest.fn(() => []),
+  } as unknown as Room;
 }
 
 function createSpawn(room: Room, name: string, active = true): StructureSpawn {
@@ -69,6 +71,7 @@ function addLiveCarrier(room: Room): void {
 }
 
 beforeEach(() => {
+  setupPathFinderGlobal(); setupRoomPositionGlobal(); setDefaultMapMocks();
   (isDefenseMode as jest.Mock).mockReturnValue(false);
   (getSafeZone as jest.Mock).mockReturnValue(new Set());
   resetRuntimeServices();
@@ -80,6 +83,7 @@ beforeEach(() => {
 const resetScenarioWorld = () => {
   // Jest 预算归并后多个场景在同一 it 内顺序执行；这里复刻全局
   // beforeEach 的隔离，并额外清空房/spawn/creep 注册，避免跨场景残留。
+  setupPathFinderGlobal(); setupRoomPositionGlobal(); setDefaultMapMocks();
   (isDefenseMode as jest.Mock).mockReturnValue(false);
   (getSafeZone as jest.Mock).mockReturnValue(new Set());
   resetRuntimeServices();

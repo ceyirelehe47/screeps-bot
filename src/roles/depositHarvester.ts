@@ -114,7 +114,7 @@ function deliver(creep: Creep, task: DepositHarvestTask | undefined): boolean {
   if (task) { delete task.blocker; task.status = "returning"; }
   if (creep.room.name !== delivery.target.pos.roomName) {
     moveToTargetRoom(creep, delivery.target.pos.roomName, delivery.routeRooms.join("|"),
-      { travelRange: 3, reusePath: 10, avoidRooms: getDepositAvoidRooms() });
+      { profile: "travel", reusePath: 10, avoidRooms: getDepositAvoidRooms() });
     return false;
   }
   if (!creep.pos.isNearTo(delivery.target)) { moveToTarget(creep, delivery.target, 1); return false; }
@@ -156,7 +156,7 @@ export const depositHarvesterRole: RoleFactory = (taskId?: string, homeRoom?: st
         creep.ticksToLive <= (task.returnTravelTicks ?? Infinity) + DEPOSIT_RETURN_BUFFER + 1) {
         stop(creep, task, "outbound_route_or_ttl"); return true;
       }
-      moveToTargetRoom(creep, task.targetRoom, route.join("|"), { travelRange: 3, reusePath: 10, avoidRooms: getDepositAvoidRooms() });
+      moveToTargetRoom(creep, task.targetRoom, route.join("|"), { profile: "travel", reusePath: 10, avoidRooms: getDepositAvoidRooms() });
       return false;
     }
     const deposit = Game.getObjectById<Deposit>(task.depositId as Id<Deposit>);
