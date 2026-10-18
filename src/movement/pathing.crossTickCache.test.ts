@@ -22,9 +22,9 @@ import {
   setupPathFinderGlobal,
   setupRoomPositionGlobal,
 } from "@mock/movement";
-import { getSourceContainerPositionsForRoom } from "@/runtime/roomPlannerConstruction";
+import { getSourceContainerPositionsForRoom } from "@/runtime/sourceWorkPosition";
 
-jest.mock("@/runtime/roomPlannerConstruction", () => ({
+jest.mock("@/runtime/sourceWorkPosition", () => ({
   getSourceContainerPositionsForRoom: jest.fn(() => []),
 }));
 

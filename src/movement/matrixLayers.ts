@@ -1,4 +1,4 @@
-import { getSourceContainerPositionsForRoom } from "@/runtime/roomPlannerConstruction";
+import { getSourceContainerPositionsForRoom } from "@/runtime/sourceWorkPosition";
 
 /** 矩阵约束层只提高成本；明确的目标豁免由调用方提供。 */
 export function applySourceContainerLayer(matrix: CostMatrix, roomName: string, allowedTarget?: { x: number; y: number; roomName: string }): void {

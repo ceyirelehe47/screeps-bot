@@ -45,3 +45,10 @@ it("周期生产任务通过 cadence 入口错峰，禁止恢复裸 Game.time �
     .filter(path => /Game\s*\.\s*time\s*%/.test(readFileSync(path, "utf8")));
   expect(violations).toEqual([]);
 });
+
+
+it("矩阵只读布局接口不反向加载规划执行器", () => {
+  const source = readFileSync(join(__dirname, "../movement/matrixLayers.ts"), "utf8");
+  expect(source).toContain("@/runtime/sourceWorkPosition");
+  expect(source).not.toContain("roomPlannerConstruction");
+});

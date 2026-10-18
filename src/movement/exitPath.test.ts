@@ -7,7 +7,7 @@ import * as safeZoneHelpers from "@/runtime/safeZoneHelpers";
 import * as safeZone from "@/runtime/safeZone";
 import { clearMovementAnalyticsForTest, getMovementAnalyticsForTest } from "@/movement/metrics";
 
-jest.mock("@/runtime/roomPlannerConstruction", () => ({ getSourceContainerPositionsForRoom: jest.fn(() => []) }));
+jest.mock("@/runtime/sourceWorkPosition", () => ({ getSourceContainerPositionsForRoom: jest.fn(() => []) }));
 
 describe("出口搜索的引擎语义边界", () => {
   beforeEach(() => {
