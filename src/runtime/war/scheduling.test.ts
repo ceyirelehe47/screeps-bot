@@ -104,6 +104,6 @@ describe("战争稳态与迁移边界", () => {
     setTaskStatus(task, "staging"); setTaskStatus(task, "queued");
     const fail = jest.fn(() => { throw new Error("retry"); });
     expect(() => onWarEntry(task, "park", fail)).toThrow("retry"); onWarEntry(task, "park", effect); expect(effect).toHaveBeenCalledTimes(2);
-    setTaskStatus(task, "done"); expect(() => setTaskStatus(task, "clearing")).toThrow("非法战争转移");
+    setTaskStatus(task, "done"); expect(() => setTaskStatus(task, "clearing")).toThrow("非法任务转移 war: done -> clearing");
   });
 });

@@ -65,6 +65,8 @@ test("the real r6 operator snapshot proposes and accepts an r7 policy successor 
   const oldRooms = Game.rooms;
   const oldShard = Game.shard;
   const oldTime = Game.time;
+  // 用确定的墙钟验证控制窗口；真实计算耗时不应替代到期/心跳反例。
+  const wallClock = jest.spyOn(Date, "now").mockReturnValue(Date.now());
   try {
     Game.time = fixture.marketData.directAutomation.baseResourceV3.preflightAt + 1;
     Game.shard = { name: "shard1" } as Game["shard"];
@@ -301,6 +303,7 @@ test("the real r6 operator snapshot proposes and accepts an r7 policy successor 
     expect(settled.state.confirmedCooldownNotBefore).toBe(Game.time + 1_000);
 
   } finally {
+    wallClock.mockRestore();
     Memory.cfg = oldCfg;
     Memory.data = oldData;
     Memory.runtime = oldRuntime;

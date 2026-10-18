@@ -32,7 +32,9 @@ describe("War workflow lifecycle architecture boundaries", () => {
 
     expect(offenders.map((file) => path.relative(ROOT, file))).toEqual([]);
     expect(read("src/runtime/colonization.ts")).toContain("clearWarRoomTask(");
-    expect(read("src/runtime/memoryCleanup.ts")).toContain("releaseWarTaskOwner(");
+    expect(read("src/runtime/memoryCleanup.ts")).toContain("runRegisteredMemoryGc(");
+    expect(read("src/runtime/registerTaskMemoryOwners.ts")).toContain("cleanupWarTasks(ownedRooms)");
+    expect(read("src/runtime/war/api.ts")).toContain("releaseWarTaskOwner(targetRoom)");
     expect(read("src/runtime/console/operationsCommands.ts")).toContain("releaseWarTaskOwner(");
   });
 
