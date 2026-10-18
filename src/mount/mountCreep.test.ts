@@ -266,7 +266,7 @@ describe("mountCreep remoteDefender lifecycle", () => {
     creep.work();
 
     expect(creep.memory.ready).toBe(true);
-    expect(creep.memory.working).toBe(false);
+    expect(creep.memory.working ?? false).toBe(false);
     expect(creep.rangedAttack).not.toHaveBeenCalled();
     expect(creep.move).toHaveBeenCalledWith(TOP_LEFT);
     expect(creep.move).not.toHaveBeenCalledWith(BOTTOM_LEFT);

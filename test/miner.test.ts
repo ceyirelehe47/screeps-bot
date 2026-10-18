@@ -1,7 +1,7 @@
 jest.mock("@/roles/shared", () => ({
   moveToTarget: jest.fn(),
 }));
-jest.mock("@/runtime/roomPlannerConstruction", () => ({
+jest.mock("@/runtime/sourceWorkPosition", () => ({
   getPlannedSourceContainerPos: jest.fn(),
 }));
 jest.mock("@/runtime/cpuPhaseProfiler", () => ({
@@ -13,7 +13,7 @@ jest.mock("@/runtime/sourceLink", () => ({
 
 import { minerRole } from "@/roles/miner";
 import { moveToTarget } from "@/roles/shared";
-import { getPlannedSourceContainerPos } from "@/runtime/roomPlannerConstruction";
+import { getPlannedSourceContainerPos } from "@/runtime/sourceWorkPosition";
 
 class MockPos {
   x: number;
@@ -61,6 +61,7 @@ function makeSource(id: string, x: number, y: number, roomName: string) {
 function makeCreep(x: number, y: number, roomName: string, freeCapacity = 50, usedCapacity = 0) {
   return {
     pos: new MockPos(x, y, roomName),
+    room: { name: roomName },
     my: true,
     memory: { role: "miner" },
     store: {

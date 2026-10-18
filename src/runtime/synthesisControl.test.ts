@@ -263,7 +263,8 @@ function runSynthesisResourceControlAuthorityTwin(
   (Memory.cfg.resourceControl as unknown as {
     logistics: { schemaVersion: 1; mode: "disabled" | "shadow"; canaryScopes: [] };
   }).logistics = { schemaVersion: 1, mode, canaryScopes: [] };
-  Memory.runtime = undefined;
+  // 两次实验从同一持久队列身份开始，只让 mode 成为变量；仍比较全部事件和游标。
+  Memory.runtime = { events: { epoch: "synthesis-authority-twin", nextSequence: 1, dropped: 0, entries: [] } };
   Memory.rooms = {};
   Memory.data = undefined;
   Game.spawns = {};

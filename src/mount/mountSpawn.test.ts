@@ -340,8 +340,10 @@ describe("mountSpawn", () => {
       });
       const makeRoom = (name: string, terrain: (x: number, y: number) => string) =>
         ({ name, getPositionAt: (x: number, y: number) => makePos(x, y, terrain) }) as unknown as Room;
-      const makeSpawningSpawn = (name: string, room: Room, remainingTime = 0) =>
-        ({
+      const makeSpawningSpawn = (name: string, room: Room, remainingTime = 0) => {
+        // 各孵化出口场景是独立帧，不能沿用上一个场景已受理的移动收据。
+        Game.time++;
+        return ({
           name,
           room,
           spawning: { name: "incoming", remainingTime },
@@ -349,6 +351,7 @@ describe("mountSpawn", () => {
           memory: { spawnList: ["queued"] },
           spawnCreep: jest.fn(),
         }) as unknown as StructureSpawn;
+      };
 
       // 默认 spawn：出生位 = spawn 8 邻格（spawn 自身格不可落 creep）。
       // blocker 站在 RIGHT 邻格 (26,25)：其邻格中出生格外的第一个可走

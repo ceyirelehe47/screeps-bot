@@ -192,6 +192,8 @@ describe("房内路径完整性", () => {
     expect(getCreepMovementState(creep)?.movePathState?.expiresAt).toBe(Game.time + 2);
     expect(creep.move).toHaveBeenCalledWith(RIGHT);
     (creep.move as jest.Mock).mockClear();
+    // 下一帧仍在 partial TTL 内；严格模式须拒用缓存，且没有上一帧的已受理 intent。
+    advanceTick();
     expect(moveToTarget(creep, target, 1, { completeness: "complete" })).toBe(ERR_NO_PATH);
     expect(creep.move).not.toHaveBeenCalled();
     expect(getCreepMovementState(creep)?.movePathState).toBeUndefined();
