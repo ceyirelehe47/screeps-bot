@@ -1,3 +1,4 @@
+import { setupPathFinderGlobal } from "@mock/movement";
 jest.mock("@/roles/shared", () => ({
   clearMovementState: jest.fn(), moveToTarget: jest.fn(), moveToTargetRoom: jest.fn(),
 }));
@@ -151,9 +152,11 @@ describe("PowerBank same-frame pair movement", () => {
     expect(healer.memory._recycleToRoom).toBe(SOURCE);
     expect(attacker.suicide).not.toHaveBeenCalled(); expect(healer.suicide).not.toHaveBeenCalled();
   });
-  it.each(["attacker-first", "healer-first"] as const)("半截 findPathTo 仍为出房双人组提交移动意图：%s", order => {
-    const find = jest.fn(() => [{ x: 11, y: 10, dx: 1, dy: 0, direction: RIGHT }]);
-    attacker.pos.findPathTo = find as RoomPosition["findPathTo"];
+  it.each(["attacker-first", "healer-first"] as const)("部分 PathFinder 路径仍为出房双人组提交移动意图：%s", order => {
+    setupPathFinderGlobal();
+    const find = jest.mocked(PathFinder.search).mockReturnValue({
+      path: [new RoomPosition(11, 10, SOURCE)], ops: 1, cost: 1, incomplete: true,
+    });
     (moveToTargetRoom as jest.Mock).mockImplementation((creep: Creep) =>
       moveActualTarget(creep, new RoomPosition(49, 10, SOURCE), 0));
     calls(order);
