@@ -2187,7 +2187,7 @@ function isSynthesisObservationRecord(value: unknown): value is SynthesisLogisti
     && optionalAmounts.every((amount) => amount === undefined || isStoredAmount(amount));
 }
 
-/** 输入收集失败只撤回新规划的完整快照凭据，保留已接受运输和 generation。 */
+/** 输入失败时原子撤回尚未执行的规划证据；已接受运输及 generation 保留。 */
 export function invalidateLogisticsProducerSnapshot(producer: string): boolean {
   const ensured = ensureLogisticsControlStore();
   if (!ensured.ok) return false;
@@ -2195,9 +2195,13 @@ export function invalidateLogisticsProducerSnapshot(producer: string): boolean {
   if (!Object.prototype.hasOwnProperty.call(ensured.store.producerSnapshots, key)) return true;
   const producerSnapshots = cloneRecord(ensured.store.producerSnapshots);
   Reflect.deleteProperty(producerSnapshots, key);
+  const latestIntents = cloneRecord(ensured.store.latestIntents);
+  const synthesisObservations = cloneRecord(ensured.store.synthesisObservations);
+  for (const [id, intent] of Object.entries(latestIntents)) if (intent.producer === producer) Reflect.deleteProperty(latestIntents, id);
+  for (const [id, observation] of Object.entries(synthesisObservations)) if (observation.producer === producer) Reflect.deleteProperty(synthesisObservations, id);
   const owner = readResourceControlOwner();
   if (!owner) return false;
-  return attachLogisticsStore(owner, { ...ensured.store, producerSnapshots }).ok;
+  return attachLogisticsStore(owner, { ...ensured.store, latestIntents, synthesisObservations, producerSnapshots }).ok;
 }
 
 export function replaceLatestLogisticsDemandsForProducer(

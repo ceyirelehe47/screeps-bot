@@ -1,3 +1,4 @@
+import { registerTaskMemoryOwners } from "@/runtime/registerTaskMemoryOwners";
 import { cadenceOffset } from "@/runtime/cadence";
 import { runMemoryCleanup } from "@/runtime/memoryCleanup";
 import { buildMemoryAuditSnapshot } from "@/runtime/memoryAudit";
@@ -24,7 +25,7 @@ function createOwnedRoom(name: string): Room {
 
 describe("memory size regression", () => {
   beforeEach(() => {
-    resetRuntimeServices();
+    resetRuntimeServices(); registerTaskMemoryOwners();
     Game.time = 17 + cadenceOffset("memory.cleanup", 17);
     Game.creeps = {};
     Game.spawns = {};

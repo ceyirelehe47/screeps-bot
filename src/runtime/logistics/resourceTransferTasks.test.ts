@@ -1121,7 +1121,7 @@ describe("resource transfer task health v2", () => {
 });
 
 
-it("invalidates producer completeness without deleting accepted legacy cargo or demand generations", () => {
+it("withdraws incomplete planning evidence without deleting accepted transfers or demand generations", () => {
   Game.time = 9000;
   const producer = "synthesisControl:room";
   const result = replaceLatestLogisticsDemandsForProducer(producer, [{
@@ -1132,13 +1132,16 @@ it("invalidates producer completeness without deleting accepted legacy cargo or 
   const before = peekLogisticsControlStore();
   expect(before.ok).toBe(true);
   if (!before.ok) return;
-  const intents = JSON.stringify(before.store.latestIntents);
+  const transfer = createResourceTransferTask("W1N1", "W2N2", RESOURCE_HYDROGEN, 100, "accepted-sibling");
+  if (typeof transfer === "string") throw new Error(transfer);
+  const acceptedBefore = JSON.stringify(transfer.task);
   const generation = JSON.stringify(before.store.generation);
   expect(invalidateLogisticsProducerSnapshot(producer)).toBe(true);
   const after = peekLogisticsControlStore();
   expect(after.ok).toBe(true);
   if (!after.ok) return;
   expect(Object.values(after.store.producerSnapshots).some(s => s.producer === producer)).toBe(false);
-  expect(JSON.stringify(after.store.latestIntents)).toBe(intents);
+  expect(Object.values(after.store.latestIntents).some(i => i.producer === producer)).toBe(false);
+  expect(JSON.stringify(transfer.task)).toBe(acceptedBefore);
   expect(JSON.stringify(after.store.generation)).toBe(generation);
 });
