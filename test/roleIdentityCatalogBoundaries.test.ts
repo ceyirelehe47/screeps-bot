@@ -264,19 +264,15 @@ function isConfigRole(expression: ts.Expression): boolean {
   );
 }
 
-function isConfigStoreDelete(node: ts.Node): boolean {
-  if (!ts.isDeleteExpression(node)) {
-    return false;
-  }
-  const target = unwrapExpression(node.expression);
-  return (
-    ts.isElementAccessExpression(target) &&
-    ts.isIdentifier(target.expression) &&
-    target.expression.text === "configStore" &&
-    !!target.argumentExpression &&
-    ts.isIdentifier(unwrapExpression(target.argumentExpression)) &&
-    (unwrapExpression(target.argumentExpression) as ts.Identifier).text === "configName"
-  );
+function isConfigOwnerRemove(node: ts.Node): boolean {
+  if (!ts.isCallExpression(node) || !ts.isPropertyAccessExpression(node.expression) ||
+      node.expression.name.text !== "remove" || node.arguments.length !== 1) return false;
+  const receiver = unwrapExpression(node.expression.expression);
+  const name = unwrapExpression(node.arguments[0]);
+  return ts.isCallExpression(receiver) && ts.isIdentifier(receiver.expression) &&
+    receiver.expression.text === "getCreepConfigService" &&
+    symbolDeclarationPaths(typeChecker.getSymbolAtLocation(receiver.expression)).includes("src/runtime/runtimeServices.ts") &&
+    ts.isIdentifier(name) && name.text === "configName";
 }
 
 function containsNode(root: ts.Node, predicate: (node: ts.Node) => boolean): boolean {
@@ -425,7 +421,7 @@ describe("role identity catalog architecture boundaries", () => {
     );
     expect(cleanupFunction).toBeDefined();
 
-    const guardedDeletes: ts.IfStatement[] = [];
+    const guardedRemovals: ts.IfStatement[] = [];
     if (cleanupFunction?.body) {
       const visit = (node: ts.Node): void => {
         if (ts.isIfStatement(node)) {
@@ -442,9 +438,9 @@ describe("role identity catalog architecture boundaries", () => {
               call.arguments.length === 1 &&
               isConfigRole(call.arguments[0]) &&
               symbolDeclarationPaths(typeChecker.getSymbolAtLocation(call.expression)).includes(CATALOG_PATH) &&
-              containsNode(node.thenStatement, isConfigStoreDelete)
+              containsNode(node.thenStatement, isConfigOwnerRemove)
             ) {
-              guardedDeletes.push(node);
+              guardedRemovals.push(node);
             }
           }
         }
@@ -453,6 +449,6 @@ describe("role identity catalog architecture boundaries", () => {
       visit(cleanupFunction.body);
     }
 
-    expect(guardedDeletes).toHaveLength(1);
+    expect(guardedRemovals).toHaveLength(1);
   });
 });
