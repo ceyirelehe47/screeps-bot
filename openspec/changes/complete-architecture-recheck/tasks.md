@@ -11,8 +11,8 @@
 - [ ] 7. 安全区为独立缓存矩阵层，稳定策略 key 和 revision，策略拒绝区别静态断路（A8）
 - [ ] 8. Memory 子树单写者与 owner GC 注册；crossShard/deposit 活体保护；resourceTransfer patch API 自动 bump revision（A9、A14）
 - [ ] 9. TickContext 唯一全量读取入口，cargo 并入且同 tick 增量可见；调和器按 revision 门控并建立边界检查（A15）
-- [ ] 10. 出生请求统一入口与配置服务写入，迁移生产调用方并约束直接写入
-- [ ] 11. CreepConfig revision 读索引；出生规划不重复 list，全索引同 tick 写后读一致
+- [x] 10. 出生请求统一入口与配置服务写入，迁移生产调用方并约束直接写入
+- [x] 11. CreepConfig revision 读索引；出生规划不重复 list，全索引同 tick 写后读一致
 - [ ] 12. 声明式进程表及 isDue 哈希错峰，迁移裸 Game.time % N，边界检查防止新增（A10）
 - [ ] 13. MoveProfile 显式移动语义，迁移调用方，解决 travelRange 无效参数
 - [ ] 14. 路径缓存分层与布局 revision，战斗稳定 costCallback key 和可复用路径（A12、A20）
@@ -20,7 +20,7 @@
 - [ ] 16. 小队抽象，迁移 PB pair 与战争协同，保留边界同步和失败恢复
 - [ ] 17. creep 执行协议、粘性动作/休眠及 tick 末交通解算，避免 intent 覆盖
 - [ ] 18. 市场预检按 revision 门控且保留实时安全校验；shadow/dryRun owner 和毕业/删除条件（A18）
-- [ ] 19. Memory 冷数据迁 segment，激活/未激活/重置恢复与容量边界验收
+- [x] 19. Memory 冷数据迁 segment，激活/未激活/重置恢复与容量边界验收
 - [ ] 20. 有界事件队列、creep memory 瘦身与迁移兼容，活体/出生/跨房生命周期验收
 
 ## 全范围交付门

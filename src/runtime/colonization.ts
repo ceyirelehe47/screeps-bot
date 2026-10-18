@@ -1,3 +1,5 @@
+import { retireCreep } from "@/runtime/retirement";
+import { createTaskLifecycle } from "@/runtime/taskLifecycle";
 import { isDue } from "@/runtime/cadence";
 import { searchPlanningPath } from "@/movement/pathSearch";
 import { replaceSpawnQueue } from "@/runtime/spawnRequests";
@@ -957,7 +959,7 @@ function abandonColonization(task: ColonizationTask, reason: string): void {
   if (task.status === "clearing") clearWarRoomTask(task.targetRoom);
   if (!Game.flags[task.flagName]) {
     // 用户主动撤旗仍按既有取消语义清理；侦察超时不进入这个分支。
-    for (const name of getTaskConfigNames(task)) for (const creep of getLiveCreepsByConfig(name)) creep.suicide();
+    for (const name of getTaskConfigNames(task)) for (const creep of getLiveCreepsByConfig(name)) retireCreep(creep, { owner: "colonization", mode: "suicide" });
     if (cleanupColonizationConfigs(task)) delete ensureColonizationStore()[task.targetRoom];
     return;
   }
@@ -1282,7 +1284,7 @@ function processTask(task: ColonizationTask): void {
   if (hasOwnedSpawnInTargetRoom(task)) {
     const targetRoomRcl = Game.rooms[task.targetRoom]?.controller?.level ?? 0;
     if (targetRoomRcl >= 3) {
-      task.status = "managed";
+      taskLifecycle.transition(task, "managed");
       const extensionsReady = isManagedColonizationExtensionReady(task);
       // managed 仍可能由母房供能；每 tick 修复缺失/已解绑的矿工配置，
       // 扩展完成后只补尚无已出生本地矿工的矿点，避免交接空档。
@@ -1345,12 +1347,12 @@ function processTask(task: ColonizationTask): void {
       }
 
       clearWarRoomTask(task.targetRoom);
-      task.status = "claiming";
+      taskLifecycle.transition(task, "claiming");
       task.mode = "normal";
     }
 
     if (task.mode === "npcStronghold") {
-      task.status = "clearing";
+      taskLifecycle.transition(task, "clearing");
       requestWarRoomClear(task.targetRoom, task.sourceRoom, {
         routeRooms: task.scoutRouteRooms,
         reason: "npc_reservation",
@@ -1358,7 +1360,7 @@ function processTask(task: ColonizationTask): void {
       return;
     }
 
-    task.status = "claiming";
+    taskLifecycle.transition(task, "claiming");
 
     const scoutConfigName = getTaskConfigName(task, "scout", "0");
     removeQueuedConfig(task, scoutConfigName);
@@ -1386,7 +1388,7 @@ function processTask(task: ColonizationTask): void {
   }
 
   task.claimCompleted = true;
-  task.status = task.planReady ? "bootstrapping" : "waiting_plan";
+  taskLifecycle.transition(task, task.planReady ? "bootstrapping" : "waiting_plan");
   removeConfigWhenIdle(getTaskConfigName(task, "claimer", "0"));
 
   cacheColonizationTravelPath(task);
@@ -1520,3 +1522,6 @@ export function runColonizationByFlag(): void {
   cleanupOrphanedColonizationConfigs(store);
   runColonizationSupport();
 }
+
+const TASK_STATUSES = ["claiming","clearing","waiting_plan","bootstrapping","managed"] as const;
+const taskLifecycle = createTaskLifecycle<ColonizationStatus, ColonizationTask>("colonization", { claiming: TASK_STATUSES, clearing: TASK_STATUSES, waiting_plan: TASK_STATUSES, bootstrapping: TASK_STATUSES, managed: TASK_STATUSES }, task => task.targetRoom);

@@ -1,3 +1,5 @@
+import { appendRuntimeEvent } from "@/runtime/runtimeEvents";
+import { getAcceptedSpawnReceipts } from "@/runtime/spawnRequests";
 import { isDue } from "@/runtime/cadence";
 import { replaceSpawnQueue } from "@/runtime/spawnRequests";
 import { cleanupPowerBankRoomIntel } from "@/runtime/powerBankIntelCleanup";
@@ -14,16 +16,11 @@ import { pruneLinkNetworkRuntime } from "@/runtime/linkNetworkMemory";
 import { cleanupWorkerTaskBoard } from "@/runtime/workerTaskPool";
 import { gcProductionReservations } from "@/runtime/resourceReservation";
 import { cleanupTerminalBootstrapRecoveryRuntime } from "@/runtime/terminalBootstrapRecovery";
-import { releaseWarTaskOwner } from "@/runtime/warControl";
 import { isRoleName } from "@/types/roleCatalog";
 import { runRegisteredMemoryGc } from "@/runtime/memoryGcRegistry";
 
 const CLEANUP_INTERVAL = 17;
 const ROOM_PLANNER_TTL = 50000;
-const INTER_SHARD_PORTAL_TTL = 10000;
-const INTER_SHARD_REMOTE_TTL = 500;
-const INTER_SHARD_CLAIM_TTL = 5000;
-const INTER_SHARD_ROOM_STATE_TTL = 5000;
 const RESOURCE_CONTROL_TERMINAL_TASK_TTL = 200;
 const CARRIER_TASK_BOARD_TTL = 500;
 
@@ -69,6 +66,7 @@ function createCreepConfigReferenceSnapshot(): CreepConfigReferenceSnapshot {
     }
   }
 
+  for (const receipt of getAcceptedSpawnReceipts()) { configNames.add(receipt.configName); spawningCreepNames.add(receipt.creepName); }
   return { configNames, spawningCreepNames };
 }
 
@@ -81,6 +79,7 @@ function cleanupDeadCreepMemory(spawningCreepNames: ReadonlySet<string>): number
 
   for (const creepName of Object.keys(Memory.creeps)) {
     if (!Game.creeps[creepName] && !spawningCreepNames.has(creepName)) {
+      appendRuntimeEvent({ owner: "creep", id: creepName, kind: "death", from: Memory.creeps[creepName].role });
       delete Memory.creeps[creepName];
       removed += 1;
     }
@@ -421,79 +420,6 @@ function cleanupIllegalStructureCleanupMemory(ownedRooms: Set<string>): number {
   return removed;
 }
 
-function cleanupWarMemory(ownedRooms: Set<string>): number {
-  if (!Memory.data?.war) {
-    return 0;
-  }
-
-  let removed = 0;
-  for (const [targetRoom, task] of Object.entries(Memory.data.war)) {
-    const sourceRoomOwned = ownedRooms.has(task.sourceRoom);
-    const terminalDone = task.status === "done" || task.status === "failed";
-    const terminalAnchor = task.completedAt ?? task.statusSince ?? task.createdAt;
-    const expiredTerminal = terminalDone && Game.time - terminalAnchor > 200;
-    if (!sourceRoomOwned || expiredTerminal) {
-      const result = releaseWarTaskOwner(targetRoom);
-      if (typeof result !== "string" && result.removedTask) removed += 1;
-    }
-  }
-
-  return removed;
-}
-
-function cleanupInterShardPortalMemory(): number {
-  if (!Memory.data?.interShardPortals) {
-    return 0;
-  }
-
-  let removed = 0;
-  for (const [portalId, portal] of Object.entries(Memory.data.interShardPortals)) {
-    const stale = Game.time - portal.lastSeenAt > INTER_SHARD_PORTAL_TTL;
-    const decayed = typeof portal.ticksToDecay === "number" && portal.ticksToDecay <= 0;
-    if (stale || decayed) {
-      delete Memory.data.interShardPortals[portalId];
-      removed += 1;
-    }
-  }
-
-  return removed;
-}
-
-function cleanupCrossShardRuntimeMemory(): number {
-  const crossShard = Memory.runtime?.crossShard;
-  if (!crossShard) {
-    return 0;
-  }
-
-  const remotes = crossShard.remotes || {};
-  const claims = crossShard.claims || {};
-  const rooms = crossShard.rooms || {};
-
-  let removed = 0;
-  for (const [shard, remote] of Object.entries(remotes)) {
-    if (Game.time - remote.updatedAt > INTER_SHARD_REMOTE_TTL) {
-      delete remotes[shard];
-      removed += 1;
-    }
-  }
-
-  for (const [roomName, claim] of Object.entries(claims)) {
-    if (Game.time - claim.updatedAt > INTER_SHARD_CLAIM_TTL) {
-      delete claims[roomName];
-      removed += 1;
-    }
-  }
-
-  for (const [roomName, summary] of Object.entries(rooms)) {
-    if (Game.time - summary.updatedAt > INTER_SHARD_ROOM_STATE_TTL) {
-      delete rooms[roomName];
-      removed += 1;
-    }
-  }
-
-  return removed;
-}
-
 function cleanupResourceControlTaskMemory(ownedRooms: Set<string>): number {
   return cleanupResourceTransferTaskStore(
     ownedRooms,
@@ -544,27 +470,6 @@ function cleanupDefenseCoordinationMemory(ownedRooms: Set<string>): number {
 
   if (Object.keys(Memory.runtime.defenseCoordination).length === 0) {
     delete Memory.runtime.defenseCoordination;
-  }
-
-  return removed;
-}
-
-function cleanupRescueMemory(ownedRooms: Set<string>): number {
-  const store = Memory.data?.rescue;
-  if (!store) {
-    return 0;
-  }
-
-  let removed = 0;
-  for (const [targetRoom, task] of Object.entries(store)) {
-    if (!ownedRooms.has(task.sourceRoom)) {
-      delete store[targetRoom];
-      removed += 1;
-    }
-  }
-
-  if (Object.keys(store).length === 0 && Memory.data) {
-    delete Memory.data.rescue;
   }
 
   return removed;
@@ -674,11 +579,7 @@ export function runMemoryCleanup(): void {
   cleanupPickupReservationStore(ownedRooms);
   cleanupTerminalBootstrapRecoveryRuntime();
   gcProductionReservations();
-  cleanupWarMemory(ownedRooms);
-  cleanupInterShardPortalMemory();
-  cleanupCrossShardRuntimeMemory();
   runRegisteredMemoryGc({ ownedRooms });
-  cleanupRescueMemory(ownedRooms);
   cleanupResourceControlTaskMemory(ownedRooms);
   cleanupLogisticsControlStore(ownedRooms);
   cleanupWorkerTaskBoardMemory(ownedRooms);

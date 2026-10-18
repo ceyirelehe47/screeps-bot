@@ -200,3 +200,13 @@ export function runInterShardControl(): void {
   writeLocalPayload();
   readRemotePayloads();
 }
+
+export function cleanupInterShardRemoteMemory(): number {
+  const remotes = Memory.runtime?.crossShard?.remotes;
+  if (!remotes) return 0;
+  let removed = 0;
+  for (const [name, remote] of Object.entries(remotes)) {
+    if (Game.time - remote.updatedAt > REMOTE_SHARD_STALE_TTL) { delete remotes[name]; removed++; }
+  }
+  return removed;
+}

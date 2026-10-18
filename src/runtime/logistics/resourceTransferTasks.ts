@@ -1,3 +1,4 @@
+import { createTaskLifecycle } from "@/runtime/taskLifecycle";
 import { getMemoryService } from "@/runtime/runtimeServices";
 import { bumpTreasuryCommitmentRevision } from "@/runtime/treasury/commitmentRevision";
 import { hasTreasuryT1TaskRetention } from "@/runtime/treasuryTaskCommitmentBridge";
@@ -101,6 +102,7 @@ export function patchResourceTransferTask(task: ResourceTransferTask, patch: Res
     if (!Object.is(task[key], patch[key])) { changed = true; break; }
   }
   if (!changed) return false;
+  if (patch.status !== undefined) transferLifecycle.transition(task, patch.status);
   Object.assign(task, patch);
   bumpTreasuryCommitmentRevision();
   return true;
@@ -322,7 +324,7 @@ export function cancelResourceTransferTask(taskId: string): CancelResourceTransf
   }
 
   const previousStatus = task.status;
-  task.status = "cancelled";
+  transferLifecycle.transition(task, "cancelled");
   task.updatedAt = Game.time;
   task.blockedReason = undefined;
   task.blockedSince = undefined;
@@ -340,7 +342,7 @@ export function cancelResourceTransferTask(taskId: string): CancelResourceTransf
 export function cancelAutomaticResourceTransferTaskForReplan(taskId: string): boolean {
   const task = ensureResourceTransferTaskStore()[taskId];
   if (!task || task.status !== "pending" || task.origin !== "automatic") return false;
-  task.status = "cancelled";
+  transferLifecycle.transition(task, "cancelled");
   task.updatedAt = Game.time;
   task.lastError = "cancelled_by_replan";
   bumpTreasuryCommitmentRevision();
@@ -385,7 +387,7 @@ export function recordResourceTransferTaskProgress(task: ResourceTransferTask): 
 }
 
 function cancelAutomaticTask(task: ResourceTransferTask, reason: string): void {
-  task.status = "cancelled";
+  transferLifecycle.transition(task, "cancelled");
   task.updatedAt = Game.time;
   task.lastError = reason;
   bumpTreasuryCommitmentRevision();
@@ -615,3 +617,9 @@ export function cleanupResourceTransferTaskStore(
   if (removed > 0) bumpTreasuryCommitmentRevision();
   return removed;
 }
+
+// 人工取消兼容既有 API，允许把已完成/失败的账目标为 cancelled；实时执行安全检查仍属于 Treasury owner。
+const TRANSFER_STATES = ["pending", "done", "cancelled", "failed"] as const;
+const transferLifecycle = createTaskLifecycle<ResourceTransferTaskStatus, ResourceTransferTask>("resourceTransfer", {
+  pending: TRANSFER_STATES, done: ["done", "cancelled"], cancelled: ["cancelled"], failed: ["failed", "cancelled"],
+}, task => task.id);

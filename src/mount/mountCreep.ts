@@ -1,3 +1,4 @@
+import { continueCreepRetirement } from "@/runtime/retirement";
 import { isDue } from "@/runtime/cadence";
 import { issueMove } from "@/movement/traffic";
 import { roleRegistry } from "@/roles";
@@ -200,6 +201,7 @@ function resolveRoleLogic(creep: Creep): ReturnType<(typeof roleRegistry)[keyof 
 
 export function mountCreep(): void {
   Creep.prototype.work = function work(): void {
+    if (continueCreepRetirement(this)) return;
     // spawn 让位指令优先：挡位 creep 的自身移动逻辑会覆盖 spawn 侧的
     // 直接 move（spawn.work 先执行），本 tick 让出一步并跳过自身行为，
     // 解除孵化冻结；指令带 tick，过期即忽略并清除。

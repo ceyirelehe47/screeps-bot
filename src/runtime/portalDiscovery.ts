@@ -51,15 +51,22 @@ function updatePortalEntriesFromVisibleRooms(store: NonNullable<NonNullable<Memo
   }
 }
 
-function cleanupStalePortalEntries(store: NonNullable<NonNullable<Memory["data"]>["interShardPortals"]>): void {
+function cleanupStalePortalEntries(store: NonNullable<NonNullable<Memory["data"]>["interShardPortals"]>): number {
+  let removed = 0;
   const now = Game.time;
   for (const [portalId, entry] of Object.entries(store)) {
     const staleByTime = now - entry.lastSeenAt > PORTAL_STALE_TTL;
     const decayed = typeof entry.ticksToDecay === "number" && entry.ticksToDecay - (now - entry.lastSeenAt) <= 0;
     if (staleByTime || decayed) {
-      delete store[portalId];
+      delete store[portalId]; removed++;
     }
   }
+  return removed;
+}
+
+export function cleanupPortalDiscoveryMemory(): number {
+  const store = Memory.data?.interShardPortals;
+  return store ? cleanupStalePortalEntries(store) : 0;
 }
 
 export function runPortalDiscovery(): void {

@@ -45,3 +45,11 @@ it("周期生产任务通过 cadence 入口错峰，禁止恢复裸 Game.time �
     .filter(path => /Game\s*\.\s*time\s*%/.test(readFileSync(path, "utf8")));
   expect(violations).toEqual([]);
 });
+
+it.each([
+  "runtime/colonization.ts", "runtime/crossShardColonization.ts", "runtime/colonizationSupport.ts",
+  "runtime/rescue.ts", "runtime/remoteMining.ts", "runtime/depositHarvest.ts", "roles/depositHarvester.ts",
+  "runtime/powerBankTaskState.ts", "runtime/war/fsm.ts", "runtime/factoryControl.ts",
+])("任务状态通过生命周期所有者转移：%s", file => {
+  expect(readFileSync(join(__dirname, "..", file), "utf8")).not.toMatch(/\.status\s*=[^=]/);
+});

@@ -1,3 +1,4 @@
+import { retireCreep } from "@/runtime/retirement";
 import { isDue } from "@/runtime/cadence";
 import { replaceSpawnQueue } from "@/runtime/spawnRequests";
 import { countBoostableParts, getBoostPartType } from "@/runtime/boostParts";
@@ -331,7 +332,7 @@ function cleanupTaskConfigs(task: PowerBankHarvestTask): void {
 function neutralizeTaskCreeps(task: PowerBankHarvestTask): void {
   const retireCombat = (creep: Creep): void => {
     if (task.sourceRoom && (creep.memory.role === "powerBankAttacker" || creep.memory.role === "powerBankHealer")) {
-      creep.memory._recycleToRoom = task.sourceRoom;
+      retireCreep(creep, { owner: "powerBank", mode: "recycle", roomName: task.sourceRoom });
       clearMovementState(creep);
     }
   };
@@ -343,7 +344,7 @@ function neutralizeTaskCreeps(task: PowerBankHarvestTask): void {
     seen.add(creep.name);
     const mem = creep.memory as PowerBankReinforcementCreepMemory;
     delete mem.taskId;
-    delete mem.configName;
+    retireCreep(creep, { owner: "powerBank", mode: "detach", releaseTask: true });
     delete mem.powerBankReinforcementStage;
     creep.memory.working = false;
     retireCombat(creep);
@@ -353,8 +354,12 @@ function neutralizeTaskCreeps(task: PowerBankHarvestTask): void {
     for (const creep of getTickContextService().getCreepsByConfigName(configName)) {
       if (seen.has(creep.name)) continue;
       const mem = creep.memory as PowerBankReinforcementCreepMemory;
+      if (creep.memory.role === "powerBankHauler" && ((creep.store?.getUsedCapacity(RESOURCE_POWER) ?? 0) > 0 ||
+          (creep.memory as CreepMemory & PowerBankHaulerMemory).powerBankPendingTransfer)) {
+        mem.taskId ??= task.id; continue;
+      }
       delete mem.taskId;
-      delete mem.configName;
+      retireCreep(creep, { owner: "powerBank", mode: "detach", releaseTask: true });
       delete mem.powerBankReinforcementStage;
       creep.memory.working = false;
       retireCombat(creep);
@@ -901,7 +906,7 @@ function abortUnfinishablePair(task: PowerBankHarvestTask, bank: StructurePowerB
     for (const creep of getTickContextService().getCreepsByConfigName(name)) {
       if ((creep.memory as PowerBankCreepMemory).taskId !== undefined && (creep.memory as PowerBankCreepMemory).taskId !== task.id) continue;
       if ((creep.store?.getUsedCapacity() ?? 0) > 0) continue;
-      creep.memory._recycleToRoom = task.sourceRoom;
+      retireCreep(creep, { owner: "powerBank", mode: "recycle", roomName: task.sourceRoom });
       clearMovementState(creep);
     }
   }
@@ -911,7 +916,7 @@ function abortUnfinishablePair(task: PowerBankHarvestTask, bank: StructurePowerB
     if (spawning && name && configs.has(name) && typeof spawning.cancel === "function") spawning.cancel();
   }
   for (const actor of [pair.attacker, pair.healer]) {
-    actor.memory._recycleToRoom = task.sourceRoom;
+    retireCreep(actor, { owner: "powerBank", mode: "recycle", roomName: task.sourceRoom });
     clearMovementState(actor);
   }
   transitionToTerminal(task, "aborted", "one_pair_runtime_ttl_insufficient");
@@ -2048,6 +2053,7 @@ function processTerminalCleanupImpl(task: PowerBankHarvestTask): void {
   }
 
   neutralizeTaskCreeps(task);
+  for (const name of getTaskConfigNames(task)) getCreepConfigService().detachSpawn(name);
   cleanupTaskConfigs(task);
   recordPowerBankHistory(task);
   task.terminalCleanupDone = true;
@@ -2267,8 +2273,13 @@ function runPowerBankHarvestImpl(): void {
 
   for (const task of tasks) {
     if (isTerminalPowerBankStatus(task.status)) {
+      const alreadyCleaned = task.terminalCleanupDone;
       processTerminalCleanup(task);
-      delete store[task.id];
+      if (!getTickContextService().getCreepsByRole("powerBankHauler").some(creep => {
+        const memory = creep.memory as CreepMemory & PowerBankHaulerMemory;
+        return (memory.taskId === task.id && (creep.store?.getUsedCapacity(RESOURCE_POWER) ?? 0) > 0) ||
+          memory.powerBankPendingTransfer?.taskId === task.id;
+      })) { if (alreadyCleaned) recordPowerBankHistory(task); delete store[task.id]; }
     }
   }
 

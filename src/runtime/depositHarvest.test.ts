@@ -12,6 +12,7 @@ jest.mock("@/runtime/powerBankObserver", () => ({ requestDepositObservation: jes
 jest.mock("@/runtime/depositPathDistance", () => ({ isDepositRoomSafe: jest.fn(() => true), measureDepositTravel: jest.fn() }));
 jest.mock("@/config/spawnProfiles", () => ({ spawnProfiles: { worker: () => [WORK, CARRY, MOVE] } }));
 jest.mock("@/runtime/runtimeServices", () => ({
+  getMemoryService: () => jest.requireActual("@/runtime/memoryService").createRuntimeMemoryService(),
   getTickContextService: () => ({ getMyRooms: () => Object.values(Game.rooms).filter((r) => r.controller?.my),
     getAllCreeps: () => Object.values(Game.creeps), getAllSpawns: () => Object.values(Game.spawns) }),
   getCreepConfigService: (() => {
@@ -113,4 +114,15 @@ it("RESERVE 保留已受理 deposit 的逐 tick 复核，但不准入新 deposit
   Game.time++; runDepositHarvest();
   expect(task.status).toBe("discovered");
   expect(Object.keys(Memory.data!.creepConfigs!)).toHaveLength(0);
+});
+
+it("孵化资格跟随 owner 的当前代，旧代名称和非整数世代不能借用资格", () => {
+  runDepositHarvest();
+  const task = Memory.data!.depositHarvest!.d1;
+  const oldName = task.configName!, cfg = Memory.data!.creepConfigs![oldName];
+  task.generation = 2; task.configName = oldName.replace(":g0", ":g2");
+  expect(canSpawnDepositConfig(task.configName, cfg)).toBe(true);
+  expect(canSpawnDepositConfig(oldName, cfg)).toBe(false);
+  task.generation = 2.5;
+  expect(canSpawnDepositConfig(task.configName, cfg)).toBe(false);
 });

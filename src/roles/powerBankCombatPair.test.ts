@@ -3,7 +3,8 @@ jest.mock("@/roles/shared", () => ({
   clearMovementState: jest.fn(), moveToTarget: jest.fn(), moveToTargetRoom: jest.fn(),
 }));
 jest.mock("@/movement/routing", () => ({ getCachedStaticTravelMatrix: jest.fn(), getNextTravelRoom: jest.fn() }));
-jest.mock("@/runtime/runtimeServices", () => ({ getTickContextService: jest.fn() }));
+jest.mock("@/runtime/runtimeServices", () => ({
+  getMemoryService: () => jest.requireActual("@/runtime/memoryService").createRuntimeMemoryService(), getTickContextService: jest.fn() }));
 jest.mock("@/runtime/cpuPhaseProfiler", () => ({
   measureCreepIntent: (fn: () => unknown) => fn(),
   measureCreepPathing: (fn: () => unknown) => fn(),

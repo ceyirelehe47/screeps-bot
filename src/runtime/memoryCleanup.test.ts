@@ -1,3 +1,4 @@
+import { registerTaskMemoryOwners } from "@/runtime/registerTaskMemoryOwners";
 import { cadenceOffset, isDue } from "@/runtime/cadence";
 const cadenceTick = (tick: number): number => tick + cadenceOffset("memory.cleanup", 17);
 import { runMemoryCleanup } from "@/runtime/memoryCleanup";
@@ -119,7 +120,7 @@ function snapshotManagedGcState(): {
 
 describe("runMemoryCleanup", () => {
   beforeEach(() => {
-    resetRuntimeServices();
+    resetRuntimeServices(); registerTaskMemoryOwners();
     clearPickupReservationStoreForTest();
     Game.time = cadenceTick(17);
     Game.rooms = { W1N1: createOwnedRoom("W1N1") };
@@ -505,7 +506,7 @@ it("布局 TTL 只淘汰失去所有权且过期的房间", () => {
     W2N2: { savedAt: Game.time, layout: {} },
     W3N3: { savedAt: 0, layout: {} },
   } } as any;
-  runMemoryCleanup();
+  registerTaskMemoryOwners(); runMemoryCleanup();
   expect(Memory.data!.roomPlanner!.W1N1).toBeDefined();
   expect(Memory.data!.roomPlanner!.W2N2).toBeDefined();
   expect(Memory.data!.roomPlanner!.W3N3).toBeUndefined();

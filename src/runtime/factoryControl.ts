@@ -1,3 +1,4 @@
+import { createTaskLifecycle } from "@/runtime/taskLifecycle";
 import { isDue } from "@/runtime/cadence";
 import { resolveMarketCreditReserve } from "@/runtime/marketActionArbiter";
 import { resolveRoomEnergyPolicyForRoom } from "@/runtime/roomEnergyPolicy";
@@ -695,7 +696,7 @@ export function cancelFactoryTask(taskId: string): CancelFactoryTaskResult | str
   }
 
   const previousStatus = task.status;
-  task.status = "cancelled";
+  taskLifecycle.transition(task, "cancelled");
   task.updatedAt = Game.time;
   task.completedAt = Game.time;
   replaceCarrierTasksForProducerRoom(FACTORY_CARRIER_TASK_PRODUCER, task.roomName, []);
@@ -896,18 +897,18 @@ function executeBatteryDecompressTask(
     task.producedEnergyAmount = Math.max(task.producedEnergyAmount, energyInFactory);
     const unloadDraft = generateBatteryDecompressUnloadDraft(room, factory, task);
     if (unloadDraft) {
-      task.status = "unloading";
+      taskLifecycle.transition(task, "unloading");
       state.stage = "unloading";
       replaceCarrierTasksForProducerRoom(FACTORY_CARRIER_TASK_PRODUCER, task.roomName, [unloadDraft]);
     } else {
-      task.status = "unloading";
+      taskLifecycle.transition(task, "unloading");
       state.stage = "blocked";
       state.sleepReason = "unload_target_full";
       state.lastError = "unload_target_full";
       replaceCarrierTasksForProducerRoom(FACTORY_CARRIER_TASK_PRODUCER, task.roomName, []);
     }
   } else if (task.remainingBatteryAmount < BATTERY_DECOMPRESS_BATCH_BATTERY) {
-    task.status = "done";
+    taskLifecycle.transition(task, "done");
     task.updatedAt = Game.time;
     task.completedAt = Game.time;
     state.stage = "idle";
@@ -916,7 +917,7 @@ function executeBatteryDecompressTask(
   } else {
     const batteryInFactory = factory.store.getUsedCapacity(RESOURCE_BATTERY) ?? 0;
     if (batteryInFactory >= BATTERY_DECOMPRESS_BATCH_BATTERY) {
-      task.status = "producing";
+      taskLifecycle.transition(task, "producing");
       state.stage = "producing";
       if (factory.cooldown <= 0) {
         const factoryFree = factory.store.getFreeCapacity() ?? 0;
@@ -931,11 +932,11 @@ function executeBatteryDecompressTask(
             task.remainingBatteryAmount = Math.max(0, task.remainingBatteryAmount - BATTERY_DECOMPRESS_BATCH_BATTERY);
             task.lastError = undefined;
           } else if (result === ERR_NOT_ENOUGH_RESOURCES) {
-            task.status = "loading";
+            taskLifecycle.transition(task, "loading");
             state.stage = "loading";
             task.lastError = `produce_${result}`;
           } else {
-            task.status = "failed";
+            taskLifecycle.transition(task, "failed");
             task.lastError = `produce_${result}`;
             task.completedAt = Game.time;
           }
@@ -944,7 +945,7 @@ function executeBatteryDecompressTask(
       replaceCarrierTasksForProducerRoom(FACTORY_CARRIER_TASK_PRODUCER, task.roomName, []);
     } else {
       const supplyDraft = generateBatteryDecompressSupplyDraft(room, factory, task);
-      task.status = "loading";
+      taskLifecycle.transition(task, "loading");
       state.stage = "loading";
       if (state.loadingSinceTick === undefined) {
         state.loadingSinceTick = Game.time;
@@ -953,7 +954,7 @@ function executeBatteryDecompressTask(
         task.lastError = "no_battery_source";
       }
       if (Game.time - state.loadingSinceTick >= 500) {
-        task.status = "failed"; task.completedAt = Game.time;
+        taskLifecycle.transition(task, "failed"); task.completedAt = Game.time;
         task.lastError = supplyDraft ? "battery_delivery_timeout" : "no_battery_source";
         state.stage = "idle"; state.activeTarget = undefined;
       }
@@ -1571,3 +1572,6 @@ export {
   type FactoryControlRuntime,
   type MarketConfig,
 };
+
+const TASK_STATUSES = ["pending","loading","producing","unloading","done","cancelled","failed"] as const;
+const taskLifecycle = createTaskLifecycle<FactoryTaskStatus, FactoryTask>("factory", { pending: TASK_STATUSES, loading: TASK_STATUSES, producing: TASK_STATUSES, unloading: TASK_STATUSES, done: ["done"], cancelled: ["cancelled"], failed: ["failed"] }, task => task.id);

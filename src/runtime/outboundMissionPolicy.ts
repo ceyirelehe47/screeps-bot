@@ -4,9 +4,9 @@ import { resolveOutboundMissionIntent } from "@/runtime/outboundMissionRegistry"
 import { getRoleSpawnIntent } from "@/runtime/spawnIntent";
 import type { CreepConfig } from "@/types/system";
 
-export interface RoomMissionMode { defense: boolean; reserve: boolean }
+export interface RoomMissionMode { defense: boolean; reserve: boolean; sourceRoom?: string }
 export function getRoomMissionMode(roomName: string): RoomMissionMode {
-  return { defense: isDefenseMode(roomName), reserve: isRoomInReserveMode(roomName) };
+  return { defense: isDefenseMode(roomName), reserve: isRoomInReserveMode(roomName), sourceRoom: roomName };
 }
 
 /** 只控制新增昂贵出征，已部署单位与外矿收入继续执行。 */
@@ -16,9 +16,10 @@ export function canStartOutboundMission(roomName: string): boolean {
 }
 
 export type SpawnAdmission = { allowed: true } | { allowed: false; reason: "defense" | "reserve" };
-export function getSpawnAdmission(configName: string, config: CreepConfig): SpawnAdmission {
-  if (!config.roomName) return { allowed: true };
-  const mode = getRoomMissionMode(config.roomName);
+export function getSpawnAdmission(configName: string, config: CreepConfig, actualSpawnRoom?: string): SpawnAdmission {
+  const roomName = config.roomName ?? actualSpawnRoom;
+  if (!roomName) return { allowed: true };
+  const mode = getRoomMissionMode(roomName);
   const mission = resolveOutboundMissionIntent(configName, config, mode);
   const intent = mission?.intent ?? getRoleSpawnIntent(config.role);
   if (mode.defense && intent !== "local") return { allowed: false, reason: "defense" };

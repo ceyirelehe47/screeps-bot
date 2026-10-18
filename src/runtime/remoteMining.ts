@@ -1,3 +1,4 @@
+import { createTaskLifecycle } from "@/runtime/taskLifecycle";
 import { isDue } from "@/runtime/cadence";
 import { searchPlanningPath } from "@/movement/pathSearch";
 import { replaceSpawnQueue } from "@/runtime/spawnRequests";
@@ -578,7 +579,7 @@ function abandonTask(
   task: RemoteMiningTask,
   reason: "not_dual_source" | "unsafe" | "not_normal" | "not_direct" | "scout_timeout" | "owned_room",
 ): void {
-  task.status = "abandoned";
+  taskLifecycle.transition(task, "abandoned");
   task.abandonedReason = reason;
   task.updatedAt = Game.time;
   task.nextRetryAt = Game.time + 5000;
@@ -642,7 +643,7 @@ function processScoutLifecycle(store: Record<string, RemoteMiningTask>, config: 
       continue;
     }
 
-    task.status = "active";
+    taskLifecycle.transition(task, "active");
     task.sourceIds = sources.map((s) => s.id);
     task.updatedAt = now;
     task.lastVerifiedAt = now;
@@ -1395,7 +1396,7 @@ function clearRemoteDefenseState(task: RemoteMiningTask): void {
 }
 
 function enterRemoteDefense(task: RemoteMiningTask, reason: RemoteDefenseReason): void {
-  task.status = "defending";
+  taskLifecycle.transition(task, "defending");
   task.defendingSince = task.defendingSince ?? Game.time;
   task.lastDefenseThreatAt = Game.time;
   task.defenseReason = reason;
@@ -1408,7 +1409,7 @@ function enterRemoteDefense(task: RemoteMiningTask, reason: RemoteDefenseReason)
 }
 
 function suspendRemoteTask(task: RemoteMiningTask, reason: RemoteSuspendReason | string): void {
-  task.status = "suspended";
+  taskLifecycle.transition(task, "suspended");
   task.suspendReason = reason;
   task.suspendedAt = Game.time;
   task.lastThreatAt = Game.time;
@@ -1464,7 +1465,7 @@ export function processRemoteConfigLifecycle(
     // Abandon the task and clean up all remote configs/spawn entries regardless of current status.
     const earlyVisibleTarget = Game.rooms[task.targetRoom];
     if (earlyVisibleTarget && earlyVisibleTarget.controller?.my) {
-      task.status = "abandoned";
+      taskLifecycle.transition(task, "abandoned");
       task.abandonedReason = "owned_room";
       task.updatedAt = Game.time;
       task.nextRetryAt = Game.time + 5000;
@@ -1522,7 +1523,7 @@ export function processRemoteConfigLifecycle(
           }
           const safeTicks = Game.time - task.safeSince;
           if (safeTicks >= config.remoteSafeTicksToResume) {
-            task.status = "active";
+            taskLifecycle.transition(task, "active");
             delete task.suspendReason;
             delete task.suspendedAt;
             delete task.lastThreatAt;
@@ -1551,7 +1552,7 @@ export function processRemoteConfigLifecycle(
       const visibleTarget = Game.rooms[task.targetRoom];
 
       if (!isSourceRoomValidForRemote(task.sourceRoom)) {
-        task.status = "suspended";
+        taskLifecycle.transition(task, "suspended");
         task.suspendReason = "source_room_invalid";
         task.suspendedAt = Game.time;
         task.lastThreatAt = Game.time;
@@ -1570,7 +1571,7 @@ export function processRemoteConfigLifecycle(
       }
 
       if (isDefenseMode(task.sourceRoom)) {
-        task.status = "suspended";
+        taskLifecycle.transition(task, "suspended");
         task.suspendReason = "source_room_defense_mode";
         task.suspendedAt = Game.time;
         task.lastThreatAt = Game.time;
@@ -1632,7 +1633,7 @@ export function processRemoteConfigLifecycle(
           continue;
         }
 
-        task.status = "active";
+        taskLifecycle.transition(task, "active");
         clearRemoteDefenseState(task);
         task.updatedAt = Game.time;
         removeRemoteDefenderConfig(task.sourceRoom, task.targetRoom);
@@ -1644,7 +1645,7 @@ export function processRemoteConfigLifecycle(
       if (visibleTarget) {
         const passiveThreat = getRemoteThreatReason(visibleTarget);
         if (passiveThreat !== null) {
-          task.status = "suspended";
+          taskLifecycle.transition(task, "suspended");
           task.suspendReason = passiveThreat;
           task.suspendedAt = Game.time;
           task.lastThreatAt = Game.time;
@@ -1666,7 +1667,7 @@ export function processRemoteConfigLifecycle(
         const defenseReason = getActiveDefenseReason(visibleTarget, task);
         if (defenseReason !== null) {
           if (task.defendingSince !== undefined && Game.time - task.defendingSince > 750) {
-            task.status = "suspended";
+            taskLifecycle.transition(task, "suspended");
             task.suspendReason = "defense_timeout";
             task.suspendedAt = Game.time;
             task.lastThreatAt = Game.time;
@@ -1711,7 +1712,7 @@ export function processRemoteConfigLifecycle(
           }
           const safeTicks = Game.time - task.lastDefenseSafeAt;
           if (safeTicks >= config.remoteSafeTicksToResume) {
-            task.status = "active";
+            taskLifecycle.transition(task, "active");
             delete task.defendingSince;
             delete task.lastDefenseThreatAt;
             delete task.defenseReason;
@@ -1753,7 +1754,7 @@ export function processRemoteConfigLifecycle(
     if (visibleTarget) {
       const threatReason = getRemoteThreatReason(visibleTarget);
       if (threatReason !== null) {
-        task.status = "suspended";
+        taskLifecycle.transition(task, "suspended");
         task.suspendReason = threatReason;
         task.suspendedAt = Game.time;
         task.lastThreatAt = Game.time;
@@ -1934,3 +1935,6 @@ export function runRemoteMining(): void {
     }
   }
 }
+
+const TASK_STATUSES = ["scouting","active","suspended","defending","abandoned"] as const;
+const taskLifecycle = createTaskLifecycle<RemoteMiningStatus, RemoteMiningTask>("remoteMining", { scouting: TASK_STATUSES, active: TASK_STATUSES, suspended: TASK_STATUSES, defending: TASK_STATUSES, abandoned: TASK_STATUSES }, task => task.targetRoom);
