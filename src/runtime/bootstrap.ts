@@ -1,14 +1,12 @@
+import { replaceSpawnQueue } from "@/runtime/spawnRequests";
 import { upsertConfig } from "@/runtime/creepApi";
 import { getLinkMinerBody } from "@/config/spawnProfiles";
 import { isColonizationBootstrapRoom } from "@/runtime/colonization";
-import {
-  applyRoomWorkforceConstructionTierEffect,
-  buildRoomWorkforceInventory,
-} from "@/runtime/roomWorkforce";
+import { applyRoomWorkforceConstructionTierEffect, buildRoomWorkforceInventory } from "@/runtime/roomWorkforce";
 import { isOwnedManagedRoom } from "@/runtime/roomTypes";
 import { isRescueRoom } from "@/runtime/rescue";
 import { getCreepConfigService, getTickContextService } from "@/runtime/runtimeServices";
-import type { TickContextService } from "@/runtime/tickContext";
+import { type TickContextService } from "@/runtime/tickContext";
 import { retireMismatchedMinersAfterHandoff } from "@/runtime/minerBodyPolicy";
 
 function hasLiveCreepForConfig(configName: string, tickContext: TickContextService): boolean {
@@ -30,7 +28,7 @@ function cleanupConfigsByPrefix(
       creepConfigs.remove(configName);
     } else if (orphanInvalidLiveConfig) {
       const config = creepConfigs.get(configName);
-      if (config) delete config.roomName;
+      if (config) getCreepConfigService().detachSpawn(configName);
     }
   }
 }
@@ -52,7 +50,7 @@ function cleanupWorkerConfigs(roomName: string, validConfigNames: Set<string>, t
     const config = creepConfigs.get(configName);
     if (hasLiveCreepForConfig(configName, tickContext)) {
       if (config) {
-        delete config.roomName;
+        getCreepConfigService().detachSpawn(configName);
       }
     } else {
       creepConfigs.remove(configName);
@@ -65,9 +63,9 @@ function cleanupWorkerConfigs(roomName: string, validConfigNames: Set<string>, t
       continue;
     }
 
-    spawn.memory.spawnList = queue.filter((configName) =>
+    replaceSpawnQueue(spawn, queue.filter((configName) =>
       !configName.startsWith(`${roomName}:worker:`) || validConfigNames.has(configName),
-    );
+    ));
   }
 }
 
@@ -100,13 +98,13 @@ function cleanupSourceRoleQueueEntries(
       continue;
     }
 
-    spawn.memory.spawnList = queue.filter((configName) => {
+    replaceSpawnQueue(spawn, queue.filter((configName) => {
       if (!isSourceRoleConfigName(roomName, configName)) {
         return true;
       }
 
       return validConfigNames.has(configName);
-    });
+    }));
   }
 }
 
@@ -116,7 +114,7 @@ function orphanDeprecatedSourceConfig(configName: string): void {
     return;
   }
 
-  delete config.roomName;
+  getCreepConfigService().detachSpawn(configName);
 }
 
 function retireDeprecatedSourceWorkers(activeConfigName: string, deprecatedConfigName: string, tickContext: TickContextService): void {

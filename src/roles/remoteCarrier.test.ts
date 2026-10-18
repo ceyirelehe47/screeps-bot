@@ -1,3 +1,4 @@
+import { getCreepConfigService } from "@/runtime/runtimeServices";
 import { remoteCarrierRole, isInvaderSalvageRoomClear, isInvaderSalvagePositionSafe } from "@/roles/remoteCarrier";
 import { clearMovementState, moveToTarget, moveToTargetRoom } from "@/roles/shared";
 import { clearRoleLifecycleCacheForTest, mountCreep } from "@/mount/mountCreep";
@@ -70,8 +71,6 @@ function createStore(resources: Partial<Record<ResourceConstant, number>>, capac
   } as unknown as StoreDefinition;
 }
 
-
-
 function createHomeRoom(name: string, storageX = 10, storageY = 20): Room {
   const room = {
     name,
@@ -133,8 +132,8 @@ describe("remoteCarrierRole", () => {
     const world = salvageFixture({ homeRoomName: "E1N57" });
     world.room.controller = { owner: { username: "TooAngel" } } as StructureController;
     world.resources.energy = 50;
-    const config = Object.values(Memory.data!.creepConfigs!)[0];
-    delete config.roomName;
+    const configName = Object.keys(Memory.data!.creepConfigs!)[0];
+    getCreepConfigService().detachSpawn(configName);
     expect(world.role.source(world.creep)).toBe(true);
     expect(world.role.target(world.creep)).toBe(false);
     expect(moveToTargetRoom).toHaveBeenCalledWith(world.creep, "E1N57", undefined, expect.any(Object));
@@ -341,7 +340,7 @@ describe("remoteCarrierRole", () => {
     Game.flags = { [flagName]: { name: flagName } as Flag };
     Memory.data!.flagHauling = { [flagName]: { flagName, sourceRoom: world.home.name, targetRoom: world.room.name,
       targetX: 44, targetY: 17, createdAt: Game.time, updatedAt: Game.time } };
-    delete Memory.data!.creepConfigs![configName].roomName;
+    getCreepConfigService().detachSpawn(configName);
     delete Game.rooms[world.room.name];
     Object.assign(world.creep, { room: world.home, pos: new RoomPosition(10, 10, world.home.name) });
     expect(world.role.source(world.creep)).toBe(false);
@@ -453,7 +452,6 @@ describe("remoteCarrierRole", () => {
     expect(delivered).toBe(false);
   });
 });
-
 
 it("路径 incomplete 不让新生搬运自杀，短 TTL 缓存过期后重新寻路", () => {
   const home = createHomeRoom("W1N1");

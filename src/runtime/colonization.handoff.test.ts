@@ -1,3 +1,4 @@
+import { requestSpawn } from "@/runtime/spawnRequests";
 jest.mock("@/modules/autoplanner", () => ({
   runPlannerForRoom: jest.fn(() => false),
   savePlannerForRoom: jest.fn(() => false),
@@ -69,7 +70,7 @@ function seedColony(extensionCount: number) {
       spawning: null,
       isActive: () => true,
       addTask: jest.fn((configName: string) => {
-        result.memory.spawnList.push(configName);
+        requestSpawn(result, configName);
       }),
     } as unknown as StructureSpawn;
     return result;

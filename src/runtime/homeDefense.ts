@@ -1,6 +1,7 @@
+import { replaceSpawnQueue } from "@/runtime/spawnRequests";
 import { forEachIsolatedRoom } from "@/runtime/runtimeIsolation";
 import { isConfigQueuedInSpawns, selectLeastLoadedSpawn } from "@/runtime/spawnHelpers";
-import { getCreepConfigService, getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
+import { getCreepConfigService, getTickContextService } from "@/runtime/runtimeServices";
 import { getSafeZone } from "@/runtime/safeZone";
 import { clearBoostLabTasks, syncBoostLabTask, buyBoostIfNeeded, shouldBoostDefender } from "@/runtime/boostControl";
 import { canTowersHandleHostiles } from "@/runtime/towerControl";
@@ -54,17 +55,17 @@ function calcDesiredDefenderCount(room: Room, hostiles: Creep[], frontCount: num
 }
 
 function ensureDefenders(room: Room, desiredCount: number): void {
-  const configStore = getMemoryService().getCreepConfigStore();
+  const configStore = getCreepConfigService().readStore();
   const spawns = getSpawnsForRoom(room.name);
   if (spawns.length === 0) return;
 
   for (let i = 0; i < desiredCount; i++) {
     const configName = getConfigName(room.name, i);
-    configStore[configName] = {
+    getCreepConfigService().set(configName, {
       role: "homeDefender",
       args: [room.name, String(i)],
       roomName: room.name,
-    };
+    });
 
     if (!isLiveOrSpawning(configName)) {
       const queued = isConfigQueuedInSpawns(spawns, configName);
@@ -86,7 +87,7 @@ function removeDefendersAbove(roomName: string, startIndex: number): void {
 
     for (const spawn of spawns) {
       if (spawn.memory.spawnList) {
-        spawn.memory.spawnList = spawn.memory.spawnList.filter((name) => name !== configName);
+        replaceSpawnQueue(spawn, spawn.memory.spawnList.filter((name) => name !== configName));
       }
     }
   }
@@ -101,7 +102,7 @@ function stopQueuedDefenderSpawning(roomName: string, desiredCount: number): voi
 
     for (const spawn of spawns) {
       if (spawn.memory.spawnList) {
-        spawn.memory.spawnList = spawn.memory.spawnList.filter((name) => name !== configName);
+        replaceSpawnQueue(spawn, spawn.memory.spawnList.filter((name) => name !== configName));
       }
     }
 

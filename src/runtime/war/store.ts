@@ -1,9 +1,8 @@
 import { queuedConfigNames, queuedSpawns, spawningForConfig } from "./spawnIndex";
-import { getSquadPolicy } from "./squadPolicy/index";
+import { getSquadPolicy, getHealerCount, getMeleeCount } from "./squadPolicy/index";
 import { getCreepConfigService, getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
-import type { CreepConfig } from "@/types/system";
+import { type CreepConfig } from "@/types/system";
 import { DEFAULT_PATROL_INTERVAL_TICKS, MIN_PATROL_INTERVAL_TICKS, WAR_CONTROLLER_ATTACK_CONFIG_SUFFIX } from "./constants";
-import { getHealerCount, getMeleeCount, isDuoTask } from "./squadPolicy/index";
 
 export type WarStatus = "queued" | "staging" | "clearing" | "downgrading" | "patrol_waiting" | "done" | "failed";
 
@@ -242,8 +241,8 @@ export function ensureWarStore(): Record<string, WarTask> {
   return data.war;
 }
 
-export function ensureConfigStore(): Record<string, CreepConfig> {
-  return getMemoryService().getCreepConfigStore();
+export function ensureConfigStore(): Readonly<Record<string, CreepConfig>> {
+  return getCreepConfigService().readStore();
 }
 
 export function getConfigName(task: WarTask, role: WarRole, index: number): string {

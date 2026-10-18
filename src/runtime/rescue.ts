@@ -95,7 +95,7 @@ function getTaskConfigNames(task: RescueTask): string[] {
 function isConfigSpawning(configName: string): boolean { const context = getTickContextService(); return context.getMyRooms().some(room => hasSpawningConfig(configName, context.getSpawnsByRoom(room.name))); }
 
 function upsertConfig(configName: string, config: import("@/types/system").CreepConfig): void {
-  ensureConfigStore()[configName] = config;
+  getCreepConfigService().set(configName, config);
 }
 
 function removeQueuedConfig(task: RescueTask, configName: string): void { removeQueuedSpawnConfig(getTickContextService().getSpawnsByRoom(task.sourceRoom), configName); }
@@ -130,7 +130,7 @@ function cleanupRescueConfigs(task: RescueTask): boolean {
 
     const config = store[configName];
     if (config?.roomName) {
-      delete config.roomName;
+      getCreepConfigService().detachSpawn(configName);
     }
 
     if (isConfigSpawning(configName)) {
@@ -145,7 +145,7 @@ function cleanupRescueConfigs(task: RescueTask): boolean {
     }
 
     if (store[configName]) {
-      delete store[configName];
+      getCreepConfigService().remove(configName);
     }
   }
 

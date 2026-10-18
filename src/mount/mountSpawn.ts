@@ -1,5 +1,6 @@
+import { readSpawnQueue, requestSpawn, consumeSpawnRequest, recordAcceptedSpawn, hasSpawnAcceptedIntent, rejectSpawnRequest } from "@/runtime/spawnRequests";
 import { isRoomInReserveMode } from "@/runtime/roomReserve";
-import { fixedBodyExceedsCapacity, isSpawnConfigEconomicallyBlocked } from "@/runtime/outboundMissionPolicy";
+import { fixedBodyExceedsCapacity, getSpawnAdmission } from "@/runtime/outboundMissionPolicy";
 import { readSpawnExitDirections } from "@/config/deployment";
 import { issueMove } from "@/movement/traffic";
 import { isSpawnActive } from "@/runtime/tickContext";
@@ -7,9 +8,8 @@ import { getHarvesterBody, spawnProfiles } from "@/config/spawnProfiles";
 import { recordFixedCpuAction } from "@/runtime/cpuPhaseProfiler";
 import { getCreepConfigService } from "@/runtime/runtimeServices";
 import { isRcl8MaintenanceUpgraderConfig } from "@/runtime/upgraderPolicy";
-import type { CreepConfig, RoleName } from "@/types/system";
-import { canSpawnDepositConfig } from "@/runtime/depositHarvest";
-import { registerWarSpawn } from "@/runtime/war/store";
+import { type CreepConfig, type RoleName } from "@/types/system";
+import { canExecuteSpawnRequest, notifySpawnRequestAccepted } from "@/runtime/spawnRequestOwners";
 
 let spawnNameGame: typeof Game | undefined;
 let spawnNameTick = -1;
@@ -35,17 +35,10 @@ function isTransientConfigName(configName: string): boolean {
   return configName.includes(":manual:") || configName.includes(":emergency:");
 }
 
-function ensureQueue(spawn: StructureSpawn): string[] {
-  if (!spawn.memory.spawnList) {
-    spawn.memory.spawnList = [];
-  }
-  return spawn.memory.spawnList;
-}
-
 function chooseBody(spawn: StructureSpawn, configName: string): BodyPartConstant[] {
   const config = getCreepConfigService().get(configName);
   if (config?.body && config.body.length > 0) {
-    return config.body;
+    return [...config.body];
   }
 
   if (!config) {
@@ -282,11 +275,7 @@ function hasWaitingRcl8MaintenanceOnAnotherSpawn(spawn: StructureSpawn): boolean
 
 export function mountSpawn(): void {
   StructureSpawn.prototype.addTask = function addTask(configName: string): number {
-    const queue = ensureQueue(this);
-    if (!queue.includes(configName)) {
-      queue.push(configName);
-    }
-    return queue.length;
+    return requestSpawn(this, configName);
   };
 
   StructureSpawn.prototype.mainSpawn = function mainSpawn(configName: string): boolean {
@@ -296,7 +285,7 @@ export function mountSpawn(): void {
       return true;
     }
 
-    if (config.role === "depositHarvester" && !canSpawnDepositConfig(configName, config)) return false;
+    if (hasSpawnAcceptedIntent(this.name) || !canExecuteSpawnRequest(configName, config)) return false;
 
     const body = chooseBody(this, configName);
     if (body.reduce((sum, part) => sum + BODYPART_COST[part], 0) > this.room.energyCapacityAvailable) {
@@ -322,7 +311,8 @@ export function mountSpawn(): void {
     const code = this.spawnCreep(body, name, options);
 
     if (code === OK) {
-      registerWarSpawn(configName, name);
+      recordAcceptedSpawn(this, configName, name);
+      notifySpawnRequestAccepted(configName, config, name);
       recordFixedCpuAction("spawnWork");
       if (isTransientConfigName(configName)) {
         creepConfigs.remove(configName);
@@ -359,18 +349,23 @@ export function mountSpawn(): void {
       return;
     }
 
-    const queue = ensureQueue(this);
-    while (queue.length) {
+    while (readSpawnQueue(this).length) {
+      const queue = readSpawnQueue(this);
       const config = getCreepConfigService().get(queue[0]);
-      if (config && !fixedBodyExceedsCapacity(config, this.room.energyCapacityAvailable) && !isSpawnConfigEconomicallyBlocked(queue[0], config)) break;
-      if (config && fixedBodyExceedsCapacity(config, this.room.energyCapacityAvailable)) {
+      const exceedsCapacity = !!config && fixedBodyExceedsCapacity(config, this.room.energyCapacityAvailable);
+      const admission = config && getSpawnAdmission(queue[0], config);
+      if (config && !exceedsCapacity && admission?.allowed) break;
+      if (config && exceedsCapacity) {
         this.memory._lastSpawnFail = { tick: Game.time, spawnName: this.name, configName: queue[0], role: config.role,
           code: ERR_NOT_ENOUGH_ENERGY, bodyCost: (config.body ?? []).reduce((sum, part) => sum + BODYPART_COST[part], 0),
           bodyParts: config.body?.length ?? 0, roomEnergyAvailable: this.room.energyAvailable,
           roomEnergyCapacityAvailable: this.room.energyCapacityAvailable };
       }
-      queue.shift();
+      const reason = !config ? "missing_config" : exceedsCapacity ? "body_capacity" :
+        admission?.allowed === false ? admission.reason : "missing_config";
+      rejectSpawnRequest(this, queue[0], reason);
     }
+    const queue = readSpawnQueue(this);
     if (queue.length === 0) {
       return;
     }
@@ -389,7 +384,7 @@ export function mountSpawn(): void {
     }
     const success = this.mainSpawn(currentTask);
     if (success) {
-      queue.shift();
+      consumeSpawnRequest(this, currentTask);
     }
   };
 }

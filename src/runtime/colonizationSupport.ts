@@ -1,9 +1,11 @@
+import { replaceSpawnQueue } from "@/runtime/spawnRequests";
+import { getCreepConfigService, getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
 import { countBoostableParts } from "@/runtime/boostParts";
 import { canStartOutboundMission } from "@/runtime/outboundMissionPolicy";
-import { getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
+
 import { prepareBoosts, releaseBoostLabs } from "@/runtime/powerBankBoost";
-import { isDefenseMode } from "@/runtime/defenseMode";
-import type { CreepConfig } from "@/types/system";
+
+import { type CreepConfig } from "@/types/system";
 import { COLONIZATION_UPGRADER_BODY } from "@/config/colonizationSupport";
 import { releaseWorkerTask } from "@/runtime/workerTaskPool";
 import { releasePickupReservation } from "@/runtime/energyPickupReservation";
@@ -53,15 +55,15 @@ export function colonizationTransitKey(sourceRoom: string, targetRoom: string): 
 function stopConfig(configName: string, sourceRoom: string, boostOwner?: string): void {
   const service = getTickContextService();
   for (const spawn of service.getSpawnsByRoom(sourceRoom)) {
-    if (spawn.memory.spawnList?.includes(configName)) spawn.memory.spawnList = spawn.memory.spawnList.filter(name => name !== configName);
+    if (spawn.memory.spawnList?.includes(configName)) replaceSpawnQueue(spawn, spawn.memory.spawnList.filter(name => name !== configName));
   }
-  const configs = getMemoryService().getCreepConfigStore();
-  if (configs[configName]) delete configs[configName].roomName;
+  const configs = getCreepConfigService().readStore();
+  if (configs[configName]) getCreepConfigService().detachSpawn(configName);
   if (boostOwner) releaseBoostLabs(boostOwner, sourceRoom);
   const spawning = service.getSpawnsByRoom(sourceRoom).some(spawn => spawn.spawning &&
     Memory.creeps?.[spawn.spawning.name]?.configName === configName);
   // 同tick交接会改写configName，旧索引不能证明新退役配置已无活体。
-  if (!spawning && !getTickContextService().getAllCreeps().some(creep => creep.memory.configName === configName)) delete configs[configName];
+  if (!spawning && !getTickContextService().getAllCreeps().some(creep => creep.memory.configName === configName)) getCreepConfigService().remove(configName);
 }
 
 /** 只对实际就位、采力足够且不临近死亡的接班矿工计时。 */
@@ -79,10 +81,10 @@ function readySourceMiner(creep: Creep, source: Source): boolean {
 
 function retireSupportMiner(creep: Creep, configName: string, targetRoom: string): void {
   if (creep.memory._colonizationRetiring) return;
-  const configs = getMemoryService().getCreepConfigStore();
+  const configs = getCreepConfigService().readStore();
   const config = configs[configName];
   const retiringName = `${configName}:retiring:${creep.name}`;
-  configs[retiringName] = { role: "colonizerHarvester", args: [...(config?.args ?? creep.memory.roleArgs ?? [])] };
+  getCreepConfigService().set(retiringName, { role: "colonizerHarvester", args: [...(config?.args ?? creep.memory.roleArgs ?? [])] });
   creep.memory.configName = retiringName;
   creep.memory._colonizationRetiring = targetRoom;
 }
@@ -91,7 +93,7 @@ function retireSupportMiner(creep: Creep, configName: string, targetRoom: string
 export function runColonizationSupport(): void {
   const memory = getMemoryService();
   const policies = Memory.cfg?.colonizationSupport;
-  const existing = Memory.data?.creepConfigs ?? {};
+  const existing = getCreepConfigService().readStore();
   // 增援矿工与仍然有效的支援策略同寿，不依赖已结束的殖民旗任务。
   for (const name of Object.keys(existing)) {
     const [home, kind, target, role] = name.split(":");
@@ -102,7 +104,7 @@ export function runColonizationSupport(): void {
         !Game.rooms[home]?.controller?.my) stopConfig(name, home);
   }
   if (!policies) return;
-  const configs = memory.getCreepConfigStore();
+  const configs = getCreepConfigService().readStore();
   const states = memory.ensureRuntime().colonizationSupport ??= {};
   const service = getTickContextService();
   for (const [targetRoom, raw] of Object.entries(policies)) {
@@ -114,8 +116,8 @@ export function runColonizationSupport(): void {
     const boostOwner = `colonizationSupport:${sourceRoom}:${targetRoom}`;
     // 旧身体无法原地替换：独立保留现役配置，不补员，空出常规名孵化新身体。
     for (const name of Object.keys(configs).filter(name => name.startsWith(retiringPrefix))) {
-      delete configs[name].roomName;
-      if (service.getCreepsByConfigName(name).length === 0) delete configs[name];
+      getCreepConfigService().detachSpawn(name);
+      if (service.getCreepsByConfigName(name).length === 0) getCreepConfigService().remove(name);
     }
     const previousState = states[targetRoom];
     const savedRoute = previousState?.sourceRoom === sourceRoom && previousState.runId === runId ? previousState.routeRooms : undefined;
@@ -126,8 +128,7 @@ export function runColonizationSupport(): void {
     // 原位转换现役与过渡支援，释放 worker 租约，不重新孵化或重做已经完成的增强。
     for (const name of liveConfigNames) {
       if (configs[name] && (configs[name].role !== "colonizerUpgrader" || configs[name].args.join("\0") !== args.join("\0"))) {
-        configs[name].role = "colonizerUpgrader";
-        configs[name].args = [...args];
+        getCreepConfigService().patch(name, { role: "colonizerUpgrader", args: [...args] });
       }
       for (const creep of service.getCreepsByConfigName(name)) {
         if (creep.memory.role === "colonizerUpgrader" && creep.memory.roleArgs?.join("\0") === args.join("\0")) continue;
@@ -157,7 +158,7 @@ export function runColonizationSupport(): void {
         if (temporaryPause) {
           // 出生策略阻止补员；保留现役身份，避免远端矿工被误当作退役召回。
           for (const spawn of service.getSpawnsByRoom(sourceRoom)) {
-            if (spawn.memory.spawnList) spawn.memory.spawnList = spawn.memory.spawnList.filter(entry => entry !== name);
+            if (spawn.memory.spawnList) replaceSpawnQueue(spawn, spawn.memory.spawnList.filter(entry => entry !== name));
           }
         } else stopConfig(name, sourceRoom);
       }
@@ -198,14 +199,14 @@ export function runColonizationSupport(): void {
         }
       }
       // 本地可生产5WORK后停止外部补员；已有矿工等本地实际就位后回收。
-      configs[miningName] = {
+      getCreepConfigService().set(miningName, {
         role: "colonizerHarvester", roomName: otherMiners.length === 0 && (!localCanSpawnFiveWork || supportMiners.length > 0) ? sourceRoom : undefined,
         args: [targetRoom, source.id, route.join("|")],
         ...(localCanSpawnFiveWork ? { spawnOnce: { queuedAt: configs[miningName]?.spawnOnce?.queuedAt ?? Game.time } } : {}),
-      };
+      });
       if (localCanSpawnFiveWork) {
         for (const spawn of service.getSpawnsByRoom(sourceRoom)) {
-          if (spawn.memory.spawnList?.includes(miningName)) spawn.memory.spawnList = spawn.memory.spawnList.filter(name => name !== miningName);
+          if (spawn.memory.spawnList?.includes(miningName)) replaceSpawnQueue(spawn, spawn.memory.spawnList.filter(name => name !== miningName));
         }
       }
     }
@@ -215,12 +216,12 @@ export function runColonizationSupport(): void {
     const current = configs[configName];
     if (current?.role !== "colonizerUpgrader" || current.roomName !== sourceRoom ||
         current.args.join("\0") !== args.join("\0") || current.body?.join("|") !== COLONIZATION_SUPPORT_BODY.join("|")) {
-      configs[configName] = { role: "colonizerUpgrader", roomName: sourceRoom, args, body: [...COLONIZATION_SUPPORT_BODY] } as CreepConfig;
+      getCreepConfigService().set(configName, { role: "colonizerUpgrader", roomName: sourceRoom, args, body: [...COLONIZATION_SUPPORT_BODY] } as CreepConfig);
     }
     for (const creep of service.getCreepsByConfigName(configName)) {
       if (creep.spawning || creep.body.map(part => part.type).join("|") === COLONIZATION_SUPPORT_BODY.join("|")) continue;
       const retiringName = `${retiringPrefix}${creep.name}`;
-      configs[retiringName] = { role: "colonizerUpgrader", args: [...args], body: creep.body.map(part => part.type) } as CreepConfig;
+      getCreepConfigService().set(retiringName, { role: "colonizerUpgrader", args: [...args], body: creep.body.map(part => part.type) } as CreepConfig);
       creep.memory.configName = retiringName;
     }
     const helpersAtSource = service.getCreepsByRoom(sourceRoom).filter(creep =>

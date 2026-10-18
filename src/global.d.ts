@@ -764,7 +764,8 @@ declare global {
   }
 
   interface SpawnMemory {
-    spawnList?: string[];
+    spawnList?: readonly string[];
+    _lastSpawnReject?: { tick: number; configName: string; reason: "missing_config" | "body_capacity" | "defense" | "reserve" };
     _lastSpawnFail?: {
       tick: number;
       spawnName: string;

@@ -1,8 +1,8 @@
-import { ensureConfigStore } from "@/runtime/spawnHelpers";
+import { replaceSpawnQueue } from "@/runtime/spawnRequests";
+import { getCreepConfigService, getTickContextService } from "@/runtime/runtimeServices";
+
 import { isSpawnActive } from "@/runtime/tickContext";
 import { buildStandardCarrierBody } from "@/runtime/carrierBodyPolicy";
-import { getTickContextService } from "@/runtime/runtimeServices";
-
 
 export interface SpawnMaxCarrierResult {
   ok: true;
@@ -42,7 +42,7 @@ function resolveSpawnByRoom(roomName: string): StructureSpawn | null {
 
 function enqueueAtFront(spawn: StructureSpawn, configName: string): void {
   const queue = spawn.memory.spawnList || [];
-  spawn.memory.spawnList = [configName, ...queue.filter((name) => name !== configName)];
+  replaceSpawnQueue(spawn, [configName, ...queue.filter((name) => name !== configName)]);
 }
 
 export function spawnMaxCarrier(roomName: string): SpawnMaxCarrierResult | string {
@@ -60,12 +60,12 @@ export function spawnMaxCarrier(roomName: string): SpawnMaxCarrierResult | strin
   const pairCount = body.length / 2;
   const configName = `${roomName}:manual:maxcarrier:${Game.time}`;
 
-  ensureConfigStore()[configName] = {
+  getCreepConfigService().set(configName, {
     role: "carrier",
     args: [],
     roomName,
     body,
-  };
+  });
 
   enqueueAtFront(spawn, configName);
 

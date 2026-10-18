@@ -1,3 +1,4 @@
+import { replaceSpawnQueue } from "@/runtime/spawnRequests";
 import { getCreepConfigService, getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
 import { isOwnedManagedRoom } from "@/runtime/roomTypes";
 import { isDefenseMode } from "@/runtime/defenseMode";
@@ -547,7 +548,7 @@ function removeScoutConfig(sourceRoom: string, targetRoom: string): void {
   if (liveCreeps.length > 0) {
     const config = creepConfigs.get(configName);
     if (config) {
-      delete config.roomName;
+      getCreepConfigService().detachSpawn(configName);
     }
   } else {
     creepConfigs.remove(configName);
@@ -567,7 +568,7 @@ function removeScoutFromSpawnQueues(sourceRoom: string, targetRoom: string): voi
     if (!queue || queue.length === 0) {
       continue;
     }
-    spawn.memory.spawnList = queue.filter(name => name !== configName);
+    replaceSpawnQueue(spawn, queue.filter(name => name !== configName));
   }
 }
 
@@ -1091,7 +1092,7 @@ function removeRemoteConfig(configName: string): void {
   if (liveCreeps.length > 0) {
     const config = creepConfigs.get(configName);
     if (config) {
-      delete config.roomName;
+      getCreepConfigService().detachSpawn(configName);
     }
   } else {
     creepConfigs.remove(configName);
@@ -1107,7 +1108,7 @@ function removeReserverConfig(sourceRoom: string, targetRoom: string): void {
     if (!queue || queue.length === 0) continue;
     const idx = queue.indexOf(configName);
     if (idx >= 0) {
-      queue.splice(idx, 1);
+      replaceSpawnQueue(spawn, queue.filter((_, index) => index !== idx));
     }
   }
 }
@@ -1120,9 +1121,9 @@ function removeRemotePrefixFromSpawnQueues(
   for (const spawn of tickContext.getSpawnsByRoom(sourceRoom)) {
     const queue = spawn.memory.spawnList;
     if (!queue || queue.length === 0) continue;
-    spawn.memory.spawnList = queue.filter(
+    replaceSpawnQueue(spawn, queue.filter(
       name => !isRemoteManagedConfig(name, sourceRoom, targetRoom),
-    );
+    ));
   }
 }
 
@@ -1167,9 +1168,9 @@ function removeAllRemotePrefixFromSpawnQueues(
   for (const spawn of tickContext.getSpawnsByRoom(sourceRoom)) {
     const queue = spawn.memory.spawnList;
     if (!queue || queue.length === 0) continue;
-    spawn.memory.spawnList = queue.filter(
+    replaceSpawnQueue(spawn, queue.filter(
       name => !isRemoteAllManagedConfig(name, sourceRoom, targetRoom),
-    );
+    ));
   }
 }
 
@@ -1208,7 +1209,7 @@ function reconcileStaleCarrierConfigs(task: RemoteMiningTask): void {
       if (!queue || queue.length === 0) continue;
       const idx = queue.indexOf(configName);
       if (idx >= 0) {
-        queue.splice(idx, 1);
+        replaceSpawnQueue(spawn, queue.filter((_, index) => index !== idx));
       }
     }
 
@@ -1217,7 +1218,7 @@ function reconcileStaleCarrierConfigs(task: RemoteMiningTask): void {
     if (liveCreeps.length > 0) {
       const config = creepConfigs.get(configName);
       if (config) {
-        delete config.roomName;
+        getCreepConfigService().detachSpawn(configName);
       }
     } else {
       creepConfigs.remove(configName);
@@ -1356,7 +1357,7 @@ function removeRemoteWorkerConfig(sourceRoom: string, targetRoom: string): void 
     if (!queue || queue.length === 0) continue;
     const idx = queue.indexOf(configName);
     if (idx >= 0) {
-      queue.splice(idx, 1);
+      replaceSpawnQueue(spawn, queue.filter((_, index) => index !== idx));
     }
   }
 }
@@ -1379,7 +1380,7 @@ function removeRemoteDefenderConfig(sourceRoom: string, targetRoom: string): voi
   for (const spawn of tickContext.getSpawnsByRoom(sourceRoom)) {
     const queue = spawn.memory.spawnList;
     if (!queue || queue.length === 0) continue;
-    spawn.memory.spawnList = queue.filter(name => name !== configName);
+    replaceSpawnQueue(spawn, queue.filter(name => name !== configName));
   }
 }
 

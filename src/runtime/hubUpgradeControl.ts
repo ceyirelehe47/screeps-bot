@@ -1,13 +1,11 @@
-import { getTickContextService } from "@/runtime/runtimeServices";
+import { replaceSpawnQueue } from "@/runtime/spawnRequests";
+import { getCreepConfigService, getTickContextService, getMemoryService } from "@/runtime/runtimeServices";
+
 import { HUB_UPGRADER_BODY } from "@/config/spawnProfiles";
 import { releaseBoostLabs } from "@/runtime/powerBankBoost";
-import { getMemoryService } from "@/runtime/runtimeServices";
-import {
-  RCL8_UPGRADER_MAINTENANCE_BODY,
-  isDedicatedUpgraderControllerRunnable,
-  shouldMaintainDedicatedUpgrader,
-} from "@/runtime/upgraderPolicy";
-import type { CreepConfig } from "@/types/system";
+
+import { RCL8_UPGRADER_MAINTENANCE_BODY, isDedicatedUpgraderControllerRunnable, shouldMaintainDedicatedUpgrader } from "@/runtime/upgraderPolicy";
+import { type CreepConfig } from "@/types/system";
 
 export { HUB_UPGRADER_BODY };
 
@@ -50,18 +48,18 @@ function getConfigRoomName(config: CreepConfig): string | undefined {
 }
 
 function getManagedConfigEntries(): Array<[string, CreepConfig]> {
-  return Object.entries(getMemoryService().getCreepConfigStore())
+  return Object.entries(getCreepConfigService().readStore())
     .filter(([configName, config]) => isManagedUpgraderConfig(configName, config));
 }
 
 function cleanupSpawnedAndQueuedUpgraders(keptConfigNames: ReadonlySet<string>): void {
-  const configs = getMemoryService().getCreepConfigStore();
+  const configs = getCreepConfigService().readStore();
   for (const spawn of Object.values(Game.spawns)) {
     const queue = spawn.memory.spawnList;
     if (queue?.length) {
-      spawn.memory.spawnList = queue.filter((configName) =>
+      replaceSpawnQueue(spawn, queue.filter((configName) =>
         !isManagedUpgraderConfig(configName, configs[configName]) || keptConfigNames.has(configName)
-      );
+      ));
     }
 
     if (!spawn.spawning) continue;
@@ -102,7 +100,7 @@ function cleanupManagedUpgraders(
   keptConfigNames: ReadonlySet<string>,
   retiringRcl8MaintenanceConfigNames: ReadonlySet<string>,
 ): void {
-  const configs = getMemoryService().getCreepConfigStore();
+  const configs = getCreepConfigService().readStore();
   const entries = getManagedConfigEntries().filter(([configName]) => !keptConfigNames.has(configName));
   const roomNames = new Set(
     entries
@@ -136,7 +134,7 @@ function cleanupManagedUpgraders(
     }
   }
   for (const [configName] of entries) {
-    delete configs[configName];
+    getCreepConfigService().remove(configName);
   }
   for (const roomName of roomNames) {
     releaseBoostLabs(getBoostTaskId(roomName), roomName);
@@ -155,7 +153,7 @@ function isEligibleUpgraderRoom(roomName: string): boolean {
 
 function ensureEligibleRoomUpgraderTasks(): string[] {
   const tasks = getManualUpgraderStore();
-  const configs = getMemoryService().getCreepConfigStore();
+  const configs = getCreepConfigService().readStore();
   const eligibleRoomNames: string[] = [];
 
   for (const room of Object.values(Game.rooms)) {
@@ -242,7 +240,7 @@ export function getUpgraderStatus(roomName?: string): ManualUpgraderResult[] | M
   const roomNames = roomName ? [roomName] : Object.keys(tasks);
   const statuses = roomNames.map((name): ManualUpgraderResult => {
     const configName = getConfigName(name);
-    const config = getMemoryService().getCreepConfigStore()[configName];
+    const config = getCreepConfigService().readStore()[configName];
     return {
       ok: true,
       roomName: name,
@@ -266,7 +264,7 @@ export function runHubUpgradeControl(): void {
   const keptConfigNames = new Set(activeRoomNames.map((roomName) => getConfigName(roomName)));
   cleanupManagedUpgraders(keptConfigNames, retiringRcl8MaintenanceConfigNames);
 
-  const configs = getMemoryService().getCreepConfigStore();
+  const configs = getCreepConfigService().readStore();
   for (const roomName of activeRoomNames) {
     const configName = getConfigName(roomName);
     const boostTaskId = getBoostTaskId(roomName);
@@ -274,7 +272,7 @@ export function runHubUpgradeControl(): void {
     const previous = configs[configName];
     if (previous?.role !== "upgrader" || previous.roomName !== roomName || previous.args.join("|") !== roomName ||
         previous.body?.join("|") !== RCL8_UPGRADER_MAINTENANCE_BODY.join("|")) {
-      configs[configName] = { role: "upgrader", args: [roomName], roomName, body: [...RCL8_UPGRADER_MAINTENANCE_BODY] };
+      getCreepConfigService().set(configName, { role: "upgrader", args: [roomName], roomName, body: [...RCL8_UPGRADER_MAINTENANCE_BODY] });
     }
     if (Memory.runtime?.powerBankBoost?.[boostTaskId]) releaseBoostLabs(boostTaskId, roomName);
     if (Memory.runtime?.powerBankBoost?.[`hubUpgrade:${roomName}`]) releaseBoostLabs(`hubUpgrade:${roomName}`, roomName);

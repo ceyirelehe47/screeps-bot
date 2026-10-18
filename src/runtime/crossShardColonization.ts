@@ -1,10 +1,10 @@
+import { getCreepConfigService, getTickContextService, getMemoryService } from "@/runtime/runtimeServices";
 import { hasTaskActors } from "@/runtime/taskActors";
-import { getTickContextService } from "@/runtime/runtimeServices";
+
 import { getGlobalOwnedRoomCount } from "@/runtime/globalRoomCount";
 import { enqueueConfig, ensureConfigStore, getBodyCost, isConfigSpawning as hasSpawningConfig, removeQueuedSpawnConfig, selectLeastLoadedSpawn } from "@/runtime/spawnHelpers";
 import { spawnProfiles } from "@/config/spawnProfiles";
 import { encodeCrossShardTravelerName } from "@/runtime/crossShardNaming";
-import { getMemoryService } from "@/runtime/runtimeServices";
 
 import { isDefenseMode } from "@/runtime/defenseMode";
 
@@ -230,7 +230,7 @@ function removeConfigWhenIdle(configName: string): void {
 
   const store = ensureConfigStore();
   if (store[configName]) {
-    delete store[configName];
+    getCreepConfigService().remove(configName);
   }
 }
 
@@ -314,7 +314,7 @@ function cleanupTaskConfigs(task: CrossShardColonizationTask): void {
 
     const config = configStore[configName];
     if (config?.roomName) {
-      delete config.roomName;
+      getCreepConfigService().detachSpawn(configName);
     }
 
     removeConfigWhenIdle(configName);
@@ -388,13 +388,13 @@ function ensureClaimer(task: CrossShardColonizationTask): void {
   }
 
   const configStore = ensureConfigStore();
-  configStore[configName] = {
+  getCreepConfigService().set(configName, {
     role: "crossShardClaimer",
     args: [task.targetShard, task.targetRoom, task.portalRoom, task.destinationRoom || ""],
     roomName: task.sourceRoom,
     body: CLAIMER_BODY,
     name: task.claimerName,
-  };
+  });
 
   const spawns = getSpawnsForRoom(task.sourceRoom);
   if (spawns.length === 0) {
@@ -424,7 +424,7 @@ function ensureClaimer(task: CrossShardColonizationTask): void {
     task.status = "in_transit";
     task.reason = `claimer launched at ${task.launchedAt}, waiting remote claim`;
     if (configStore[configName]?.roomName) {
-      delete configStore[configName].roomName;
+      getCreepConfigService().detachSpawn(configName);
     }
     removeQueuedConfig(task, configName);
     removeConfigWhenIdle(configName);
@@ -481,12 +481,12 @@ function ensureBootstrapSquad(task: CrossShardColonizationTask): void {
   for (let i = 0; i < BOOTSTRAP_HARVESTER_COUNT; i++) {
     const configName = getTaskConfigName(task, "harvester", i);
     bootstrapConfigNames.push(configName);
-    configStore[configName] = {
+    getCreepConfigService().set(configName, {
       role: "crossShardColonizerHarvester",
       args: [task.targetShard, task.targetRoom, task.portalRoom, task.destinationRoom || ""],
       body: spawnProfiles.crossShardColonizerHarvester(referenceSpawn.room),
       name: generateTravelerName("harvester", task, i),
-    };
+    });
     const targetSpawn = selectLeastLoadedSpawn(spawns);
     if (targetSpawn) enqueueConfig(targetSpawn, configName, false);
   }
@@ -494,12 +494,12 @@ function ensureBootstrapSquad(task: CrossShardColonizationTask): void {
   for (let i = 0; i < BOOTSTRAP_WORKER_COUNT; i++) {
     const configName = getTaskConfigName(task, "worker", i);
     bootstrapConfigNames.push(configName);
-    configStore[configName] = {
+    getCreepConfigService().set(configName, {
       role: "crossShardColonizerWorker",
       args: [task.targetShard, task.targetRoom, task.portalRoom, task.destinationRoom || ""],
       body: spawnProfiles.crossShardColonizerWorker(referenceSpawn.room),
       name: generateTravelerName("worker", task, i),
-    };
+    });
     const targetSpawn = selectLeastLoadedSpawn(spawns);
     if (targetSpawn) enqueueConfig(targetSpawn, configName, false);
   }

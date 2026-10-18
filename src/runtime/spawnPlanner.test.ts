@@ -1,3 +1,6 @@
+import { readSpawnQueue, consumeSpawnRequest } from "@/runtime/spawnRequests";
+import { registerSpawnRequestOwners } from "@/runtime/registerSpawnRequestOwners";
+registerSpawnRequestOwners();
 import { registerOutboundMissionOwners } from "@/runtime/registerOutboundMissionOwners";
 registerOutboundMissionOwners();
 jest.mock("@/runtime/defenseMode", () => ({
@@ -7,7 +10,6 @@ jest.mock("@/runtime/defenseMode", () => ({
 jest.mock("@/runtime/safeZone", () => ({
   getSafeZone: jest.fn(() => new Set()),
 }));
-
 
 import { scheduleSpawnTasks } from "@/runtime/spawnPlanner";
 import { isDefenseMode } from "@/runtime/defenseMode";
@@ -162,7 +164,8 @@ describe("采矿持续补员回归", () => {
   it("紧急矿工寿命结束后重新恢复收入", () => {
     const { room, spawn } = stalledRoom(213);
     scheduleSpawnTasks();
-    const first = spawn.memory.spawnList!.shift()!;
+    const first = readSpawnQueue(spawn)[0];
+    consumeSpawnRequest(spawn, first);
     delete Memory.data!.creepConfigs![first];
     Game.creeps.recovery = { name: "recovery", room, memory: { role: "harvester", configName: first }, ticksToLive: 1000 } as Creep;
     Game.time += 1; resetRuntimeServices(); scheduleSpawnTasks();
@@ -621,7 +624,6 @@ describe("spawnPlanner powerbank combat guard edge cases 重合同", () => {
     scenarioDefense();
   });
 });
-
 
 it("RESERVE 下调度已投入战争搭档，不启动同源新战争", () => {
   resetScenarioWorld();

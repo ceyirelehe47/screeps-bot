@@ -1,7 +1,8 @@
+import { replaceSpawnQueue } from "@/runtime/spawnRequests";
 import { cleanupPowerBankRoomIntel } from "@/runtime/powerBankIntelCleanup";
 import { pruneDeadCreepMovementState } from "@/movement/creepState";
 import { pruneDeadCreepAssignmentState } from "@/runtime/creepAssignmentState";
-import { getCreepConfigService, getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
+import { getCreepConfigService, getTickContextService } from "@/runtime/runtimeServices";
 import { getOwnedRoomWorkforceConfigIdentity } from "@/runtime/roomWorkforceIdentity";
 import { isOwnedManagedRoom } from "@/runtime/roomTypes";
 import { cleanupCarrierTaskBoard } from "@/runtime/carrierTaskBoard";
@@ -118,7 +119,7 @@ function cleanupSpawnQueueMemory(): number {
 
       const validQueue = queue.filter((configName) => !!creepConfigs.get(configName));
       if (validQueue.length !== queue.length) {
-        spawn.memory.spawnList = validQueue;
+        replaceSpawnQueue(spawn, validQueue);
         trimmed += queue.length - validQueue.length;
       }
     }
@@ -128,11 +129,11 @@ function cleanupSpawnQueueMemory(): number {
 }
 
 function cleanupUnknownRoleConfigMemory(): number {
-  const configStore = getMemoryService().getCreepConfigStore();
+  const configStore = getCreepConfigService().readStore();
   let removed = 0;
   for (const [configName, config] of Object.entries(configStore)) {
     if (!isRoleName(config.role)) {
-      delete configStore[configName];
+      getCreepConfigService().remove(configName);
       removed += 1;
     }
   }
@@ -141,7 +142,7 @@ function cleanupUnknownRoleConfigMemory(): number {
 }
 
 function cleanupManagedCreepConfigs(referencedConfigNames: ReadonlySet<string>): number {
-  const configStore = getMemoryService().getCreepConfigStore();
+  const configStore = getCreepConfigService().readStore();
   const managedRoomNames = new Set(
     getTickContextService()
       .getMyRooms()
@@ -170,15 +171,15 @@ function cleanupManagedCreepConfigs(referencedConfigNames: ReadonlySet<string>):
       continue;
     }
 
-    spawn.memory.spawnList = queue.filter((configName) => !retiringConfigNames.has(configName));
+    replaceSpawnQueue(spawn, queue.filter((configName) => !retiringConfigNames.has(configName)));
   }
 
   let removed = 0;
   for (const [configName, config] of retirements) {
     if (referencedConfigNames.has(configName)) {
-      delete config.roomName;
+      getCreepConfigService().detachSpawn(configName);
     } else {
-      delete configStore[configName];
+      getCreepConfigService().remove(configName);
       removed += 1;
     }
   }
@@ -330,7 +331,7 @@ function cleanupPowerBankBoostMemory(): number {
     if (task.primaryBoostOwnerId) activeTaskIds.add(task.primaryBoostOwnerId);
     if (task.reinforcement?.boostOwnerId) activeTaskIds.add(task.reinforcement.boostOwnerId);
   }
-  for (const config of Object.values(Memory.data?.creepConfigs || {})) {
+  for (const config of getCreepConfigService().getReadIndex().entries.map(([, config]) => config)) {
     for (const arg of config.args || []) {
       if (typeof arg === "string") activeTaskIds.add(arg);
     }

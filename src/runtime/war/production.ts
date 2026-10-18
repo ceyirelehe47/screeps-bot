@@ -1,3 +1,5 @@
+import { replaceSpawnQueue } from "@/runtime/spawnRequests";
+import { getCreepConfigService, getTickContextService } from "@/runtime/runtimeServices";
 import { retireCreep, retireCreepMemory } from "@/runtime/retirement";
 import { canContinueWarMission } from "./outbound";
 import { countBoostableParts } from "@/runtime/boostParts";
@@ -5,23 +7,18 @@ import { selectLeastLoadedSpawn } from "@/runtime/spawnHelpers";
 export { getSpawnQueueLoad, selectLeastLoadedSpawn } from "@/runtime/spawnHelpers";
 import { canStartOutboundMission, isSpawnConfigEconomicallyBlocked } from "@/runtime/outboundMissionPolicy";
 import { cancelSpawning, invalidateWarSpawnQueues, queuedSpawns, spawningForConfig } from "./spawnIndex";
-import { getSquadPolicy } from "./squadPolicy/index";
-import { getTickContextService } from "@/runtime/runtimeServices";
+import { getSquadPolicy, getHealerCount, getMeleeCount, getRoleArgs, getRoleBody } from "./squadPolicy/index";
+
 import { prepareBoosts, releaseBoostLabs } from "@/runtime/powerBankBoost";
 import { clearMovementState } from "@/roles/shared";
-import type { CreepConfig } from "@/types/system";
+import { type CreepConfig } from "@/types/system";
 import { CONTROLLER_ATTACKER_QUEUE_INTERVAL, T3_ATTACKER_BOOSTS, T3_DUO_BOOST_AMOUNTS, T3_HEALER_BOOSTS } from "./constants";
-import type { WarGenerationState, WarRole, WarStatus, WarTask, WarTaskAssetReleaseOptions, WarTaskAssetReleaseResult } from "./store";
-import { ensureConfigStore, getConfigName, getControllerAttackConfigName, getGenerationBoostTaskId, getGenerationConfigName, getLegacyWarBoostTaskId, getLiveCreepsByConfig, getTaskConfigNames, isPatrolTask, sameArray } from "./store";
-import { getHealerCount, getMeleeCount, getRoleArgs, getRoleBody } from "./squadPolicy/index";
+import { type WarGenerationState, type WarRole, type WarStatus, type WarTask, type WarTaskAssetReleaseOptions, type WarTaskAssetReleaseResult, ensureConfigStore, getConfigName, getControllerAttackConfigName, getGenerationBoostTaskId, getGenerationConfigName, getLegacyWarBoostTaskId, getLiveCreepsByConfig, getTaskConfigNames, isPatrolTask, sameArray } from "./store";
+
 import { onWarEntry, setTaskStatus } from "./fsm";
 
-export function upsertWarConfig(store: Record<string, CreepConfig>, name: string, next: CreepConfig): void {
-  const old = store[name];
-  if (old && old.role === next.role && old.roomName === next.roomName && sameArray(old.args, next.args)
-    && (old.body === next.body || sameArray(old.body, next.body ?? []))
-    && (old.spawnOnce === next.spawnOnce || JSON.stringify(old.spawnOnce) === JSON.stringify(next.spawnOnce))) return;
-  store[name] = next;
+export function upsertWarConfig(name: string, next: CreepConfig): void {
+  getCreepConfigService().set(name, next);
 }
 
 export function getSpawnsForRoom(roomName: string): StructureSpawn[] {
@@ -72,7 +69,7 @@ export function synchronizeGenerationRoleArgs(task: WarTask, resetTargets: boole
       : generation.configNames.meleeAttacker;
     const args = getRoleArgs(task, role, encodedRoute, generation.boostTaskId, partnerConfigName);
     if (store[configName]) {
-      if (!sameArray(store[configName].args, args)) store[configName].args = args;
+      if (!sameArray(store[configName].args, args)) getCreepConfigService().patch(configName, { args });
     }
     for (const creep of getLiveCreepsByConfig(configName)) {
       if (creep.memory.roleArgs?.[1] !== undefined && creep.memory.roleArgs[1] !== encodedRoute) clearMovementState(creep);
@@ -103,9 +100,9 @@ export function enqueueConfig(spawn: StructureSpawn, configName: string, toFront
   const queue = spawn.memory.spawnList || [];
   if (toFront) {
     const next = [configName, ...queue.filter((name) => name !== configName)];
-    if (!sameArray(queue, next)) { spawn.memory.spawnList = next; invalidateWarSpawnQueues(); }
+    if (!sameArray(queue, next)) { replaceSpawnQueue(spawn, next); invalidateWarSpawnQueues(); }
     if (config?.spawnOnce && config.spawnOnce.queuedAt === undefined) {
-      config.spawnOnce.queuedAt = Game.time;
+      getCreepConfigService().patch(configName, { spawnOnce: { ...config.spawnOnce, queuedAt: Game.time } });
     }
     return;
   }
@@ -113,7 +110,7 @@ export function enqueueConfig(spawn: StructureSpawn, configName: string, toFront
   if (!queue.includes(configName)) {
     spawn.addTask(configName); invalidateWarSpawnQueues();
     if (config?.spawnOnce && config.spawnOnce.queuedAt === undefined) {
-      config.spawnOnce.queuedAt = Game.time;
+      getCreepConfigService().patch(configName, { spawnOnce: { ...config.spawnOnce, queuedAt: Game.time } });
     }
   }
 }
@@ -125,7 +122,7 @@ export function shouldQueueWarConfig(config: CreepConfig | undefined): boolean {
 export function removeQueuedConfig(task: WarTask, configName: string): void {
   for (const spawn of getTickContextService().getSpawnsByRoom(task.sourceRoom)) {
     if (spawn.memory.spawnList?.includes(configName)) {
-      spawn.memory.spawnList = spawn.memory.spawnList.filter((name) => name !== configName); invalidateWarSpawnQueues();
+      replaceSpawnQueue(spawn, spawn.memory.spawnList.filter((name) => name !== configName)); invalidateWarSpawnQueues();
     }
   }
 }
@@ -135,7 +132,7 @@ export function removeQueuedConfigByName(configName: string): number {
   for (const spawn of queuedSpawns(configName)) {
     const queue = spawn.memory.spawnList ?? [];
     const next = queue.filter(name => name !== configName);
-    if (next.length !== queue.length) { spawn.memory.spawnList = next; invalidateWarSpawnQueues(); removed += queue.length - next.length; }
+    if (next.length !== queue.length) { replaceSpawnQueue(spawn, next); invalidateWarSpawnQueues(); removed += queue.length - next.length; }
   }
   return removed;
 }
@@ -168,7 +165,7 @@ export function removeConfigWhenIdle(configName: string): void {
 
   const store = ensureConfigStore();
   if (store[configName]) {
-    delete store[configName];
+    getCreepConfigService().remove(configName);
   }
 }
 
@@ -178,7 +175,7 @@ export function removeConfig(configName: string): number {
     return 0;
   }
 
-  delete store[configName];
+  getCreepConfigService().remove(configName);
   return 1;
 }
 
@@ -303,7 +300,7 @@ export function ensureControllerAttackConfig(task: WarTask): void {
   const lastQueuedAt = task.controllerAttackerLastQueuedAt;
   const queueDue = lastQueuedAt === undefined || Game.time - lastQueuedAt >= CONTROLLER_ATTACKER_QUEUE_INTERVAL;
 
-  upsertWarConfig(store, configName, {
+  upsertWarConfig(configName, {
     role: "claimer",
     args: [task.targetRoom, encodedRoute, "attack"],
     roomName: task.sourceRoom,
@@ -358,7 +355,7 @@ export function ensureCombatConfigs(task: WarTask): void {
     const configName = getCombatConfigName(task, "meleeAttacker", i);
     const existing = store[configName];
     if (combatConfigCurrent(task, "meleeAttacker", i, encodedRoute, generation, existing)) continue;
-    upsertWarConfig(store, configName, {
+    upsertWarConfig(configName, {
       role: "meleeAttacker",
       args: getRoleArgs(
         task,
@@ -377,7 +374,7 @@ export function ensureCombatConfigs(task: WarTask): void {
     const configName = getCombatConfigName(task, "healer", i);
     const existing = store[configName];
     if (combatConfigCurrent(task, "healer", i, encodedRoute, generation, existing)) continue;
-    upsertWarConfig(store, configName, {
+    upsertWarConfig(configName, {
       role: "healer",
       args: getRoleArgs(
         task,

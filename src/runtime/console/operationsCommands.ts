@@ -1,33 +1,10 @@
+import { replaceSpawnQueue } from "@/runtime/spawnRequests";
 import { jsonCommand } from "@/runtime/console/jsonCommand";
 import { ensureConfigStore } from "@/runtime/spawnHelpers";
-import {
-  spawnMaxCarrier as spawnMaxCarrierCore,
-  spawnMaxCarrierRaw as spawnMaxCarrierRawCore,
-  type SpawnMaxCarrierResult,
-} from "@/runtime/emergencySpawning";
-import {
-  getUpgraderStatus,
-  startUpgrader,
-  stopUpgrader,
-} from "@/runtime/hubUpgradeControl";
+import { spawnMaxCarrier as spawnMaxCarrierCore, spawnMaxCarrierRaw as spawnMaxCarrierRawCore, type SpawnMaxCarrierResult } from "@/runtime/emergencySpawning";
+import { getUpgraderStatus, startUpgrader, stopUpgrader } from "@/runtime/hubUpgradeControl";
 import { getCreepConfigService, getTickContextService } from "@/runtime/runtimeServices";
-import {
-  getWarStatus,
-  configureWarRebuildWatch,
-  releaseWarTaskOwner,
-  startWarPatrol,
-  startWarRoom,
-  stopWarRoom,
-  type StartWarOptions,
-  type StartWarPatrolOptions,
-  type StartWarPatrolResult,
-  type StartWarResult,
-  type StopWarOptions,
-  type StopWarResult,
-  type WarBoostTier,
-  type WarSquad,
-  type WarStatusSnapshot,
-} from "@/runtime/warControl";
+import { getWarStatus, configureWarRebuildWatch, releaseWarTaskOwner, startWarPatrol, startWarRoom, stopWarRoom, type StartWarOptions, type StartWarPatrolOptions, type StartWarPatrolResult, type StartWarResult, type StopWarOptions, type StopWarResult, type WarBoostTier, type WarSquad, type WarStatusSnapshot } from "@/runtime/warControl";
 
 
 interface StopColonizationResult {
@@ -59,7 +36,7 @@ function removeConfigFromSpawnQueue(configName: string): number {
 
       const next = queue.filter((name) => name !== configName);
       if (next.length !== queue.length) {
-        spawn.memory.spawnList = next;
+        replaceSpawnQueue(spawn, next);
         removed += queue.length - next.length;
       }
     }
@@ -115,7 +92,7 @@ function removeConfig(configName: string): number {
     return 0;
   }
 
-  delete store[configName];
+  getCreepConfigService().remove(configName);
   return 1;
 }
 

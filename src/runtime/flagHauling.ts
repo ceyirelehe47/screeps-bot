@@ -1,14 +1,11 @@
+import { getCreepConfigService, getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
 import { getBodyCost, getLiveCreepsByConfig, isConfigSpawning as hasSpawningConfig, removeQueuedSpawnConfig } from "@/runtime/spawnHelpers";
 import { isDefenseMode } from "@/runtime/defenseMode";
 import { buildStandardCarrierBody } from "@/runtime/carrierBodyPolicy";
-import { getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
-import type { CreepConfig } from "@/types/system";
+
+import { type CreepConfig } from "@/types/system";
 import { requestCombatObservation } from "@/runtime/powerBankObserver";
-import {
-  isInvaderSalvageTarget,
-  isInvaderSalvageRoomClear,
-  isInvaderSalvagePositionSafe,
-} from "@/runtime/invaderSalvageSafety";
+import { isInvaderSalvageTarget, isInvaderSalvageRoomClear, isInvaderSalvagePositionSafe } from "@/runtime/invaderSalvageSafety";
 import { clearMovementState } from "@/roles/shared";
 
 interface FlagHaulTask {
@@ -211,7 +208,7 @@ function retireEmptySalvageMember(task: FlagHaulTask, creep: Creep): void {
 }
 
 function trimSalvageConfig(task: FlagHaulTask, name: string): void {
-  const store = getMemoryService().getCreepConfigStore();
+  const store = getCreepConfigService().readStore();
   removeQueuedConfig(task, name);
   for (const spawn of getTickContextService().getSpawnsByRoom(task.sourceRoom)) {
     if (spawn.spawning && Memory.creeps?.[spawn.spawning.name]?.configName === name) spawn.spawning.cancel();
@@ -222,19 +219,19 @@ function trimSalvageConfig(task: FlagHaulTask, name: string): void {
     else creep.memory.working = true;
   }
   if (live.some(creep => creep.store.getUsedCapacity() > 0)) {
-    if (store[name]) delete store[name].roomName;
-  } else delete store[name];
+    if (store[name]) getCreepConfigService().detachSpawn(name);
+  } else getCreepConfigService().remove(name);
 }
 
 function cleanupFlagHaulConfig(task: FlagHaulTask): boolean {
-  const store = getMemoryService().getCreepConfigStore();
+  const store = getCreepConfigService().readStore();
   let canDelete = true;
 
   for (const configName of getConfigNames(task)) {
     const config = store[configName];
     removeQueuedConfig(task, configName);
     if (config?.roomName) {
-      delete config.roomName;
+      getCreepConfigService().detachSpawn(configName);
     }
     if (isInvaderFlag(task.flagName)) {
       for (const spawn of getTickContextService().getSpawnsByRoom(task.sourceRoom)) {
@@ -260,7 +257,7 @@ function cleanupFlagHaulConfig(task: FlagHaulTask): boolean {
 
   for (const configName of getConfigNames(task)) {
     if (store[configName]) {
-      delete store[configName];
+      getCreepConfigService().remove(configName);
     }
   }
 
@@ -273,7 +270,7 @@ function upsertFlagHaulConfig(task: FlagHaulTask, configName: string, amount?: n
     return;
   }
 
-  const store = getMemoryService().getCreepConfigStore();
+  const store = getCreepConfigService().readStore();
   const existing = store[configName];
   const live = getLiveCreepsByConfig(configName).filter(creep => !creep.memory._recycleToRoom);
   const active = live.length > 0 || isConfigSpawning(configName);
@@ -301,7 +298,7 @@ function upsertFlagHaulConfig(task: FlagHaulTask, configName: string, amount?: n
     return;
   }
 
-  store[configName] = nextConfig;
+  getCreepConfigService().set(configName, nextConfig);
 }
 
 function upsertSalvageConfigs(task: FlagHaulTask, amount: number): void {
@@ -394,11 +391,11 @@ function upsertFlagHaulTask(flag: Flag): boolean {
 function processFlagHaulTask(task: FlagHaulTask): boolean {
   if (isInvaderFlag(task.flagName)) {
     requestCombatObservation(task.targetRoom);
-    const store = getMemoryService().getCreepConfigStore();
+    const store = getCreepConfigService().readStore();
     const pause = (): void => {
       for (const name of getConfigNames(task)) {
         removeQueuedConfig(task, name);
-        if (store[name]) delete store[name].roomName;
+        if (store[name]) getCreepConfigService().detachSpawn(name);
         for (const creep of getLiveCreepsByConfig(name)) {
           if (creep.store.getUsedCapacity() > 0) creep.memory.working = true;
         }

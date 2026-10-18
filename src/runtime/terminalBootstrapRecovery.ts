@@ -1,4 +1,5 @@
-import { getTickContextService } from "@/runtime/runtimeServices";
+import { getCreepConfigService, getTickContextService } from "@/runtime/runtimeServices";
+
 import { resolveRoomEnergyPolicy } from "@/runtime/roomEnergyPolicy";
 
 export const TERMINAL_BOOTSTRAP_RECOVERY_STABLE_TICKS = 25;
@@ -91,7 +92,7 @@ function isManagedLiveCreep(
     return false;
   }
 
-  const config = Memory.data?.creepConfigs?.[creep.memory.configName];
+  const config = getCreepConfigService().get(creep.memory.configName);
   return config?.role === role && config.roomName === roomName;
 }
 

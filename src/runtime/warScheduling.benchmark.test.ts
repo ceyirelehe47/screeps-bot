@@ -1,3 +1,4 @@
+import { requestSpawn } from "@/runtime/spawnRequests";
 jest.mock("@/runtime/powerBankObserver", () => ({ ...jest.requireActual("@/runtime/powerBankObserver"), requestCombatObservation: jest.fn(() => true) }));
 import { appendFileSync } from "node:fs";
 import { startWarRoom, runWarControl, configureWarRebuildWatch } from "./warControl";
@@ -12,7 +13,7 @@ describe("战争调度固定负载 A/B", () => {
       storage: { store: createMockStore({}) }, terminal: { store: createMockStore({}) }, find: () => [] } as unknown as Room;
     Game.rooms = { E1N57: source };
     for (let i = 0; i < 3; i++) Game.spawns[`spawn${i}`] = { name: `spawn${i}`, room: source, owner: { username: "me" }, memory: { spawnList: [] }, spawning: null,
-      isActive: () => true, addTask(name: string) { this.memory.spawnList.push(name); } } as unknown as StructureSpawn;
+      isActive: () => true, addTask(name: string) { requestSpawn(this as StructureSpawn, name); } } as unknown as StructureSpawn;
     for (let i = 0; i < 250; i++) {
       const memory = { role: "worker", configName: `worker:${i}` } as CreepMemory; Memory.creeps[`worker${i}`] = memory;
       if (i < 150) Game.creeps[`worker${i}`] = { name: `worker${i}`, memory, room: source, pos: new MockPos(25, 25, source.name), body: [] } as unknown as Creep;

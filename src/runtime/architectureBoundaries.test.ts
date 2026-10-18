@@ -25,3 +25,11 @@ it("独立 Game 对账入口仅由只读影子验证器使用，不回流业务�
     .filter(path => /\.readLiveCreepsForAudit\(/.test(readFileSync(path, "utf8")));
   expect(violations).toEqual([]);
 });
+
+it("出生执行只分发 owner 生命周期，配置规划使用 revision 索引", () => {
+  const mount = readFileSync(join(__dirname, "../mount/mountSpawn.ts"), "utf8");
+  expect(mount).not.toMatch(/from ["'][^"']*(?:war\/|depositHarvest|powerBankHarvest|colonization)[^"']*["']/);
+  const planner = readFileSync(join(__dirname, "spawnPlanner.ts"), "utf8");
+  expect(planner).not.toMatch(/\.list\(|\.readStore\(/);
+  expect(planner).toContain(".getReadIndex()");
+});

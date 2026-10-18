@@ -1,5 +1,6 @@
-import { getTickContextService } from "@/runtime/runtimeServices";
-import type { RoleFactory } from "@/types/system";
+import { getCreepConfigService, getTickContextService } from "@/runtime/runtimeServices";
+
+import { type RoleFactory } from "@/types/system";
 import { isPowerBankSearchRoom } from "@/runtime/powerBankConstants";
 import { getPowerBankSearchCandidates, getPowerBankSearchRooms } from "@/runtime/powerBankSearch";
 import { getPowerBankRoomStatus } from "@/runtime/powerBankMapFacts";
@@ -202,7 +203,7 @@ export const powerBankScoutRole: RoleFactory = () => ({
     const migrateLegacyPatrol = patrol.catalogVersion !== 1 &&
       (patrol.patrolIndex !== undefined || patrol.patrolDirection !== undefined || patrol.originRoomName !== undefined);
     const configName = creep.memory.configName;
-    const configuredOrigin = configName ? Memory.data?.creepConfigs?.[configName]?.roomName : undefined;
+    const configuredOrigin = configName ? getCreepConfigService().get(configName)?.roomName : undefined;
     const origin = configuredOrigin || patrol.originRoomName || creep.room.name;
     if (patrol.originRoomName !== origin) {
       patrol.originRoomName = origin;

@@ -1,9 +1,9 @@
+import { getCreepConfigService, getTickContextService } from "@/runtime/runtimeServices";
 import { createHarvesterRole } from "@/roles/harvester";
 import { moveToTarget, moveToTargetRoom } from "@/roles/shared";
-import type { RoleFactory } from "@/types/system";
+import { type RoleFactory } from "@/types/system";
 import { shouldPauseRemoteEnergyExtraction } from "@/runtime/energyInflowGuard";
 import { canUseColonizationTransit, readColonizationSupportPolicy } from "@/runtime/colonizationSupport";
-import { getTickContextService } from "@/runtime/runtimeServices";
 
 function shouldSkipFullContainerHarvestIntent(creep: Creep): boolean {
   const configName = creep.memory?.configName;
@@ -53,7 +53,7 @@ export const colonizerHarvesterRole: RoleFactory = (targetRoom?: string, sourceI
       const supportPolicy = targetRoom ? readColonizationSupportPolicy(targetRoom) : undefined;
       const supportController = targetRoom ? Game.rooms[targetRoom]?.controller : undefined;
       const supportActive = supportPolicy?.sourceRoom === home && (!supportController || supportController.my && supportController.level < 6);
-      if (persistentSupport && !supportActive && Memory.data?.creepConfigs?.[configName!]?.roomName !== home) {
+      if (persistentSupport && !supportActive && getCreepConfigService().get(configName!)?.roomName !== home) {
         if (creep.room.name !== home) {
           moveToTargetRoom(creep, home, encodedRouteRooms?.split("|").reverse().join("|"), { plainCost: 2, swampCost: 10 });
         } else {

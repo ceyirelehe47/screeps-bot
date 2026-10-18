@@ -1,7 +1,7 @@
-import { getTickContextService } from "@/runtime/runtimeServices";
+import { getCreepConfigService, getTickContextService } from "@/runtime/runtimeServices";
 import { jsonCommand } from "@/runtime/console/jsonCommand";
-import type { CreepConfig } from "@/types/system";
-import type { DamageSnapshot, RemoteDefenseReason, RemoteMiningTask } from "@/runtime/remoteMining";
+import { type CreepConfig } from "@/types/system";
+import { type DamageSnapshot, type RemoteDefenseReason, type RemoteMiningTask } from "@/runtime/remoteMining";
 
 type ActiveCombatPartCounts = Record<"attack" | "ranged_attack" | "heal" | "work", number>;
 
@@ -217,7 +217,7 @@ function buildOwnCreepSnapshot(creep: Creep): RemoteDefenseCreepSnapshot {
 }
 
 function buildRelatedConfigs(targetRoom: string, task: RemoteMiningTask | null): RemoteDefenseConfigSnapshot[] {
-  const configs = Memory.data?.creepConfigs ?? {};
+  const configs = getCreepConfigService().readStore();
   const prefix = task ? getTaskPrefix(task) : null;
   const entries = Object.entries(configs).filter(([configName, config]) => {
     if (prefix && configName.startsWith(prefix)) return true;

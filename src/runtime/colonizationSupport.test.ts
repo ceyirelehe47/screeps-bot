@@ -1,3 +1,5 @@
+import { requestSpawn } from "@/runtime/spawnRequests";
+import { getCreepConfigService } from "@/runtime/runtimeServices";
 jest.mock("@/runtime/powerBankBoost", () => ({ prepareBoosts: jest.fn(() => ({ status: "ready", labs: [] })), releaseBoostLabs: jest.fn() }));
 jest.mock("@/runtime/defenseMode", () => ({ isDefenseMode: jest.fn(() => false) }));
 jest.mock("@/runtime/workerTaskPool", () => ({ releaseWorkerTask: jest.fn() }));
@@ -32,7 +34,7 @@ describe("殖民 T3 支援生命周期", () => {
     const home = Game.rooms[SOURCE]; home.energyAvailable = home.energyCapacityAvailable = 12900;
     Game.spawns.Mother = { name: "Mother", room: home, pos: { x: 25, y: 25, roomName: SOURCE },
       memory: { spawnList: [] as string[] }, isActive: () => true,
-      addTask(name: string) { this.memory.spawnList!.push(name); return this.memory.spawnList!.length; },
+      addTask(name: string) { requestSpawn(this as StructureSpawn, name); return this.memory.spawnList!.length; },
     } as unknown as StructureSpawn;
     const names = sources.map(source => `${SOURCE}:colonizationSupport:${TARGET}:harvester:${source.id}`);
     return { target, sources, names };
@@ -124,7 +126,7 @@ describe("殖民 T3 支援生命周期", () => {
   it("跨一个矿工寿命后配置丢失与旧配置解绑均能重新绑定母房并排队", () => {
     const { names } = miningWorld(); runColonizationSupport();
     delete Memory.data!.creepConfigs![names[0]];
-    delete Memory.data!.creepConfigs![names[1]].roomName;
+    getCreepConfigService().detachSpawn(names[1]);
     Game.time += 1600; Game.creeps = {};
     runColonizationSupport(); scheduleSpawnTasks();
     for (const name of names) {
@@ -250,7 +252,7 @@ describe("殖民 T3 支援生命周期", () => {
     const name = supportConfigName(SOURCE, TARGET);
     const suicide = jest.fn();
     Game.creeps.helper = { name: "helper", room: Game.rooms[TARGET], memory: { configName: name, role: "colonizerUpgrader" }, body: [], suicide } as unknown as Creep;
-    Game.spawns.s = { room: Game.rooms[SOURCE], memory: { spawnList: [name, "other"] }, spawning: null } as StructureSpawn;
+    Game.spawns.s = { room: Game.rooms[SOURCE], memory: { spawnList: [name, "other"] }, spawning: null } as unknown as StructureSpawn;
     Game.time++; Game.rooms[TARGET].controller!.level = 6; runColonizationSupport();
     expect(Game.spawns.s.memory.spawnList).toEqual(["other"]);
     expect(Memory.data!.creepConfigs![name].roomName).toBeUndefined();

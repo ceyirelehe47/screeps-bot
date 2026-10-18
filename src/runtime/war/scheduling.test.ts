@@ -1,3 +1,4 @@
+import { requestSpawn } from "@/runtime/spawnRequests";
 jest.mock("@/runtime/powerBankObserver", () => ({ ...jest.requireActual("@/runtime/powerBankObserver"), requestCombatObservation: jest.fn(() => true) }));
 import { startWarRoom, requestWarRoomClear, runWarControl, configureWarRebuildWatch } from "@/runtime/warControl";
 import { getTaskConfigNames, type WarTask } from "./store";
@@ -13,7 +14,7 @@ function install() {
   const source = { name: SOURCE, controller: { my: true, level: 8 }, energyCapacityAvailable: 12900,
     storage: { store: createMockStore({}) }, terminal: { store: createMockStore({}) }, find: () => [] } as unknown as Room;
   const spawn = { name: "spawn", room: source, owner: { username: "me" }, memory: { spawnList: [] }, spawning: null,
-    addTask(name: string) { this.memory.spawnList.push(name); }, isActive: () => true } as unknown as StructureSpawn;
+    addTask(name: string) { requestSpawn(this as StructureSpawn, name); }, isActive: () => true } as unknown as StructureSpawn;
   Game.rooms = { [SOURCE]: source }; Game.spawns = { spawn };
   return spawn;
 }
@@ -63,7 +64,7 @@ describe("战争稳态与迁移边界", () => {
     const old = `${SOURCE}:war:E3N57:g7:meleeAttacker:0`;
     task.membersVersion = 1; task.members = undefined; // 部分迁移标记不能吞掉旧成员。
     Memory.creeps.old = { configName: old } as CreepMemory;
-    Game.spawns.spawn.memory.spawnList.push(old);
+    requestSpawn(Game.spawns.spawn, old);
     expect(getTaskConfigNames(task)).toContain(old);
     expect(task.members?.[old].creepNames).toEqual(["old"]);
     const list = jest.spyOn(Object, "values"); getTaskConfigNames(task);

@@ -1,3 +1,4 @@
+import { requestSpawn } from "@/runtime/spawnRequests";
 jest.mock("@/runtime/powerBankObserver", () => ({ ...jest.requireActual("@/runtime/powerBankObserver"), requestCombatObservation: jest.fn(() => true) }));
 
 import { configureWarRebuildWatch, requestWarRoomClear, runWarControl, startWarRoom, stopWarRoom } from "@/runtime/warControl";
@@ -62,7 +63,7 @@ function createSpawn(room: Room): StructureSpawn {
     spawning: null,
     isActive: jest.fn(() => true),
     addTask(configName: string): number {
-      this.memory.spawnList.push(configName);
+      requestSpawn(this as StructureSpawn, configName);
       return this.memory.spawnList.length;
     },
   } as unknown as StructureSpawn;
@@ -1000,12 +1001,11 @@ describe("towerDrainDuo 战争控制", () => {
     expect(stopWarRoom("E3N57")).toMatchObject({ ok: true, releasedBoosts: false, removedConfigs: 2 });
 
     expect(Memory.data!.war!.E3N57).toBeUndefined();
-    expect(Game.spawns.Spawn1.memory.spawnList.sort()).toEqual(survivingNames.sort());
+    expect([...(Game.spawns.Spawn1.memory.spawnList ?? [])].sort()).toEqual(survivingNames.sort());
     expect(Object.keys(Memory.data!.creepConfigs!).sort()).toEqual(survivingNames.sort());
     expect(release).not.toHaveBeenCalled();
   });
 });
-
 
 describe("清剿后Observer重建监视", () => {
   const rooms = ["E3N57", "E3N53", "E2N54"];

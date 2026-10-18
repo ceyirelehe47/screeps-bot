@@ -1,3 +1,4 @@
+import { replaceSpawnQueue } from "@/runtime/spawnRequests";
 import { selectLeastLoadedSpawn as selectSpawnByLoad } from "@/runtime/spawnHelpers";
 import { isSpawnActive } from "@/runtime/tickContext";
 
@@ -123,7 +124,7 @@ function rebuildQueues(
       }
       return left.configName.localeCompare(right.configName);
     });
-    spawn.memory.spawnList = tokens.map((token) => token.configName);
+    replaceSpawnQueue(spawn, tokens.map((token) => token.configName));
   }
 }
 
@@ -148,7 +149,7 @@ export function reconcileSpawnQueueOwnership(
   // used by every owner decision below.
   for (const spawn of sortedSpawns) {
     const seen = new Set<string>();
-    spawn.memory.spawnList = (spawn.memory.spawnList ?? []).filter((configName) => {
+    replaceSpawnQueue(spawn, (spawn.memory.spawnList ?? []).filter((configName) => {
       if (
         !options.knownConfigNames.has(configName) ||
         options.spawningConfigNames.has(configName) ||
@@ -158,7 +159,7 @@ export function reconcileSpawnQueueOwnership(
       }
       seen.add(configName);
       return true;
-    });
+    }));
   }
 
   const normalizedSnapshot = getQueueSnapshot(sortedSpawns);

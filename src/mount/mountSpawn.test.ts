@@ -1,3 +1,5 @@
+import { registerSpawnRequestOwners } from "@/runtime/registerSpawnRequestOwners";
+registerSpawnRequestOwners();
 import { registerOutboundMissionOwners } from "@/runtime/registerOutboundMissionOwners";
 registerOutboundMissionOwners();
 jest.mock("@/runtime/tickContext", () => ({
@@ -12,12 +14,9 @@ jest.mock("@/runtime/cpuPhaseProfiler", () => ({
 
 import { mountSpawn } from "@/mount/mountSpawn";
 import { DEPOSIT_BODY } from "@/runtime/depositViability";
-import type { DepositHarvestTask } from "@/runtime/depositHarvest";
+import { type DepositHarvestTask } from "@/runtime/depositHarvest";
 import { releaseWarTaskOwner } from "@/runtime/warControl";
-import {
-  RCL8_UPGRADER_MAINTENANCE_BODY,
-  RCL8_UPGRADER_RECOVERY_START_TICKS,
-} from "@/runtime/upgraderPolicy";
+import { RCL8_UPGRADER_MAINTENANCE_BODY, RCL8_UPGRADER_RECOVERY_START_TICKS } from "@/runtime/upgraderPolicy";
 
 type SpawnPrototype = {
   work(this: StructureSpawn): void;

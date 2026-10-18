@@ -1,3 +1,4 @@
+import { replaceSpawnQueue } from "@/runtime/spawnRequests";
 import { getGlobalOwnedRoomCount } from "@/runtime/globalRoomCount";
 import { enqueueConfig, ensureConfigStore, getBodyCost, getLiveCreepsByConfig, isConfigQueuedInSpawns, isConfigSpawning as hasSpawningConfig, removeQueuedSpawnConfig, selectLeastLoadedSpawn } from "@/runtime/spawnHelpers";
 import { runPlannerForRoom, savePlannerForRoom } from "@/modules/autoplanner";
@@ -8,13 +9,9 @@ import { clearWarRoomTask, isWarRoomClearDone, requestWarRoomClear } from "@/run
 import { isDefenseMode } from "@/runtime/defenseMode";
 import { canStartOutboundMission } from "@/runtime/outboundMissionPolicy";
 import { canUseColonizationTransit, colonizationTransitKey, runColonizationSupport, readColonizationSupportPolicy } from "@/runtime/colonizationSupport";
-import {
-  COLONIZATION_TRAVEL_PATH_RETRY_INTERVAL,
-  getCachedStaticTravelMatrix,
-  getColonizationTravelPathKey,
-} from "@/movement/routing";
+import { COLONIZATION_TRAVEL_PATH_RETRY_INTERVAL, getCachedStaticTravelMatrix, getColonizationTravelPathKey } from "@/movement/routing";
 import { recordMovementMetric } from "@/movement/metrics";
-import type { CachedTravelPath, StoredRoomPosition } from "@/movement/types";
+import { type CachedTravelPath, type StoredRoomPosition } from "@/movement/types";
 
 type ColonizationStatus = "claiming" | "clearing" | "waiting_plan" | "bootstrapping" | "managed";
 type ColonizationMode = "normal" | "npcStronghold";
@@ -181,7 +178,7 @@ function upsertConfig(
   config: import("@/types/system").CreepConfig,
 ): void {
   const store = ensureConfigStore();
-  store[configName] = config;
+  getCreepConfigService().set(configName, config);
 }
 
 function removeConfigWhenIdle(configName: string): void {
@@ -192,7 +189,7 @@ function removeConfigWhenIdle(configName: string): void {
 
   const store = ensureConfigStore();
   if (store[configName]) {
-    delete store[configName];
+    getCreepConfigService().remove(configName);
   }
 }
 
@@ -985,14 +982,14 @@ function cleanupOrphanedColonizationConfigs(tasks: Record<string, ColonizationTa
     const liveCreeps = getLiveCreepsByConfig(configName);
     removeQueuedConfigFromSourceRoom(parsed.sourceRoom, configName);
     if (config.roomName) {
-      delete config.roomName;
+      getCreepConfigService().detachSpawn(configName);
     }
 
     if (isConfigSpawning(configName) || liveCreeps.length > 0) {
       continue;
     }
 
-    delete configStore[configName];
+    getCreepConfigService().remove(configName);
   }
 }
 
@@ -1133,8 +1130,8 @@ function ensureBootstrapHarvester(task: ColonizationTask, sourceId: Id<Source>):
   if (readColonizationSupportPolicy(task.targetRoom)) {
     const name = getTaskConfigName(task, "harvester", sourceId);
     const existing = ensureConfigStore()[name];
-    if (existing) existing.roomName = undefined;
-    for (const spawn of getSpawnsForRoom(task.sourceRoom)) if (spawn.memory.spawnList?.includes(name)) spawn.memory.spawnList = spawn.memory.spawnList.filter(item => item !== name);
+    if (existing) getCreepConfigService().detachSpawn(name);
+    for (const spawn of getSpawnsForRoom(task.sourceRoom)) if (spawn.memory.spawnList?.includes(name)) replaceSpawnQueue(spawn, spawn.memory.spawnList.filter(item => item !== name));
     return;
   }
   const configName = getTaskConfigName(task, "harvester", sourceId);
@@ -1179,7 +1176,7 @@ function cleanupColonizationConfigs(task: ColonizationTask): boolean {
 
     const config = store[configName];
     if (config?.roomName) {
-      delete config.roomName;
+      getCreepConfigService().detachSpawn(configName);
     }
 
     if (isConfigSpawning(configName)) {
@@ -1247,14 +1244,14 @@ function retireHandedOffHarvesters(task: ColonizationTask): void {
 
     removeQueuedConfig(task, configName);
     if (config.roomName) {
-      delete config.roomName;
+      getCreepConfigService().detachSpawn(configName);
     }
 
     if (isConfigSpawning(configName)) {
       continue;
     }
 
-    delete store[configName];
+    getCreepConfigService().remove(configName);
   }
 }
 

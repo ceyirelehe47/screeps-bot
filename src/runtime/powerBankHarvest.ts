@@ -1,60 +1,21 @@
+import { replaceSpawnQueue } from "@/runtime/spawnRequests";
 import { countBoostableParts, getBoostPartType } from "@/runtime/boostParts";
 import { canStartOutboundMission } from "@/runtime/outboundMissionPolicy";
-import {
-  predictPowerBankRecovery,
-  predictPowerBankFinishTicks,
-  powerBankAttackSustainable,
-} from "@/runtime/powerBankCapability";
-import {
-  POWER_BANK_STATUS,
-  POWER_BANK_BODY_TIERS,
-  POWER_BANK_BOOST_REQUIREMENTS,
-  POWER_BANK_MAX_ROUTE_ROOMS,
-  getPowerBankConfigName,
-  isPowerBankSearchRoom,
-} from "@/runtime/powerBankConstants";
-import {
-  ATTACK_POWER,
-  POWER_BANK_ROOM_TRAVEL_TICKS,
-  POWER_BANK_COMBAT_TTL_MARGIN,
-  derivePowerBankTierProfile,
-  planPowerBankTimeline,
-  selectBodyTier,
-  assessViability,
-  type PowerBankTierProfile,
-} from "@/runtime/powerBankViability";
+import { predictPowerBankRecovery, predictPowerBankFinishTicks, powerBankAttackSustainable } from "@/runtime/powerBankCapability";
+import { POWER_BANK_STATUS, POWER_BANK_BODY_TIERS, POWER_BANK_BOOST_REQUIREMENTS, POWER_BANK_MAX_ROUTE_ROOMS, getPowerBankConfigName, isPowerBankSearchRoom } from "@/runtime/powerBankConstants";
+import { POWER_BANK_ROOM_TRAVEL_TICKS, POWER_BANK_COMBAT_TTL_MARGIN, derivePowerBankTierProfile, planPowerBankTimeline, selectBodyTier, assessViability, type PowerBankTierProfile } from "@/runtime/powerBankViability";
 import { findBestDonorRoom, prepareBoosts, releaseBoostLabs, type BoostPrepResult } from "@/runtime/powerBankBoost";
-import {
-  getActivePowerBankBoostLabIds,
-  getAssignedPowerBankBoostLabId,
-  getPowerBankBoostPrep,
-} from "@/runtime/powerBankBoostMemory";
+import { getActivePowerBankBoostLabIds, getAssignedPowerBankBoostLabId, getPowerBankBoostPrep } from "@/runtime/powerBankBoostMemory";
 import { cleanupStaleDiscoveries, ensureDiscoveryStore } from "@/runtime/powerBankDiscovery";
-import {
-  getPowerBankRoomThreat,
-  hasPowerBankObserverCoverage,
-  requestPowerBankObservation,
-} from "@/runtime/powerBankObserver";
+import { getPowerBankRoomThreat, hasPowerBankObserverCoverage, requestPowerBankObservation } from "@/runtime/powerBankObserver";
 import { canMeasurePowerBankTravelThisTick, measurePowerBankTravel } from "@/runtime/powerBankPathDistance";
 import { getPowerBankSearchRooms } from "@/runtime/powerBankSearch";
 import { isDefenseMode } from "@/runtime/defenseMode";
-import { getCreepConfigService, getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
+import { getCreepConfigService, getTickContextService } from "@/runtime/runtimeServices";
 import { clearMovementState, moveToTarget } from "@/roles/shared";
-import type { CreepConfig } from "@/types/system";
-import {
-  ensureResourceTransferTaskStore,
-  isHealthyReceiverCapacityCommitment,
-} from "@/runtime/logistics/resourceTransferTasks";
-import {
-  ATTACK_PROGRESS_TIMEOUT,
-  getPowerBankLifecycleFailure,
-  initializePowerBankTaskRuntime,
-  isTerminalPowerBankStatus,
-  markPowerBankProgress,
-  setPowerBankBlocker,
-  transitionPowerBankTask,
-  updatePowerBankObservation,
-} from "@/runtime/powerBankTaskState";
+import { type CreepConfig } from "@/types/system";
+import { ensureResourceTransferTaskStore, isHealthyReceiverCapacityCommitment } from "@/runtime/logistics/resourceTransferTasks";
+import { ATTACK_PROGRESS_TIMEOUT, getPowerBankLifecycleFailure, initializePowerBankTaskRuntime, isTerminalPowerBankStatus, markPowerBankProgress, setPowerBankBlocker, transitionPowerBankTask, updatePowerBankObservation } from "@/runtime/powerBankTaskState";
 import { recordPowerBankHistory } from "@/runtime/powerBankStatus";
 import { spawnProfiles } from "@/config/spawnProfiles";
 import { getPowerBankOwnedAvoidRooms } from "@/runtime/powerBankTransit";
@@ -98,8 +59,8 @@ function getTaskStore(): Record<string, PowerBankHarvestTask> {
   return ensureDiscoveryStore();
 }
 
-function getConfigStore(): Record<string, CreepConfig> {
-  return getMemoryService().getCreepConfigStore();
+function getConfigStore(): Readonly<Record<string, CreepConfig>> {
+  return getCreepConfigService().readStore();
 }
 
 function isSameLegacyScope(task: PowerBankHarvestTask, other: PowerBankHarvestTask): boolean {
@@ -180,23 +141,23 @@ function ensureCombatConfigs(task: PowerBankHarvestTask, index: number): boolean
   const encodedRoute = task.routeRooms?.join("|") ?? "";
   const generation = getCombatGeneration(task, index);
 
-  configStore[getCombatConfigName(task, "attacker", index)] = {
+  getCreepConfigService().set(getCombatConfigName(task, "attacker", index), {
     role: "powerBankAttacker",
     args: [task.targetRoom, encodedRoute],
     roomName: task.sourceRoom,
     body: tierBodies.attacker,
     taskId: task.id,
     powerBankGeneration: generation,
-  };
+  });
 
-  configStore[getCombatConfigName(task, "healer", index)] = {
+  getCreepConfigService().set(getCombatConfigName(task, "healer", index), {
     role: "powerBankHealer",
     args: [task.targetRoom, encodedRoute],
     roomName: task.sourceRoom,
     body: tierBodies.healer,
     taskId: task.id,
     powerBankGeneration: generation,
-  };
+  });
 
   return true;
 }
@@ -239,7 +200,7 @@ function removeSpawnQueueEntry(configName: string): void {
   for (const room of getTickContextService().getMyRooms()) {
     for (const spawn of getTickContextService().getSpawnsByRoom(room.name)) {
       if (!spawn.memory.spawnList) continue;
-      spawn.memory.spawnList = spawn.memory.spawnList.filter((name) => name !== configName);
+      replaceSpawnQueue(spawn, spawn.memory.spawnList.filter((name) => name !== configName));
     }
   }
 }
@@ -253,7 +214,7 @@ function cleanupConfigNames(configNames: readonly string[], queueRoomName?: stri
   const queueSpawns = queueRoomName === undefined ? ownedSpawns : tickContext.getSpawnsByRoom(queueRoomName);
   for (const spawn of queueSpawns) {
     if (!spawn.memory.spawnList) continue;
-    spawn.memory.spawnList = spawn.memory.spawnList.filter(name => !names.has(name));
+    replaceSpawnQueue(spawn, spawn.memory.spawnList.filter(name => !names.has(name)));
   }
   const spawningConfigNames = new Set<string>();
   const creepMemory = Memory.creeps || {};
@@ -265,7 +226,7 @@ function cleanupConfigNames(configNames: readonly string[], queueRoomName?: stri
   const store = getConfigStore();
   for (const name of names) {
     if (tickContext.getCreepsByConfigName(name).length === 0 && !spawningConfigNames.has(name)) {
-      delete store[name];
+      getCreepConfigService().remove(name);
     }
   }
 }
@@ -303,7 +264,7 @@ function retireCombatGeneration(task: PowerBankHarvestTask, index: number): void
         delete memory.powerBankReinforcementStage;
         creep.suicide();
       }
-      delete getConfigStore()[configName];
+      getCreepConfigService().remove(configName);
     }
   }
 }
@@ -343,7 +304,7 @@ function cleanupOrphanPowerBankConfigsImpl(tasks: PowerBankHarvestTask[]): void 
   const activeTaskIds = new Set(activeTasks.map((task) => task.id));
   const activePrefixes = new Set(activeTasks.map((task) => `${task.sourceRoom}:powerbank:${task.targetRoom}:`));
 
-  const configs = getCreepConfigService().list();
+  const configs = getCreepConfigService().readStore();
   const orphanNames: string[] = [];
   for (const [configName, config] of Object.entries(configs)) {
     const parts = configName.split(":");
@@ -991,13 +952,13 @@ function ensureHaulerConfigs(task: PowerBankHarvestTask): void {
       task.id,
       0,
     );
-    configStore[configName] = {
+    getCreepConfigService().set(configName, {
       role: "powerBankHauler",
       args: [task.targetRoom, encodedRoute],
       roomName: task.sourceRoom,
       taskId: task.id,
       powerBankGeneration: 0,
-    };
+    });
 
     for (const creep of getTickContextService().getCreepsByConfigName(configName)) {
       const mem = creep.memory as PowerBankCreepMemory;
@@ -2225,7 +2186,7 @@ function maintainPatrolScoutImpl(): void {
   const configStore = getConfigStore();
   if (hasPowerBankObserverCoverage()) {
     if (configStore[PATROL_SCOUT_CONFIG_NAME]) {
-      delete configStore[PATROL_SCOUT_CONFIG_NAME];
+      getCreepConfigService().remove(PATROL_SCOUT_CONFIG_NAME);
     }
     return;
   }
@@ -2241,7 +2202,7 @@ function maintainPatrolScoutImpl(): void {
         if (creepMemory[spawn.spawning.name]?.configName === PATROL_SCOUT_CONFIG_NAME) return;
       }
     }
-    delete configStore[PATROL_SCOUT_CONFIG_NAME];
+    getCreepConfigService().remove(PATROL_SCOUT_CONFIG_NAME);
   }
 
   const eligibleRooms = getTickContextService().getMyRooms().filter(r => {
@@ -2269,11 +2230,11 @@ function maintainPatrolScoutImpl(): void {
     }
   }
 
-  configStore[PATROL_SCOUT_CONFIG_NAME] = {
+  getCreepConfigService().set(PATROL_SCOUT_CONFIG_NAME, {
     role: "powerBankScout",
     args: [],
     roomName: sourceRoom,
-  };
+  });
 }
 
 function orderAdmissionTasks(tasks: PowerBankHarvestTask[]): PowerBankHarvestTask[] {

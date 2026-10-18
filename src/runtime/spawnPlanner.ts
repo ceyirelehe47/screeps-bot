@@ -1,3 +1,4 @@
+import { replaceSpawnQueue, readSpawnQueue } from "@/runtime/spawnRequests";
 import { selectLeastLoadedSpawn as selectSpawnByLoad } from "@/runtime/spawnHelpers";
 import { isSpawnActive } from "@/runtime/tickContext";
 import { spawnProfiles } from "@/config/spawnProfiles";
@@ -10,10 +11,10 @@ import { getSafeZone } from "@/runtime/safeZone";
 import { isInsideSafeZone } from "@/runtime/safeZoneHelpers";
 import { isRcl8MaintenanceUpgraderConfig } from "@/runtime/upgraderPolicy";
 import { getPowerBankConfigName, POWER_BANK_STATUS } from "@/runtime/powerBankConstants";
-import { canSpawnDepositConfig } from "@/runtime/depositHarvest";
+import { canExecuteSpawnRequest } from "@/runtime/spawnRequestOwners";
 import { reconcileSpawnQueueOwnership } from "@/runtime/spawnQueueOwnership";
 import { colonizationHarvesterPreSpawnThreshold } from "@/runtime/colonizationHarvesterPreSpawn";
-import type { CreepConfig } from "@/types/system";
+import { type CreepConfig } from "@/types/system";
 import { fixedBodyExceedsCapacity, isSpawnConfigEconomicallyBlocked } from "@/runtime/outboundMissionPolicy";
 import { getRoleSpawnIntent } from "@/runtime/spawnIntent";
 
@@ -100,14 +101,6 @@ function getSpawnConfigPriority(roomName: string, configName: string): number {
     return 3;
   }
   return 4 + getSpawnRolePriority(config?.role);
-}
-
-function ensureQueue(spawn: StructureSpawn): string[] {
-  if (!spawn.memory.spawnList) {
-    spawn.memory.spawnList = [];
-  }
-
-  return spawn.memory.spawnList;
 }
 
 function isConfigQueued(spawn: StructureSpawn, configName: string): boolean {
@@ -266,7 +259,7 @@ function getSpawnBody(spawn: StructureSpawn, configName: string): BodyPartConsta
   }
 
   if (config.body && config.body.length > 0) {
-    return config.body;
+    return [...config.body];
   }
 
   return spawnProfiles[config.role](spawn.room);
@@ -436,7 +429,7 @@ function stripConfigFromAllSpawnQueues(configName: string): void {
   for (const room of tickContext.getMyRooms()) {
     for (const spawn of tickContext.getSpawnsByRoom(room.name)) {
       if (spawn.memory.spawnList?.includes(configName)) {
-        spawn.memory.spawnList = spawn.memory.spawnList.filter((item) => item !== configName);
+        replaceSpawnQueue(spawn, spawn.memory.spawnList.filter((item) => item !== configName));
       }
     }
   }
@@ -606,13 +599,13 @@ function shouldSkipConfigInDefenseMode(config: CreepConfig): boolean {
 }
 
 function queueConfig(spawn: StructureSpawn, configName: string, options?: { toFront?: boolean }): void {
-  const queue = ensureQueue(spawn);
+  const queue = readSpawnQueue(spawn);
   const config = getCreepConfigService().get(configName);
 
   if (options?.toFront) {
-    spawn.memory.spawnList = [configName, ...queue.filter((item) => item !== configName)];
+    replaceSpawnQueue(spawn, [configName, ...queue.filter((item) => item !== configName)]);
     if (config?.spawnOnce && config.spawnOnce.queuedAt === undefined) {
-      config.spawnOnce.queuedAt = Game.time;
+      getCreepConfigService().patch(configName, { spawnOnce: { ...config.spawnOnce, queuedAt: Game.time } });
     }
     return;
   }
@@ -620,7 +613,7 @@ function queueConfig(spawn: StructureSpawn, configName: string, options?: { toFr
   if (!queue.includes(configName)) {
     spawn.addTask(configName);
     if (config?.spawnOnce && config.spawnOnce.queuedAt === undefined) {
-      config.spawnOnce.queuedAt = Game.time;
+      getCreepConfigService().patch(configName, { spawnOnce: { ...config.spawnOnce, queuedAt: Game.time } });
     }
   }
 }
@@ -640,7 +633,7 @@ function suppressRcl8MaintenanceReplacement(
 
   for (const spawn of spawns) {
     if (spawn.memory.spawnList?.includes(configName)) {
-      spawn.memory.spawnList = spawn.memory.spawnList.filter((item) => item !== configName);
+      replaceSpawnQueue(spawn, spawn.memory.spawnList.filter((item) => item !== configName));
     }
 
     if (
@@ -836,7 +829,7 @@ function isPowerBankHaulingExhausted(configName: string, config: CreepConfig): b
 }
 
 function prioritizeSpawnQueue(spawn: StructureSpawn): void {
-  const queue = ensureQueue(spawn);
+  const queue = readSpawnQueue(spawn);
   if (queue.length < 2) {
     return;
   }
@@ -845,7 +838,7 @@ function prioritizeSpawnQueue(spawn: StructureSpawn): void {
   for (let index = 1; index < queue.length; index++) {
     const priority = getSpawnConfigPriority(spawn.room.name, queue[index]);
     if (priority < previousPriority) {
-      spawn.memory.spawnList = [...queue]
+      replaceSpawnQueue(spawn, [...queue]
         .map((configName, queueIndex) => {
           return {
             configName,
@@ -860,7 +853,7 @@ function prioritizeSpawnQueue(spawn: StructureSpawn): void {
 
           return a.index - b.index;
         })
-        .map((item) => item.configName);
+        .map((item) => item.configName));
       return;
     }
 
@@ -935,7 +928,7 @@ function pruneEmergencyCarrierQueue(roomName: string, keepOne: boolean): boolean
       continue;
     }
 
-    spawn.memory.spawnList = queue.filter((configName) => {
+    replaceSpawnQueue(spawn, queue.filter((configName) => {
       if (!isEmergencyCarrierConfigName(roomName, configName)) {
         return true;
       }
@@ -952,7 +945,7 @@ function pruneEmergencyCarrierQueue(roomName: string, keepOne: boolean): boolean
 
       creepConfigs.remove(configName);
       return false;
-    });
+    }));
   }
 
   return kept;
@@ -976,16 +969,17 @@ function ensureEmergencyCarrier(spawn: StructureSpawn): void {
 
 /** 无本地采矿单位且满体型无法支付时，先恢复收入，避免 carrier 队首永久等能量。 */
 function ensureRecoveryHarvester(
-  room: Room, spawns: StructureSpawn[], configs: Record<string, CreepConfig>, context: SpawnPlanningContext,
+  room: Room, spawns: StructureSpawn[], context: SpawnPlanningContext,
 ): boolean {
   if (!room.controller?.my) return false;
-  const local = Object.entries(configs).filter(([name, config]) => config.roomName === room.name &&
+  const configs = getCreepConfigService().getReadIndex();
+  const local = configs.byRoom(room.name).filter(([name, config]) =>
     ((name.startsWith(`${room.name}:harvester:`) && config.role === "harvester") ||
      (name.startsWith(`${room.name}:miner:`) && config.role === "miner")));
   if (local.length === 0 || hasRoomSourceWorker(room.name)) return false;
   if (local.some(([name]) => isConfigSpawning(name, context))) return false;
   const prefix = `${room.name}:manual:bootstrapHarvester:`;
-  if (Object.keys(configs).some(name => name.startsWith(prefix) &&
+  if (configs.names.some(name => name.startsWith(prefix) &&
       (isConfigQueuedInSpawns(spawns, name) || isConfigSpawning(name, context)))) return true;
   const targetSpawn = selectLeastLoadedSpawn(spawns.filter(isSpawnActive));
   if (!targetSpawn || local.some(([name]) => getSpawnBody(targetSpawn, name)
@@ -997,7 +991,7 @@ function ensureRecoveryHarvester(
   const [, config] = entry;
   const body: BodyPartConstant[] = room.energyAvailable >= 250 ? [WORK, WORK, MOVE] : [WORK, MOVE];
   const name = `${prefix}${Game.time}`;
-  getMemoryService().getCreepConfigStore()[name] = { role: "harvester", args: [config.args[0]], roomName: room.name, body };
+  getCreepConfigService().set(name, { role: "harvester", args: [config.args[0]], roomName: room.name, body });
   queueConfig(targetSpawn, name, { toFront: true });
   return true;
 }
@@ -1010,17 +1004,15 @@ function ensureRecoveryHarvester(
 function tryQueueInitialHarvester(
   room: Room,
   spawns: StructureSpawn[],
-  configs: Record<string, CreepConfig>,
   context: SpawnPlanningContext,
 ): boolean {
   if ((room.controller?.level ?? 0) !== 1) return false;
   if (getTickContextService().getCreepsByRoom(room.name).length > 0) return false;
 
-  const harvesterEntry = Object.entries(configs).find(
-    ([, cfg]) => cfg.roomName === room.name && cfg.role === "harvester",
-  );
+  const configs = getCreepConfigService().getReadIndex();
+  const harvesterEntry = configs.byRoom(room.name).find(([, cfg]) => cfg.role === "harvester");
   const creepConfigs = getCreepConfigService();
-  for (const configName of Object.keys(configs)) {
+  for (const configName of configs.names) {
     if (isEmergencyCarrierConfigName(room.name, configName)) {
       creepConfigs.remove(configName);
     }
@@ -1029,10 +1021,10 @@ function tryQueueInitialHarvester(
     for (const configName of spawn.memory.spawnList ?? []) {
       const config = creepConfigs.get(configName);
       if (config?.spawnOnce?.queuedAt !== undefined && !isConfigSpawning(configName, context)) {
-        delete config.spawnOnce.queuedAt;
+        getCreepConfigService().patch(configName, { spawnOnce: {} });
       }
     }
-    spawn.memory.spawnList = [];
+    replaceSpawnQueue(spawn, []);
   }
   if (!harvesterEntry) return true;
 
@@ -1059,27 +1051,26 @@ export function scheduleSpawnTasks(): void {
     }
   }
 
-  const initialConfigs = getCreepConfigService().list();
 
   // RCL1 rooms with no creeps get exactly one harvester queued; skip all other logic.
   const initialHarvesterRooms = new Set<string>();
   for (const room of tickContext.getMyRooms()) {
     const spawns = spawnsByRoom.get(room.name) ?? [];
-    if (tryQueueInitialHarvester(room, spawns, initialConfigs, planningContext)) {
+    if (tryQueueInitialHarvester(room, spawns, planningContext)) {
       initialHarvesterRooms.add(room.name);
     }
   }
 
   for (const spawn of spawnByRoom.values()) {
     if (!initialHarvesterRooms.has(spawn.room.name) && !ensureRecoveryHarvester(
-      spawn.room, spawnsByRoom.get(spawn.room.name) ?? [], initialConfigs, planningContext,
+      spawn.room, spawnsByRoom.get(spawn.room.name) ?? [], planningContext,
     )) {
       ensureEmergencyCarrier(spawn);
     }
   }
 
-  const configs = getCreepConfigService().list();
-  for (const [configName, config] of Object.entries(configs)) {
+  const configs = getCreepConfigService().getReadIndex();
+  for (const [configName, config] of configs.entries) {
     if (!config.roomName) {
       continue;
     }
@@ -1088,7 +1079,7 @@ export function scheduleSpawnTasks(): void {
       continue;
     }
 
-    if (config.role === "depositHarvester" && !canSpawnDepositConfig(configName, config)) continue;
+    if (!canExecuteSpawnRequest(configName, config)) continue;
 
     if (config.role === "powerBankHauler") {
       queuePowerBankHaulerConfig(spawnsByRoom.get(config.roomName) ?? [], configName, config, planningContext);
@@ -1103,7 +1094,7 @@ export function scheduleSpawnTasks(): void {
     queueMissingConfig(spawnsByRoom.get(config.roomName) ?? [], configName, config, planningContext);
   }
 
-  const knownConfigNames = new Set(Object.keys(getCreepConfigService().list()));
+  const knownConfigNames = new Set(getCreepConfigService().getReadIndex().names);
   for (const spawns of spawnsByRoom.values()) {
     reconcileSpawnQueueOwnership(spawns, {
       knownConfigNames,

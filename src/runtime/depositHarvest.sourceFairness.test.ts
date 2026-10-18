@@ -2,7 +2,7 @@ import { runDepositHarvest, canSpawnDepositConfig } from "@/runtime/depositHarve
 import { recordDepositDiscovery } from "@/runtime/depositDiscovery";
 import { clearDepositPathCacheForTest, measureDepositTravel } from "@/runtime/depositPathDistance";
 import { DEPOSIT_BODY } from "@/runtime/depositViability";
-import type { CreepConfig } from "@/types/system";
+
 
 // 整合真实 manager + path validator + 负缓存 + 1/2 测量预算。
 // PF provider 只给原始路径；measureDepositTravel 不 mock。
@@ -15,13 +15,12 @@ jest.mock("@/runtime/powerBankObserver", () => ({ requestDepositObservation: () 
 jest.mock("@/config/spawnProfiles", () => ({ spawnProfiles: {} }));
 jest.mock("@/runtime/runtimeServices", () => ({
   getTickContextService: () => ({ getMyRooms: () => Object.values(Game.rooms).filter((r) => r.controller?.my) }),
-  getCreepConfigService: () => ({
-    get: (name: string) => Memory.data?.creepConfigs?.[name], list: () => Memory.data?.creepConfigs ?? {},
-    remove: (name: string) => { delete Memory.data!.creepConfigs![name]; },
-    upsert: (name: string, role: CreepConfig["role"], args: string[], roomName: string) => {
-      (Memory.data!.creepConfigs ??= {})[name] = { role, args, roomName };
-    },
-  }),
+  getCreepConfigService: (() => {
+    const { createCreepConfigService } = jest.requireActual("@/runtime/creepConfigService");
+    const { createRuntimeMemoryService } = jest.requireActual("@/runtime/memoryService");
+    const service = createCreepConfigService(createRuntimeMemoryService());
+    return () => service;
+  })(),
 }));
 
 function pos(x: number, y: number, roomName: string): RoomPosition { return { x, y, roomName } as RoomPosition; }

@@ -1,13 +1,13 @@
 import { cancelSpawning } from "./spawnIndex";
 import { measureSampledCpuPhase } from "@/runtime/cpuPhaseProfiler";
 import { getCreepConfigService, getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
-import { requestCombatObservation, OBSERVATION_REQUEST_TTL } from "@/runtime/powerBankObserver";
+import { requestCombatObservation } from "@/runtime/powerBankObserver";
 import { assessUnboostedNpc, isNpcWarTarget } from "@/runtime/warNpcPolicy";
 import { TOWER_DRAIN_ATTACKER_BODY, TOWER_DRAIN_HEALER_BODY, WAR_CLEAR_DEBOUNCE_TICKS } from "./constants";
-import type { WarGenerationState, WarRole, WarTask } from "./store";
+import { type WarGenerationState, type WarRole, type WarTask, ensureConfigStore, getControllerAttackConfigName, getGenerationBoostTaskId, getGenerationConfigName, getLiveCreepsByConfig, getTaskConfigNames } from "./store";
 import { activateFrontline, processScheduledTask } from "./lifecycle";
 import { clearControllerAttackConfig, collectSpawningForConfigs, detachWarTaskCreeps, ensureControllerAttackConfig, getSpawnsForRoom, isConfigQueuedInSpawns, isConfigSpawning, isGenerationComplete, releaseWarBoosts, removeConfig, removeQueuedConfigByName, resetWarCreepTargetState, synchronizeGenerationRoleArgs, transitionWarTaskTerminal } from "./production";
-import { ensureConfigStore, getControllerAttackConfigName, getGenerationBoostTaskId, getGenerationConfigName, getLiveCreepsByConfig, getTaskConfigNames } from "./store";
+
 import { getHostilePresence, isControllerDefeated, isControllerDowngradeReady } from "./observation";
 import { getRoleBody } from "./squadPolicy/index";
 import { setTaskStatus } from "./fsm";
@@ -81,7 +81,7 @@ export function transferSharedGeneration(from: WarTask, to: WarTask): boolean {
     getTickContextService().reindexCreepConfig(member, previous.configNames[role]);
     member.memory._warPartnerConfigName = generation.configNames[role === "meleeAttacker" ? "healer" : "meleeAttacker"];
     resetWarCreepTargetState(member);
-    store[name] = { role, roomName: to.sourceRoom, args: [], body: getRoleBody(to, role), spawnOnce: { queuedAt: previous.createdAt } };
+    getCreepConfigService().set(name, { role, roomName: to.sourceRoom, args: [], body: getRoleBody(to, role), spawnOnce: { queuedAt: previous.createdAt } });
   }
   synchronizeGenerationRoleArgs(to, false);
   delete from.activeGeneration;

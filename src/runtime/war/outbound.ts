@@ -1,9 +1,10 @@
 import { getCreepConfigService, getTickContextService } from "@/runtime/runtimeServices";
 import { isDefenseMode } from "@/runtime/defenseMode";
 import { isRoomInReserveMode } from "@/runtime/roomReserve";
-import type { CreepConfig } from "@/types/system";
-import type { WarTask } from "./store";
-import type { OutboundMissionOwner } from "@/runtime/outboundMissionRegistry";
+import { type CreepConfig } from "@/types/system";
+import { type WarTask } from "./store";
+import { type OutboundMissionOwner } from "@/runtime/outboundMissionRegistry";
+import { hasAcceptedSpawn } from "@/runtime/spawnRequests";
 
 /** 只认任务所有者和当前代，旧代/同目标的孤立配置不能借用在途豁免。 */
 function ownsWarConfig(task: WarTask, name: string, config: CreepConfig): boolean {
@@ -40,7 +41,9 @@ export function canContinueWarMission(task: WarTask): boolean {
   const context = getTickContextService();
   if ([...names].some(name => context.getCreepsByConfigName(name).some(creep =>
     !creep.memory._warDetached && creep.memory.configName === name))) return committed();
-  const pending = context.getSpawnsByRoom(task.sourceRoom).some(spawn =>
+  const sourceSpawns = context.getSpawnsByRoom(task.sourceRoom);
+  const sourceNames = new Set(sourceSpawns.map(spawn => spawn.name));
+  const pending = [...names].some(name => hasAcceptedSpawn(name, sourceNames)) || sourceSpawns.some(spawn =>
     ((spawn.memory.spawnList ?? []).some(name => names.has(name)) ||
       !!spawn.spawning && names.has(Memory.creeps?.[spawn.spawning.name]?.configName ?? "")));
   return pending ? committed() : false;
@@ -55,8 +58,9 @@ export const warMissionOwner: OutboundMissionOwner = {
     if (!mode.reserve || mode.defense) return { intent: "expedition", committed: false };
     if (name === `${config.roomName}:war:${config.args[0]}:controllerAttacker:0` && config.role === "claimer" && config.args[2] === "attack") {
       const active = task && task.sourceRoom === config.roomName && ["staging", "clearing", "downgrading", "patrol_waiting"].includes(task.status);
-      const committed = !!active && getTickContextService().getSpawnsByRoom(config.roomName!).some(spawn =>
-        (spawn.memory.spawnList ?? []).includes(name) || !!spawn.spawning && Memory.creeps?.[spawn.spawning.name]?.configName === name);
+      const spawns = getTickContextService().getSpawnsByRoom(config.roomName!);
+      const committed = !!active && (hasAcceptedSpawn(name, new Set(spawns.map(spawn => spawn.name))) || spawns.some(spawn =>
+        (spawn.memory.spawnList ?? []).includes(name) || !!spawn.spawning && Memory.creeps?.[spawn.spawning.name]?.configName === name));
       return { intent: "expedition", committed };
     }
     return { intent: "expedition", committed: !!task && ownsWarConfig(task, name, config) && canContinueWarMission(task) };

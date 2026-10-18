@@ -1,3 +1,4 @@
+import { getCreepConfigService } from "@/runtime/runtimeServices";
 jest.mock("@/roles/optionalCombatBoosts", () => ({ prepareOptionalCombatBoost: jest.fn(() => false) }));
 jest.mock("@/roles/energyTargets", () => ({
   pickupEnergyFromPreferredTarget: jest.fn(() => ({ picked: false, outOfRange: false })),
@@ -87,7 +88,7 @@ describe("upgraderRole", () => {
     const room = createRoom([], 8, true, "E4N58", 195_000);
     Game.rooms.E4N58 = room;
     Memory.data!.manualUpgraders!.E4N58.maintenance = true;
-    Memory.data!.creepConfigs!["E4N58:upgrader:0"].args = ["E4N58"];
+    getCreepConfigService().patch("E4N58:upgrader:0", { args: ["E4N58"] });
     const creep = createCreep(room, 100);
 
     expect(upgraderRole("E4N58").prepare?.(creep)).toBe(true);

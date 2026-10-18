@@ -1,5 +1,7 @@
-import { getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
-import type { CreepConfig } from "@/types/system";
+import { replaceSpawnQueue, hasAcceptedSpawn } from "@/runtime/spawnRequests";
+import { getCreepConfigService, getTickContextService } from "@/runtime/runtimeServices";
+
+import { type CreepConfig } from "@/types/system";
 
 /** 默认负载沿用“孵化中算一项 + 队列长度”，调用方可显式提供计划负载。 */
 export function getSpawnQueueLoad(spawn: StructureSpawn): number {
@@ -13,8 +15,8 @@ export function selectLeastLoadedSpawn(
   return [...spawns].sort((left, right) => load(left) - load(right) || left.name.localeCompare(right.name))[0];
 }
 
-export function ensureConfigStore(): Record<string, CreepConfig> {
-  return getMemoryService().getCreepConfigStore();
+export function ensureConfigStore(): Readonly<Record<string, CreepConfig>> {
+  return getCreepConfigService().readStore();
 }
 
 export function getBodyCost(body: readonly BodyPartConstant[]): number {
@@ -28,7 +30,7 @@ export function getLiveCreepsByConfig(configName: string): Creep[] {
 /** spawns 必须由调用方给出，保留全局、己方房间或任务来源各自的查询范围。 */
 export function isConfigSpawning(configName: string, spawns: readonly StructureSpawn[]): boolean {
   const memory = Memory.creeps || {};
-  return spawns.some(spawn => !!spawn.spawning && memory[spawn.spawning.name]?.configName === configName);
+  return hasAcceptedSpawn(configName, new Set(spawns.map(spawn => spawn.name))) || spawns.some(spawn => !!spawn.spawning && memory[spawn.spawning.name]?.configName === configName);
 }
 
 export function isConfigQueuedInSpawns(spawns: readonly StructureSpawn[], configName: string): boolean {
@@ -37,12 +39,12 @@ export function isConfigQueuedInSpawns(spawns: readonly StructureSpawn[], config
 
 export function enqueueConfig(spawn: StructureSpawn, configName: string, toFront: boolean): void {
   const queue = spawn.memory.spawnList || [];
-  if (toFront) spawn.memory.spawnList = [configName, ...queue.filter(name => name !== configName)];
+  if (toFront) replaceSpawnQueue(spawn, [configName, ...queue.filter(name => name !== configName)]);
   else if (!queue.includes(configName)) spawn.addTask(configName);
 }
 
 export function removeQueuedSpawnConfig(spawns: readonly StructureSpawn[], configName: string): void {
   for (const spawn of spawns) {
-    if (spawn.memory.spawnList) spawn.memory.spawnList = spawn.memory.spawnList.filter(name => name !== configName);
+    if (spawn.memory.spawnList) replaceSpawnQueue(spawn, spawn.memory.spawnList.filter(name => name !== configName));
   }
 }

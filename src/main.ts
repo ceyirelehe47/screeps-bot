@@ -1,3 +1,4 @@
+import { registerSpawnRequestOwners } from "@/runtime/registerSpawnRequestOwners";
 import { createProcessScheduler } from "@/runtime/processScheduler";
 import { markCpuTickPhase, completeCpuTickHealth } from "@/runtime/cpuTickHealth";
 import { errorMapper, reportRuntimeError } from "@/modules/errorMapper";
@@ -40,21 +41,17 @@ import { runPowerSpawnControl } from "@/runtime/powerSpawnControl";
 import { runNukerControl } from "@/runtime/nukerControl";
 import { refreshWorkerTasks } from "@/runtime/workerTaskPool";
 import { createTickCpuProfiler, setActiveTickCpuProfiler } from "@/runtime/cpuPhaseProfiler";
-import { getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
+import { getTickContextService } from "@/runtime/runtimeServices";
 import { runHubProgressAnalytics, renderHubProgressOverlays } from "@/runtime/hubProgress";
 import { runRemoteMining } from "@/runtime/remoteMining";
 import { runMarketSalePreflight } from "@/runtime/marketSaleAutomation";
 import { runLiveMarketSaleAutomation } from "@/runtime/marketSaleRuntime";
 import { runEmpireInventoryShadowCheck } from "@/runtime/empireInventoryShadow";
-import {
-  beginTreasuryProductionTick,
-  endTreasuryProductionTick,
-  registerTreasuryProductionTerminalTransfer,
-  runTreasuryT1ShadowObservation,
-} from "@/runtime/treasuryTerminalTransfer";
+import { beginTreasuryProductionTick, endTreasuryProductionTick, registerTreasuryProductionTerminalTransfer, runTreasuryT1ShadowObservation } from "@/runtime/treasuryTerminalTransfer";
 
 registerOutboundMissionOwners();
 registerTaskMemoryOwners();
+registerSpawnRequestOwners();
 registerTreasuryProductionTerminalTransfer();
 registerGlobalApi();
 mountAll();

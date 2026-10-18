@@ -69,7 +69,7 @@ function createRoom(options: {
 }
 
 function createSpawn(room: Room, queue: string[] = []): StructureSpawn {
-  return { room, memory: { spawnList: [...queue] } } as StructureSpawn;
+  return { room, memory: { spawnList: [...queue] } } as unknown as StructureSpawn;
 }
 
 function createOwnedStructure(structureType: StructureConstant): Structure {

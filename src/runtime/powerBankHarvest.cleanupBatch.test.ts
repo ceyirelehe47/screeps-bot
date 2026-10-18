@@ -1,3 +1,5 @@
+import { requestSpawn } from "@/runtime/spawnRequests";
+import { getCreepConfigService, getTickContextService } from "@/runtime/runtimeServices";
 jest.mock("@/runtime/powerBankObserver", () => ({
   hasPowerBankObserverCoverage: () => true,
   requestPowerBankObservation: jest.fn(),
@@ -6,8 +8,8 @@ jest.mock("@/runtime/powerBankObserver", () => ({
 
 import { runPowerBankHarvest } from "@/runtime/powerBankHarvest";
 import { getPowerBankConfigName, POWER_BANK_STATUS } from "@/runtime/powerBankConstants";
-import { getTickContextService } from "@/runtime/runtimeServices";
-import type { CreepConfig } from "@/types/system";
+
+import { type CreepConfig } from "@/types/system";
 
 function setupRoom(name: string): StructureSpawn {
   const room = { name, controller: { my: true, level: 8 }, find: () => [] } as unknown as Room;
@@ -48,16 +50,13 @@ describe("PowerBank 批量配置清理", () => {
     const names = Array.from({ length: 64 }, (_, index) => `E5N55:powerbank:E0N60:attacker:${index}`);
     names.forEach(name => addConfig(name));
     const spawns = Array.from({ length: 8 }, (_, index) => setupRoom(`E${index + 1}N55`));
-    const filters = spawns.map(spawn => {
-      const queue = ["worker-a", ...names, "worker-b", names[0], "worker-c"];
-      const filter = jest.spyOn(queue, "filter");
-      spawn.memory.spawnList = queue;
-      return filter;
-    });
+    spawns.forEach(spawn => { spawn.memory.spawnList = ["worker-a", ...names, "worker-b", names[0], "worker-c"]; });
+    const requests = jest.requireActual("@/runtime/spawnRequests");
+    const replace = jest.spyOn(requests, "replaceSpawnQueue");
     const byRoom = jest.spyOn(getTickContextService(), "getSpawnsByRoom");
     runPowerBankHarvest();
     spawns.forEach(spawn => expect(spawn.memory.spawnList).toEqual(["worker-a", "worker-b", "worker-c"]));
-    filters.forEach(filter => expect(filter).toHaveBeenCalledTimes(1));
+    expect(replace).toHaveBeenCalledTimes(8);
     expect(byRoom).toHaveBeenCalledTimes(8);
     expect(Memory.data!.creepConfigs).toEqual({});
   });
@@ -82,7 +81,7 @@ describe("PowerBank 批量配置清理", () => {
     const legacy = getPowerBankConfigName(current.sourceRoom, current.targetRoom, "attacker", 0);
     const previous = getPowerBankConfigName("E6N55", current.targetRoom, "attacker", 0, current.id, 0);
     const orphan = getPowerBankConfigName(current.sourceRoom, current.targetRoom, "healer", 0, "orphan", 0);
-    addConfig(legacy); delete Memory.data!.creepConfigs![legacy].taskId;
+    addConfig(legacy); getCreepConfigService().patch(legacy, { taskId: undefined });
     addConfig(previous, current.id); addConfig(orphan);
     spawn.memory.spawnList = [legacy, orphan, previous];
     runPowerBankHarvest();
@@ -98,7 +97,7 @@ describe("PowerBank 批量配置清理", () => {
     const second = "E5N55:powerbank:E0N60:attacker:second";
     addConfig(first); spawn.memory.spawnList = [first, "worker"];
     runPowerBankHarvest();
-    addConfig(second); spawn.memory.spawnList!.push(second);
+    addConfig(second); requestSpawn(spawn, second);
     runPowerBankHarvest();
     expect(spawn.memory.spawnList).toEqual(["worker"]);
     expect(Memory.data!.creepConfigs).toEqual({});

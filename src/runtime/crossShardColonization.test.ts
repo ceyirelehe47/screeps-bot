@@ -1,3 +1,4 @@
+import { requestSpawn } from "@/runtime/spawnRequests";
 jest.mock("@/runtime/defenseMode", () => ({
   isDefenseMode: jest.fn(() => false),
 }));
@@ -43,14 +44,13 @@ function createSpawn(name: string, room: Room): StructureSpawn {
       spawn.memory.spawnList = [];
     }
     if (!spawn.memory.spawnList.includes(configName)) {
-      spawn.memory.spawnList.push(configName);
+      requestSpawn(spawn, configName);
     }
     return spawn.memory.spawnList.length;
   });
 
   return spawn;
 }
-
 
 describe("runCrossShardColonizationByFlag", () => {
   beforeEach(() => {
@@ -177,7 +177,6 @@ describe("runCrossShardColonizationByFlag", () => {
     expect(spawnB.memory.spawnList).toContain(configName);
   });
 });
-
 
 it("Portal 旧快照已过期时不能继续排队，并撤销原有待孵化配置", () => {
   resetRuntimeServices(); Game.time = 10000; Game.creeps = {}; Game.flags = {};

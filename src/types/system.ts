@@ -1,21 +1,21 @@
-import type { RoleName } from "@/types/roleCatalog";
+import { type RoleName } from "@/types/roleCatalog";
 
 export type { RoleName } from "@/types/roleCatalog";
 export type WorkerTaskType = "build" | "upgrade" | "repair" | "dismantle";
 export type RoomType = "normal" | "reserved" | "industrial";
 
 export interface CreepConfig {
-  role: RoleName;
-  args: string[];
-  roomName?: string;
-  body?: BodyPartConstant[];
-  name?: string;
+  readonly role: RoleName;
+  readonly args: readonly string[];
+  readonly roomName?: string;
+  readonly body?: readonly BodyPartConstant[];
+  readonly name?: string;
   /** Stable owner for PowerBank configs; absent on legacy configs. */
-  taskId?: string;
+  readonly taskId?: string;
   /** Combat-pair generation for PowerBank attacker/healer configs. */
-  powerBankGeneration?: number;
-  spawnOnce?: {
-    queuedAt?: number;
+  readonly powerBankGeneration?: number;
+  readonly spawnOnce?: {
+    readonly queuedAt?: number;
   };
 }
 
@@ -46,5 +46,5 @@ export interface CreepApi {
   add(configName: string, role: RoleName, ...args: string[]): string;
   remove(configName: string): string;
   get(configName: string): CreepConfig | undefined;
-  list(prefix?: string): Record<string, CreepConfig>;
+  list(prefix?: string): Readonly<Record<string, CreepConfig>>;
 }

@@ -1,10 +1,11 @@
+import { getCreepConfigService } from "@/runtime/runtimeServices";
 import { registerOutboundMissionOwners } from "@/runtime/registerOutboundMissionOwners";
 registerOutboundMissionOwners();
 import { canSpawnDepositConfig, runDepositHarvest } from "@/runtime/depositHarvest";
 import { isSpawnConfigEconomicallyBlocked } from "@/runtime/outboundMissionPolicy";
 import { recordDepositDiscovery } from "@/runtime/depositDiscovery";
 import { measureDepositTravel, isDepositRoomSafe } from "@/runtime/depositPathDistance";
-import type { CreepConfig } from "@/types/system";
+
 
 jest.mock("@/runtime/defenseMode", () => ({ isDefenseMode: jest.fn(() => false) }));
 jest.mock("@/runtime/powerBankObserver", () => ({ requestDepositObservation: jest.fn(() => true) }));
@@ -13,13 +14,12 @@ jest.mock("@/config/spawnProfiles", () => ({ spawnProfiles: { worker: () => [WOR
 jest.mock("@/runtime/runtimeServices", () => ({
   getTickContextService: () => ({ getMyRooms: () => Object.values(Game.rooms).filter((r) => r.controller?.my),
     getAllCreeps: () => Object.values(Game.creeps), getAllSpawns: () => Object.values(Game.spawns) }),
-  getCreepConfigService: () => ({
-    get: (name: string) => Memory.data?.creepConfigs?.[name], list: () => Memory.data?.creepConfigs ?? {},
-    remove: (name: string) => { delete Memory.data!.creepConfigs![name]; },
-    upsert: (name: string, role: CreepConfig["role"], args: string[], roomName: string) => {
-      (Memory.data!.creepConfigs ??= {})[name] = { role, args, roomName };
-    },
-  }),
+  getCreepConfigService: (() => {
+    const { createCreepConfigService } = jest.requireActual("@/runtime/creepConfigService");
+    const { createRuntimeMemoryService } = jest.requireActual("@/runtime/memoryService");
+    const service = createCreepConfigService(createRuntimeMemoryService());
+    return () => service;
+  })(),
 }));
 function deposit(): Deposit {
   return { id: "d1", pos: { x: 20, y: 20, roomName: "E10N1" }, depositType: RESOURCE_METAL,
@@ -47,7 +47,7 @@ describe("Deposit 一代owner与孵化门", () => {
     const task = Memory.data!.depositHarvest!.d1; const cfg = Memory.data!.creepConfigs![task.configName!];
     expect(cfg.spawnOnce).toEqual({}); expect(cfg.body).toHaveLength(40);
     expect(canSpawnDepositConfig(task.configName!, cfg)).toBe(true);
-    cfg.spawnOnce!.queuedAt = Game.time;
+    getCreepConfigService().patch(task.configName!, { spawnOnce: { queuedAt: Game.time } });
     Game.time += 1; runDepositHarvest();
     expect(task.bornAt).toBeUndefined(); expect(task.spawnStartedAt).toBeUndefined();
     Game.creeps.d = { name: "d", memory: { configName: task.configName }, spawning: false } as unknown as Creep;
@@ -90,7 +90,6 @@ describe("Deposit 一代owner与孵化门", () => {
   });
 });
 
-
 it("新鲜 Deposit 视野可延长到期时间，不复活终态", () => {
   const task = Memory.data!.depositHarvest!.d1;
   task.status = "failed";
@@ -99,7 +98,6 @@ it("新鲜 Deposit 视野可延长到期时间，不复活终态", () => {
   expect(task.expiresAt).toBe(Game.time + 5_000);
   expect(task.status).toBe("failed");
 });
-
 
 it("RESERVE 保留已受理 deposit 的逐 tick 复核，但不准入新 deposit", () => {
   runDepositHarvest();

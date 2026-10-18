@@ -1,3 +1,4 @@
+import { replaceSpawnQueue } from "@/runtime/spawnRequests";
 import { canStartOutboundMission } from "@/runtime/outboundMissionPolicy";
 import { spawnProfiles } from "@/config/spawnProfiles";
 import { isDefenseMode } from "@/runtime/defenseMode";
@@ -6,7 +7,7 @@ import { isDepositRoomSafe, measureDepositTravel } from "@/runtime/depositPathDi
 import { requestDepositObservation } from "@/runtime/powerBankObserver";
 import { getCreepConfigService, getTickContextService } from "@/runtime/runtimeServices";
 import { assessDepositViability, DEPOSIT_BODY } from "@/runtime/depositViability";
-import type { CreepConfig } from "@/types/system";
+import { type CreepConfig } from "@/types/system";
 
 export type DepositHarvestStatus = "discovered" | "spawning" | "outbound" | "harvesting" |
   "returning" | "unloading" | "complete" | "aborted" | "failed";
@@ -102,7 +103,7 @@ export function cleanupDepositSpawnOwner(task: DepositHarvestTask): void {
   const cfg = service.get(task.configName);
   if (cfg && !configOwned(task, cfg)) return;
   for (const spawn of Object.values(Game.spawns)) {
-    spawn.memory.spawnList = (spawn.memory.spawnList ?? []).filter((name) => name !== task.configName);
+    replaceSpawnQueue(spawn, (spawn.memory.spawnList ?? []).filter((name) => name !== task.configName));
   }
   if (cfg) service.remove(task.configName);
 }
@@ -280,9 +281,8 @@ function admit(task: DepositHarvestTask, tasks: DepositHarvestTask[], config: De
     task.outboundTravelTicks = outboundTravelTicks; task.returnTravelTicks = returnTravelTicks;
     task.configName = `${room.name}:deposit:${task.id}:g${task.generation}`;
     if (getCreepConfigService().get(task.configName)) { finishDepositTask(task, "failed", "spawn_owner_conflict"); return; }
-    getCreepConfigService().upsert(task.configName, "depositHarvester", [task.id, room.name], room.name);
-    const spawnConfig = getCreepConfigService().get(task.configName)!;
-    spawnConfig.body = [...DEPOSIT_BODY]; spawnConfig.taskId = task.id; spawnConfig.spawnOnce = {};
+    getCreepConfigService().set(task.configName, { role: "depositHarvester", args: [task.id, room.name], roomName: room.name,
+      body: [...DEPOSIT_BODY], taskId: task.id, spawnOnce: {} });
     task.status = "spawning"; task.spawnReadyAt = Game.time; delete task.blocker; delete task.nextAttemptAt;
     return;
   }
@@ -296,9 +296,9 @@ export function runDepositHarvest(): void {
   for (const task of tasks) reconcile(task, config);
   cleanupDepositDiscoveryTasks();
   // 孤立的一代配置不交给 generic spawnOnce 重试；活体从 memory fallback 返仓。
-  for (const [name, cfg] of Object.entries(getCreepConfigService().list())) {
+  for (const [name, cfg] of Object.entries(getCreepConfigService().readStore())) {
     if (cfg.role !== "depositHarvester" || (cfg.taskId && store[cfg.taskId])) continue;
-    for (const spawn of Object.values(Game.spawns)) spawn.memory.spawnList = (spawn.memory.spawnList ?? []).filter((n) => n !== name);
+    for (const spawn of Object.values(Game.spawns)) replaceSpawnQueue(spawn, (spawn.memory.spawnList ?? []).filter((n) => n !== name));
     getCreepConfigService().remove(name);
   }
   if (!config.enabled) return;

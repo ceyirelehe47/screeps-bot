@@ -1,10 +1,11 @@
+import { getCreepConfigService } from "@/runtime/runtimeServices";
 import { prepareOptionalCombatBoost } from "@/roles/optionalCombatBoosts";
 import { pickupEnergyFromPreferredTarget } from "@/roles/energyTargets";
 import { moveToTarget } from "@/roles/shared";
 import { measureCreepDecision, measureCreepIntent } from "@/runtime/cpuPhaseProfiler";
 import { releasePickupReservation } from "@/runtime/energyPickupReservation";
 import { isDedicatedUpgraderControllerRunnable } from "@/runtime/upgraderPolicy";
-import type { RoleFactory, RoleLifecycle } from "@/types/system";
+import { type RoleFactory, type RoleLifecycle } from "@/types/system";
 
 type ControllerLocalEnergySource = StructureLink | StructureContainer;
 type ControllerEnergySource = ControllerLocalEnergySource | StructureStorage;
@@ -13,7 +14,7 @@ function getActiveController(roomName: string | undefined, creep: Creep): Struct
   if (!roomName) return null;
   const configName = `${roomName}:upgrader:0`;
   const task = Memory.data?.manualUpgraders?.[roomName];
-  const config = Memory.data?.creepConfigs?.[configName];
+  const config = getCreepConfigService().get(configName);
   if (
     task?.maintenance !== true ||
     creep.memory.configName !== configName ||
