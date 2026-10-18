@@ -21,15 +21,17 @@ describe("actual move receipts", () => {
     expect(receipt.from.x).toBe(10);
     Game.time += 1; expect(getMoveIntentReceipt(creep)).toBeUndefined();
   });
-  it("tracks the last accepted intent and does not erase it for a failed attempt", () => {
+  it("requires the current receipt to replace an accepted intent and retains it for a failed native attempt", () => {
     clearMovementAnalyticsForTest();
     const creep = createMockPowerBankCreep("powerBankAttacker");
     issueMove(creep, RIGHT);
     (creep.move as jest.Mock).mockReturnValue(ERR_TIRED);
-    expect(issueMove(creep, TOP)).toBe(ERR_TIRED);
+    expect(issueMove(creep, TOP)).toBe(ERR_BUSY);
+    const previous = getMoveIntentReceipt(creep)!;
+    expect(issueMove(creep, TOP, previous)).toBe(ERR_TIRED);
     expect(getMoveIntentReceipt(creep)!.direction).toBe(RIGHT);
     expect(getMovementAnalyticsForTest().totals.moveIntentOverwrites).toBe(0);
-    (creep.move as jest.Mock).mockReturnValue(OK); issueMove(creep, LEFT);
+    (creep.move as jest.Mock).mockReturnValue(OK); issueMove(creep, LEFT, previous);
     expect(getMoveIntentReceipt(creep)!.direction).toBe(LEFT);
     expect(getMovementAnalyticsForTest().totals.moveIntentOverwrites).toBe(1);
   });
@@ -49,7 +51,7 @@ describe("actual move receipts", () => {
     Object.assign(creep, { cancelOrder: jest.fn(() => ERR_NOT_FOUND) });
     issueMove(creep, RIGHT); const first = getMoveIntentReceipt(creep)!;
     expect(cancelMoveIntent(creep, first)).toBe(false); expect(getMoveIntentReceipt(creep)).toBe(first);
-    issueMove(creep, TOP); const second = getMoveIntentReceipt(creep)!;
+    issueMove(creep, TOP, first); const second = getMoveIntentReceipt(creep)!;
     expect(cancelMoveIntent(creep, first)).toBe(false);
     (creep.cancelOrder as jest.Mock).mockReturnValue(OK);
     expect(cancelMoveIntent(creep, second)).toBe(true); expect(getMoveIntentReceipt(creep)).toBeUndefined();

@@ -1,4 +1,4 @@
-import type { RoleFactory } from "@/types/system";
+import type { RoleFactory, RoleLifecycle } from "@/types/system";
 import { moveToTarget } from "@/roles/shared";
 import { measureCreepIntent } from "@/runtime/cpuPhaseProfiler";
 import { shouldPauseNativeMineralHarvest } from "@/runtime/mineralHarvestPolicy";
@@ -19,7 +19,8 @@ function getAdjacentContainer(mineral: Mineral): StructureContainer | null {
   return (containers[0] as StructureContainer | undefined) ?? null;
 }
 
-export const mineralHarvesterRole: RoleFactory = (mineralId?: string) => ({
+export const mineralHarvesterRole: RoleFactory = (mineralId?: string) => {
+ const role: RoleLifecycle = {
   source: (creep): boolean => {
     const mineral = getMineral(mineralId);
     if (!mineral || mineral.mineralAmount <= 0) {
@@ -51,4 +52,14 @@ export const mineralHarvesterRole: RoleFactory = (mineralId?: string) => ({
     return false;
   },
   target: (): boolean => false,
-});
+};
+ role.step = (creep, stage) => {
+   if (stage === "source") {
+     const mineral = getMineral(mineralId);
+     if (!mineral || mineral.mineralAmount <= 0) return { kind: "sleep", until: Game.time + 5,
+       wake: () => (getMineral(mineralId)?.mineralAmount ?? 0) > 0 };
+   }
+   return { kind: (stage === "target" ? role.target(creep) : role.source!(creep)) ? "transition" : "continue" };
+ };
+ return role;
+};

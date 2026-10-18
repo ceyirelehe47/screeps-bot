@@ -1,3 +1,4 @@
+import { runCreepStep, compactCreepMemory, clearCreepExecution, resetCreepExecutionForTest } from "@/runtime/creepExecution";
 import { continueCreepRetirement } from "@/runtime/retirement";
 import { isDue } from "@/runtime/cadence";
 import { issueMove } from "@/movement/traffic";
@@ -83,6 +84,7 @@ function bufferRoleLifecycleCacheHit(): void {
 
 export function clearRoleLifecycleCacheForTest(): void {
   roleLifecycleCache.clear();
+  resetCreepExecutionForTest();
   roleLifecycleCacheHitBuffer = 0;
 }
 
@@ -201,7 +203,8 @@ function resolveRoleLogic(creep: Creep): ReturnType<(typeof roleRegistry)[keyof 
 
 export function mountCreep(): void {
   Creep.prototype.work = function work(): void {
-    if (continueCreepRetirement(this)) return;
+    compactCreepMemory(this.memory);
+    if (continueCreepRetirement(this)) { clearCreepExecution(this); return; }
     // spawn 让位指令优先：挡位 creep 的自身移动逻辑会覆盖 spawn 侧的
     // 直接 move（spawn.work 先执行），本 tick 让出一步并跳过自身行为，
     // 解除孵化冻结；指令带 tick，过期即忽略并清除。
@@ -254,25 +257,19 @@ export function mountCreep(): void {
     }
 
     const isWorking = this.memory.working ?? false;
-    let shouldSwitch = false;
-
-    if (isWorking) {
-      shouldSwitch = logic.target(this);
-    } else if (logic.source) {
-      shouldSwitch = logic.source(this);
-    } else {
-      shouldSwitch = true;
-    }
+    const step = runCreepStep(this, logic, isWorking ? "target" : "source");
+    const shouldSwitch = step.kind === "transition";
 
     if (shouldSwitch) {
       clearMovementState(this);
+      clearCreepExecution(this);
       this.memory.working = !isWorking;
 
       const switchedToWorking = this.memory.working === true;
       if (switchedToWorking) {
-        logic.target(this);
+        runCreepStep(this, logic, "target");
       } else if (logic.source) {
-        logic.source(this);
+        runCreepStep(this, logic, "source");
       }
     }
   };

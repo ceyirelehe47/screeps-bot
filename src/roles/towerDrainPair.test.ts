@@ -77,12 +77,14 @@ function t3Pair(outside = false, structures: Structure[] = [tower("tower")], hos
 function deferredBorderFrame(actors: Creep[]): () => void {
   const pending = new Map<Creep, DirectionConstant>();
   const offsets: Record<number, [number, number]> = { 1: [0, -1], 2: [1, -1], 3: [1, 0], 4: [1, 1], 5: [0, 1], 6: [-1, 1], 7: [-1, 0], 8: [-1, -1] };
-  for (const actor of actors) actor.move = jest.fn((direction: DirectionConstant) => { pending.set(actor, direction); return OK; }) as unknown as Creep["move"];
+  for (const actor of actors) {
+    actor.move = jest.fn((direction: DirectionConstant) => { pending.set(actor, direction); return OK; }) as unknown as Creep["move"];
+    actor.cancelOrder = jest.fn((method: string) => { if (method === "move") pending.delete(actor); return OK; }) as Creep["cancelOrder"];
+  }
   moveToTarget.mockImplementation((actor: Creep, target: RoomPosition | { pos: RoomPosition }) => {
     const destination = "pos" in target ? target.pos : target;
     const direction = actor.pos.getDirectionTo(destination);
-    if (direction) actor.move(direction);
-    return OK;
+    return direction ? issueMove(actor, direction) : OK;
   });
   return () => {
     const positions = actors.map((actor) => {

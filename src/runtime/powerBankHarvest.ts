@@ -264,7 +264,7 @@ function retireCombatGeneration(task: PowerBankHarvestTask, index: number): void
         if (memory.taskId !== undefined && memory.taskId !== task.id) continue;
         delete memory.taskId;
         delete memory.powerBankReinforcementStage;
-        creep.suicide();
+        retireCreep(creep, { owner: "powerBank", mode: "suicide" });
       }
       getCreepConfigService().remove(configName);
     }
@@ -1962,8 +1962,8 @@ function retireCombatCreeps(task: PowerBankHarvestTask): void {
   const attacker = task.attackerId ? Game.getObjectById(task.attackerId as Id<Creep>) : null;
   const healer = task.healerId ? Game.getObjectById(task.healerId as Id<Creep>) : null;
 
-  attacker?.suicide();
-  healer?.suicide();
+  if (attacker) retireCreep(attacker, { owner: "powerBank", mode: "suicide" });
+  if (healer) retireCreep(healer, { owner: "powerBank", mode: "suicide" });
 }
 
 function processHauling(task: PowerBankHarvestTask): void {

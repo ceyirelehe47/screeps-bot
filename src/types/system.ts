@@ -19,7 +19,13 @@ export interface CreepConfig {
   };
 }
 
+export type CreepStepResult =
+  | { readonly kind: "transition" }
+  | { readonly kind: "continue"; readonly sticky?: { readonly until: number; readonly run: (creep: Creep) => boolean } }
+  | { readonly kind: "sleep"; readonly until: number; readonly wake?: (creep: Creep) => boolean };
+
 export interface RoleLifecycle {
+  step?: (creep: Creep, stage: "source" | "target") => CreepStepResult;
   prepare?: (creep: Creep) => boolean;
   source?: (creep: Creep) => boolean;
   target: (creep: Creep) => boolean;

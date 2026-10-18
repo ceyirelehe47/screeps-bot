@@ -1,3 +1,5 @@
+import { enforceLegacyMarketSafetyLatch } from "@/runtime/marketSaleConfig";
+import { resolveTrafficIntents } from "@/movement/traffic";
 import { registerSpawnRequestOwners } from "@/runtime/registerSpawnRequestOwners";
 import { createProcessScheduler } from "@/runtime/processScheduler";
 import { markCpuTickPhase, completeCpuTickHealth } from "@/runtime/cpuTickHealth";
@@ -81,6 +83,7 @@ function gameLoop(): void {
   try {
     scheduler.runAll({
       announceDeploy: announceDeploy,
+      marketSafetyLatch: enforceLegacyMarketSafetyLatch,
       marketSalePreflight: runMarketSalePreflight,
       pixelGenerator: runPixelGenerator,
       productionMonitor: runProductionMonitor,
@@ -135,6 +138,7 @@ function gameLoop(): void {
           }
         });
       },
+      trafficResolution: () => { resolveTrafficIntents(); },
       empireInventoryShadow: runEmpireInventoryShadowCheck,
     });
   } finally {

@@ -1,7 +1,7 @@
-import type { RoleFactory } from "@/types/system";
+import type { RoleFactory, RoleLifecycle } from "@/types/system";
 import { moveToTarget } from "@/roles/shared";
 import { measureCreepIntent } from "@/runtime/cpuPhaseProfiler";
-import { getPlannedSourceContainerPos } from "@/runtime/roomPlannerConstruction";
+import { getPlannedSourceContainerPos } from "@/runtime/sourceWorkPosition";
 import { getSourceAdjacentLink } from "@/runtime/sourceLink";
 import { shouldPauseEnergyExtraction } from "@/runtime/energyInflowGuard";
 
@@ -21,7 +21,8 @@ function unloadOverflow(creep: Creep): boolean {
   return code === OK;
 }
 
-export const minerRole: RoleFactory = (sourceId?: string) => ({
+export const minerRole: RoleFactory = (sourceId?: string) => {
+ const role: RoleLifecycle = {
   source: (creep): boolean => {
     const source = getSource(sourceId);
     if (!source) {
@@ -105,4 +106,19 @@ export const minerRole: RoleFactory = (sourceId?: string) => ({
 
     return false;
   },
-});
+};
+ role.step = (creep, stage) => {
+   if (stage === "target") return { kind: role.target(creep) ? "transition" : "continue" };
+   if (role.source!(creep)) return { kind: "transition" };
+   return { kind: "continue", sticky: { until: Game.time + 5, run: current => {
+     const source = getSource(sourceId);
+     if (!source || source.energy <= 0 || current.spawning || current.getActiveBodyparts(WORK) <= 0 ||
+         !current.pos.inRangeTo(source, 1) || current.store.getFreeCapacity(RESOURCE_ENERGY) <= 0 ||
+         shouldPauseEnergyExtraction(current.room.name)) return false;
+     const workPos = getPlannedSourceContainerPos(source);
+     if (workPos && !current.pos.isEqualTo(workPos)) return false;
+     return measureCreepIntent(() => current.harvest(source)) === OK;
+   } } };
+ };
+ return role;
+};

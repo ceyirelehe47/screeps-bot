@@ -1,3 +1,4 @@
+import { retireCreep } from "@/runtime/retirement";
 import { isDue } from "@/runtime/cadence";
 import { getCreepConfigService, getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
 import { getBodyCost, getLiveCreepsByConfig, isConfigSpawning as hasSpawningConfig, removeQueuedSpawnConfig } from "@/runtime/spawnHelpers";
@@ -203,9 +204,7 @@ function isConfigSpawning(configName: string): boolean { const context = getTick
 function removeQueuedConfig(task: FlagHaulTask, configName: string): void { removeQueuedSpawnConfig(getTickContextService().getSpawnsByRoom(task.sourceRoom), configName); }
 
 function retireEmptySalvageMember(task: FlagHaulTask, creep: Creep): void {
-  creep.memory._recycleToRoom = task.sourceRoom;
-  delete creep.memory.configName;
-  clearMovementState(creep);
+  retireCreep(creep, { owner: "hauling", mode: "recycle", roomName: task.sourceRoom });
 }
 
 function trimSalvageConfig(task: FlagHaulTask, name: string): void {

@@ -1,3 +1,4 @@
+import type { Squad } from "@/runtime/squads/squad";
 import { ensureCreepMovementState, getCreepMovementState } from "@/movement/creepState";
 import { recordMovementMetric } from "@/movement/metrics";
 import { getTickContextService } from "@/runtime/runtimeServices";
@@ -123,6 +124,7 @@ export interface MoveIntentReceipt {
   readonly tick: number;
   readonly actorId: string;
   readonly direction: DirectionConstant;
+  readonly kind: "role" | "yield";
   readonly from: Readonly<{ x: number; y: number; roomName: string }>;
   /** 引擎原房坐标估计；任一轴越界时整步忽略，保留原坐标。 */
   readonly attempted: Readonly<{ x: number; y: number; roomName: string }> | null;
@@ -130,20 +132,34 @@ export interface MoveIntentReceipt {
   readonly to: Readonly<{ x: number; y: number; roomName: string }> | null;
 }
 
-// 每个 Game/tick 仅保留每个 actor 最后一次成功 move，不写 Memory。
+// 每 tick 每个 actor 保留首个成功 move；明确持有当前收据的 owner 才能替换。
 let receiptGame: typeof Game | undefined;
 let receiptTick = -1;
-let moveReceipts = new WeakMap<AnyCreep, MoveIntentReceipt>();
+let moveReceipts = new Map<AnyCreep, MoveIntentReceipt>();
 let destinationActors = new Map<string, Set<AnyCreep>>();
+let squads = new Map<string, Squad>();
+let moveRevision = 0;
+let actorMoveRevisions = new WeakMap<AnyCreep, number>();
 
-function currentMoveReceipts(): WeakMap<AnyCreep, MoveIntentReceipt> {
+function currentMoveReceipts(): Map<AnyCreep, MoveIntentReceipt> {
   if (receiptGame !== Game || receiptTick !== Game.time) {
     receiptGame = Game;
     receiptTick = Game.time;
-    moveReceipts = new WeakMap<AnyCreep, MoveIntentReceipt>();
+    moveReceipts = new Map<AnyCreep, MoveIntentReceipt>();
     destinationActors = new Map();
+    squads = new Map();
+    moveRevision = 0; actorMoveRevisions = new WeakMap();
   }
   return moveReceipts;
+}
+
+function bumpMoveRevision(actor: AnyCreep): void {
+  moveRevision++; actorMoveRevisions.set(actor, (actorMoveRevisions.get(actor) ?? 0) + 1);
+}
+/** 排除自身动作/回滚，只在其它单位的新移动事实出现后允许重试等待。 */
+export function getMoveIntentRevision(except: readonly AnyCreep[] = []): number {
+  currentMoveReceipts();
+  return moveRevision - except.reduce((sum, actor) => sum + (actorMoveRevisions.get(actor) ?? 0), 0);
 }
 
 const destinationKey = (pos: Readonly<{ x: number; y: number; roomName: string }>): string => `${pos.roomName}:${pos.x}:${pos.y}`;
@@ -207,7 +223,18 @@ export function getMoveIntentReceipt(creep: AnyCreep): MoveIntentReceipt | undef
 }
 
 /** 与原 native 调用、Profiler、返回值一致；失败尝试不覆盖先前成功意图。 */
-export function issueMove(creep: AnyCreep, direction: DirectionConstant): CreepMoveReturnCode {
+export function issueMove(creep: AnyCreep, direction: DirectionConstant, replace?: MoveIntentReceipt, kind: "role" | "yield" = "role"): CreepMoveReturnCode {
+  const receipts = currentMoveReceipts();
+  const previous = receipts.get(creep);
+  if (previous && previous.direction === direction && replace !== previous) {
+    if (previous.kind === "yield" && kind === "role") receipts.set(creep, Object.freeze({ ...previous, kind }));
+    return OK;
+  }
+  // 让路是代为提交的临时动作；单位自身的正式动作可以接管，其余替换仍需当前收据。
+  if (previous && replace !== previous && !(previous.kind === "yield" && kind === "role")) {
+    recordMovementMetric("moveIntentRejected", creep.room?.name);
+    return ERR_BUSY;
+  }
   const from = Object.freeze({ x: creep.pos.x, y: creep.pos.y, roomName: creep.pos.roomName });
   const code = isStandardCreep(creep)
     ? measureCreepIntent(() => creep.move(direction))
@@ -217,11 +244,12 @@ export function issueMove(creep: AnyCreep, direction: DirectionConstant): CreepM
     if (receipts.has(creep)) recordMovementMetric("moveIntentOverwrites", creep.room?.name);
     removeMoveDestination(creep, receipts.get(creep));
     const receipt = Object.freeze({
-      tick: Game.time, actorId: creep.id ?? creep.name, direction, from,
+      tick: Game.time, actorId: creep.id ?? creep.name, direction, kind, from,
       attempted: getMoveIntentAttemptedPosition(from, direction),
       to: getMoveIntentDestination(from, direction),
     });
     receipts.set(creep, receipt);
+    bumpMoveRevision(creep);
     if (receipt.to) {
       const key = destinationKey(receipt.to);
       const actors = destinationActors.get(key) ?? new Set<AnyCreep>();
@@ -232,13 +260,72 @@ export function issueMove(creep: AnyCreep, direction: DirectionConstant): CreepM
 }
 
 /** 只撤销调用者持有的当前成功意图，不碰此前其它调用者的意图。 */
-export function cancelMoveIntent(creep: Creep, receipt: MoveIntentReceipt): boolean {
+export function cancelMoveIntent(creep: AnyCreep, receipt: MoveIntentReceipt): boolean {
   const receipts = currentMoveReceipts();
   if (receipts.get(creep) !== receipt || typeof creep.cancelOrder !== "function") return false;
   if (creep.cancelOrder("move") !== OK) return false;
   removeMoveDestination(creep, receipt);
   receipts.delete(creep);
+  bumpMoveRevision(creep);
   return true;
+}
+
+/** Owner 的成员绑定在 tick 末协调冲突；独立跨房几何仍由各 owner 的退出证明决定。 */
+export function registerSquadMovement(squad: Squad): void {
+  currentMoveReceipts();
+  squads.set(JSON.stringify([squad.owner, squad.taskId, squad.generation]), squad);
+}
+
+/** 原生校验/intent 返回值保留在 issueMove；此处只取消冲突，不伪造提前成功的移动。 */
+export function resolveTrafficIntents(): { checked: number; canceled: number; unresolved: number } {
+  const receipts = currentMoveReceipts();
+  const selected = new Set(receipts.keys());
+  const owned = [...getTickContextService().getAllCreeps(), ...Object.values(Game.powerCreeps ?? {}).filter(actor => actor.ticksToLive != null)];
+  const occupants = new Map<string, AnyCreep[]>();
+  for (const actor of owned) {
+    const key = destinationKey(actor.pos), rows = occupants.get(key) ?? [];
+    rows.push(actor); occupants.set(key, rows);
+  }
+  const priority = (actor: AnyCreep): number => "memory" in actor && (actor.memory as CreepMemory).role === "homeDefender" ? 2 : 1;
+  const attemptedActors = new Map<string, Set<AnyCreep>>();
+  for (const [actor, receipt] of receipts) if (receipt.attempted) {
+    const key = destinationKey(receipt.attempted), actors = attemptedActors.get(key) ?? new Set<AnyCreep>();
+    actors.add(actor); attemptedActors.set(key, actors);
+  }
+  for (const actors of [...attemptedActors.values(), ...destinationActors.values()]) {
+    const ranked = [...actors].sort((a, b) => priority(b) - priority(a) || (a.id ?? a.name).localeCompare(b.id ?? b.name));
+    for (const actor of ranked.slice(1)) selected.delete(actor);
+  }
+  // 传播被挡链；唯一落点的交换和环保持有效。
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const actor of selected) {
+      // 原房碰撞先于出口迁房；不能用迁房后的坐标误判原房挡位/合法跟随。
+      const to = receipts.get(actor)!.attempted;
+      if (!to) continue;
+      if ((occupants.get(destinationKey(to)) ?? []).some(other => other !== actor && (
+        !selected.has(other) || !receipts.get(other)?.attempted || destinationKey(receipts.get(other)!.attempted!) === destinationKey(other.pos)
+      ))) { selected.delete(actor); changed = true; }
+    }
+    for (const squad of squads.values()) {
+      const members = [squad.leader, squad.follower];
+      const moves = members.map(actor => receipts.get(actor));
+      // 同房旅行允许 owner 已批准的临时间隔；跨房的两份成功收据一起保留或取消。
+      const crossing = moves.every(Boolean) && moves.some(receipt => receipt!.to && receipt!.to.roomName !== receipt!.from.roomName);
+      if (crossing && members.some(actor => !selected.has(actor))) {
+        for (const actor of members) if (selected.delete(actor)) changed = true;
+      }
+    }
+  }
+  let canceled = 0, unresolved = 0;
+  for (const [actor, receipt] of [...receipts]) {
+    if (selected.has(actor)) continue;
+    if (cancelMoveIntent(actor, receipt)) canceled++;
+    else unresolved++;
+  }
+  if (canceled) recordMovementMetric("trafficCancellations", undefined, canceled);
+  return { checked: selected.size + canceled + unresolved, canceled, unresolved };
 }
 
 function isHeadOnWarDuoSwap(attacker: AnyCreep, healer: AnyCreep): boolean {
@@ -286,7 +373,7 @@ function getPlannedNextStep(creep: AnyCreep): { x: number; y: number } | null {
 }
 
 function moveBlockerToYieldPosition(pusher: AnyCreep, blocker: AnyCreep, yieldPos: RoomPosition): boolean {
-  const moveCode = issueMove(blocker, blocker.pos.getDirectionTo(yieldPos));
+  const moveCode = issueMove(blocker, blocker.pos.getDirectionTo(yieldPos), undefined, "yield");
   if (moveCode !== OK) {
     return false;
   }

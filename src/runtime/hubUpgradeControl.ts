@@ -1,3 +1,4 @@
+import { retireCreep } from "@/runtime/retirement";
 import { runIsolatedRoutineRoomOperation } from "@/runtime/runtimeIsolation";
 import { replaceSpawnQueue } from "@/runtime/spawnRequests";
 import { getCreepConfigService, getTickContextService, getMemoryService } from "@/runtime/runtimeServices";
@@ -131,7 +132,7 @@ function cleanupManagedUpgraders(
       !isKept &&
       isRetiringRcl8Maintenance
     ) {
-      creep.suicide();
+      retireCreep(creep, { owner: "workforce", mode: "suicide" });
     }
   }
   for (const [configName] of entries) {

@@ -1,3 +1,4 @@
+import { registerTaskMemoryOwners } from "@/runtime/registerTaskMemoryOwners";
 import { cadenceOffset, tickPhase } from "@/runtime/cadence";
 jest.mock("@/movement/pathing", () => ({ getRoomStaticMatrix: () => ({ get: () => 0 }) }));
 import { colonizationHarvesterPreSpawnThreshold } from "@/runtime/colonizationHarvesterPreSpawn";
@@ -14,6 +15,7 @@ function spawn(): StructureSpawn {
 }
 describe("新房增援矿工完整路线提前补员", () => {
   beforeEach(() => {
+    registerTaskMemoryOwners();
     Game.time = tick += 10000; Memory.runtime = {};
     delete (global as typeof global & { __runtimeServices?: unknown }).__runtimeServices;
     Memory.cfg = { colonizationSupport: { E4N57: { sourceRoom: "E1N57", enabled: true } } };

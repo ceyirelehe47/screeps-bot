@@ -26,6 +26,10 @@ export class MockPos {
     return this.x === target.x && this.y === target.y && (!target.roomName || this.roomName === target.roomName);
   }
 
+  public inRangeTo(target: { pos?: { x: number; y: number }; x?: number; y?: number }, range: number): boolean {
+    return this.getRangeTo(target) <= range;
+  }
+
   public isNearTo(target: { pos?: { x: number; y: number }; x?: number; y?: number }): boolean {
     return this.getRangeTo(target) <= 1;
   }
@@ -344,6 +348,7 @@ export function createMockPowerBankCreep(role: string, overrides: Partial<MockCr
     withdraw: jest.fn((_target: Structure | Tombstone | Ruin, _type: ResourceConstant, _amount?: number) => OK),
     transfer: jest.fn((_target: Structure | Creep, _type: ResourceConstant, _amount?: number) => OK),
     suicide: jest.fn(() => OK),
+    cancelOrder: jest.fn(() => OK),
     move: jest.fn((_direction: DirectionConstant) => OK),
     moveTo: jest.fn((_target: RoomPosition | { pos: RoomPosition }, _opts?: MoveToOpts) => OK),
     renewCreep: jest.fn((_spawn: StructureSpawn) => OK),

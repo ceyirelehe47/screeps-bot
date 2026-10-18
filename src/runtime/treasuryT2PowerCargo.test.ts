@@ -1,3 +1,4 @@
+import { getRuntimeRoomFaults, resetRuntimeIsolationForTest } from "@/runtime/runtimeIsolation";
 jest.mock("@/movement/pathing", () => ({
   moveToTarget: jest.fn(),
 }));
@@ -97,7 +98,7 @@ describe("T2 active PowerCreep terminal energy cargo", () => {
   beforeAll(() => expect(registerTreasuryProductionTerminalTransfer()).toBe(true));
   beforeEach(() => {
     delete (global as typeof global & { __runtimeServices?: unknown }).__runtimeServices;
-    resetPowerCreepControlCacheForTest();
+    resetPowerCreepControlCacheForTest(); resetRuntimeIsolationForTest();
     clearCreepMovementStateForTest();
     clearMarketSaleExposureReservationsForTest();
     context = initializeT2();
@@ -177,8 +178,10 @@ describe("T2 active PowerCreep terminal energy cargo", () => {
       if (outcome === "throw") throw new Error("unknown native power result");
       return outcome === "malformed" ? undefined : OK;
     });
-    if (outcome === "throw") expect(() => runPowerCreepControl()).toThrow("unknown native power result");
-    else expect(() => runPowerCreepControl()).not.toThrow();
+    expect(() => runPowerCreepControl()).not.toThrow();
+    if (outcome === "throw") expect(getRuntimeRoomFaults()).toEqual(expect.arrayContaining([
+      expect.objectContaining({ scope: `runPowerCreepControl:${powerCreep.name}`, message: "unknown native power result" }),
+    ]));
     expect(powerCreep.usePower).toHaveBeenCalledTimes(1);
     expect(powerCreep.usePower).toHaveBeenCalledWith(PWR_OPERATE_EXTENSION, room.terminal);
     expect(room.terminal!.store.getUsedCapacity(RESOURCE_ENERGY))

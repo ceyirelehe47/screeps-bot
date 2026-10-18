@@ -3,6 +3,8 @@ type MovementMetricName =
   | "pathBudgetDenied"
   | "exitPolicyDenied"
   | "moveIntentOverwrites"
+  | "moveIntentRejected"
+  | "trafficCancellations"
   | "exitReselectByKey"
   | "exitTargetSwitches"
   | "exitSelectFailures"
@@ -56,6 +58,8 @@ export interface MovementMetricBucket {
   pathBudgetDenied: number;
   exitPolicyDenied: number;
   moveIntentOverwrites: number;
+  moveIntentRejected: number;
+  trafficCancellations: number;
   exitReselectByKey: number;
   exitTargetSwitches: number;
   exitNoGoals: number;
@@ -268,6 +272,8 @@ function createEmptyBucket(): MovementMetricBucket {
   return {
     pathBudgetDenied: 0,
     moveIntentOverwrites: 0,
+    moveIntentRejected: 0,
+    trafficCancellations: 0,
     exitReselectByKey: 0,
     exitTargetSwitches: 0,
     exitPolicyDenied: 0,

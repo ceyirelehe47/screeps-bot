@@ -4,7 +4,7 @@ import { clearCreepMovementState } from "@/movement/creepState";
 import { releasePickupReservation } from "@/runtime/energyPickupReservation";
 import { getTickContextService } from "@/runtime/runtimeServices";
 
-export type RetirementOwner = "war" | "powerBank" | "colonization" | "workforce";
+export type RetirementOwner = "war" | "powerBank" | "colonization" | "workforce" | "deposit" | "remoteMining" | "hauling" | "scout" | "operator";
 interface Retirement {
   owner: RetirementOwner;
   mode: "detach" | "recycle" | "suicide";
@@ -36,7 +36,8 @@ function submitSuicide(creep: Creep): boolean {
 
 export function retireCreep(creep: Creep, decision: Retirement): boolean {
   const previousName = creep.memory.configName;
-  const changed = !!previousName || decision.mode === "recycle" && creep.memory._recycleToRoom !== decision.roomName;
+  const changed = !!previousName || decision.mode === "recycle" && creep.memory._recycleToRoom !== decision.roomName ||
+    decision.mode === "suicide" && creep.memory._retireSuicideOwner !== decision.owner;
   retireCreepMemory(creep.memory, decision);
   const suicided = decision.mode === "suicide" && submitSuicide(creep);
   if (previousName) getTickContextService().reindexCreepConfig(creep, previousName);

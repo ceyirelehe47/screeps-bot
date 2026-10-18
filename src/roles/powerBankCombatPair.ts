@@ -1,3 +1,4 @@
+import { bindSquad, claimSquadMovement } from "@/runtime/squads/squad";
 import { retireCreep } from "@/runtime/retirement";
 import { clearMovementState, moveToTarget, moveToTargetRoom } from "@/roles/shared";
 import { ensureCreepMovementState, getCreepMovementState } from "@/movement/creepState";
@@ -7,7 +8,7 @@ import { getTickContextService } from "@/runtime/runtimeServices";
 import { getCachedStaticTravelMatrix, getNextTravelRoom } from "@/movement/routing";
 import { getPowerBankOwnedAvoidRooms, isPowerBankTransitRoomAllowed, powerBankTransitOptions } from "@/runtime/powerBankTransit";
 import {
-  cancelMoveIntent, getMoveIntentAttemptedPosition, getMoveIntentDestination, getMoveIntentReceipt, issueMove, moveToAdjacentPosition,
+  registerSquadMovement, getMoveIntentRevision, cancelMoveIntent, getMoveIntentAttemptedPosition, getMoveIntentDestination, getMoveIntentReceipt, issueMove, moveToAdjacentPosition,
   hasMoveDestinationConflict, isBlockerActivelyMoving,
   moveOffExit, type MoveIntentReceipt,
 } from "@/movement/traffic";
@@ -129,9 +130,10 @@ export function resolvePowerBankPair(creep: Creep, task: RuntimePowerBankTask): 
   const attacker = role === "powerBankAttacker" ? creep : findCreepById(attackerId);
   const healer = role === "powerBankHealer" ? creep : findCreepById(healerId);
   if (!attacker || !healer) return null;
-  if (attacker.memory.role !== "powerBankAttacker" || healer.memory.role !== "powerBankHealer") return null;
-  if (!hasMatchingTask(attacker, task) || !hasMatchingTask(healer, task)) return null;
-  if (!hasMatchingGeneration(attacker, generation) || !hasMatchingGeneration(healer, generation)) return null;
+  const squad = bindSquad({ owner: "powerBank", taskId: task.id, generation: generation ?? "legacy", leader: attacker, follower: healer },
+    (member, slot) => member.memory.role === (slot === "leader" ? "powerBankAttacker" : "powerBankHealer") &&
+      hasMatchingTask(member, task) && hasMatchingGeneration(member, generation));
+  if (!squad) return null;
 
   return {
     task,
@@ -212,9 +214,9 @@ const PAIR_TRAVEL_OPTIONS = { plainCost: 2, swampCost: 8 } as const;
 const PAIR_DIRECTIONS: readonly DirectionConstant[] = [TOP, TOP_RIGHT, RIGHT, BOTTOM_RIGHT, BOTTOM, BOTTOM_LEFT, LEFT, TOP_LEFT];
 let pairMovementGame: typeof Game | undefined;
 let pairMovementTick = -1;
-let pairMovementCalls = new WeakMap<Creep, { task: RuntimePowerBankTask; healer: Creep; generation?: number }>();
 let pairTileChecks = new WeakMap<Creep, { healer: Creep; values: Map<string, { room: Room | undefined; staticOpen: boolean; occupants: AnyCreep[] }> }>();
 let pairOccupants = new Map<string, AnyCreep[]>();
+let pairQueryRevision = 0;
 let pairQueryContext: ReturnType<typeof getTickContextService> | undefined;
 let pairQueryCreeps: typeof Game.creeps | undefined;
 let pairQueryPowerCreeps: typeof Game.powerCreeps | undefined;
@@ -224,6 +226,7 @@ function pairPositionKey(pos: PairPosition): string { return `${pos.roomName}:${
 function refreshPairQueries(): void {
   const context = getTickContextService();
   if (pairQueryContext === context && pairQueryCreeps === Game.creeps && pairQueryPowerCreeps === Game.powerCreeps) return;
+  pairQueryRevision++;
   pairQueryContext = context; pairQueryCreeps = Game.creeps; pairQueryPowerCreeps = Game.powerCreeps;
   pairTileChecks = new WeakMap(); pairOccupants = new Map();
   for (const creep of [...getTickContextService().getAllCreeps(), ...Object.values(Game.powerCreeps || {}).filter((actor) => actor.ticksToLive != null)]) {
@@ -514,7 +517,6 @@ export function coordinatePowerBankPairMovement(pair: PowerBankPairContext, fall
   if (pairMovementGame !== Game || pairMovementTick !== Game.time) {
     pairMovementGame = Game;
     pairMovementTick = Game.time;
-    pairMovementCalls = new WeakMap();
     pairQueryContext = undefined; pairQueryCreeps = undefined; pairQueryPowerCreeps = undefined;
   }
   refreshPairQueries();
@@ -524,15 +526,15 @@ export function coordinatePowerBankPairMovement(pair: PowerBankPairContext, fall
       if (state.travelState?.targetRoom !== pair.task.targetRoom) state.travelState = { targetRoom: pair.task.targetRoom, stuckTicks: 0 };
     }
   }
-  const previous = pairMovementCalls.get(pair.attacker);
-  if (previous?.task === pair.task && previous.healer === pair.healer && previous.generation === pair.generation) {
-    // mount source→target 切换会清理 heap state；保留已提交意图的交通占位，绝不重发。
+  const squad = bindSquad({ owner: "powerBank", taskId: pair.task.id, generation: pair.generation ?? "legacy",
+    leader: pair.attacker, follower: pair.healer }, () => true);
+  if (squad) registerSquadMovement(squad);
+  if (!squad || !claimSquadMovement(squad, `${pairQueryRevision}:${getMoveIntentRevision([pair.attacker, pair.healer])}`)) {
     for (const member of [pair.attacker, pair.healer]) {
       if (getMoveIntentReceipt(member)) ensureCreepMovementState(member).pathingRequestedAt = Game.time;
     }
     return;
   }
-  pairMovementCalls.set(pair.attacker, { task: pair.task, healer: pair.healer, generation: pair.generation });
   if (!pairReadyForTravel(pair) || hasForeignMovement(pair.attacker) || hasForeignMovement(pair.healer)) return;
   if (pair.attacker.room.name !== pair.healer.room.name) {
     if (rejoinAcrossPairExit(pair)) return;
@@ -626,4 +628,5 @@ export function coordinatePowerBankPairMovement(pair: PowerBankPairContext, fall
       }
     } else completePairStep(pair, receipt, destination, receipt.direction);
   }
+
 }

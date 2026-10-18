@@ -351,3 +351,38 @@ describe("marketBaseResourcePermit", () => {
     });
   });
 });
+
+
+function freezeRestored<T>(value: T): T {
+  if (value && typeof value === "object") {
+    for (const child of Object.values(value)) freezeRestored(child);
+    Object.freeze(value);
+  }
+  return value;
+}
+
+it("reuses static preflight validation only for an entirely immutable restored epoch and freezes its result", () => {
+  const restored = freezeRestored(clone(initialState()));
+  const first = validateMarketBaseResourcePermitChain(restored);
+  expect(first.ok).toBe(true);
+  expect(Object.isFrozen(first)).toBe(true);
+  expect(validateMarketBaseResourcePermitChain(restored)).toBe(first);
+  expect(validateMarketBaseResourcePermitChain(freezeRestored(clone(initialState())))).not.toBe(first);
+  expect(validateMarketBaseResourcePermitChain(restored, {
+    permitEpochHighWater: 2, permitChainHeadHighWater: digest("wrong-tip"), totalChainLength: 2, prefixCommitment: digest("wrong-prefix"),
+  }).ok).toBe(false);
+});
+
+it("does not cache a frozen shell with mutable permit children or an accessor", () => {
+  const mutable = clone(initialState()); Object.freeze(mutable);
+  expect(validateMarketBaseResourcePermitChain(mutable).ok).toBe(true);
+  (mutable.retainedPermits[0] as unknown as { permitId: string }).permitId = "tampered";
+  expect(validateMarketBaseResourcePermitChain(mutable).ok).toBe(false);
+  const accessor = clone(initialState());
+  let epoch = accessor.currentPermitEpoch;
+  Object.defineProperty(accessor, "currentPermitEpoch", { get: () => epoch, enumerable: true });
+  freezeRestored(accessor);
+  expect(validateMarketBaseResourcePermitChain(accessor).ok).toBe(true);
+  epoch++;
+  expect(validateMarketBaseResourcePermitChain(accessor).ok).toBe(false);
+});

@@ -9,7 +9,7 @@ beforeEach(() => {
 
 it("生产表无遗漏或重复、依赖可满足，防御先于市场/规划，出生先于 creep 执行", () => {
   const ids: readonly string[] = RUNTIME_PROCESSES.map(spec => spec.id);
-  expect(ids).toHaveLength(40); expect(new Set(ids).size).toBe(ids.length);
+  expect(ids).toHaveLength(42); expect(new Set(ids).size).toBe(ids.length);
   expect(ids.slice(0, 5)).toEqual(["announceDeploy", "coreDefense", "defenseMode", "homeDefense", "towerControl"]);
   for (const spec of PROCESS_SPECS.values()) {
     for (const dependency of [...spec.after ?? [], ...spec.requires ?? []]) expect(ids.indexOf(dependency)).toBeLessThan(ids.indexOf(spec.id));
@@ -94,4 +94,16 @@ it("引擎每 tick 更换 Game 对象时保持 heap 起点，T3/T4 只在真正�
     expect(Memory.runtime!.processScheduler!.deferred.hubPlanner).toBe(2);
     expect(Memory.runtime!.processScheduler!.lastDeferred).toEqual([]);
   } finally { Object.assign(global, { Game: originalGame }); }
+});
+
+
+it("市场重预检被 CPU 延后时，廉价安全闸仍每 tick 执行", () => {
+  const { enforceLegacyMarketSafetyLatch } = require("./marketSaleConfig") as typeof import("./marketSaleConfig");
+  Game.cpu.bucket = 1;
+  Memory.cfg = { pixelGenerator: { enabled: true }, factoryControl: { market: { enabled: true } }, resourceControl: { market: { enabled: true } } } as Memory["cfg"];
+  const work = Object.fromEntries(RUNTIME_PROCESSES.map(spec => [spec.id, spec.id === "marketSafetyLatch" ? enforceLegacyMarketSafetyLatch : () => undefined])) as Record<RuntimeProcessId, () => void>;
+  const runner = createProcessScheduler((_id, execute) => execute(), jest.fn()); runner.runAll(work);
+  expect(Memory.cfg!.pixelGenerator!.enabled).toBe(false);
+  expect(Memory.cfg!.factoryControl!.market!.enabled).toBe(false);
+  expect(Memory.cfg!.resourceControl!.market!.enabled).toBe(false);
 });

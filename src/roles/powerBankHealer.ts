@@ -1,3 +1,4 @@
+import { retireCreep } from "@/runtime/retirement";
 import {
   coordinatePowerBankPairMovement,
   getPowerBankTaskForCreep,
@@ -56,7 +57,7 @@ export const powerBankHealerRole: RoleFactory = (_targetRoomArg?: string, encode
       return false;
     }
     if (RETIRE_STATUSES.has(task.status)) {
-      creep.suicide();
+      retireCreep(creep, { owner: "powerBank", mode: "suicide" });
       return false;
     }
 
@@ -82,7 +83,7 @@ export const powerBankHealerRole: RoleFactory = (_targetRoomArg?: string, encode
       return false;
     }
     if (RETIRE_STATUSES.has(task.status)) {
-      creep.suicide();
+      retireCreep(creep, { owner: "powerBank", mode: "suicide" });
       return false;
     }
 

@@ -15,6 +15,7 @@ export const RUNTIME_PROCESSES = [
   process("announceDeploy", "T0"),
   process("coreDefense", "T0"), process("defenseMode", "T0", { after: ["coreDefense"] }),
   process("homeDefense", "T0", { after: ["defenseMode"] }), process("towerControl", "T0", { after: ["defenseMode"] }),
+  process("marketSafetyLatch", "T0", { after: ["towerControl"] }),
   process("marketSalePreflight", "T2"), process("homeDefenseSupply", "T2", { after: ["homeDefense"], requires: ["marketSalePreflight"] }),
   process("pixelGenerator", "T4"), process("productionMonitor", "T4"),
   process("nukerControl", "T2"), process("hubPlanner", "T3"), process("hubUpgradeControl", "T2"),
@@ -29,6 +30,7 @@ export const RUNTIME_PROCESSES = [
   process("linkControl", "T1"), process("refreshWorkerTasks", "T1"), process("bootstrapRooms", "T1"),
   process("remoteMining", "T1"), process("scheduleSpawnTasks", "T1"),
   process("spawnWork", "T1", { after: ["scheduleSpawnTasks"] }), process("creepWork", "T1", { after: ["spawnWork"] }),
+  process("trafficResolution", "T1", { after: ["creepWork"] }),
   process("empireInventoryShadow", "T4"),
 ] as const;
 

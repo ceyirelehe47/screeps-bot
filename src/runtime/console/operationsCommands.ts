@@ -1,3 +1,4 @@
+import { retireCreep } from "@/runtime/retirement";
 import { replaceSpawnQueue } from "@/runtime/spawnRequests";
 import { jsonCommand } from "@/runtime/console/jsonCommand";
 import { ensureConfigStore } from "@/runtime/spawnHelpers";
@@ -77,8 +78,7 @@ function suicideCreepsByConfig(configName: string): number {
       continue;
     }
 
-    const code = creep.suicide();
-    if (code === OK) {
+    if (retireCreep(creep, { owner: "operator", mode: "suicide" })) {
       suicided += 1;
     }
   }

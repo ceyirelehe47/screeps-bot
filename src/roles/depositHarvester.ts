@@ -1,3 +1,4 @@
+import { retireCreep } from "@/runtime/retirement";
 import { setDepositTaskStatus } from "@/runtime/depositHarvest";
 import { moveToTarget, moveToTargetRoom } from "@/roles/shared";
 import { measureCreepIntent } from "@/runtime/cpuPhaseProfiler";
@@ -94,7 +95,7 @@ function finishEmpty(creep: Creep, task: DepositHarvestTask | undefined): boolea
   if (cargo(creep) > 0 || mem.depositPendingTransfer) return false;
   if (task && !isDepositTerminal(task)) finishDepositTask(task,
     task.deliveredAmount > 0 ? "complete" : "aborted", task.stopReason);
-  creep.suicide();
+  retireCreep(creep, { owner: "deposit", mode: "suicide" });
   return false; // mounted lifecycle 不再在同 tick 切回 source。
 }
 function deliver(creep: Creep, task: DepositHarvestTask | undefined): boolean {

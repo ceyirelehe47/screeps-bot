@@ -1,3 +1,4 @@
+import { retireCreep } from "@/runtime/retirement";
 import { executeTreasuryFencedTerminalCargo } from "@/runtime/treasuryTerminalCargo";
 import { clearMovementState, moveToTarget, moveToTargetRoom } from "@/roles/shared";
 import { measureCreepDecision, measureCreepIntent } from "@/runtime/cpuPhaseProfiler";
@@ -115,7 +116,7 @@ function isEmpty(creep: Creep): boolean {
 function retireIfLowTtl(creep: Creep): void {
   if (typeof creep.ticksToLive === "number" && creep.ticksToLive < 150) {
     if (typeof creep.suicide === "function") {
-      creep.suicide();
+      retireCreep(creep, { owner: "remoteMining", mode: "suicide" });
     }
   }
 }

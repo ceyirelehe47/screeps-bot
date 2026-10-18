@@ -66,3 +66,17 @@ it("中央 GC 仅调度领域 owner，不读取领域数据或改写运行时子
   expect(readFileSync(join(__dirname, "memoryCleanup.ts"), "utf8")).not.toMatch(/Memory\.(data|runtime)/);
   expect(readFileSync(join(__dirname, "minerBodyPolicy.ts"), "utf8")).not.toMatch(/\.suicide\(|retireCreep\(/);
 });
+
+
+it("所有退役 intent 与回收字段只经 retirement owner 提交", () => {
+  const violations = productionFiles(join(__dirname, "..")).filter(path => !path.endsWith("/retirement.ts"))
+    .filter(path => /\.suicide\(|\._recycleToRoom\s*=|\._warRetireToRoom\s*=|\._retireSuicideOwner\s*=/.test(readFileSync(path, "utf8")));
+  expect(violations).toEqual([]);
+});
+
+
+it("影子调度器已毕业，CPU 历史兼容模块不能恢复第二个执行器", () => {
+  const compatibility = readFileSync(join(__dirname, "cpuSchedulerShadow.ts"), "utf8");
+  expect(compatibility).not.toMatch(/export\s+(?:function|const|class)\s/);
+  expect(readFileSync(join(__dirname, "processTable.ts"), "utf8")).toContain('process("marketSafetyLatch", "T0"');
+});

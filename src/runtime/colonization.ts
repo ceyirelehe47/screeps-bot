@@ -923,7 +923,7 @@ function requestScoutRescan(task: ColonizationTask, reason: string): void {
 
   const scoutConfigName = getTaskConfigName(task, "scout", "0");
   for (const scout of getLiveCreepsByConfig(scoutConfigName)) {
-    scout.suicide();
+    retireCreep(scout, { owner: "colonization", mode: "suicide" });
   }
   removeQueuedConfig(task, scoutConfigName);
   removeConfigWhenIdle(scoutConfigName);
@@ -1243,7 +1243,7 @@ function retireHandedOffHarvesters(task: ColonizationTask): void {
     }
 
     for (const creep of getLiveCreepsByConfig(configName)) {
-      creep.suicide();
+      retireCreep(creep, { owner: "colonization", mode: "suicide" });
     }
 
     removeQueuedConfig(task, configName);

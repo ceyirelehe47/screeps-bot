@@ -1,6 +1,6 @@
 {
   "name": "screeps",
-  "version": "2026.10.18-9",
+  "version": "2026.10.18-10",
   "description": "Screeps local development workspace",
   "main": "dist/main.js",
   "scripts": {

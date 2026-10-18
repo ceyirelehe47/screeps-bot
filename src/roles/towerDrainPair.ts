@@ -1,6 +1,6 @@
-import { issueMove } from "@/movement/traffic";
+import { issueMove, registerSquadMovement, getMoveIntentReceipt, cancelMoveIntent } from "@/movement/traffic";
 import { warGeometry, warTerrain, warTerrainVersion } from "@/roles/warGeometry";
-import { warPartner } from "@/roles/warPartner";
+import { warPartner, warSquad } from "@/roles/warPartner";
 import {
   getHostileTowers as activeTowers,
   getHostileTowerThreats as towerThreats,
@@ -585,6 +585,10 @@ function publish(state: TowerDrainPairState, attacker: Creep, healer?: Creep): v
 }
 
 function withdraw(creep: Creep, state: TowerDrainPairState, entry: { x: number; y: number } | undefined): void {
+  // 新鲜威胁把推进改为撤退时，明确撤销本成员持有的动作后重新规划。
+  const receipt = getMoveIntentReceipt(creep);
+  if (receipt && !cancelMoveIntent(creep, receipt)) { state.blocker = "retreat_cancel_failed"; return; }
+
   if (!entry || !state.retreatRoom || !state.exitDirection) { state.blocker = "missing_exit"; return; }
   if (creep.room.name === state.targetRoom) {
     const partner = warPartner(creep);
@@ -651,6 +655,8 @@ export function runTowerDrainPair(creep: Creep, targetRoom: string, partnerConfi
     withdraw(creep, state, red ? state.attackerEntry : state.healerEntry);
     return true;
   }
+  const squad = warSquad(attacker, healer);
+  if (squad) registerSquadMovement(squad);
   const room = Game.rooms[targetRoom];
   if (room?.controller?.my) { state.blocker = "target_owned"; publish(state, attacker, healer); return true; }
   if (creep === healer) healPair(healer, attacker);

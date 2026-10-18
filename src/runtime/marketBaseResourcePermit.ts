@@ -2142,10 +2142,34 @@ export function isMarketBaseResourcePermitDeepFrozen(value: unknown): boolean {
   );
 }
 
+/** 证明外部 segment 解码产物是不可变纯数据；访问器、可变子树与异常代理不缓存。 */
+function isRestoredImmutablePermitInput(root: unknown): boolean {
+  if (!root || typeof root !== "object") return false;
+  const pending: object[] = [root], seen = new Set<object>();
+  try {
+    while (pending.length) {
+      const value = pending.pop()!;
+      if (seen.has(value)) continue;
+      if (seen.size >= 50_000 || !Object.isFrozen(value)) return false;
+      const prototype = Object.getPrototypeOf(value);
+      if (prototype !== null && prototype !== Object.prototype && prototype !== Array.prototype) return false;
+      seen.add(value);
+      for (const name of Reflect.ownKeys(value)) {
+        if (typeof name !== "string") return false;
+        const descriptor = Object.getOwnPropertyDescriptor(value, name)!;
+        if (!("value" in descriptor) || typeof descriptor.value === "function") return false;
+        if (descriptor.value && typeof descriptor.value === "object") pending.push(descriptor.value);
+      }
+    }
+    return true;
+  } catch { return false; }
+}
+
 /**
  * Canonical builders 返回递归 frozen 的不可变 chain；同一 runtime object 的
  * 重复 reader/plan 校验可安全复用首次完整结果。来自 Memory reset 的普通
- * mutable object 仍每次完整重验，任何 nested bit flip 都不会命中缓存。
+ * mutable object 仍每次完整重验。外部恢复的纯数据首次完整校验后，按不可变对象身份
+ * （segment manifest/epoch 改变时会换对象）门控静态重验；实时账本和许可门禁不复用。
  */
 export function validateMarketBaseResourcePermitChain(
   state: MarketBaseResourcePermitChainState,
@@ -2157,10 +2181,13 @@ export function validateMarketBaseResourcePermitChain(
     readonly laneTombstoneCheckpointCommitment?: string;
   },
 ): MarketBaseResourcePermitChainValidation {
-  if (highWaterCheckpoint === undefined && permitDeepFrozenValues.has(state)) {
+  if (highWaterCheckpoint === undefined && (
+    permitDeepFrozenValues.has(state) || isRestoredImmutablePermitInput(state)
+  )) {
     const cached = permitChainValidationCache.get(state);
     if (cached) return cached;
-    const validation = validateMarketBaseResourcePermitChainUncached(state);
+    const validation = Object.freeze(validateMarketBaseResourcePermitChainUncached(state));
+    if (validation.ok) permitDeepFrozenValues.add(state);
     permitChainValidationCache.set(state, validation);
     return validation;
   }

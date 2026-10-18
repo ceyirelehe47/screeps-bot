@@ -1,3 +1,4 @@
+import { retireCreep } from "@/runtime/retirement";
 import { issueMove } from "@/movement/traffic";
 import { executeTreasuryFencedTerminalCargo } from "@/runtime/treasuryTerminalCargo";
 import { moveToTarget, moveToTargetRoom } from "@/roles/shared";
@@ -542,7 +543,7 @@ function deliverPower(creep: Creep, fallbackEncodedRoute?: string): boolean {
 
 function retireIfEmpty(creep: Creep): boolean {
   if (getPowerUsed(creep) > 0 || (creep.memory as PowerBankHaulerRuntimeMemory).powerBankPendingTransfer) return false;
-  creep.suicide();
+  retireCreep(creep, { owner: "powerBank", mode: "suicide" });
   return true;
 }
 

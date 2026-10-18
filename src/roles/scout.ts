@@ -1,3 +1,4 @@
+import { retireCreep } from "@/runtime/retirement";
 import type { RoleFactory } from "@/types/system";
 import { isExitTile } from "@/movement/common";
 import { getCurrentScoutRoute, moveToTargetRoom } from "@/roles/shared";
@@ -44,7 +45,7 @@ export const scoutRole: RoleFactory = (targetRoom?: string, encodedRouteRooms?: 
 
     if (creep.room.name === targetRoom && !isExitTile(creep.pos)) {
       if (!shouldKeepScoutAliveForRemoteObservation(targetRoom)) {
-        creep.suicide();
+        retireCreep(creep, { owner: "scout", mode: "suicide" });
       }
       return false;
     }

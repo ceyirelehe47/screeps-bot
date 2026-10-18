@@ -20,6 +20,7 @@ describe("main loop phase ordering", () => {
     ["defenseMode", "runDefenseMode"],
     ["homeDefense", "runHomeDefense"],
     ["towerControl", "runTowerControl"],
+    ["marketSafetyLatch", "enforceLegacyMarketSafetyLatch"],
     ["marketSalePreflight", "runMarketSalePreflight"],
     ["homeDefenseSupply", "runHomeDefenseSupply"],
     ["pixelGenerator", "runPixelGenerator"],
@@ -54,6 +55,7 @@ describe("main loop phase ordering", () => {
     ["scheduleSpawnTasks", "scheduleSpawnTasks"],
     ["spawnWork", "<inline>"],
     ["creepWork", "<inline>"],
+    ["trafficResolution", "<inline>"],
     ["empireInventoryShadow", "runEmpireInventoryShadowCheck"],
   ] as const;
 
@@ -195,7 +197,7 @@ describe("main loop phase ordering", () => {
 
     expect(phaseContract).toEqual(canonicalTickPhases);
     expect(new Set(order).size).toBe(order.length);
-    expect(order).toHaveLength(40);
+    expect(order).toHaveLength(42);
   });
 
   it("keeps one-time registrations outside and before gameLoop", () => {

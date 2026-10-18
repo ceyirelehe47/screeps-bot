@@ -6,7 +6,7 @@ import { clearWarGeometryForTest } from "@/roles/warGeometry";
 import { clearCreepMovementStateForTest } from "@/movement/creepState";
 import { clearRoutingCachesForTest } from "@/movement/routing";
 import { clearRoomTopologyRevisionCacheForTest } from "@/movement/roomTopologyRevision";
-import { clearTrafficNaturalObstacleCacheForTest } from "@/movement/traffic";
+import { clearTrafficNaturalObstacleCacheForTest, resolveTrafficIntents } from "@/movement/traffic";
 import { clearMovementAnalyticsForTest } from "@/movement/metrics";
 import { registerRuntimeServices } from "@/runtime/runtimeServices";
 import { createMockPowerBankCreep, createMockStore, MockPos } from "@mock/powerBank";
@@ -332,6 +332,7 @@ class DuoWorld {
     const greenRole = healerRole(ROOM, "", "", "", RED_CONFIG, tactic);
     if (this.order === "leader-first") { redRole.target(this.red); greenRole.target(this.green); }
     else { greenRole.target(this.green); redRole.target(this.red); }
+    resolveTrafficIntents();
     const intents = [...this.pending].map(([creep, direction]) => ({ name: creep.name, direction }));
     this.settle();
     const state = this.red.memory._warTowerDrain as (NonNullable<CreepMemory["_warTowerDrain"]> & { reselectRequested?: true }) | undefined;

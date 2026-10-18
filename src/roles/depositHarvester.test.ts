@@ -9,6 +9,7 @@ jest.mock("@/roles", () => ({ roleRegistry: { depositHarvester: (...args: string
   jest.requireActual("@/roles/depositHarvester").depositHarvesterRole(...args) } }));
 jest.mock("@/roles/shared", () => ({ clearMovementState: jest.fn(), moveToTarget: jest.fn(), moveToTargetRoom: jest.fn() }));
 jest.mock("@/runtime/runtimeServices", () => ({
+  ...jest.requireActual("@/runtime/runtimeServices"),
   getMemoryService: () => jest.requireActual("@/runtime/memoryService").createRuntimeMemoryService(), getCreepConfigService: () => ({ get: () => undefined }) }));
 jest.mock("@/runtime/cpuPhaseProfiler", () => ({ isPerCreepPhaseTimingEnabled: () => false,
   measureCreepIntent: (fn: () => unknown) => fn(), measureCpuPhase: (_p: string, fn: () => unknown) => fn() }));
@@ -84,7 +85,7 @@ describe("Deposit mounted source/target闭环", () => {
     jest.mocked(measureDepositReturn).mockReturnValue({ status: "pending", reason: "budget", retryAt: 101 });
     const c = creep(); c.work();
     expect(c.harvest).not.toHaveBeenCalled(); expect(task.blocker).toBe("return_path_measurement_pending");
-    expect(c.memory.working).toBe(false); expect(finishDepositTask).not.toHaveBeenCalled();
+    expect(c.memory.working ?? false).toBe(false); expect(finishDepositTask).not.toHaveBeenCalled();
   });
   it("等待下一次cooldown必须仍覆盖当前位置真实满载返程+50", () => {
     cooldown = 20; const c = creep(); c.ticksToLive = 160; c.work();

@@ -1,3 +1,4 @@
+import { retireCreep } from "@/runtime/retirement";
 import { getTickContextService } from "@/runtime/runtimeServices";
 import { issueMove } from "@/movement/traffic";
 import { moveToTarget, moveToTargetRoom } from "@/roles/shared";
@@ -206,7 +207,7 @@ function retireTowardSource(creep: Creep, sourceRoom: string): void {
 
   moveToTarget(creep, new RoomPosition(25, 25, sourceRoom), 3, { reusePath: 5 });
   if (creep.pos.roomName === sourceRoom) {
-    creep.suicide();
+    retireCreep(creep, { owner: "remoteMining", mode: "suicide" });
   }
 }
 

@@ -1,3 +1,4 @@
+import { retireCreep } from "@/runtime/retirement";
 import { refreshCarrierCargoActor } from "@/runtime/carrierCargo";
 import type { RoleFactory } from "@/types/system";
 import {
@@ -1029,7 +1030,7 @@ function pickupEnergyDemandForCarrier(
       (getAssignedCarrierRoom(creep)?.controller?.level ?? 0) > 2) {
     releasePickupReservation(creep);
     clearSynthesisCarrierTaskPlan(creep);
-    creep.suicide();
+    retireCreep(creep, { owner: "workforce", mode: "suicide" });
     return { switched: false, picked: false, outOfRange: false };
   }
 
@@ -2095,7 +2096,7 @@ export const carrierRole: RoleFactory = () => ({
     if (creep.store.getUsedCapacity() === 0 && hasNewerLiveReplacement(creep) &&
         (getAssignedCarrierRoom(creep)?.controller?.level ?? 0) > 2) {
       releasePickupReservation(creep);
-      creep.suicide();
+      retireCreep(creep, { owner: "workforce", mode: "suicide" });
       return false;
     }
 

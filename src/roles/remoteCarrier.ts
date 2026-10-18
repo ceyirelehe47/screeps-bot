@@ -1,3 +1,4 @@
+import { retireCreep } from "@/runtime/retirement";
 import { tickPhase } from "@/runtime/cadence";
 import { searchMovementPath } from "@/movement/pathSearch";
 import { getTickContextService } from "@/runtime/runtimeServices";
@@ -346,7 +347,7 @@ export const remoteCarrierRole: RoleFactory = (targetRoom: string, targetX?: str
     if (creep.room.name !== targetRoom) {
       const homeRoomName = getHomeRoomName(creep);
       if (creep.room.name === homeRoomName && shouldRetireBeforeDeparture(creep, targetRoom)) {
-        creep.suicide();
+        retireCreep(creep, { owner: "hauling", mode: "suicide" });
         return false;
       }
 
@@ -384,7 +385,7 @@ export const remoteCarrierRole: RoleFactory = (targetRoom: string, targetX?: str
     if (creep.room.name !== targetRoom) {
       const homeRoomName = getHomeRoomName(creep);
       if (creep.room.name === homeRoomName && shouldRetireBeforeDeparture(creep, targetRoom)) {
-        creep.suicide();
+        retireCreep(creep, { owner: "hauling", mode: "suicide" });
         return false;
       }
 
