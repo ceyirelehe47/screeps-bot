@@ -51,3 +51,28 @@ it("队列有容量上限，消费者游标过期得到 gap，heap reset 后顺�
   Memory.runtime = {};
   expect(readRuntimeEventsAfter(before.cursor).gap).toBe(true);
 });
+
+
+it("Memory 重置后相同数值序号也不能复用旧 epoch，旧数值游标要求重新调和", () => {
+  appendRuntimeEvent({ owner: "fixture", kind: "death", id: "before" });
+  const before = readRuntimeEventsAfter(0);
+  Memory.runtime = {};
+  appendRuntimeEvent({ owner: "fixture", kind: "death", id: "after" });
+  const after = readRuntimeEventsAfter(before.cursor);
+  expect(after.cursor.sequence).toBe(before.cursor.sequence);
+  expect(after.cursor.epoch).not.toBe(before.cursor.epoch);
+  expect(after.gap).toBe(true); expect(after.entries.map(event => event.id)).toEqual(["after"]);
+  expect(readRuntimeEventsAfter(1).gap).toBe(true);
+  expect(readRuntimeEventsAfter(after.cursor).gap).toBe(false);
+});
+
+it("损坏条目与序号溢出不会使任务状态转移中途失败", () => {
+  appendRuntimeEvent({ owner: "fixture", kind: "death", id: "before" });
+  const before = readRuntimeEventsAfter(0);
+  Memory.runtime!.events!.entries.push(null as unknown as import("./runtimeEvents").RuntimeEvent);
+  const task: Task = { id: "one", status: "ready" };
+  expect(() => lifecycle.transition(task, "running")).not.toThrow();
+  Memory.runtime!.events!.nextSequence = Number.MAX_SAFE_INTEGER;
+  appendRuntimeEvent({ owner: "fixture", kind: "death", id: "after" });
+  expect(readRuntimeEventsAfter(before.cursor).gap).toBe(true);
+});
