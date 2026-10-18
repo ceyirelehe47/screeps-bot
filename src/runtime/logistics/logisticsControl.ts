@@ -2187,7 +2187,7 @@ function isSynthesisObservationRecord(value: unknown): value is SynthesisLogisti
     && optionalAmounts.every((amount) => amount === undefined || isStoredAmount(amount));
 }
 
-/** 输入失败时原子撤回尚未执行的规划证据；已接受运输及 generation 保留。 */
+/** 输入失败时原子撤回尚未执行的规划证据；已接受运输及世代高水位保留。 */
 export function invalidateLogisticsProducerSnapshot(producer: string): boolean {
   const ensured = ensureLogisticsControlStore();
   if (!ensured.ok) return false;
