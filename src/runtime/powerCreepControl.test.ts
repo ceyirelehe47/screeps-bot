@@ -10,8 +10,11 @@ import {
   listPowerCreepTasks,
   resetPowerCreepControlCacheForTest,
   runPowerCreepControl,
+  runPowerCreepLifecycle,
 } from "@/runtime/powerCreepControl";
 import { clearCreepMovementStateForTest, ensureCreepMovementState } from "@/movement/creepState";
+import { moveToTarget } from "@/movement/pathing";
+import { createProcessScheduler, resetProcessSchedulerForTest } from "@/runtime/processScheduler";
 
 type ResourceAmounts = Partial<Record<ResourceConstant, number>>;
 
@@ -171,6 +174,92 @@ describe("powerCreepControl", () => {
     resetPowerCreepControlCacheForTest();
     clearCreepMovementStateForTest();
     Memory.powerCreeps = {};
+    resetProcessSchedulerForTest();
+  });
+
+  it("经济阶段连续被延后时，仍在 499 TTL 返回续命，真实回读 TTL 增加后才恢复经济任务", () => {
+    const storage = createStorage("E4N58", { energy: 100000 });
+    const { room, powerSpawn } = createRoom({ storage });
+    const pc = createPowerCreep({ room, ticksToLive: 499, ops: 100, capacity: 300, powers: {
+      [PWR_OPERATE_STORAGE]: { level: 5, cooldown: 0 },
+    } });
+    pc.memory._spawnYield = { dir: LEFT, tick: Game.time };
+    installGameObjects([storage, powerSpawn]); installPowerCreeps(pc);
+    Game.cpu = { ...Game.cpu, bucket: 1, limit: 120, tickLimit: 500, getUsed: jest.fn(() => 0) };
+    const tick = () => {
+      const runner = createProcessScheduler((_id, work) => work(), jest.fn());
+      runner.runPhase("powerCreepLifecycle", runPowerCreepLifecycle);
+      runner.runPhase("powerCreepControl", runPowerCreepControl);
+      runner.finish();
+    };
+    tick();
+    expect(pc.renew).toHaveBeenCalledWith(powerSpawn);
+    expect(pc.usePower).not.toHaveBeenCalled();
+    expect(pc.memory._spawnYield).toBeUndefined();
+    expect(pc.memory.lifecycle).toMatchObject({ action: "renew", result: OK, ttl: 499 });
+    // API 的 OK 只证明 intent；尚未读到新寿命时仍必须续命。
+    Game.time++; tick();
+    expect(pc.renew).toHaveBeenCalledTimes(2);
+    Object.assign(pc, { ticksToLive: 5000 }); Game.time++; Game.cpu.bucket = 10000; tick();
+    expect(pc.renew).toHaveBeenCalledTimes(2);
+    expect(pc.usePower).toHaveBeenCalledWith(PWR_OPERATE_STORAGE, storage);
+  });
+
+  it("返程失败保留续命目标、工作范围和错误码，T2 不重复续命或切换到经济任务", () => {
+    const { room, powerSpawn } = createRoom();
+    const pc = createPowerCreep({ room, ticksToLive: 199, rangeToTarget: 5, renewResult: ERR_NOT_IN_RANGE });
+    installGameObjects([powerSpawn]); installPowerCreeps(pc);
+    (moveToTarget as jest.Mock).mockReturnValueOnce(ERR_NO_PATH);
+    runPowerCreepLifecycle(); runPowerCreepControl();
+    expect(pc.renew).toHaveBeenCalledTimes(1);
+    expect(listPowerCreepTasks(pc)).toContainEqual(expect.objectContaining({ type: "renew", targetId: powerSpawn.id }));
+    expect(ensureCreepMovementState(pc).workAnchor).toMatchObject({ x: powerSpawn.pos.x, range: 1 });
+    expect(pc.memory.lifecycle).toMatchObject({ result: ERR_NOT_IN_RANGE, moveResult: ERR_NO_PATH });
+    Game.time++; runPowerCreepLifecycle();
+    expect(pc.renew).toHaveBeenCalledTimes(2);
+  });
+
+  it("死亡冷却结束才重生，清理上一条生命的任务和路径，同 tick 不重复出生", () => {
+    const { room, powerSpawn } = createRoom();
+    const pc = createPowerCreep({ name: room.name, ticksToLive: Number.NaN });
+    Object.assign(pc, { pos: undefined, spawnCooldownTime: Date.now() + 60000 });
+    pc.memory.tasks = [{ id: "renew", type: "renew", priority: 1000, createdAt: Game.time - 200, targetId: "old" }];
+    ensureCreepMovementState(pc).workAnchor = { x: 1, y: 1, roomName: room.name, range: 1 };
+    installGameObjects([powerSpawn]); installPowerCreeps(pc);
+    runPowerCreepLifecycle(); runPowerCreepControl();
+    expect(pc.spawn).not.toHaveBeenCalled();
+    Object.assign(pc, { spawnCooldownTime: Date.now() - 1 }); Game.time++;
+    runPowerCreepLifecycle(); runPowerCreepControl();
+    expect(pc.spawn).toHaveBeenCalledTimes(1);
+    expect(pc.spawn).toHaveBeenCalledWith(powerSpawn);
+    expect(pc.memory.tasks).toEqual([]);
+    expect(ensureCreepMovementState(pc).workAnchor).toBeUndefined();
+  });
+
+  it("单个 PC 续命抛错后不熔断生存入口，也不阻止下一个 PC", () => {
+    const first = createRoom(), second = createRoom({ name: "E6N59" });
+    const a = createPowerCreep({ room: first.room, ticksToLive: 100 });
+    const b = createPowerCreep({ name: second.room.name, room: second.room, ticksToLive: 100 });
+    (a.renew as jest.Mock).mockImplementation(() => { throw Error("renew failed"); });
+    installGameObjects([first.powerSpawn, second.powerSpawn]); installPowerCreeps(a, b);
+    for (let i = 0; i < 5; i++) { Game.time++; runPowerCreepLifecycle(); }
+    expect(a.renew).toHaveBeenCalledTimes(5);
+    expect(b.renew).toHaveBeenCalledTimes(5);
+  });
+
+  it("跨 shard 或没有合法归属的 PC 不执行生存和经济动作", () => {
+    const { room } = createRoom();
+    const foreign = createPowerCreep({ room, ticksToLive: 100, powers: { [PWR_GENERATE_OPS]: { level: 1, cooldown: 0 } } });
+    Object.assign(foreign, { shard: "shard9" });
+    const unmanaged = createPowerCreep({ name: "unmanaged", room, ticksToLive: 100,
+      powers: { [PWR_GENERATE_OPS]: { level: 1, cooldown: 0 } } });
+    installPowerCreeps(foreign, unmanaged);
+    runPowerCreepLifecycle(); runPowerCreepControl();
+    for (const pc of [foreign, unmanaged]) {
+      expect(pc.spawn).not.toHaveBeenCalled();
+      expect(pc.renew).not.toHaveBeenCalled();
+      expect(pc.usePower).not.toHaveBeenCalled();
+    }
   });
 
   it("ops 耗尽或冷却时恢复普通供能，并从库存补充 ops", () => {

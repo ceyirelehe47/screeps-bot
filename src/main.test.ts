@@ -45,6 +45,7 @@ describe("main loop phase ordering", () => {
     ["powerBankObserver", "runPowerBankObserver"],
     ["powerBankHarvest", "runPowerBankHarvest"],
     ["depositHarvest", "runDepositHarvest"],
+    ["powerCreepLifecycle", "runPowerCreepLifecycle"],
     ["powerCreepControl", "runPowerCreepControl"],
     ["powerSpawnControl", "runPowerSpawnControl"],
     ["roomPlannerConstruction", "runRoomPlannerConstruction"],
@@ -197,7 +198,7 @@ describe("main loop phase ordering", () => {
 
     expect(phaseContract).toEqual(canonicalTickPhases);
     expect(new Set(order).size).toBe(order.length);
-    expect(order).toHaveLength(42);
+    expect(order).toHaveLength(43);
   });
 
   it("keeps one-time registrations outside and before gameLoop", () => {

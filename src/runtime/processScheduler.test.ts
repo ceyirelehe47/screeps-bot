@@ -9,13 +9,30 @@ beforeEach(() => {
 
 it("生产表无遗漏或重复、依赖可满足，防御先于市场/规划，出生先于 creep 执行", () => {
   const ids: readonly string[] = RUNTIME_PROCESSES.map(spec => spec.id);
-  expect(ids).toHaveLength(42); expect(new Set(ids).size).toBe(ids.length);
+  expect(ids).toHaveLength(43); expect(new Set(ids).size).toBe(ids.length);
   expect(ids.slice(0, 5)).toEqual(["announceDeploy", "coreDefense", "defenseMode", "homeDefense", "towerControl"]);
   for (const spec of PROCESS_SPECS.values()) {
     for (const dependency of [...spec.after ?? [], ...spec.requires ?? []]) expect(ids.indexOf(dependency)).toBeLessThan(ids.indexOf(spec.id));
   }
   expect(PROCESS_SPECS.get("marketSalePreflight")?.tier).toBe("T2");
+  expect(PROCESS_SPECS.get("powerCreepLifecycle")?.tier).toBe("T1");
+  expect(PROCESS_SPECS.get("powerCreepControl")?.tier).toBe("T2");
   expect(ids.indexOf("spawnWork")).toBeLessThan(ids.indexOf("creepWork"));
+});
+
+it("低 bucket、CPU 超预算和旧熔断均不能阻止 PC 续命入口，普通 PC 工作仍延后", () => {
+  Game.cpu.bucket = 1;
+  Game.cpu.getUsed = jest.fn(() => 499);
+  Memory.runtime!.processScheduler = { updatedAt: 99, estimates: {}, deferred: {}, failures: {}, lastDeferred: [],
+    circuits: { powerCreepLifecycle: { failures: 10, until: 150 } } };
+  const lifecycle = jest.fn(), economy = jest.fn();
+  const runner = createProcessScheduler((_id, work) => work(), jest.fn());
+  runner.runPhase("powerCreepLifecycle", lifecycle);
+  runner.runPhase("powerCreepControl", economy);
+  runner.finish();
+  expect(lifecycle).toHaveBeenCalledTimes(1);
+  expect(economy).not.toHaveBeenCalled();
+  expect(Memory.runtime!.processScheduler!.circuits.powerCreepLifecycle).toBeUndefined();
 });
 
 it("低 bucket 真正延后可选工作，所有 T0/T1 仍执行且摘要独立于 profiler", () => {

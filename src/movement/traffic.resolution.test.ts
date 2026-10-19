@@ -29,6 +29,37 @@ it("resolves duplicate destinations deterministically", () => {
   expect(resolveTrafficIntents()).toEqual({ checked: 2, canceled: 1, unresolved: 0 });
   expect(a.cancelOrder).not.toHaveBeenCalled(); expect(b.cancelOrder).toHaveBeenCalledWith("move");
 });
+
+it("死亡或跨 shard PC 不进入占位表，存活 PC 的碰撞约束仍有效", () => {
+  const a = actor("a", 10, 10);
+  Game.powerCreeps = Object.fromEntries([
+    ["dead", { name: "dead", ticksToLive: Number.NaN }],
+    ["zero", { name: "zero", ticksToLive: 0 }],
+    ["transition", { name: "transition", ticksToLive: 500 }],
+    ["foreign", { name: "foreign", ticksToLive: 500, shard: "shard9", pos: a.pos, room: a.room }],
+  ]) as unknown as Record<string, PowerCreep>;
+  issueMove(a, RIGHT);
+  expect(resolveTrafficIntents()).toEqual({ checked: 1, canceled: 0, unresolved: 0 });
+  Game.time++;
+  Game.powerCreeps.live = { name: "live", powers: {}, ticksToLive: 500, room: a.room,
+    pos: { x: 11, y: 10, roomName: "W0N0" }, memory: {} } as unknown as PowerCreep;
+  issueMove(a, RIGHT);
+  expect(resolveTrafficIntents().canceled).toBe(1);
+});
+
+it("续命 PC 的返程落点优先于普通搬运，仍让位于防御单位", () => {
+  const carrier = actor("a-carrier", 10, 10);
+  const pc = { ...actor("z-pc", 12, 10), powers: {}, ticksToLive: 199,
+    memory: { tasks: [{ type: "renew" }] } } as unknown as PowerCreep;
+  actors.pop(); Game.powerCreeps[pc.name] = pc;
+  issueMove(carrier, RIGHT); issueMove(pc, LEFT);
+  expect(resolveTrafficIntents().canceled).toBe(1);
+  expect(carrier.cancelOrder).toHaveBeenCalled(); expect(pc.cancelOrder).not.toHaveBeenCalled();
+  Game.time++; carrier.memory.role = "homeDefender";
+  issueMove(carrier, RIGHT); issueMove(pc, LEFT);
+  expect(resolveTrafficIntents().canceled).toBe(1);
+  expect(getMoveIntentReceipt(carrier)).toBeDefined(); expect(getMoveIntentReceipt(pc)).toBeUndefined();
+});
 it("propagates stationary blockers but preserves swaps and closed movement cycles", () => {
   const a = actor("a", 10, 10), b = actor("b", 11, 10); actor("stationary", 12, 10);
   issueMove(a, RIGHT); issueMove(b, RIGHT);

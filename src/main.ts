@@ -38,7 +38,7 @@ import { runWarControl } from "@/runtime/warControl";
 import { runPowerBankObserver } from "@/runtime/powerBankObserver";
 import { runPowerBankHarvest } from "@/runtime/powerBankHarvest";
 import { runDepositHarvest } from "@/runtime/depositHarvest";
-import { runPowerCreepControl } from "@/runtime/powerCreepControl";
+import { runPowerCreepControl, runPowerCreepLifecycle } from "@/runtime/powerCreepControl";
 import { runPowerSpawnControl } from "@/runtime/powerSpawnControl";
 import { runNukerControl } from "@/runtime/nukerControl";
 import { refreshWorkerTasks } from "@/runtime/workerTaskPool";
@@ -107,6 +107,7 @@ function gameLoop(): void {
       powerBankObserver: runPowerBankObserver,
       powerBankHarvest: runPowerBankHarvest,
       depositHarvest: runDepositHarvest,
+      powerCreepLifecycle: runPowerCreepLifecycle,
       powerCreepControl: runPowerCreepControl,
       powerSpawnControl: runPowerSpawnControl,
       roomPlannerConstruction: runRoomPlannerConstruction,

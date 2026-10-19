@@ -1,4 +1,4 @@
-import { runIsolatedRoutineRoomOperation } from "@/runtime/runtimeIsolation";
+import { runIsolatedRoomOperation, runIsolatedRoutineRoomOperation } from "@/runtime/runtimeIsolation";
 import { searchRoomPath } from "@/movement/roomPath";
 import { needsFactoryOperatePower } from "@/runtime/factoryControl";
 import { executeTreasuryFencedTerminalCargo } from "@/runtime/treasuryTerminalCargo";
@@ -8,12 +8,12 @@ import type {
   PowerCreepTask,
   PowerCreepTaskType,
 } from "@/runtime/powerCreepTypes";
-import { ensureCreepMovementState } from "@/movement/creepState";
+import { clearCreepMovementState, ensureCreepMovementState } from "@/movement/creepState";
 import { issueMove, getMoveIntentDestination } from "@/movement/traffic";
 import { moveToTarget } from "@/movement/pathing";
 import { runOpsDistribution } from "@/runtime/opsDistribution";
 
-export const POWER_CREEP_RENEW_TTL = 200;
+export const POWER_CREEP_RENEW_TTL = 500;
 export const POWER_CREEP_OPS_HIGH_WATER_RATIO = 0.9;
 export const POWER_CREEP_OPS_RETAIN_RATIO = 0.5;
 
@@ -40,6 +40,8 @@ const POWER_TASKS: Partial<Record<PowerCreepTaskType, PowerConstant>> = {
 const extensionSupplyIntents = new Map<string, number>();
 let capabilityCacheTick = -1;
 let capabilityCache: Record<string, PowerCreepRoomCapability> = {};
+let lifecycleTick = -1;
+const lifecycleHandled = new Set<string>();
 
 function getOwnedPowerSpawn(room: Room | undefined): StructurePowerSpawn | null {
   if (!room?.controller?.my) {
@@ -343,12 +345,9 @@ function pruneObsoleteTasks(powerCreep: PowerCreep, room: Room): void {
   );
 }
 
-function scheduleLifecycleTasks(powerCreep: PowerCreep, room: Room, powerSpawn: StructurePowerSpawn | null): void {
+function scheduleEnableRoomTask(powerCreep: PowerCreep, room: Room): void {
   if (room.controller && !room.controller.isPowerEnabled) {
     enqueuePowerCreepTask(powerCreep, "enable_room", room.controller.id);
-  }
-  if (powerSpawn && powerCreep.ticksToLive != null && powerCreep.ticksToLive < POWER_CREEP_RENEW_TTL) {
-    enqueuePowerCreepTask(powerCreep, "renew", powerSpawn.id);
   }
 }
 
@@ -485,7 +484,7 @@ function movePowerCreepToTarget(
   powerCreep: PowerCreep,
   target: RoomObject,
   range: 1 | 2 | 3,
-): void {
+): ScreepsReturnCode {
   if (powerCreep.room?.name !== target.pos.roomName) {
     const step = searchRoomPath(powerCreep.pos, target.pos, { range, maxRooms: 16, maxOps: 8000, mover: powerCreep }, "execution").path[0];
     if (step) {
@@ -493,18 +492,18 @@ function movePowerCreepToTarget(
         const destination = getMoveIntentDestination(powerCreep.pos, value);
         return destination?.x === step.x && destination.y === step.y && destination.roomName === step.roomName;
       });
-      if (direction) issueMove(powerCreep, direction);
+      if (direction) return issueMove(powerCreep, direction);
     }
-    return;
+    return ERR_NO_PATH;
   }
-  moveToTarget(powerCreep, target, range, { reusePath: 5, ignoreCreeps: true });
+  return moveToTarget(powerCreep, target, range, { reusePath: 5, ignoreCreeps: true });
 }
 
-function moveToTaskTarget(powerCreep: PowerCreep, task: PowerCreepTask, target: RoomObject | null): void {
+function moveToTaskTarget(powerCreep: PowerCreep, task: PowerCreepTask, target: RoomObject | null): ScreepsReturnCode | undefined {
   if (!target) {
     return;
   }
-  movePowerCreepToTarget(powerCreep, target, getTaskRange(task));
+  return movePowerCreepToTarget(powerCreep, target, getTaskRange(task));
 }
 
 function prepositionForTask(powerCreep: PowerCreep, task: PowerCreepTask): void {
@@ -557,14 +556,13 @@ function handleTaskResult(
   task: PowerCreepTask,
   target: RoomObject | null,
   result: ScreepsReturnCode,
-): void {
+): ScreepsReturnCode | undefined {
   if (result === OK) {
     finishSuccessfulTask(powerCreep, task);
     return;
   }
   if (result === ERR_NOT_IN_RANGE) {
-    moveToTaskTarget(powerCreep, task, target);
-    return;
+    return moveToTaskTarget(powerCreep, task, target);
   }
   if (result === ERR_INVALID_TARGET || result === ERR_NOT_FOUND) {
     removePowerCreepTask(powerCreep, task.id);
@@ -624,7 +622,14 @@ function executeTask(powerCreep: PowerCreep, task: PowerCreepTask): ScreepsRetur
       return;
   }
 
-  handleTaskResult(powerCreep, task, target, result);
+  const moveResult = handleTaskResult(powerCreep, task, target, result);
+  if (task.type === "renew") {
+    powerCreep.memory.lifecycle = {
+      tick: Game.time, action: "renew", result, ttl: powerCreep.ticksToLive,
+      pos: { x: powerCreep.pos.x, y: powerCreep.pos.y, roomName: powerCreep.pos.roomName },
+      ...(moveResult !== undefined ? { moveResult } : {}),
+    };
+  }
   return result;
 }
 
@@ -638,11 +643,66 @@ function trySpawnPowerCreep(powerCreep: PowerCreep, room: Room): void {
   }
   const powerSpawn = getOwnedPowerSpawn(room);
   if (powerSpawn) {
-    powerCreep.spawn(powerSpawn);
+    const result = powerCreep.spawn(powerSpawn);
+    powerCreep.memory.lifecycle = { tick: Game.time, action: "spawn", result };
+    if (result === OK) {
+      powerCreep.memory.tasks = [];
+      delete powerCreep.memory._spawnYield;
+      clearCreepMovementState(powerCreep);
+    }
+  }
+}
+
+/** 生存动作走 T1；普通技能与跨房 OPS 规划仍走 T2。每个 PC 每 tick 只执行一次生存动作。 */
+function runPowerCreepLifecycleFor(powerCreep: PowerCreep): boolean {
+  if (lifecycleTick !== Game.time) {
+    lifecycleTick = Game.time;
+    lifecycleHandled.clear();
+  }
+  if (lifecycleHandled.has(powerCreep.name)) return true;
+  if (powerCreep.shard && powerCreep.shard !== Game.shard?.name) return true;
+  const homeRoomName = resolvePowerCreepHomeRoomName(powerCreep);
+  const room = homeRoomName ? Game.rooms[homeRoomName] : undefined;
+  if (!room) return true;
+  const ttl = powerCreep.ticksToLive;
+  if (ttl == null || !Number.isFinite(ttl) || ttl <= 0) {
+    lifecycleHandled.add(powerCreep.name);
+    trySpawnPowerCreep(powerCreep, room);
+    return true;
+  }
+  if (!powerCreep.room || !powerCreep.pos) return true;
+  if (ttl >= POWER_CREEP_RENEW_TTL) return false;
+  lifecycleHandled.add(powerCreep.name);
+  powerCreep.memory.lastControlTick = Game.time;
+  const powerSpawn = getOwnedPowerSpawn(room);
+  if (powerSpawn) {
+    // 续命覆盖旧的让位请求，避免经济工作或重复让位消耗最后的返程时间。
+    delete powerCreep.memory._spawnYield;
+    enqueuePowerCreepTask(powerCreep, "renew", powerSpawn.id);
+    const task = ensureTaskQueue(powerCreep).find(candidate => candidate.type === "renew")!;
+    syncPowerTaskWorkAnchor(powerCreep, task);
+    executeTask(powerCreep, task);
+  }
+  return true;
+}
+
+export function runPowerCreepLifecycle(): void {
+  for (const powerCreep of Object.values(Game.powerCreeps || {})) {
+    runIsolatedRoomOperation("powerCreepLifecycle", powerCreep.name, () => runPowerCreepLifecycleFor(powerCreep));
   }
 }
 
 function runPowerCreep(powerCreep: PowerCreep): void {
+  if (runPowerCreepLifecycleFor(powerCreep)) {
+    // T2 仍获准时沿用独立的产 OPS 槽位；不覆盖 T1 的续命移动或工作锚点。
+    if (lifecycleHandled.has(powerCreep.name) && Number.isFinite(powerCreep.ticksToLive) && (powerCreep.ticksToLive ?? 0) > 0 &&
+        powerCreep.room && powerCreep.pos && (!powerCreep.shard || powerCreep.shard === Game.shard?.name) &&
+        isPowerReady(powerCreep, PWR_GENERATE_OPS) && powerCreep.store.getFreeCapacity() >= getGenerateOpsAmount(powerCreep)) {
+      enqueuePowerCreepTask(powerCreep, "generate_ops");
+      executeTask(powerCreep, ensureTaskQueue(powerCreep).find(task => task.type === "generate_ops")!);
+    }
+    return;
+  }
   // spawn 让位指令优先：powerCreep 的任务逻辑（movePowerCreepToTarget）
   // 会覆盖 spawn 侧的直接 move，本 tick 让出出生位一步并跳过任务行为。
   // 指令带 tick，过期即忽略并清除。
@@ -663,26 +723,9 @@ function runPowerCreep(powerCreep: PowerCreep): void {
     return;
   }
 
-  // Live Screeps may expose null or NaN for an unspawned Power Creep even
-  // though the community type currently models only undefined. This check
-  // must stay ahead of room/pos guards because unspawned PCs expose neither.
-  const ticksToLive = powerCreep.ticksToLive;
-  if (ticksToLive == null || !Number.isFinite(ticksToLive)) {
-    trySpawnPowerCreep(powerCreep, room);
-    return;
-  }
-
-  // Power Creep 在跨 shard 或出生/消失的边界 tick 里，可能仍报告寿命，
-  // 但尚未暴露当前 shard 的 room/pos。此时不能执行本地任务，否则任何
-  // 距离判断都会中断整个主循环。
-  if (!powerCreep.room || !powerCreep.pos) {
-    return;
-  }
-
   powerCreep.memory.lastControlTick = Game.time;
-  const powerSpawn = getOwnedPowerSpawn(room);
   pruneObsoleteTasks(powerCreep, room);
-  scheduleLifecycleTasks(powerCreep, room, powerSpawn);
+  scheduleEnableRoomTask(powerCreep, room);
   scheduleOpsTasks(powerCreep, room);
   scheduleOperateStorage(powerCreep, room);
   scheduleOperateFactory(powerCreep, room);
@@ -741,4 +784,6 @@ export function resetPowerCreepControlCacheForTest(): void {
   extensionSupplyIntents.clear();
   capabilityCacheTick = -1;
   capabilityCache = {};
+  lifecycleTick = -1;
+  lifecycleHandled.clear();
 }

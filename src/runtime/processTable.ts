@@ -26,7 +26,7 @@ export const RUNTIME_PROCESSES = [
   process("memoryCleanup", "T2"), process("portalDiscovery", "T3"), process("flagControl", "T1"),
   process("crossShardSignals", "T1"), process("interShardControl", "T1"), process("warControl", "T2"),
   process("powerBankObserver", "T3"), process("powerBankHarvest", "T2"), process("depositHarvest", "T2"),
-  process("powerCreepControl", "T2"), process("powerSpawnControl", "T2"), process("roomPlannerConstruction", "T3"),
+  process("powerCreepLifecycle", "T1"), process("powerCreepControl", "T2"), process("powerSpawnControl", "T2"), process("roomPlannerConstruction", "T3"),
   process("linkControl", "T1"), process("refreshWorkerTasks", "T1"), process("bootstrapRooms", "T1"),
   process("remoteMining", "T1"), process("scheduleSpawnTasks", "T1"),
   process("spawnWork", "T1", { after: ["scheduleSpawnTasks"] }), process("creepWork", "T1", { after: ["spawnWork"] }),

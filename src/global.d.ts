@@ -747,6 +747,14 @@ declare global {
   }
 
   interface PowerCreepMemory {
+    lifecycle?: {
+      tick: number;
+      action: "spawn" | "renew";
+      result: ScreepsReturnCode;
+      ttl?: number;
+      moveResult?: ScreepsReturnCode;
+      pos?: { x: number; y: number; roomName: string };
+    };
     homeRoom?: string;
     tasks?: PowerCreepTask[];
     regenSourceIds?: string[];

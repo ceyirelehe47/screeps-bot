@@ -280,13 +280,19 @@ export function registerSquadMovement(squad: Squad): void {
 export function resolveTrafficIntents(): { checked: number; canceled: number; unresolved: number } {
   const receipts = currentMoveReceipts();
   const selected = new Set(receipts.keys());
-  const owned = [...getTickContextService().getAllCreeps(), ...Object.values(Game.powerCreeps ?? {}).filter(actor => actor.ticksToLive != null)];
+  // 未出生/死亡 PC 的 TTL 在真实引擎中可以是 NaN，也可能在边界 tick 缺少位置。
+  const owned = [...getTickContextService().getAllCreeps(), ...Object.values(Game.powerCreeps ?? {}).filter(actor =>
+    Number.isFinite(actor.ticksToLive) && (actor.ticksToLive ?? 0) > 0 && actor.pos && actor.room &&
+    (!actor.shard || actor.shard === Game.shard?.name))];
   const occupants = new Map<string, AnyCreep[]>();
   for (const actor of owned) {
     const key = destinationKey(actor.pos), rows = occupants.get(key) ?? [];
     rows.push(actor); occupants.set(key, rows);
   }
-  const priority = (actor: AnyCreep): number => "memory" in actor && (actor.memory as CreepMemory).role === "homeDefender" ? 2 : 1;
+  const priority = (actor: AnyCreep): number => {
+    if (isStandardCreep(actor)) return actor.memory.role === "homeDefender" ? 3 : 1;
+    return actor.memory.tasks?.some(task => task.type === "renew") ? 2 : 1;
+  };
   const attemptedActors = new Map<string, Set<AnyCreep>>();
   for (const [actor, receipt] of receipts) if (receipt.attempted) {
     const key = destinationKey(receipt.attempted), actors = attemptedActors.get(key) ?? new Set<AnyCreep>();
