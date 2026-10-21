@@ -28,6 +28,7 @@ interface ColonizationTask {
   planReady: boolean;
   blockedReason?: string;
   blockedUntil?: number;
+  sourceBlockedSince?: number;
   scoutStartedAt?: number;
   claimCompleted: boolean;
   scoutSafe?: boolean;
@@ -106,7 +107,7 @@ function getOwnedSpawnRooms(): string[] {
 }
 
 function selectSourceRoom(targetRoom: string, preferredRoom?: string): string | null {
-  const ownedSpawnRooms = getOwnedSpawnRooms().filter(name => name !== targetRoom);
+  const ownedSpawnRooms = getOwnedSpawnRooms().filter(name => name !== targetRoom && canStartOutboundMission(name));
   if (ownedSpawnRooms.length === 0) {
     return null;
   }
@@ -1416,11 +1417,20 @@ function upsertColonizationTask(flag: Flag): boolean {
   const preferredRoom = getPreferredSourceFromFlagName(flag.name);
   const existingTask = Memory.data?.colonization?.[targetRoom];
   const previousSource = existingTask?.sourceRoom;
+  const previousSpawns = previousSource ? getTickContextService().getSpawnsByRoom(previousSource) : [];
+  const sourceReady = !!previousSource && !!Game.rooms[previousSource]?.controller?.my &&
+    !isDefenseMode(previousSource) && canStartOutboundMission(previousSource) &&
+    previousSpawns.some(hasColonizationSquadProductionCapability);
+  if (existingTask) {
+    if (sourceReady) delete existingTask.sourceBlockedSince;
+    else existingTask.sourceBlockedSince ??= Game.time;
+  }
+  // 保留短暂阻塞的粘性；长时间不可用才尝试换源，不撤销已经出生的队伍。
   const keepSource = previousSource && previousSource !== targetRoom && Game.rooms[previousSource]?.controller?.my &&
-    getTickContextService().getSpawnsByRoom(previousSource).length > 0;
+    previousSpawns.length > 0 && (sourceReady || Game.time - (existingTask?.sourceBlockedSince ?? Game.time) < 500);
   const explicitSource = preferredRoom && preferredRoom !== targetRoom && Game.rooms[preferredRoom]?.controller?.my &&
     getTickContextService().getSpawnsByRoom(preferredRoom).some(hasColonizationSquadProductionCapability) ? preferredRoom : undefined;
-  const sourceRoom = explicitSource ?? (keepSource ? previousSource : selectSourceRoom(targetRoom, preferredRoom));
+  const sourceRoom = explicitSource ?? (keepSource ? previousSource : selectSourceRoom(targetRoom, preferredRoom)) ?? (previousSource && Game.rooms[previousSource]?.controller?.my ? previousSource : undefined);
 
   if (!sourceRoom) {
     return false;
@@ -1445,6 +1455,7 @@ function upsertColonizationTask(flag: Flag): boolean {
     planReady: existing?.planReady ?? false,
     blockedReason: existing?.sourceRoom === sourceRoom && existing.flagName === flag.name ? existing.blockedReason : undefined,
     blockedUntil: existing?.blockedUntil,
+    sourceBlockedSince: existing?.sourceRoom === sourceRoom ? existing.sourceBlockedSince : undefined,
     scoutStartedAt: existing?.sourceRoom === sourceRoom && existing.flagName === flag.name ? existing.scoutStartedAt : undefined,
     claimCompleted: existing?.claimCompleted ?? false,
     scoutSafe: existing?.sourceRoom === sourceRoom && (existing.scoutSafe ?? false),

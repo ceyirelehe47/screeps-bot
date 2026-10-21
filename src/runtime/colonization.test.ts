@@ -119,6 +119,20 @@ describe("runColonizationByFlag", () => {
     expect(Memory.data!.colonization!.W1N2.sourceRoom).toBe("W1N1");
     expect(creep.suicide).not.toHaveBeenCalled();
   });
+  it("未显式指定母房且持续阻塞500 tick 后改选可用来源", () => {
+    const source = createSourceRoom("W1N1"), other = createSourceRoom("W3N3");
+    Game.rooms = { W1N1: source, W3N3: other }; Game.creeps = {};
+    Game.spawns = { A: createSpawn(source), B: createSpawn(other) };
+    Game.flags = { CL: { name: "CL", pos: { roomName: "W1N2" }, remove: jest.fn() } as unknown as Flag };
+    Memory.data = { colonization: { W1N2: { targetRoom: "W1N2", sourceRoom: "W1N1", status: "claiming",
+      flagName: "CL", planReady: false, claimCompleted: false, sourceBlockedSince: Game.time - 500,
+      createdAt: Game.time - 600, updatedAt: Game.time - 1 } } };
+    jest.mocked(isDefenseMode).mockImplementation(name => name === source.name);
+    runColonizationByFlag();
+    expect(Memory.data!.colonization!.W1N2.sourceRoom).toBe(other.name);
+    expect(Memory.data!.colonization!.W1N2.sourceBlockedSince).toBeUndefined();
+  });
+
   it("reuses a failed safe-route lookup within the same tick", () => {
     const sourceRoom = createSourceRoom("W1N1");
     const spawn = createSpawn(sourceRoom);

@@ -16,6 +16,7 @@ export type ResourceTransferTaskOrigin = "manual" | "automatic";
 export type ResourceTransferTaskBlockedReason =
   | "receiver_capacity"
   | "source_depleted"
+  | "source_protected"
   | "insufficient_terminal_resource_or_fee";
 
 // 健康/需求覆盖谓词已上提至 resourceTransferTaskHealth.ts（canonical 单一实现，

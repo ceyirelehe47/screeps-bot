@@ -209,7 +209,7 @@ declare global {
           updatedAt: number;
           origin: "manual" | "automatic";
           lastProgressAt: number;
-          blockedReason?: "receiver_capacity" | "source_depleted" | "insufficient_terminal_resource_or_fee";
+          blockedReason?: "receiver_capacity" | "source_depleted" | "source_protected" | "insufficient_terminal_resource_or_fee";
           blockedSince?: number;
           reason?: string;
           lastError?: string;
@@ -243,6 +243,7 @@ declare global {
         planReady: boolean;
         blockedReason?: string;
         blockedUntil?: number;
+        sourceBlockedSince?: number;
         scoutStartedAt?: number;
         claimCompleted: boolean;
         scoutSafe?: boolean;

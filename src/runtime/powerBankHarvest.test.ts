@@ -399,6 +399,19 @@ describe("powerBankHarvest", () => {
     resetPowerBankFixture();
   });
 
+  it("固定战斗体型因扩展损失超过容量时由任务 owner 失败收尾", () => {
+    setupSourceRoom({ energyCapacity: 300 }); setupTargetRoom();
+    const task = makeTask({ sourceRoom: SOURCE_ROOM, status: POWER_BANK_STATUS.SPAWNING });
+    const configs = getCreepConfigService();
+    const name = getPowerBankConfigName(SOURCE_ROOM, TARGET_ROOM, "attacker", 0, task.id, 0);
+    configs.set(name, { role: "powerBankAttacker", roomName: SOURCE_ROOM, args: [TARGET_ROOM], taskId: task.id,
+      body: [ATTACK, ATTACK, ATTACK, ATTACK, MOVE] });
+    setupStore()[task.id] = task;
+    runPowerBankHarvest();
+    expect(task).toMatchObject({ status: POWER_BANK_STATUS.FAILED, failReason: "spawn_body_capacity_lost" });
+    expect(getCreepConfigService().get(name)).toBeUndefined();
+  });
+
   it("终态解绑战斗成员同时安排母房回收，不留下无任务原地站立的单位", () => {
     setupSourceRoom(); setupTargetRoom();
     const taskId = "pb-terminal-recycle";
@@ -623,11 +636,12 @@ describe("powerBankHarvest", () => {
       expect(Object.keys(Memory.data!.powerBankHarvest!)).toEqual([task.id]);
       expect(task.bankExpiresAt).toBe(expiresAt);
     }
-    expect(find).toHaveBeenCalledTimes(1);
+    // 退避期间后台索引可以测其它高速房；这里只约束该 Bank 的准入路线。
+    expect(find.mock.calls.filter(([, to]) => to === TARGET_ROOM)).toHaveLength(1);
     expect(stock).not.toHaveBeenCalled();
     expect(powerBankPathDistance.measurePowerBankTravel).not.toHaveBeenCalled();
     frame(200);
-    expect(find).toHaveBeenCalledTimes(2);
+    expect(find.mock.calls.filter(([, to]) => to === TARGET_ROOM)).toHaveLength(2);
     expect(task.nextAttemptAt).toBe(300);
     expect(getTask(task.id)).toBe(task);
 
@@ -640,7 +654,7 @@ describe("powerBankHarvest", () => {
     expect(Memory.data!.powerBankHarvestHistory).toContainEqual(expect.objectContaining({
       taskId: task.id, failReason: "bank_expired", terminalTick: expiresAt,
     }));
-    expect(find).toHaveBeenCalledTimes(2);
+    expect(find.mock.calls.filter(([, to]) => to === TARGET_ROOM)).toHaveLength(2);
   });
 
   it("长走廊 hold 不阻止其它来源准入，due 入口的危险与世界变化重新取路线", () => {

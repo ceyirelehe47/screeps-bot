@@ -486,6 +486,7 @@ function shouldQueuePowerBankCombatConfig(
     return false;
   }
 
+  if (config.roomName && fixedBodyExceedsCapacity(config, Game.rooms[config.roomName]?.energyCapacityAvailable ?? 0)) return false;
   return getConfigCreeps(configName, context).length === 0;
 }
 
@@ -703,6 +704,7 @@ function queuePowerBankHaulerConfig(
   context: SpawnPlanningContext,
 ): void {
   if (spawns.length === 0) return;
+  if (fixedBodyExceedsCapacity(config, spawns[0].room.energyCapacityAvailable)) return;
   if (isPowerBankHaulingExhausted(configName, config)) return;
   if (isConfigQueuedInSpawns(spawns, configName)) return;
   if (isConfigSpawning(configName, context)) return;
@@ -922,6 +924,7 @@ function pruneEmergencyCarrierQueue(roomName: string, keepOne: boolean): boolean
   const activeSpawns = spawns.filter(isSpawnActive);
   const eligibleSpawns = new Set(activeSpawns.length > 0 ? activeSpawns : spawns);
   let kept = false;
+  let migration: { spawn: StructureSpawn; name: string } | undefined;
 
   for (const spawn of spawns) {
     const queue = spawn.memory.spawnList;
@@ -941,6 +944,11 @@ function pruneEmergencyCarrierQueue(roomName: string, keepOne: boolean): boolean
 
       if (keepOne && !kept && eligibleSpawns.has(spawn)) {
         kept = true;
+        const idle = spawn.spawning ? activeSpawns.find(candidate => !candidate.spawning) : undefined;
+        if (idle) {
+          migration = { spawn: idle, name: configName };
+          return false;
+        }
         return true;
       }
 
@@ -949,6 +957,7 @@ function pruneEmergencyCarrierQueue(roomName: string, keepOne: boolean): boolean
     }));
   }
 
+  if (migration) replaceSpawnQueue(migration.spawn, [migration.name, ...(migration.spawn.memory.spawnList ?? []).filter(name => name !== migration!.name)]);
   return kept;
 }
 

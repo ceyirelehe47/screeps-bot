@@ -50,6 +50,35 @@ describe("mountSpawn", () => {
     Game.spawns = {};
   });
 
+  it("紧急 carrier 等在忙碌 spawn 时，空闲 spawn 仍可执行本地请求", () => {
+    const room = { name: "W1N1", energyAvailable: 300, energyCapacityAvailable: 300 } as Room;
+    const emergency = `W1N1:manual:maxcarrier:${Game.time}`;
+    const worker = "W1N1:worker:0";
+    Memory.data!.creepConfigs![emergency] = { role: "carrier", roomName: room.name, args: [], body: [CARRY, MOVE] };
+    Memory.data!.creepConfigs![worker] = { role: "worker", roomName: room.name, args: [], body: [WORK, CARRY, MOVE] };
+    const busy = createSpawn("Busy", room, [emergency]);
+    busy.spawning = { name: "old", remainingTime: 100 } as Spawning;
+    const idle = createSpawn("Idle", room, [worker]);
+    Game.spawns = { Busy: busy, Idle: idle }; Game.rooms = { W1N1: room }; Game.flags = {};
+    Object.setPrototypeOf(idle, prototype); prototype.work.call(idle);
+    expect(idle.spawnCreep).toHaveBeenCalledWith([WORK, CARRY, MOVE], expect.any(String), expect.any(Object));
+  });
+
+  it("deposit fresh 门未通过时保留请求，允许后面的 worker 出生", () => {
+    const room = { name: "W1N1", energyAvailable: 3000, energyCapacityAvailable: 3000 } as Room;
+    const deposit = "W1N1:deposit:d:g0", worker = "W1N1:worker:0";
+    Memory.data!.depositHarvest = { d: { id: "d", sourceRoom: room.name, status: "spawning", generation: 0,
+      configName: deposit, spawnReadyAt: Game.time - 1 } as DepositHarvestTask };
+    Memory.data!.creepConfigs![deposit] = { role: "depositHarvester", roomName: room.name, args: ["d", room.name],
+      taskId: "d", spawnOnce: {}, body: [...DEPOSIT_BODY] };
+    Memory.data!.creepConfigs![worker] = { role: "worker", roomName: room.name, args: [], body: [WORK, CARRY, MOVE] };
+    const spawn = createSpawn("Spawn1", room, [deposit, worker]);
+    Game.spawns = { Spawn1: spawn }; Game.rooms = { W1N1: room }; Game.flags = {};
+    Object.setPrototypeOf(spawn, prototype); prototype.work.call(spawn);
+    expect((spawn.spawnCreep as jest.Mock).mock.calls[0][2].memory.configName).toBe(worker);
+    expect(spawn.memory.spawnList).toEqual([deposit]);
+  });
+
   it("超容量固定队首被移出并留下诊断，同 tick 后续可支付单位出生", () => {
     const room = { name: "W1N1", energyAvailable: 300, energyCapacityAvailable: 300 } as Room;
     const blocked = "W1N1:colonizationSupport:W2N2:upgrader", worker = "W1N1:worker:0";

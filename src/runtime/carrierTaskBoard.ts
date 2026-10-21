@@ -24,6 +24,9 @@ export interface CarrierTaskStep {
   readonly fromId: string;
   readonly toId: string;
   readonly amount: number;
+  /** 执行时保留的源库存与目标空闲容量，避免陈旧草稿反复搬运。 */
+  readonly sourceFloorAmount?: number;
+  readonly destinationFreeCapacityFloor?: number;
   /** Terminal feed 的目标库存上限；不是可以反复领取的搬运增量。 */
   readonly destinationTargetAmount?: number;
   readonly boundResourceTransferTaskId?: string;
@@ -712,6 +715,8 @@ function cloneCarrierTaskStep(step: CarrierTaskStep): MutableCarrierTaskStepForT
     fromId: step.fromId,
     toId: step.toId,
     amount: step.amount,
+    ...(step.sourceFloorAmount !== undefined ? { sourceFloorAmount: step.sourceFloorAmount } : {}),
+    ...(step.destinationFreeCapacityFloor !== undefined ? { destinationFreeCapacityFloor: step.destinationFreeCapacityFloor } : {}),
     ...(step.destinationTargetAmount !== undefined ? { destinationTargetAmount: step.destinationTargetAmount } : {}),
     ...(step.boundResourceTransferTaskId !== undefined ? { boundResourceTransferTaskId: step.boundResourceTransferTaskId } : {}),
     ...(step.boundResourceTransferTaskIdentity !== undefined ? { boundResourceTransferTaskIdentity: step.boundResourceTransferTaskIdentity } : {}),

@@ -1,3 +1,4 @@
+import { getResourceControlPlanningEnergyBudget } from "@/runtime/resourceControlReadModel";
 import { isDue } from "@/runtime/cadence";
 import { createAutomaticResourceTransferTask, createResourceTransferTaskAmountIndex, ensureResourceTransferTaskStore } from "@/runtime/logistics/resourceTransferTasks";
 import { getTerminalAmountOutsideMarketSaleExposure } from "@/runtime/marketSaleExposure";
@@ -17,7 +18,7 @@ export function runPowerDistribution(rooms: readonly Room[], processors: Readonl
   for (const task of Object.values(ensureResourceTransferTaskStore())) {
     if (task.status !== "pending") continue;
     capacityReserved.set(task.toRoomName, (capacityReserved.get(task.toRoomName) ?? 0) + task.remainingAmount);
-    feeReserved.set(task.fromRoomName, (feeReserved.get(task.fromRoomName) ?? 0) + Game.market.calcTransactionCost(task.remainingAmount, task.fromRoomName, task.toRoomName));
+    feeReserved.set(task.fromRoomName, (feeReserved.get(task.fromRoomName) ?? 0) + Game.market.calcTransactionCost(Math.min(resolveRoomConfig(task.fromRoomName).transferBatchSize, task.remainingAmount), task.fromRoomName, task.toRoomName));
   }
   const candidates = rooms.filter((room) => room.controller?.my && room.terminal
     && (typeof room.terminal.isActive !== "function" || room.terminal.isActive())).map((room) => {
@@ -41,7 +42,7 @@ export function runPowerDistribution(rooms: readonly Room[], processors: Readonl
     return { room, surplus: Math.max(0, stored - Math.max(0, target - inProcessor) - outgoing - (processor ? 2 * MIN_BATCH : 0)),
       deficit: Math.max(0, target - stored - inProcessor + outgoing - incoming),
       capacity: Math.max(0, terminal.store.getFreeCapacity() - (capacityReserved.get(room.name) ?? 0)),
-      feeEnergy: Math.max(0, terminal.store.getUsedCapacity(RESOURCE_ENERGY) - policy.terminalEnergyReserve - index.getOutgoing(room.name, RESOURCE_ENERGY) - (feeReserved.get(room.name) ?? 0)) };
+      feeEnergy: Math.max(0, getResourceControlPlanningEnergyBudget(room) - index.getOutgoing(room.name, RESOURCE_ENERGY) - (feeReserved.get(room.name) ?? 0)) };
   });
   const pairs = candidates.flatMap((source) => candidates.filter((target) => source !== target && target.deficit >= MIN_BATCH && source.surplus >= MIN_BATCH)
     .map((target) => ({ source, target, distance: Game.map.getRoomLinearDistance(source.room.name, target.room.name) })));

@@ -33,6 +33,7 @@ export interface PowerBankSourceIndexEntry {
 
 interface IndexPair { ticks: number | null; at: number }
 interface IndexRoom {
+  signature?: string;
   pairs: Record<string, IndexPair>;
   entries: PowerBankSourceIndexEntry[];
   /** entries 来自一次完整构建；刷新期间旧 entries 继续可用。 */
@@ -51,7 +52,7 @@ interface IndexState {
 }
 
 let state: IndexState | undefined;
-let frame: { game: Game; tick: number; sig: string; sources: IndexSource[]; avoid: Set<string> } | undefined;
+let frame: { game: Game; tick: number; sig: string; sources: IndexSource[]; avoid: Set<string>; signatures: Map<string, string> } | undefined;
 
 function hash(text: string): string {
   let value = 5381;
@@ -77,14 +78,14 @@ function readFrame(): NonNullable<typeof frame> {
     ...Object.keys(Memory.runtime?.powerBankPermanentDangerRooms ?? {}),
     ...Object.keys(Memory.runtime?.powerBankOwnedRoomIntel ?? {}),
   ]);
-  const sig = hash(JSON.stringify([Game.shard?.name ?? "", sources.map((source) => `${source.room}:${source.level}`), [...avoid].sort()]));
-  frame = { game: Game, tick: Game.time, sig, sources, avoid };
+  const sig = hash(JSON.stringify(["room-scoped-v2", Game.shard?.name ?? ""]));
+  frame = { game: Game, tick: Game.time, sig, sources, avoid, signatures: new Map() };
   return frame;
 }
 
 function parseMemoryRoom(encoded: unknown): IndexRoom | undefined {
   if (typeof encoded !== "string") return undefined;
-  const [builtAtText, list = ""] = encoded.split("|");
+  const [builtAtText, list = "", signature] = encoded.split("|");
   const builtAt = Number(builtAtText);
   if (!Number.isSafeInteger(builtAt)) return undefined;
   const entries: PowerBankSourceIndexEntry[] = [];
@@ -95,11 +96,11 @@ function parseMemoryRoom(encoded: unknown): IndexRoom | undefined {
     if (!room || !Number.isFinite(ticks) || !Number.isSafeInteger(level)) continue;
     entries.push({ room, ticks, level });
   }
-  return { pairs: {}, entries, complete: true, builtAt, buildStartedAt: builtAt };
+  return { pairs: {}, entries, complete: true, builtAt, buildStartedAt: builtAt, signature };
 }
 
 function encodeMemoryRoom(entry: IndexRoom): string {
-  return `${entry.builtAt}|${entry.entries.map((item) => `${item.room}:${item.ticks}:${item.level}`).join(",")}`;
+  return `${entry.builtAt}|${entry.entries.map((item) => `${item.room}:${item.ticks}:${item.level}`).join(",")}|${entry.signature ?? ""}`;
 }
 
 function ensureState(): IndexState {
@@ -126,6 +127,28 @@ function persist(roomName: string, entry: IndexRoom | undefined): void {
   const stored = runtime.powerBankSourceIndex ??= { sig: state?.sig ?? "", rooms: {} };
   if (entry) stored.rooms[roomName] = encodeMemoryRoom(entry);
   else delete stored.rooms[roomName];
+}
+
+/** 只使可能使用变化来源或避让房的高速条目失效。 */
+function currentRoomEntry(highwayRoom: string, index: IndexState): IndexRoom | undefined {
+  const signature = roomSignature(highwayRoom);
+  const entry = index.rooms.get(highwayRoom);
+  if (entry && entry.signature === signature) return entry;
+  if (entry) { index.rooms.delete(highwayRoom); persist(highwayRoom, undefined); }
+  return undefined;
+}
+
+function roomSignature(highwayRoom: string): string {
+  const current = readFrame();
+  const cached = current.signatures.get(highwayRoom);
+  if (cached !== undefined) return cached;
+  const signature = hash(JSON.stringify([
+    current.sources.filter(source => linearDistance(source.room, highwayRoom) <= POWER_BANK_SEARCH_RADIUS)
+      .map(source => [source.room, source.level, source.origin.x, source.origin.y]),
+    [...current.avoid].filter(room => linearDistance(room, highwayRoom) <= POWER_BANK_MAX_ROUTE_ROOMS).sort(),
+  ]));
+  current.signatures.set(highwayRoom, signature);
+  return signature;
 }
 
 function linearDistance(from: string, to: string): number {
@@ -218,7 +241,7 @@ function measurePair(source: IndexSource, highwayRoom: string, avoid: ReadonlySe
 
 function hasDiscoveredTask(): boolean {
   return Object.values(Memory.data?.powerBankHarvest ?? {})
-    .some((task) => task?.status === POWER_BANK_STATUS.DISCOVERED);
+    .some((task) => task?.status === POWER_BANK_STATUS.DISCOVERED && (task.nextAttemptAt ?? 0) <= Game.time);
 }
 
 /** 每 tick 推进索引：至多 1 对 PF 测量；待准入任务存在时把名额让给准入。 */
@@ -246,11 +269,11 @@ function runPowerBankSourceIndexImpl(): void {
   for (let offset = 0; offset < scan; offset += 1) {
     const position = (index.cursor + offset) % highwayRooms.length;
     const highwayRoom = highwayRooms[position];
-    let entry = index.rooms.get(highwayRoom);
+    let entry = currentRoomEntry(highwayRoom, index);
     if (entry?.complete && Game.time - entry.builtAt < POWER_BANK_SOURCE_INDEX_REFRESH_TICKS &&
         entry.buildStartedAt <= entry.builtAt) continue;
     if (!entry) {
-      entry = { pairs: {}, entries: [], complete: false, builtAt: -1, buildStartedAt: Game.time };
+      entry = { pairs: {}, entries: [], complete: false, builtAt: -1, buildStartedAt: Game.time, signature: roomSignature(highwayRoom) };
       index.rooms.set(highwayRoom, entry);
     } else if (entry.complete && entry.buildStartedAt <= entry.builtAt) {
       // 过期刷新：旧 entries 继续服务准入，直到新一轮完整构建覆盖。
@@ -281,7 +304,7 @@ export function getPowerBankSourceIndexEntry(highwayRoom: string): readonly Powe
   if (typeof Game.map?.getRoomLinearDistance !== "function") return undefined;
   const current = readFrame();
   if (current.sources.length === 0) return undefined;
-  const entry = ensureState().rooms.get(highwayRoom);
+  const entry = currentRoomEntry(highwayRoom, ensureState());
   return entry?.complete && entry.entries.length > 0 ? entry.entries : undefined;
 }
 
@@ -289,7 +312,7 @@ export function getPowerBankSourceIndexEntry(highwayRoom: string): readonly Powe
 export function getPowerBankSourceIndexTicks(highwayRoom: string, sourceRoom: string): number | undefined {
   if (typeof Game.map?.getRoomLinearDistance !== "function") return undefined;
   if (readFrame().sources.length === 0) return undefined;
-  const entry = ensureState().rooms.get(highwayRoom);
+  const entry = currentRoomEntry(highwayRoom, ensureState());
   if (!entry) return undefined;
   const listed = entry.entries.find((item) => item.room === sourceRoom);
   if (listed && entry.complete) return listed.ticks;

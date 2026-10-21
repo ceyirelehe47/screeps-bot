@@ -1,4 +1,4 @@
-import { readSpawnQueue, requestSpawn, consumeSpawnRequest, recordAcceptedSpawn, hasSpawnAcceptedIntent, rejectSpawnRequest } from "@/runtime/spawnRequests";
+import { readSpawnQueue, replaceSpawnQueue, requestSpawn, consumeSpawnRequest, recordAcceptedSpawn, hasSpawnAcceptedIntent, rejectSpawnRequest } from "@/runtime/spawnRequests";
 import { isRoomInReserveMode } from "@/runtime/roomReserve";
 import { fixedBodyExceedsCapacity, getSpawnAdmission } from "@/runtime/outboundMissionPolicy";
 import { readSpawnExitDirections } from "@/config/deployment";
@@ -207,7 +207,7 @@ function isSpawnableEmergencyCarrierConfig(spawn: StructureSpawn, configName: st
 
 function hasWaitingEmergencyCarrierOnAnotherSpawn(spawn: StructureSpawn): boolean {
   return Object.values(Game.spawns).some((candidate) => {
-    if (candidate === spawn || candidate.room.name !== spawn.room.name || !isSpawnActive(candidate)) {
+    if (candidate === spawn || candidate.spawning || candidate.room.name !== spawn.room.name || !isSpawnActive(candidate)) {
       return false;
     }
 
@@ -365,6 +365,15 @@ export function mountSpawn(): void {
         admission?.allowed === false ? admission.reason : "missing_config";
       rejectSpawnRequest(this, queue[0], reason);
     }
+    // Owner 当帧未就绪的请求保留排队，不能阻止同档其它请求执行。
+    const waiting = readSpawnQueue(this);
+    const readyIndex = waiting.findIndex(name => {
+      const config = getCreepConfigService().get(name);
+      return !!config && !fixedBodyExceedsCapacity(config, this.room.energyCapacityAvailable) &&
+        getSpawnAdmission(name, config, this.room.name).allowed && canExecuteSpawnRequest(name, config);
+    });
+    if (readyIndex < 0) return;
+    if (readyIndex > 0) replaceSpawnQueue(this, [waiting[readyIndex], ...waiting.filter((_, index) => index !== readyIndex)]);
     const queue = readSpawnQueue(this);
     if (queue.length === 0) {
       return;
@@ -379,7 +388,7 @@ export function mountSpawn(): void {
     if (!isRcl8Maintenance && shouldYieldEnergyToWar(this, currentTask)) {
       return;
     }
-    if (!isRcl8Maintenance && shouldYieldToEmergencyCarrier(this, currentTask)) {
+    if (currentConfig?.role !== "homeDefender" && !isRcl8Maintenance && shouldYieldToEmergencyCarrier(this, currentTask)) {
       return;
     }
     const success = this.mainSpawn(currentTask);

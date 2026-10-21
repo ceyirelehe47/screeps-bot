@@ -60,15 +60,21 @@ describe("PC 跨房 OPS 补给", () => {
     Game.time += 25; runOpsDistribution(); expect(tasks()[0].amount).toBe(1946);
   });
 
-  it("按手续费和共享终端容量缩小批次，不挤占其他资源的在途容量", () => {
+  it("Storage 可补手续费时按共享终端容量派单，不挤占其他资源在途容量", () => {
     const source = room("E5N59", 10000); const target = room("E4N58"); pc(target);
     source.terminal!.store = createMockStore({ energy: 25015 }, 300000);
     target.terminal!.store = createMockStore({ energy: 298800 }, 300000);
     room("E6N59"); createAutomaticResourceTransferTask("E6N59", target.name, RESOURCE_HYDROGEN, 1000, "existing");
-    runOpsDistribution(); expect(tasks()[0].amount).toBe(150);
+    runOpsDistribution(); expect(tasks()[0].amount).toBe(200);
     source.terminal!.store[RESOURCE_ENERGY] = 30000; Game.time += 25; runOpsDistribution();
-    // 仅余50容量时不派小于100的碎片单。
-    expect(tasks().reduce((sum, task) => sum + task.remainingAmount, 0)).toBe(150);
+    // 已有200在途占完剩余仓位，重复规划不追加。
+    expect(tasks().reduce((sum, task) => sum + task.remainingAmount, 0)).toBe(200);
+  });
+
+  it("Terminal 只有保底能量时，Storage 库存仍可支持 OPS 手续费", () => {
+    const source = room("E5N59", 10_000), target = room("E4N58"); pc(target);
+    source.terminal!.store = createMockStore({ energy: 25_000 }, 300_000);
+    runOpsDistribution(); expect(tasks()[0]).toMatchObject({ fromRoomName: source.name, amount: 2_000 });
   });
 
   it("500低水位以上、运输停用、终端不可用时不补给", () => {

@@ -399,7 +399,7 @@ function scheduleRegenSource(powerCreep: PowerCreep, room: Room): void {
   }
 
   const sources = refreshSourceRotation(powerCreep, room);
-  if (sources.length < 2) {
+  if (sources.length < 1) {
     return;
   }
   const index = (powerCreep.memory.nextRegenSourceIndex || 0) % sources.length;

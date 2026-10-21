@@ -157,7 +157,7 @@ describe("production Treasury T1 real facade task path", () => {
     try {
       Memory.cfg = {
         treasuryTerminalTransferSlice0: { mode: "off" },
-        resourceControl: { sampleInterval: 10, market: { enabled: false } },
+        resourceControl: { sampleInterval: 10, market: { enabled: false }, rooms: { [sourceName]: { mineralFloor: { [RESOURCE_HYDROGEN]: 0 } } } },
       } as unknown as Memory["cfg"];
       expect(armTreasuryT1FirstLive(task.id, task.createdAt).ok).toBe(true);
       clock.mockReturnValue(now + 60_000);

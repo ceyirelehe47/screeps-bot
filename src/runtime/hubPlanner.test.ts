@@ -14,6 +14,7 @@ import {
   planDistributedSynthesis,
   planHubChains,
   planHubImports,
+  resupplyBusySynthesisRooms,
   runHubPlanner,
   writeSynthesisConfig,
   wireDistributedSynthesis,
@@ -123,10 +124,27 @@ describe("planHubImports", () => {
     registerRuntimeServices();
   });
 
-  it("creates base mineral import from survival satellite with surplus H above safety floor", () => {
+  it("HUB补料只承诺保护线以上的真实仓储现货，同轮多个卫星不能重复占用", () => {
+    delete Memory.cfg!.hub!.targetCompounds;
+    const hub = createSatelliteRoom(HUB_ROOM, { H: 25_000, G: 8_000, OH: 55_000, XUH2O: 10_000 });
+    const first = createSatelliteRoom(SAT_ROOM, {}), second = createSatelliteRoom("W3N1", {});
+    Game.rooms = { [hub.name]: hub, [first.name]: first, [second.name]: second };
+    Memory.runtime = { synthesisControl: { rooms: {
+      [first.name]: { stage: "loading", missing: { H: 10_000, G: 5_000, OH: 10_000, XUH2O: 1_000 } },
+      [second.name]: { stage: "loading", missing: { H: 10_000, OH: 10_000 } },
+    } } } as unknown as Memory["runtime"];
+    // 预测库存故意包含不在仓储中的货，不能把它当成可出货的现货。
+    resupplyBusySynthesisRooms(HUB_ROOM, { H: 50_000, G: 50_000, OH: 80_000, XUH2O: 30_000 }, 5_000);
+    const tasks = Object.values(ensureResourceTransferTaskStore());
+    expect(tasks.reduce((sum, task) => sum + (task.resource === RESOURCE_HYDROGEN ? task.amount : 0), 0)).toBe(5_000);
+    expect(tasks.reduce((sum, task) => sum + (task.resource === RESOURCE_HYDROXIDE ? task.amount : 0), 0)).toBe(5_000);
+    expect(tasks.some(task => task.resource === RESOURCE_GHODIUM || task.resource === RESOURCE_CATALYZED_UTRIUM_ACID)).toBe(false);
+  });
+
+  it("survival 卫星房只导出默认5000保护线以上的基础矿", () => {
     Game.rooms[HUB_ROOM] = createHubRoomForImports();
     Game.rooms[SAT_ROOM] = createSatelliteRoom(SAT_ROOM, {
-      [RESOURCE_HYDROGEN]: 1000,
+      [RESOURCE_HYDROGEN]: 5500,
     });
     Memory.runtime!.resourceControl = {
       updatedAt: Game.time,

@@ -292,8 +292,8 @@ function runSynthesisResourceControlAuthorityTwin(
     mineralType: RESOURCE_HYDROGEN,
     storageEnergy: 300_000,
     terminalResources: {
-      [RESOURCE_UTRIUM]: 5_000,
-      [RESOURCE_HYDROGEN]: 5_000,
+      [RESOURCE_UTRIUM]: 10_000,
+      [RESOURCE_HYDROGEN]: 10_000,
     },
   });
   Game.rooms = { [hubRoom.name]: hubRoom, [donorRoom.name]: donorRoom };
@@ -407,8 +407,8 @@ describe("runSynthesisControl hub import guard", () => {
       mineralType: RESOURCE_HYDROGEN,
       storageEnergy: 300000,
       terminalResources: {
-        [RESOURCE_UTRIUM]: 5000,
-        [RESOURCE_HYDROGEN]: 5000,
+        [RESOURCE_UTRIUM]: 10000,
+        [RESOURCE_HYDROGEN]: 10000,
       },
     });
     Game.rooms[hubRoom.name] = hubRoom;

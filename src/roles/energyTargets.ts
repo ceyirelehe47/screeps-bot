@@ -155,12 +155,12 @@ export function getEnergyStoreTarget(creep: Creep, options: EnergyStoreTargetOpt
       return bestLab;
     }
 
-    if (includeStorage && targetRoom?.storage && !excludeSet.has(targetRoom.storage.id) &&
+    if (includeStorage && targetRoom?.storage && targetRoom.storage.store.getFreeCapacity(RESOURCE_ENERGY) > 0 && !excludeSet.has(targetRoom.storage.id) &&
       (!shouldRestrictToSafeZone(creep) || isPositionAllowedForCreep(creep, targetRoom.storage.pos))) {
       return targetRoom.storage;
     }
 
-    if (includeTerminal && targetRoom?.terminal && !excludeSet.has(targetRoom.terminal.id) &&
+    if (includeTerminal && targetRoom?.terminal && targetRoom.terminal.store.getFreeCapacity(RESOURCE_ENERGY) > 0 && !excludeSet.has(targetRoom.terminal.id) &&
       (!shouldRestrictToSafeZone(creep) || isPositionAllowedForCreep(creep, targetRoom.terminal.pos))) {
       return targetRoom.terminal;
     }

@@ -1380,6 +1380,21 @@ describe("carrierRole mineral hauling", () => {
     }
   });
 
+  it("两名 carrier 对同一供料步骤共同遵守额度，普通搬运仍可并行", () => {
+    const room = createRoom("W205N6");
+    const source = createCarrierTaskTestContainer(room, "supply-source", 2, { [RESOURCE_UTRIUM]: 5_000 });
+    const target = createCarrierTaskTestContainer(room, "supply-target", 3);
+    installCarrierTaskTestObjects([source, target]);
+    const draft = createMineralHaulTaskDraft("shared-supply", 100, RESOURCE_UTRIUM, source, target, 100);
+    replaceCarrierTasksForProducerRoom("supply-test", room.name, [{ ...draft, type: "lab_supply" }]);
+    const first = { ...createCreep(room), name: "supply-first" } as Creep;
+    const second = { ...createCreep(room), name: "supply-second" } as Creep;
+    Game.creeps = { [first.name]: first, [second.name]: second };
+    carrierRole().source?.(first); carrierRole().source?.(second);
+    expect(first.withdraw).toHaveBeenCalledWith(source, RESOURCE_UTRIUM, 100);
+    expect(second.withdraw).not.toHaveBeenCalled();
+  });
+
   it("allows multiple carriers to bind and withdraw from an ordinary task in the same tick", () => {
     const room = createRoom("W205N5");
     const source = createCarrierTaskTestContainer(

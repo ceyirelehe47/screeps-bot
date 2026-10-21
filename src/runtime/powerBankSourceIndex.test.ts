@@ -90,7 +90,7 @@ describe("PB 高速房来源索引", () => {
     setup([["E1N57", 7], ["E2N57", 6]]);
     runTicks(5);
     expect(index.getPowerBankSourceIndexEntry(HIGHWAY)?.map((entry) => entry.room)).toEqual(["E2N57", "E1N57"]);
-    expect(Memory.runtime!.powerBankSourceIndex!.rooms[HIGHWAY]).toMatch(/E2N57:80:6,E1N57:120:7$/);
+    expect(Memory.runtime!.powerBankSourceIndex!.rooms[HIGHWAY]).toMatch(/E2N57:80:6,E1N57:120:7\|[a-z0-9]+$/);
 
     index.resetPowerBankSourceIndexForTest();
     expect(index.getPowerBankSourceIndexEntry(HIGHWAY)?.map((entry) => entry.room)).toEqual(["E2N57", "E1N57"]);
@@ -115,6 +115,30 @@ describe("PB 高速房来源索引", () => {
     jest.mocked(Game.cpu.getUsed).mockReturnValue(0);
     runTicks(3);
     expect(index.getPowerBankSourceIndexEntry(HIGHWAY)?.map((entry) => entry.room)).toEqual(["E1N57"]);
+  });
+
+  it("未到重试时间的 discovery 不阻止后台索引，到期时仍让位给准入", () => {
+    costs = { E1N57: 100 };
+    setup([["E1N57", 8]]);
+    Memory.data!.powerBankHarvest = { t: { status: "discovered", nextAttemptAt: Game.time + 20 } as PowerBankHarvestTask };
+    runTicks(3);
+    expect(index.getPowerBankSourceIndexEntry(HIGHWAY)?.[0].room).toBe("E1N57");
+    const measured = search.mock.calls.length;
+    Game.time += index.POWER_BANK_SOURCE_INDEX_REFRESH_TICKS;
+    index.runPowerBankSourceIndex();
+    expect(search.mock.calls.length).toBe(measured);
+  });
+
+  it("无关远处敌房变化不清空已完成条目，相关避让变化仍使条目失效", () => {
+    costs = { E1N57: 100 }; setup([["E1N57", 8]]); runTicks(5);
+    expect(index.getPowerBankSourceIndexEntry(HIGHWAY)?.[0].room).toBe("E1N57");
+    jest.mocked(Game.map.getRoomLinearDistance).mockImplementation((from, to) => from === "W99S99" || to === "W99S99" ? 100 : 2);
+    Memory.runtime!.powerBankOwnedRoomIntel = { W99S99: { owner: "enemy", lastSeenAt: Game.time } };
+    Game.time++;
+    expect(index.getPowerBankSourceIndexEntry(HIGHWAY)?.[0].room).toBe("E1N57");
+    Memory.runtime!.powerBankOwnedRoomIntel.E2N57 = { owner: "enemy", lastSeenAt: Game.time };
+    Game.time++;
+    expect(index.getPowerBankSourceIndexEntry(HIGHWAY)).toBeUndefined();
   });
 
   it("条目超过刷新周期后重测，期间旧条目继续可用", () => {

@@ -422,6 +422,16 @@ describe("powerCreepControl", () => {
     expect(pc.usePower).not.toHaveBeenCalled();
   });
 
+  it("单 Source 房也施放 REGEN_SOURCE，轮转索引保持0", () => {
+    const source = createSource("E4N58", "single-source", 10);
+    const { room, powerSpawn } = createRoom({ sources: [source] });
+    const pc = createPowerCreep({ room, ticksToLive: 1000, powers: { [PWR_REGEN_SOURCE]: { level: 5, cooldown: 0 } } });
+    installPowerCreeps(pc); installGameObjects([source, powerSpawn]);
+    runPowerCreepControl();
+    expect(pc.usePower).toHaveBeenCalledWith(PWR_REGEN_SOURCE, source);
+    expect(pc.memory.nextRegenSourceIndex).toBe(0);
+  });
+
   it("Storage 与 Regen 同时就绪时按优先级跨 tick 执行并轮换 Source", () => {
     const roomName = "E4N58";
     const storage = createStorage(roomName, {

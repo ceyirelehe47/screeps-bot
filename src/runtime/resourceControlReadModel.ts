@@ -700,6 +700,7 @@ function isValidSynthesisShadowCaptureTask(
     (value.blockedReason === undefined ||
       value.blockedReason === "receiver_capacity" ||
       value.blockedReason === "source_depleted" ||
+      value.blockedReason === "source_protected" ||
       value.blockedReason === "insufficient_terminal_resource_or_fee") &&
     (value.blockedSince === undefined ||
       (Number.isSafeInteger(value.blockedSince) &&
@@ -1253,16 +1254,15 @@ export function getHealthyOutgoingCommitment(
   return Math.max(0, total);
 }
 
-export function getProtectedResourceAmount(
+/** 规划与执行共用的出货保护线；本房生产消费不受此出口下限约束。 */
+export function getResourceControlResourceFloor(
   snapshot: ResourceControlSnapshot,
   resource: ResourceConstant,
-  config: ResourceCapacityConfig,
-  context: ResourceControlCommitmentReadContext,
-  excludeTaskId?: string,
+  config: ResourceCapacityConfig = resolveCapacityConfig(),
+  transfer?: Pick<ResourceTransferTask, "origin" | "reason">,
 ): number {
   let safetyFloor = snapshot.mineralFloor[resource] || 0;
   const hub = Memory.cfg?.hub;
-  const transfer = excludeTaskId ? context.taskById.get(excludeTaskId) : undefined;
   if (resource === RESOURCE_OPS && transfer?.origin !== "manual") {
     safetyFloor = Math.max(safetyFloor, collectPowerCreepOpsRoomPolicies().get(snapshot.roomName)?.target || 0);
   }
@@ -1275,11 +1275,37 @@ export function getProtectedResourceAmount(
   if (HUB_TARGET_COMPOUNDS.includes(resource) && !isHubOnlyReserveCompound(resource)) {
     safetyFloor = Math.max(safetyFloor, config.t3ReservePerRoom);
   }
+  return safetyFloor;
+}
+
+export function getProtectedResourceAmount(
+  snapshot: ResourceControlSnapshot,
+  resource: ResourceConstant,
+  config: ResourceCapacityConfig,
+  context: ResourceControlCommitmentReadContext,
+  excludeTaskId?: string,
+): number {
+  const transfer = excludeTaskId ? context.taskById.get(excludeTaskId) : undefined;
+  const safetyFloor = getResourceControlResourceFloor(snapshot, resource, config, transfer);
   const exposure = getMarketSaleTerminalExposure(snapshot.roomName, resource);
   if (exposure.blocked) return getStock(snapshot, resource);
   const cargo = context.marketCargoTargets?.get(snapshot.roomName);
   return safetyFloor + getProductionCommitmentAmount(snapshot.roomName, resource, context) +
     Math.max(exposure.reservedAmount, cargo?.resource === resource ? cargo.targetStock : 0);
+}
+
+/** 终端中已指定给本地生产或市场的库存，不能被跨房动作借走。 */
+export function getProtectedTerminalResourceAmount(
+  snapshot: ResourceControlSnapshot, resource: ResourceConstant, context: ResourceControlCommitmentReadContext,
+): number {
+  const production = listCarrierTasksByRoom(snapshot.roomName)
+    .filter(task => task.type === "lab_supply" || task.type === "factory_supply")
+    .reduce((sum, task) => sum + task.steps.filter(step => step.resource === resource && step.fromId === snapshot.terminal.id)
+      .reduce((amount, step) => amount + step.amount, 0), 0);
+  const exposure = getMarketSaleTerminalExposure(snapshot.roomName, resource);
+  if (exposure.blocked) return getTerminalResourceAmount(snapshot, resource);
+  const cargo = context.marketCargoTargets?.get(snapshot.roomName);
+  return production + Math.max(exposure.reservedAmount, cargo?.resource === resource ? cargo.targetStock : 0);
 }
 
 export function getTotalMovableResourceAmount(
@@ -1985,9 +2011,23 @@ function inspectTreasuryResourceTransferAvailability(task: ResourceTransferTask,
   } catch { return {ok:false,reason:"shared_commitment_unreadable"}; }
 }
 
+/** 发布运输前的费用预算包含 Storage，实际手续费由 staging 补入 Terminal。 */
+export function getResourceControlPlanningEnergyBudget(room: Room): number {
+  if (!room.terminal) return 0;
+  const terminalEnergy = room.terminal.store.getUsedCapacity(RESOURCE_ENERGY);
+  return getTerminalActionEnergyOwnershipBudget({
+    totalEnergy: terminalEnergy + (room.storage?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0),
+    ordinaryTerminalEnergyReserve: resolveRoomConfig(room.name).terminalEnergyReserve,
+    productionEnergyCommitment: getReservedProductionAmount(room.name, RESOURCE_ENERGY),
+    otherOutgoingEnergyCommitment: 0, otherOutgoingFeeCommitment: 0,
+    otherExplicitEnergyOwnership: Math.max(0, terminalEnergy - getTerminalAmountOutsideMarketSaleExposure(room.terminal, RESOURCE_ENERGY, room.name)),
+  });
+}
+
 export function getResourceControlDonorAvailable(
   snapshot: ResourceControlSnapshot,
   resource: ResourceConstant,
+  protectProduction = true,
 ): number {
   const total = getStock(snapshot, resource);
   if (resource === RESOURCE_ENERGY) {
@@ -2012,6 +2052,12 @@ export function getResourceControlDonorAvailable(
       ),
     });
   }
-  const floor = snapshot.mineralFloor[resource] || 0;
-  return Math.max(0, total - floor);
+  const floor = getResourceControlResourceFloor(snapshot, resource);
+  const exposure = getMarketSaleTerminalExposure(snapshot.roomName, resource);
+  if (exposure.blocked) return 0;
+  const production = protectProduction ? getReservedProductionAmount(snapshot.roomName, resource) +
+    listCarrierTasksByRoom(snapshot.roomName).filter(task => task.type === "lab_supply" || task.type === "factory_supply")
+      .reduce((sum, task) => sum + task.steps.filter(step => step.resource === resource &&
+        (step.fromKind === "storage" || step.fromKind === "terminal")).reduce((n, step) => n + step.amount, 0), 0) : 0;
+  return Math.max(0, total - floor - production - exposure.reservedAmount);
 }

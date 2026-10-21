@@ -504,7 +504,7 @@ function getDonorAvailableGhodium(
   const safeStock = getSnapshotSafeGhodiumStock(snapshot);
   const floor = snapshot.mineralFloor[RESOURCE_GHODIUM] || 0;
   const baseAvailable = Math.min(
-    getResourceControlDonorAvailable(snapshot, RESOURCE_GHODIUM),
+    getResourceControlDonorAvailable(snapshot, RESOURCE_GHODIUM, false),
     Math.max(0, safeStock - floor),
   );
   const ownNukerDeficit = ownPlan?.ghodiumDeficit || 0;

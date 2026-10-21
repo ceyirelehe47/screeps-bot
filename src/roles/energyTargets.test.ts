@@ -131,6 +131,16 @@ describe("energyTargets", () => {
     clearSpawnActiveCacheForTest();
   });
 
+  it("Storage 满时改选有空位的 Terminal，两者满时不返回满结构", () => {
+    const storage = { id: "full-storage", structureType: STRUCTURE_STORAGE, pos: createPos(25), store: createStore(1000, 1000) } as unknown as StructureStorage;
+    const terminal = { id: "available-terminal", structureType: STRUCTURE_TERMINAL, pos: createPos(26), store: createStore(0, 1000) } as unknown as StructureTerminal;
+    const room = createRoom({ storage, terminal }); Game.rooms[room.name] = room;
+    const creep = createCreep(room);
+    expect(getEnergyStoreTarget(creep)).toBe(terminal);
+    terminal.store = createStore(1000, 1000) as StoreDefinition;
+    expect(getEnergyStoreTarget(creep)).toBeNull();
+  });
+
   it("按技能动态跳过 Spawn，但 PC 未接管时保留 Extension 回退", () => {
     const roomName = "W2N2";
     const spawn = {

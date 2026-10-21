@@ -2,7 +2,7 @@ import { retireCreep } from "@/runtime/retirement";
 import { isDue } from "@/runtime/cadence";
 import { replaceSpawnQueue } from "@/runtime/spawnRequests";
 import { countBoostableParts, getBoostPartType } from "@/runtime/boostParts";
-import { canStartOutboundMission } from "@/runtime/outboundMissionPolicy";
+import { canStartOutboundMission, fixedBodyExceedsCapacity } from "@/runtime/outboundMissionPolicy";
 import { predictPowerBankRecovery, predictPowerBankFinishTicks, powerBankAttackSustainable } from "@/runtime/powerBankCapability";
 import { POWER_BANK_STATUS, POWER_BANK_BODY_TIERS, POWER_BANK_BOOST_REQUIREMENTS, POWER_BANK_MAX_ROUTE_ROOMS, POWER_BANK_MAX_HIGHWAY_APPROACH, getPowerBankConfigName, isPowerBankSearchRoom } from "@/runtime/powerBankConstants";
 import { POWER_BANK_ROOM_TRAVEL_TICKS, POWER_BANK_COMBAT_TTL_MARGIN, derivePowerBankTierProfile, planPowerBankTimeline, selectBodyTier, assessViability, type PowerBankTierProfile } from "@/runtime/powerBankViability";
@@ -2252,6 +2252,17 @@ function processTaskImpl(task: PowerBankHarvestTask): void {
 
   if (!isPowerBankSearchRoom(task.targetRoom)) {
     transitionToTerminal(task, "aborted", "outside_powerbank_search_rooms");
+    return;
+  }
+
+  const capacity = Game.rooms[task.sourceRoom]?.energyCapacityAvailable;
+  if (task.status === POWER_BANK_STATUS.SPAWNING && capacity !== undefined && getTaskConfigNames(task).some(name => {
+    const config = getCreepConfigService().get(name);
+    return config && fixedBodyExceedsCapacity(config, capacity) &&
+      getTickContextService().getCreepsByConfigName(name).length === 0 &&
+      !Object.values(Game.spawns).some(spawn => spawn.spawning && Memory.creeps[spawn.spawning.name]?.configName === name);
+  })) {
+    transitionToTerminal(task, "failed", "spawn_body_capacity_lost");
     return;
   }
 

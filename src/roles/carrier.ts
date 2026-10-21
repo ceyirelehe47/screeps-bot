@@ -59,6 +59,7 @@ import {
 import {
   claimTerminalAmountOutsideMarketSaleExposure,
   getTerminalAmountOutsideMarketSaleExposure,
+  getMarketSaleTerminalExposure,
 } from "@/runtime/marketSaleExposure";
 import {
   noteTerminalBootstrapRecoveryPickup,
@@ -742,11 +743,16 @@ function getCarrierTaskStepSourceAmount(
   const from = resolveTaskStructure(step.fromId);
   if (!from) return 0;
   if (from.structureType === STRUCTURE_TERMINAL) {
-    return getTerminalAmountOutsideMarketSaleExposure(
+    const roomName = from.room?.name || from.pos?.roomName || fallbackRoomName;
+    const available = getTerminalAmountOutsideMarketSaleExposure(
       from,
       step.resource,
-      from.room?.name || from.pos?.roomName || fallbackRoomName,
+      roomName,
     );
+    if (step.sourceFloorAmount === undefined) return available;
+    if (!Number.isSafeInteger(step.sourceFloorAmount) || step.sourceFloorAmount < 0) return 0;
+    const exposure = roomName ? getMarketSaleTerminalExposure(roomName, step.resource).reservedAmount : 0;
+    return Math.max(0, available - Math.max(0, step.sourceFloorAmount - exposure));
   }
   return (from.store.getUsedCapacity(step.resource) ?? 0);
 }
@@ -766,11 +772,13 @@ function isCarrierTaskStepRunnable(
     return false;
   }
   const targetFree = taskType === "terminal_offload"
-    ? getLocalCarrierDestinationAvailableAmount(to, step.resource)
+    ? Math.max(0, getLocalCarrierDestinationAvailableAmount(to, step.resource) - (step.destinationFreeCapacityFloor ?? 0))
     : (to.store.getFreeCapacity(step.resource) ?? 0);
   if (targetFree <= 0) {
     return false;
   }
+  if (taskType === "terminal_offload" && step.destinationTargetAmount !== undefined &&
+      getTerminalFeedRemainingTarget(to, step.resource, step.destinationTargetAmount) <= 0) return false;
   const feedTarget = task ? readTerminalFeedTargetAmount(task, step) : undefined;
   if (feedTarget !== undefined && getTerminalFeedRemainingTarget(to, step.resource, feedTarget) <= 0) return false;
   return true;
@@ -1156,7 +1164,11 @@ function pickupSynthesisCarrierResource(
   const freeCapacity = creep.store.getFreeCapacity(assignment.step.resource);
   const feedTargetAmount = readTerminalFeedTargetAmount(assignment.task, assignment.step);
   const feedDestination = feedTargetAmount !== undefined ? resolveTaskStructure(assignment.step.toId) : null;
-  const requestedAmount = Math.min(assignment.step.amount, freeCapacity,
+  const offloadDestination = assignment.task.type === "terminal_offload" ? resolveTaskStructure(assignment.step.toId) : null;
+  const requestedAmount = Math.min(assignment.step.amount, freeCapacity, getCarrierTaskStepSourceAmount(assignment.step, creep.room.name),
+    offloadDestination ? Math.max(0, getLocalCarrierDestinationAvailableAmount(offloadDestination, assignment.step.resource) - (assignment.step.destinationFreeCapacityFloor ?? 0)) : Infinity,
+    offloadDestination && assignment.step.destinationTargetAmount !== undefined
+      ? getTerminalFeedRemainingTarget(offloadDestination, assignment.step.resource, assignment.step.destinationTargetAmount) : Infinity,
     feedTargetAmount !== undefined ? feedDestination ? getTerminalFeedRemainingTarget(feedDestination, assignment.step.resource, feedTargetAmount) : 0 : Number.POSITIVE_INFINITY);
   let exposureClaim:
     | ReturnType<typeof claimTerminalAmountOutsideMarketSaleExposure>
@@ -1196,6 +1208,7 @@ function pickupSynthesisCarrierResource(
     assignment.task,
   );
   const requiresTaskAmountClaim = isTerminalOffload ||
+    ["lab_supply", "factory_supply", "power_spawn_supply", "nuker_supply", "lab_cleanup", "lab_product_unload", "factory_unload"].includes(assignment.task.type) ||
     isCapacityReliefPreload || isMarketEgressPreload || feedTargetAmount !== undefined || (
     isNukerEnergySupplyCarrierTask(assignment.task) &&
     assignment.step.resource === RESOURCE_ENERGY
@@ -1304,6 +1317,9 @@ function pickupSynthesisCarrierResource(
   destinationCapacityClaim?.commit();
   if (feedTargetAmount !== undefined && feedDestination) {
     noteTerminalFeedAcceptedPickup(creep.name, feedDestination.id, assignment.step.resource, withdrawAmount);
+  }
+  if (offloadDestination && assignment.step.destinationTargetAmount !== undefined) {
+    noteTerminalFeedAcceptedPickup(creep.name, offloadDestination.id, assignment.step.resource, withdrawAmount);
   }
 
   // Record the accepted intent — store mutation happens next tick in live Screeps
@@ -1579,6 +1595,22 @@ function dropUnassignedResource(creep: Creep, resource: ResourceConstant): void 
   measureCreepIntent(() => creep.drop(resource));
 }
 
+function recoverBlockedOffloadCargo(creep: Creep, resource: ResourceConstant): boolean {
+  const state = ensureCreepAssignmentState(creep.name);
+  const critical = resource === RESOURCE_ENERGY && isCriticalEnergyDemandTarget(getEnergyStoreTarget(creep, {
+    includeStorage: false, includeTerminal: false, roomName: getAssignedCarrierRoomName(creep),
+  }));
+  state.synthesisCarrierPendingReturnStartedAt ??= Game.time;
+  if (!critical && Game.time - state.synthesisCarrierPendingReturnStartedAt < 50) return true;
+  clearSynthesisCarrierTaskPlan(creep);
+  if (resource === RESOURCE_ENERGY) return false;
+  const target = getSynthesisCleanupDeliveryTarget(creep, resource);
+  if (!target) { dropUnassignedResource(creep, resource); return true; }
+  const transfer = transferCarrierResource(creep, target, resource);
+  if (transfer.code === ERR_NOT_IN_RANGE) moveToTarget(creep, target);
+  return true;
+}
+
 function deliverSynthesisCarrierResource(creep: Creep): boolean {
   const assigned = getAssignedSynthesisCarrierTask(creep);
   const state = ensureCreepAssignmentState(creep.name);
@@ -1658,10 +1690,8 @@ function deliverSynthesisCarrierResource(creep: Creep): boolean {
       }
     }
     if (_cdTarget && isTerminalOffloadSnapshot) {
-      // Accepted offload cargo remains committed to its original Storage even
-      // when the board refreshes or the target becomes full. New pickups are
-      // blocked by the destination-capacity ledger; this carrier retries.
-      return true;
+      // 已接货先等原 Storage 腾位；关键补能可接管能量，持续满仓50 tick 后退货。
+      return recoverBlockedOffloadCargo(creep, _cdResource);
     }
     clearSynthesisCarrierPendingSnapshot(state);
   }
@@ -1763,10 +1793,7 @@ function deliverSynthesisCarrierResource(creep: Creep): boolean {
     }
   }
 
-  // terminal_offload task-bound delivery: keep carrier bound to the assigned
-  // storage target even when selectDeliveryStep returns null (storage full) —
-  // prevents fall-through to generic getEnergyStoreTarget which would route
-  // energy toward spawn/extension/tower.
+  // offload 正常投递保留原 Storage 归属；满仓时走有界恢复，避免永久抱货。
   if (assigned?.type === "terminal_offload") {
     const offloadStep = assigned.steps.find(
       (step) => creep.store.getUsedCapacity(step.resource) > 0,
@@ -1795,8 +1822,7 @@ function deliverSynthesisCarrierResource(creep: Creep): boolean {
           }
           return true;
         }
-        // ERR_FULL, ERR_INVALID_TARGET, etc — stay bound, retry next tick
-        return true;
+        return recoverBlockedOffloadCargo(creep, offloadStep.resource);
       }
     }
     // Empty-store fallback: carrier called target() during mount re-entry
@@ -1902,6 +1928,23 @@ export const carrierRole: RoleFactory = () => ({
     }
     if (receiverLinkFlushOwners.delete(creep.name)) delete deliveryState.carrierStorageOnlyMode;
 
+    const energyDemandTarget = getEnergyStoreTarget(creep, {
+      includeTerminal: false,
+      includeStorage: false,
+      roomName: assignedRoomName,
+    });
+
+    if (energyDemandTarget && isCriticalEnergyDemandTarget(energyDemandTarget)) {
+      clearUnacceptedResourceControlTerminalFeedAssignment(creep);
+      clearNukerEnergyTaskAssignment(creep);
+      return pickupEnergyDemandForCarrier(
+        creep,
+        energyDemandTarget,
+        assignedRoomName,
+        terminalBootstrapReserve,
+      ).switched;
+    }
+
     if (hasRunnablePowerBankBoostCarrierTask(assignedRoomName)) {
       const powerBankBoostPickup = pickupSynthesisCarrierResource(creep, isPowerBankBoostCarrierTask, false);
       if (powerBankBoostPickup.picked || powerBankBoostPickup.outOfRange) {
@@ -1924,23 +1967,6 @@ export const carrierRole: RoleFactory = () => ({
         return creep.store.getUsedCapacity() > 0 ||
           ensureCreepAssignmentState(creep.name).synthesisCarrierPendingPickupTick === Game.time;
       }
-    }
-
-    const energyDemandTarget = getEnergyStoreTarget(creep, {
-      includeTerminal: false,
-      includeStorage: false,
-      roomName: assignedRoomName,
-    });
-
-    if (energyDemandTarget && isCriticalEnergyDemandTarget(energyDemandTarget)) {
-      clearUnacceptedResourceControlTerminalFeedAssignment(creep);
-      clearNukerEnergyTaskAssignment(creep);
-      return pickupEnergyDemandForCarrier(
-        creep,
-        energyDemandTarget,
-        assignedRoomName,
-        terminalBootstrapReserve,
-      ).switched;
     }
 
     // 解开 link 网络背压优先于后台补给；实际领取仍复用普通能量预约和移动。

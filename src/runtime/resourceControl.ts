@@ -125,6 +125,7 @@ import {
   computeLargestAffordableAmount,
   getEnergyBalancingSurplus,
   getMovableResourceAmount,
+  getHubPendingImportResources,
   getCapacityReliefReceivableAmount,
   getCapacityReliefLedgerAvailableAmount,
   getCapacityReliefRecoveryGap,
@@ -762,6 +763,8 @@ function applyInternalBalancing(
     .filter(
       (snapshot) =>
         snapshot.terminal.cooldown === 0 &&
+        !context.tasks.some(task => task.fromRoomName === snapshot.roomName &&
+          isHealthyReceiverCapacityCommitment(task, resolveCapacityConfig().automaticTaskNoProgressTtl)) &&
         getEnergyBalancingSurplus(snapshot, context) > 0,
     )
     .sort(
@@ -808,7 +811,7 @@ function applyInternalBalancing(
         receiverCapacity,
         context,
       );
-      if (amount <= 0) continue;
+      if (amount < Math.min(1000, donor.transferBatchSize)) continue;
 
       const transactionCost = Game.market.calcTransactionCost(
         amount,
@@ -2755,29 +2758,6 @@ function planCapacityReliefTasks(
   return actions;
 }
 
-function getHubPendingImportResources(
-  tasks: ResourceTransferTask[],
-): Map<string, Set<string>> {
-  const result = new Map<string, Set<string>>();
-  for (const task of tasks) {
-    if (!isHealthyResourceTransferTaskReservation(task, "incoming")) continue;
-    const reason = task.reason;
-    if (
-      reason &&
-      (reason.startsWith("hub:import:") || reason.startsWith("hub:reclaim:"))
-    ) {
-      const resource = reason.split(":").pop()!;
-      let set = result.get(task.toRoomName);
-      if (!set) {
-        set = new Set<string>();
-        result.set(task.toRoomName, set);
-      }
-      set.add(resource);
-    }
-  }
-  return result;
-}
-
 function executeTransferTasks(
   snapshots: ResourceControlSnapshot[],
   terminalBusy: Set<string>,
@@ -2916,6 +2896,17 @@ function executeTransferTasks(
       syncResourceControlTransferTask(context, task);
     }
 
+    const movable = task.resource === RESOURCE_ENERGY ? Infinity : getTotalMovableResourceAmount(donor, task.resource, capacityConfig, context, task.id);
+    if (movable <= 0) {
+      markResourceTransferTaskBlocked(task, "source_protected");
+      syncResourceControlTransferTask(context, task);
+      continue;
+    }
+    if (task.blockedReason === "source_protected") {
+      clearResourceTransferTaskBlocker(task);
+      syncResourceControlTransferTask(context, task);
+    }
+
     const opsNeed = getPowerCreepOpsShipmentNeed(task, getStock(receiver, task.resource));
     if (opsNeed === 0) {
       cancelResourceTransferTask(task.id);
@@ -2975,6 +2966,7 @@ function executeTransferTasks(
       donor.transferBatchSize,
       receiverCapacity,
       opsNeed ?? Infinity,
+      task.resource === RESOURCE_ENERGY ? Infinity : getMovableResourceAmount(donor, task.resource, "terminal", capacityConfig, context, task.id),
       opsNeed !== undefined ? getTotalMovableResourceAmount(donor, RESOURCE_OPS, capacityConfig, context, task.id) : Infinity,
       synthesisDemand.status === "bounded" ? synthesisDemand.amount : Number.POSITIVE_INFINITY,
       isHubBufferExport ? Math.max(0, getStock(donor, task.resource) - HUB_T3_SUPPLY_FLOOR -
@@ -3286,6 +3278,7 @@ function persistResourceControlState(
       (
         task.lastError === "automatic_no_progress_timeout" ||
         task.lastError === "automatic_source_depleted_timeout" ||
+        task.lastError === "automatic_source_protected_timeout" ||
         task.lastError ===
           "automatic_receiver_capacity_coverage_timeout"
       )

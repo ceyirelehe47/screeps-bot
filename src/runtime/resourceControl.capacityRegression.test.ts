@@ -529,7 +529,9 @@ describe("resource control live-like capacity recovery", () => {
       task.reason = `capacity:relief:${RESOURCE_HYDROGEN}`;
     }],
   ] as const)("keeps ordinary Energy balancing available for %s outgoing relief responsibility", (_label, mutate) => {
-    const { donor, relief } = createOutgoingEnergyReliefScenario();
+    const { donor, relief, synthesis } = createOutgoingEnergyReliefScenario();
+    // 本组只验证接收方责任；显式 UH 任务的发送优先权由上一例单独验证。
+    synthesis.status = "cancelled";
     mutate(relief);
 
     runResourceControl();
@@ -540,6 +542,63 @@ describe("resource control live-like capacity recovery", () => {
     expect(donor.terminal!.send).toHaveBeenCalledWith(
       RESOURCE_ENERGY, 8_859, "E3N59", expect.anything(),
     );
+  });
+
+  it("外运不能借用 Terminal 本地lab供料库存，先补独立批次再发送", () => {
+    const donor = createMutableRoom("W82N4", { energy: 300_000, H: 10_000 }, { energy: 30_000, H: 3_000 });
+    const receiver = createMutableRoom("W83N4", { energy: 200_000 }, { energy: 25_000 });
+    Game.rooms = { [donor.name]: donor, [receiver.name]: receiver };
+    replaceCarrierTasksForProducerRoom("local-production", donor.name, [{ id: "local-h", type: "lab_supply", priority: 150,
+      steps: [{ id: "local-h-step", resource: RESOURCE_HYDROGEN, fromKind: "terminal", toKind: "lab",
+        fromId: donor.terminal!.id, toId: "local-lab", amount: 3_000 }] }]);
+    createAutomaticResourceTransferTask(donor.name, receiver.name, RESOURCE_HYDROGEN, 1_000, "supply:reserved-test");
+    Game.time = cadenceTick(100); resetRuntimeServices(); runResourceControl();
+    expect(donor.terminal!.send).not.toHaveBeenCalled();
+    const feed = getCarrierTasksByRoom(donor.name)[`resourceControl:terminal_feed:${donor.name}:H`];
+    expect(feed.steps[0]).toMatchObject({ amount: 1_000, destinationTargetAmount: 4_000 });
+    (donor.storage!.store as MutableStore).set(RESOURCE_HYDROGEN, 9_000);
+    (donor.terminal!.store as MutableStore).set(RESOURCE_HYDROGEN, 4_000);
+    Game.time += 10; resetRuntimeServices(); runResourceControl();
+    expect(donor.terminal!.send).toHaveBeenCalledWith(RESOURCE_HYDROGEN, 1_000, receiver.name, expect.anything());
+  });
+
+  it("等待同资源入库的非buffer HUB export 不占其它出货的备货窗口", () => {
+    const hub = createMutableRoom("W82N5", { energy: 300_000, utrium_bar: 3_000, G: 50_000 }, { energy: 30_000 });
+    const source = createMutableRoom("W83N5", { energy: 200_000, utrium_bar: 1_000 }, { energy: 25_000 });
+    const receiver = createMutableRoom("W84N5", { energy: 200_000 }, { energy: 25_000 });
+    Game.rooms = { [hub.name]: hub, [source.name]: source, [receiver.name]: receiver };
+    Memory.cfg!.hub = { enabled: true, hubRoomName: hub.name, targetCompounds: [RESOURCE_UTRIUM_BAR] };
+    createAutomaticResourceTransferTask(source.name, hub.name, RESOURCE_UTRIUM_BAR, 1_000, "hub:import:utrium_bar");
+    createAutomaticResourceTransferTask(hub.name, receiver.name, RESOURCE_UTRIUM_BAR, 1_000, "hub:export:utrium_bar");
+    createAutomaticResourceTransferTask(hub.name, receiver.name, RESOURCE_GHODIUM, 1_000, "hub:export:G");
+    Game.time = cadenceTick(100); resetRuntimeServices(); runResourceControl();
+    const tasks = getCarrierTasksByRoom(hub.name);
+    expect(tasks[`resourceControl:terminal_feed:${hub.name}:utrium_bar`]).toBeUndefined();
+    expect(tasks[`resourceControl:terminal_feed:${hub.name}:G`].steps[0].amount).toBe(1_000);
+  });
+
+  it("能量自动平衡不为不足1000的碎片占用 Terminal 动作", () => {
+    const donor = createMutableRoom("W82N3", { [RESOURCE_ENERGY]: 400_000 }, { [RESOURCE_ENERGY]: 25_500 });
+    const receiver = createMutableRoom("W83N3", { [RESOURCE_ENERGY]: 150_000 }, { [RESOURCE_ENERGY]: 25_000 });
+    Game.rooms = { [donor.name]: donor, [receiver.name]: receiver };
+    Game.time = cadenceTick(100); resetRuntimeServices(); runResourceControl();
+    expect(donor.terminal!.send).not.toHaveBeenCalled();
+  });
+
+  it("HUB 受保护库存不因位于 Terminal 就外发，100 tick 后释放自动需求", () => {
+    const donor = createMutableRoom("W82N2", { [RESOURCE_ENERGY]: 300_000 },
+      { [RESOURCE_ENERGY]: 30_000, [RESOURCE_GHODIUM]: 8_000 });
+    const receiver = createMutableRoom("W83N2", { [RESOURCE_ENERGY]: 200_000 }, { [RESOURCE_ENERGY]: 25_000 });
+    Game.rooms = { [donor.name]: donor, [receiver.name]: receiver };
+    Memory.cfg!.hub = { enabled: true, hubRoomName: donor.name };
+    Game.time = cadenceTick(100); resetRuntimeServices();
+    const created = createAutomaticResourceTransferTask(donor.name, receiver.name, RESOURCE_GHODIUM, 5_000, "nuker:ghodium");
+    if (typeof created === "string") throw new Error(created);
+    runResourceControl();
+    expect(donor.terminal!.send).not.toHaveBeenCalled();
+    expect(created.task.blockedReason).toBe("source_protected");
+    Game.time += 110; resetRuntimeServices(); runResourceControl();
+    expect(created.task).toMatchObject({ status: "cancelled", lastError: "automatic_source_protected_timeout" });
   });
 
   it("recovers a sticky 50000-free terminal through real carrier moves without next-cycle jitter", () => {

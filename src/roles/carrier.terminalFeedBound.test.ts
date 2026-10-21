@@ -280,6 +280,74 @@ describe("carrier terminal_feed 的实时绝对目的库存约束", () => {
     Memory.data = undefined;
   });
 
+  it("Tower 关键补能优先于可执行 lab 清理", () => {
+    const scenario = createFeedScenario({ terminalStock: 1_000, storageStock: 0 });
+    scenario.storageInventory.set(RESOURCE_ENERGY, 1_000);
+    const tower = { id: "critical-tower", room: scenario.room, structureType: STRUCTURE_TOWER,
+      pos: scenario.terminal.pos, store: createNativeStore(1_000).store } as unknown as StructureTower;
+    scenario.room.find = ((kind: FindConstant) => kind === FIND_MY_STRUCTURES || kind === FIND_STRUCTURES
+      ? [scenario.storage, scenario.terminal, tower] : []) as Room["find"];
+    replaceCarrierTasksForProducerRoom("synthesisControl", scenario.room.name, [{
+      id: "urgent-cleanup", type: "lab_cleanup", priority: 161,
+      steps: [{ id: "cleanup", resource: RESOURCE_HYDROXIDE, fromKind: "terminal", toKind: "storage",
+        fromId: scenario.terminal.id, toId: scenario.storage.id, amount: 100 }],
+    }]);
+    const carrier = scenario.addCarrier("critical-energy");
+    carrierRole().source?.(carrier.creep);
+    expect(carrier.withdraw).toHaveBeenCalledWith(scenario.storage, RESOURCE_ENERGY);
+    expect(carrier.withdraw).not.toHaveBeenCalledWith(scenario.terminal, RESOURCE_HYDROXIDE, expect.any(Number));
+  });
+
+  it("陈旧 offload 草稿跨多个 tick 与两名 carrier 只卸出一次额度", () => {
+    const scenario = createFeedScenario({ terminalStock: 2_000, storageStock: 0 });
+    const first = scenario.addCarrier("offload-first");
+    const second = scenario.addCarrier("offload-second");
+    replaceCarrierTasksForProducerRoom("resourceControl:preload", scenario.room.name, [{
+      id: "bounded-offload", type: "terminal_offload", priority: 90,
+      steps: [{ id: "offload-oh", resource: RESOURCE_HYDROXIDE, fromKind: "terminal", toKind: "storage",
+        fromId: scenario.terminal.id, toId: scenario.storage.id, amount: 100,
+        sourceFloorAmount: 1_900, destinationTargetAmount: 100 }],
+    }]);
+    expect(listCarrierTasksByRoom(scenario.room.name)[0].steps[0]).toMatchObject({ sourceFloorAmount: 1_900, destinationTargetAmount: 100 });
+    const role = carrierRole();
+    role.source?.(first.creep); role.source?.(second.creep);
+    expect(first.withdraw).toHaveBeenCalledWith(scenario.terminal, RESOURCE_HYDROXIDE, 100);
+    expect(second.withdraw).not.toHaveBeenCalled();
+    for (let tick = 0; tick < 8; tick++) {
+      scenario.nextTick();
+      for (const carrier of [first, second]) {
+        if (carrier.inventory.store.getUsedCapacity()) role.target(carrier.creep);
+        else role.source?.(carrier.creep);
+      }
+    }
+    expect(scenario.terminalInventory.get(RESOURCE_HYDROXIDE)).toBe(1_900);
+    expect(scenario.storageInventory.get(RESOURCE_HYDROXIDE)).toBe(100);
+  });
+
+  it("offload 执行时仍保留目标空闲容量，满仓已接货最多等待50 tick", () => {
+    const scenario = createFeedScenario({ terminalStock: 1_000, storageStock: 0, storageCapacity: 100 });
+    const carrier = scenario.addCarrier("offload-full");
+    const draft: CarrierTaskDraft = { id: "offload-full", type: "terminal_offload", priority: 90,
+      steps: [{ id: "offload-full-oh", resource: RESOURCE_HYDROXIDE, fromKind: "terminal", toKind: "storage",
+        fromId: scenario.terminal.id, toId: scenario.storage.id, amount: 100, sourceFloorAmount: 900,
+        destinationTargetAmount: 100, destinationFreeCapacityFloor: 100 }] };
+    replaceCarrierTasksForProducerRoom("resourceControl:preload", scenario.room.name, [draft]);
+    const role = carrierRole(); role.source?.(carrier.creep);
+    expect(carrier.withdraw).not.toHaveBeenCalled();
+    replaceCarrierTasksForProducerRoom("resourceControl:preload", scenario.room.name, [{ ...draft,
+      steps: draft.steps.map(step => ({ ...step, destinationFreeCapacityFloor: 0 })) }]);
+    role.source?.(carrier.creep); scenario.nextTick();
+    scenario.storageInventory.set(RESOURCE_HYDROXIDE, 100);
+    role.target(carrier.creep);
+    expect(carrier.transfer).not.toHaveBeenCalled();
+    Game.time += 50;
+    role.target(carrier.creep);
+    expect(carrier.transfer).toHaveBeenCalledWith(scenario.terminal, RESOURCE_HYDROXIDE);
+    scenario.nextTick();
+    expect(carrier.inventory.get(RESOURCE_HYDROXIDE)).toBe(0);
+    expect(getCreepAssignmentState(carrier.creep.name)?.synthesisCarrierTaskId).toBeUndefined();
+  });
+
   it("公共任务板保留目的库存标量，旧板数 tick 不刷新也只搬入 26 OH", () => {
     const scenario = createFeedScenario();
     const carrier = scenario.addCarrier("bounded-stale-board");

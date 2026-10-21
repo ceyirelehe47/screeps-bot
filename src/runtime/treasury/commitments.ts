@@ -94,6 +94,7 @@ const VALID_TASK_STATUSES: ReadonlySet<string> = new Set<string>([
 const VALID_TASK_BLOCKED_REASONS: ReadonlySet<string> = new Set<string>([
   "receiver_capacity",
   "source_depleted",
+  "source_protected",
   "insufficient_terminal_resource_or_fee",
 ]);
 

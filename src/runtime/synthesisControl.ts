@@ -1,3 +1,4 @@
+import { collectResourceControlSnapshots, getResourceControlDonorAvailable } from "@/runtime/resourceControlReadModel";
 import { runIsolatedRoutineRoomOperation } from "@/runtime/runtimeIsolation";
 import { isDue } from "@/runtime/cadence";
 import { countCarrierCargo } from "@/runtime/carrierCargo";
@@ -464,7 +465,9 @@ function selectDonor(
       const outgoing = transferTasks.getOutgoingAmount(room.name, resource);
       const holderId = `synthesis:${targetRoom.name}:${resource}`;
       const reserved = getReservedProductionAmountExcludingHolder(room.name, resource, holderId);
-      const exportable = Math.max(0, total - reserve - outgoing - reserved);
+      const snapshot = collectResourceControlSnapshots([resource], [room])[0];
+      const exportable = Math.max(0, Math.min(total - reserve - reserved,
+        snapshot ? getResourceControlDonorAvailable(snapshot, resource) : 0) - outgoing);
       if (exportable <= 0) {
         return undefined;
       }

@@ -39,9 +39,12 @@ describe("Power就近分发加工", () => {
     runPowerDistribution(rooms, processors); expect(tasks()).toHaveLength(1);
   });
 
-  it("终端没有费用余量或目标没有容量时不派单", () => {
+  it("Storage可补足费用；总预算不足或目标无容量时不派单", () => {
     const source = room("E1N1", 2000); source.terminal!.store = createMockStore({ [RESOURCE_POWER]: 2000, [RESOURCE_ENERGY]: 20_000 }, 300_000);
-    const target = room("E2N1", 0); runPowerDistribution([source, target], processors); expect(tasks()).toHaveLength(0);
+    const target = room("E2N1", 0); runPowerDistribution([source, target], processors); expect(tasks()).toHaveLength(1);
+    Memory.data = {};
+    source.storage!.store = createMockStore({ [RESOURCE_ENERGY]: 0 }, 1_000_000);
+    runPowerDistribution([source, target], processors); expect(tasks()).toHaveLength(0);
     source.terminal!.store = createMockStore({ [RESOURCE_POWER]: 2000, [RESOURCE_ENERGY]: 30_000 }, 300_000);
     target.terminal!.store = createMockStore({ [RESOURCE_ENERGY]: 300_000 }, 300_000);
     runPowerDistribution([source, target], processors); expect(tasks()).toHaveLength(0);

@@ -1,3 +1,4 @@
+import { getResourceControlPlanningEnergyBudget } from "@/runtime/resourceControlReadModel";
 import { isDue } from "@/runtime/cadence";
 import { createAutomaticResourceTransferTask, createResourceTransferTaskAmountIndex, ensureResourceTransferTaskStore } from "@/runtime/logistics/resourceTransferTasks";
 import { getTerminalAmountOutsideMarketSaleExposure } from "@/runtime/marketSaleExposure";
@@ -22,7 +23,7 @@ export function runOpsDistribution(): void {
     if (task.status !== "pending") continue;
     capacityReserved.set(task.toRoomName, (capacityReserved.get(task.toRoomName) || 0) + task.remainingAmount);
     feeReserved.set(task.fromRoomName, (feeReserved.get(task.fromRoomName) || 0) +
-      Game.market.calcTransactionCost(task.remainingAmount, task.fromRoomName, task.toRoomName));
+      Game.market.calcTransactionCost(Math.min(resolveRoomConfig(task.fromRoomName).transferBatchSize, task.remainingAmount), task.fromRoomName, task.toRoomName));
   }
   const candidates = rooms.map(room => {
     const terminal = room.terminal!;
@@ -36,8 +37,7 @@ export function runOpsDistribution(): void {
       deficit: policy && available < policy.lowWater ? Math.max(0, policy.target - available) : 0,
       available,
       capacity: Math.max(0, terminal.store.getFreeCapacity() - (capacityReserved.get(room.name) || 0)),
-      feeEnergy: Math.max(0, getTerminalAmountOutsideMarketSaleExposure(terminal, RESOURCE_ENERGY, room.name) -
-        resolveRoomConfig(room.name).terminalEnergyReserve - index.getOutgoing(room.name, RESOURCE_ENERGY) -
+      feeEnergy: Math.max(0, getResourceControlPlanningEnergyBudget(room) - index.getOutgoing(room.name, RESOURCE_ENERGY) -
         (feeReserved.get(room.name) || 0)),
     };
   });

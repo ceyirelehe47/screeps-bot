@@ -241,13 +241,13 @@ declare global {
             pendingOutgoing: number;
             blockedIncoming: Partial<
               Record<
-                "receiver_capacity" | "source_depleted" | "insufficient_terminal_resource_or_fee",
+                "receiver_capacity" | "source_depleted" | "source_protected" | "insufficient_terminal_resource_or_fee",
                 number
               >
             >;
             blockedOutgoing: Partial<
               Record<
-                "receiver_capacity" | "source_depleted" | "insufficient_terminal_resource_or_fee",
+                "receiver_capacity" | "source_depleted" | "source_protected" | "insufficient_terminal_resource_or_fee",
                 number
               >
             >;
@@ -263,7 +263,7 @@ declare global {
         automaticPending: number;
         blockedByReason: Partial<
           Record<
-            "receiver_capacity" | "source_depleted" | "insufficient_terminal_resource_or_fee",
+            "receiver_capacity" | "source_depleted" | "source_protected" | "insufficient_terminal_resource_or_fee",
             number
           >
         >;

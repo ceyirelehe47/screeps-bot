@@ -44,7 +44,8 @@ const MEMORY_BRANCHES = {
     interfaceName: "ScreepsMemoryRuntime",
     // 登记实际调度、独立 CPU 健康面包屑与有界生命周期事件；均由各自 owner 单写。
     // powerBankSourceIndex 由 powerBankSourceIndex.ts 单写（高速房来源索引的紧凑备份）。
-    schemaFingerprint: "4d585f1df1fe182f8e34bfc6727f54fafd2056ef54632df3d2d6f73715f117fe",
+    // 调度修复新增 source_protected 诊断枚举，根字段清单不变。
+    schemaFingerprint: "cf01ede3fa26e1867f01976103d43771197858cabb3be7aa44e63276d3fb3fc1",
     imports: [
       "@/runtime/cpuTickHealth:CpuTickCheckpoint",
       "@/runtime/cpuTickHealth:CpuTickHealthSummary",
@@ -102,8 +103,8 @@ const MEMORY_BRANCHES = {
   data: {
     declaration: "src/types/memory/data.d.ts",
     interfaceName: "ScreepsMemoryData",
-    // 登记殖民 blockedUntil/scoutStartedAt 与战争 reserveContinuationUntil；其他分支边界不变。
-    schemaFingerprint: "539fe2006e621a1a25a787ada2c01c27a9bfaab43d2292fcf3d5272c75300061",
+    // 登记殖民 sourceBlockedSince 与运输 source_protected；根字段清单保持不变。
+    schemaFingerprint: "e3c45cb6d7e0e8992f7171931005d16555435e6fd71e77ea36cc66a047d731bc",
     imports: [
       "@/runtime/market/state:CompactMarketState",
       "@/runtime/depositHarvest:DepositHarvestTask",
@@ -770,8 +771,10 @@ const legacyPowerBankObserver: NonNullable<RuntimeRoot["powerBankObserver"]> = {
 const dataBlockedReason:
   | "receiver_capacity"
   | "source_depleted"
+  | "source_protected"
   | "insufficient_terminal_resource_or_fee"
   | undefined = data.resourceControl?.tasks?.contract?.blockedReason;
+const colonySourceBlockedSince: number | undefined = data.colonization?.contract?.sourceBlockedSince;
 const analyticsStoredEnergy: number | undefined =
   analytics.production?.rooms?.["E1N1"]?.latest?.storedEnergy;
 const mergedExtension: "merged" | undefined = data.__memoryDeclarationBoundaryProbe;

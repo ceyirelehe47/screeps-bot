@@ -78,37 +78,23 @@ function ensureDefenders(room: Room, desiredCount: number): void {
 }
 
 function removeDefendersAbove(roomName: string, startIndex: number): void {
-  const configStore = getCreepConfigService();
-  const spawns = getTickContextService().getSpawnsByRoom(roomName);
-
-  for (let i = startIndex; i < getMaxDefenders(); i++) {
-    const configName = getConfigName(roomName, i);
-    configStore.remove(configName);
-
-    for (const spawn of spawns) {
-      if (spawn.memory.spawnList) {
-        replaceSpawnQueue(spawn, spawn.memory.spawnList.filter((name) => name !== configName));
-      }
-    }
-  }
+  stopQueuedDefenderSpawning(roomName, startIndex);
 }
 
 function stopQueuedDefenderSpawning(roomName: string, desiredCount: number): void {
-  const configStore = getCreepConfigService();
+  const configs = getCreepConfigService();
+  const prefix = `${roomName}:homeDefense:defender:`;
   const spawns = getTickContextService().getSpawnsByRoom(roomName);
-
-  for (let i = desiredCount; i < getMaxDefenders(); i++) {
-    const configName = getConfigName(roomName, i);
-
-    for (const spawn of spawns) {
-      if (spawn.memory.spawnList) {
-        replaceSpawnQueue(spawn, spawn.memory.spawnList.filter((name) => name !== configName));
-      }
-    }
-
-    if (!isLiveOrSpawning(configName)) {
-      configStore.remove(configName);
-    }
+  const names = new Set([...configs.getReadIndex().byRole("homeDefender").map(([name]) => name),
+    ...spawns.flatMap(spawn => [...(spawn.memory.spawnList ?? [])])]);
+  for (const name of names) {
+    if (!name.startsWith(prefix)) continue;
+    const slot = name.slice(prefix.length);
+    if (!/^\d+$/.test(slot) || Number(slot) < desiredCount) continue;
+    for (const spawn of spawns) replaceSpawnQueue(spawn, (spawn.memory.spawnList ?? []).filter(queued => queued !== name));
+    // 活体仍引用配置；解除自动补孵，待它退役后再删除。
+    if (isLiveOrSpawning(name)) configs.detachSpawn(name);
+    else configs.remove(name);
   }
 }
 
@@ -146,6 +132,8 @@ export function runHomeDefense(): void {
   forEachIsolatedRoom("homeDefense", tickContext.getMyRooms(), room => {
     const safeZone = getSafeZone(room.name);
     if (safeZone.size === 0) {
+      removeDefendersAbove(room.name, 0);
+      clearBoostLabTasks(room.name);
       clearDefenseCoordination(room.name);
       return;
     }

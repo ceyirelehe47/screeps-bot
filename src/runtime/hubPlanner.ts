@@ -1,3 +1,4 @@
+import { collectResourceControlSnapshots, getResourceControlDonorAvailable, getResourceControlResourceFloor } from "@/runtime/resourceControlReadModel";
 import { isDue } from "@/runtime/cadence";
 import { getActivePowerBankBoostLabIds } from "@/runtime/powerBankBoostMemory";
 /**
@@ -156,6 +157,8 @@ export interface AllocationLedgerEntry {
   totalAmount: number;
   /** How much each room has committed or holds. */
   roomCommitments: Record<string, number>;
+  /** 只允许跨房发出的现货；incoming 与本房保护库存不能转承诺。 */
+  exportableByRoom?: Record<string, number>;
 }
 
 /** A decision to send resources directly between rooms via terminal. */
@@ -618,7 +621,9 @@ export function planHubImports(
         if (amount <= BASE_MINERAL_SAFETY_FLOOR) continue;
         const directCommitment = getDirectSupplyCommitment(satellite.name, mineral, transferAmounts);
         const localReserve = getLocalReserveForSynthesis(satellite.name, mineral, reservePerRoom, targetCompounds);
-        const sendAmount = amount - BASE_MINERAL_SAFETY_FLOOR - directCommitment - localReserve;
+        const snapshot = collectResourceControlSnapshots([mineral], [satellite])[0];
+        const sendAmount = Math.min(amount - BASE_MINERAL_SAFETY_FLOOR - localReserve,
+          snapshot ? getResourceControlDonorAvailable(snapshot, mineral) : 0) - directCommitment;
         if (sendAmount < MIN_HUB_IMPORT_AMOUNT) continue;
         const reason = `hub:import:${mineral}`;
         const key = `${satellite.name}:${mineral}:${reason}`;
@@ -1061,6 +1066,8 @@ export function planDistributedSynthesis(
   );
   const allResources = [...BASE_MINERALS, ...INTERMEDIATE_COMPOUNDS, ...T3_TARGETS];
 
+  const supplySnapshots = new Map(collectResourceControlSnapshots().map(snapshot => [snapshot.roomName, snapshot]));
+
   // 1. Build per-room effective inventories (with pending transfers and reserves)
   const roomEffective: Record<string, Record<string, number>> = {};
   for (const room of rooms) {
@@ -1089,10 +1096,13 @@ export function planDistributedSynthesis(
       const amt = roomEffective[room.roomName][res] || 0;
       if (amt <= 0) continue;
       if (!ledger[res]) {
-        ledger[res] = { resource: res as ResourceConstant, totalAmount: 0, roomCommitments: {} };
+        ledger[res] = { resource: res as ResourceConstant, totalAmount: 0, roomCommitments: {}, exportableByRoom: {} };
       }
       ledger[res].totalAmount += amt;
       ledger[res].roomCommitments[room.roomName] = amt;
+      const snapshot = supplySnapshots.get(room.roomName);
+      ledger[res].exportableByRoom![room.roomName] = snapshot ? Math.max(0,
+        getResourceControlDonorAvailable(snapshot, res as ResourceConstant) - transferAmounts.getOutgoing(room.roomName, res as ResourceConstant)) : 0;
     }
   }
 
@@ -1464,6 +1474,10 @@ function assignStepToRoom(
       ledger[reagentA]!.totalAmount -= needed;
       ledger[reagentB]!.roomCommitments[roomName] -= needed;
       ledger[reagentB]!.totalAmount -= needed;
+      for (const reagent of [reagentA, reagentB]) {
+        const exported = ledger[reagent]?.exportableByRoom;
+        if (exported) exported[roomName] = Math.max(0, (exported[roomName] ?? 0) - needed);
+      }
       return {
         assignment: { roomName, product: step.product, targetAmount: needed, isHubRoom: roomName === hubRoomName },
         routes: [],
@@ -1497,7 +1511,7 @@ function assignStepToRoom(
       if (depGraph.wouldCreateCycle(roomName, from)) continue;
 
       if (remA > 0) {
-        const avail = ledger[reagentA]?.roomCommitments[from] ?? 0;
+        const avail = Math.min(ledger[reagentA]?.roomCommitments[from] ?? 0, ledger[reagentA]?.exportableByRoom?.[from] ?? Infinity);
         if (avail > 0) {
           const send = Math.min(avail, remA);
           routes.push({ fromRoom: from, toRoom: roomName, resource: reagentA, amount: send, fee: 0, isHubReagentDemand: isHubTarget });
@@ -1507,7 +1521,7 @@ function assignStepToRoom(
         }
       }
       if (remB > 0) {
-        const avail = ledger[reagentB]?.roomCommitments[from] ?? 0;
+        const avail = Math.min(ledger[reagentB]?.roomCommitments[from] ?? 0, ledger[reagentB]?.exportableByRoom?.[from] ?? Infinity);
         if (avail > 0) {
           const send = Math.min(avail, remB);
           routes.push({ fromRoom: from, toRoom: roomName, resource: reagentB, amount: send, fee: 0, isHubReagentDemand: isHubTarget });
@@ -1522,6 +1536,8 @@ function assignStepToRoom(
       for (const c of changes) {
         ledger[c.res]!.roomCommitments[c.room] -= c.amt;
         ledger[c.res]!.totalAmount -= c.amt;
+        const exported = ledger[c.res]?.exportableByRoom;
+        if (exported) exported[c.room] = Math.max(0, (exported[c.room] ?? 0) - c.amt);
       }
       for (const dep of newDeps) {
         depGraph.add(roomName, dep);
@@ -2119,6 +2135,8 @@ export function resupplyBusySynthesisRooms(
   transferAmounts: ResourceTransferTaskAmountIndex = createResourceTransferTaskAmountIndex(),
 ): string[] {
   const actions: string[] = [];
+  const hubSnapshot = collectResourceControlSnapshots().find(snapshot => snapshot.roomName === hubRoomName);
+  const plannedOutgoing = new Map<ResourceConstant, number>();
 
   const myRooms = getTickContextService().getMyRooms();
   const synthesisRooms = Memory.runtime?.synthesisControl?.rooms;
@@ -2148,13 +2166,15 @@ export function resupplyBusySynthesisRooms(
 
       const hubHas = hubInventory[rc] || 0;
       const hubOutgoing = transferAmounts.getOutgoing(hubRoomName, rc);
-      const hubExportable = Math.max(0, hubHas - hubOutgoing - reservePerRoom);
+      const hubExportable = hubSnapshot ? Math.max(0, Math.min(hubHas - reservePerRoom,
+        getResourceControlDonorAvailable(hubSnapshot, rc)) - hubOutgoing - (plannedOutgoing.get(rc) ?? 0)) : 0;
       if (hubExportable <= 0) continue;
 
       const amount = Math.min(needed, hubExportable);
       const reason = `synthesis:resupply:${rc}`;
       const result = createAutomaticResourceTransferTask(hubRoomName, room.name, rc, amount, reason);
       if (typeof result === "object" && result.ok) {
+        plannedOutgoing.set(rc, (plannedOutgoing.get(rc) ?? 0) + amount);
         actions.push(`resupply:${room.name}:${rc}=${amount}`);
       }
     }
@@ -2694,9 +2714,11 @@ function runHubPlanningAttempt(
   const satelliteDeficit = computeTotalSatelliteDeficit(cfg, targetCompounds, transferAmountsBeforeImports);
   const chainTarget = hubReservePerCompound + satelliteDeficit;
   const nukerGhodiumDemand = getNukerGhodiumProductionDemand();
+  const hubSupplySnapshot = collectResourceControlSnapshots([RESOURCE_GHODIUM], [room])[0];
+  const hubGhodiumFloor = hubSupplySnapshot ? getResourceControlResourceFloor(hubSupplySnapshot, RESOURCE_GHODIUM) : 0;
   const additionalProductionDemands: Partial<Record<ResourceConstant, number>> =
     nukerGhodiumDemand > 0
-      ? { [RESOURCE_GHODIUM]: nukerGhodiumDemand }
+      ? { [RESOURCE_GHODIUM]: nukerGhodiumDemand + hubGhodiumFloor }
       : {};
 
   planHubImports(cfg, transferAmountsBeforeImports, hubInventory);

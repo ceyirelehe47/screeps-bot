@@ -133,6 +133,24 @@ describe("runHomeDefense", () => {
     Game.time += 1;
   });
 
+  it("缩小 defender 上限后按配置前缀清理高序号，活体保留配置但不再补孵", () => {
+    const room = createRoom("W2N2"); const spawn = createSpawn(room);
+    const dead = `${room.name}:homeDefense:defender:4`, live = `${room.name}:homeDefense:defender:3`;
+    Game.rooms = { [room.name]: room }; Game.spawns = { [spawn.name]: spawn };
+    Game.creeps = { defender: { name: "defender", room, memory: { configName: live }, store: {} } as Creep };
+    Memory.cfg = { homeDefense: { maxDefenders: 2 } };
+    Memory.data = { creepConfigs: {
+      [dead]: { role: "homeDefender", args: [room.name, "4"], roomName: room.name },
+      [live]: { role: "homeDefender", args: [room.name, "3"], roomName: room.name },
+    } };
+    spawn.memory.spawnList = [dead, live];
+    runHomeDefense();
+    expect(spawn.memory.spawnList).toEqual([]);
+    expect(Memory.data!.creepConfigs![dead]).toBeUndefined();
+    expect(Memory.data!.creepConfigs![live]).toMatchObject({ role: "homeDefender" });
+    expect(Memory.data!.creepConfigs![live].roomName).toBeUndefined();
+  });
+
   it("首房防御异常后其余房间继续创建防御配置", () => {
     const bad = createRoom("W1N1"), good = createRoom("W2N2", { hostiles: [createHostile("W2N2", 20, 20)] });
     Game.rooms = { W1N1: bad, W2N2: good };

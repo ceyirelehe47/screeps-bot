@@ -1,3 +1,5 @@
+import { HUB_TARGET_COMPOUNDS, isHubOnlyReserveCompound } from "@/config/hub";
+import { isHealthyResourceTransferTaskReservation } from "@/runtime/logistics/resourceTransferTasks";
 import { getMarketSaleTerminalExposure } from "@/runtime/marketSaleExposure";
 import { getPowerCreepOpsShipmentNeed } from "@/runtime/powerCreepOpsPolicy";
 import { DEFAULT_TERMINAL_ENERGY_RESERVE } from "@/runtime/roomEnergyPolicy";
@@ -41,7 +43,9 @@ import {
   getStorageResourceAmount,
   getTerminalActionEnergyBudget,
   getProtectedResourceAmount,
+  getProtectedTerminalResourceAmount,
   getTotalMovableResourceAmount,
+  resolveCapacityConfig,
   TERMINAL_STORAGE_CAPACITY,
   RESOURCE_CONTROL_TERMINAL_FEED_PRODUCER,
   TERMINAL_TOTAL_STORAGE_CAP,
@@ -563,11 +567,8 @@ export function getMovableResourceAmount(
     location === "terminal"
       ? getTerminalResourceAmount(snapshot, resource)
       : getStorageResourceAmount(snapshot, resource);
-  const exposure = getMarketSaleTerminalExposure(snapshot.roomName, resource);
-  const cargo = context.marketCargoTargets?.get(snapshot.roomName);
-  const terminalProtected = exposure.blocked ? structureStock : Math.max(exposure.reservedAmount,
-    cargo?.resource === resource ? cargo.targetStock : 0);
-  return Math.min(Math.max(0, structureStock - (location === "terminal" ? terminalProtected : 0)), movableTotal);
+  const terminalProtected = location === "terminal" ? getProtectedTerminalResourceAmount(snapshot, resource, context) : 0;
+  return Math.min(Math.max(0, structureStock - terminalProtected), movableTotal);
 }
 
 export function getCapacityReliefRecoveryGap(
@@ -744,6 +745,9 @@ function createTerminalOffloadTask(
         fromId: room.terminal.id,
         toId: room.storage.id,
         amount: movable,
+        sourceFloorAmount: Math.max(0, getTerminalResourceAmount(room, resource) - movable),
+        destinationTargetAmount: room.storage.store.getUsedCapacity(resource) + movable,
+        destinationFreeCapacityFloor: resolveCapacityConfig().storageReliefTargetFreeCapacity,
       },
     ],
   };
@@ -1578,6 +1582,7 @@ function limitCarrierTaskDraftAmount(
       const amount = Math.min(step.amount, remaining);
       remaining -= amount;
       return { ...step, amount,
+        ...(step.sourceFloorAmount !== undefined ? { sourceFloorAmount: step.sourceFloorAmount + step.amount - amount } : {}),
         ...(step.destinationTargetAmount !== undefined
           ? { destinationTargetAmount: Math.max(0, step.destinationTargetAmount - step.amount) + amount }
           : {}),
@@ -1592,11 +1597,12 @@ function getRequiredTerminalStagingFeedAmount(
   resource: ResourceConstant,
   amount: number,
   transactionFee: number,
+  context: ResourceControlTransferContext,
 ): { energy: number; resource: number; total: number } {
   const resourceFeedAmount =
     resource === RESOURCE_ENERGY
       ? 0
-      : Math.max(0, amount - getTerminalResourceAmount(source, resource));
+      : Math.max(0, amount + getProtectedTerminalResourceAmount(source, resource, context) - getTerminalResourceAmount(source, resource));
   const desiredEnergy =
     transactionFee + (resource === RESOURCE_ENERGY ? amount : 0);
   const energyFeedAmount = Math.max(0, desiredEnergy - source.terminalEnergy);
@@ -1675,6 +1681,7 @@ function assessTransferTaskStagingBatch(
       task.resource,
       maximum,
       maximumTransactionFee,
+      context,
     );
     if (
       maximumRequiredFeed.resource === 0 &&
@@ -1716,6 +1723,7 @@ function assessTransferTaskStagingBatch(
       task.resource,
       amount,
       transactionFee,
+      context,
     );
     if (
       requiredFeed.resource >
@@ -2035,6 +2043,29 @@ export function planAuthorizedMarketCargoTargets(
   return targets;
 }
 
+export function getHubPendingImportResources(
+  tasks: ResourceTransferTask[],
+): Map<string, Set<string>> {
+  const result = new Map<string, Set<string>>();
+  for (const task of tasks) {
+    if (!isHealthyResourceTransferTaskReservation(task, "incoming")) continue;
+    const reason = task.reason;
+    if (
+      reason &&
+      (reason.startsWith("hub:import:") || reason.startsWith("hub:reclaim:"))
+    ) {
+      const resource = reason.split(":").pop()!;
+      let set = result.get(task.toRoomName);
+      if (!set) {
+        set = new Set<string>();
+        result.set(task.toRoomName, set);
+      }
+      set.add(resource);
+    }
+  }
+  return result;
+}
+
 export function syncTerminalFeedTasks(
   snapshots: ResourceControlSnapshot[],
   marketCfg: ResourceControlMarketConfig,
@@ -2055,6 +2086,7 @@ export function syncTerminalFeedTasks(
     );
   }
 
+  const hubPendingImports = getHubPendingImportResources(context.tasks);
   const stagingBatchByRoom = new Map<string, TerminalStagingBatch>();
   const marketCargoTargets = context.marketCargoTargets ?? planAuthorizedMarketCargoTargets(snapshots, authorization);
   context.marketCargoTargets = marketCargoTargets;
@@ -2082,6 +2114,10 @@ export function syncTerminalFeedTasks(
       );
       continue;
     }
+    const isHubBufferExport = task.reason?.startsWith("hub:export:") && task.fromRoomName === Memory.cfg?.hub?.hubRoomName &&
+      HUB_TARGET_COMPOUNDS.includes(task.resource) && !isHubOnlyReserveCompound(task.resource);
+    if (task.reason?.startsWith("hub:export:") && !isHubBufferExport &&
+        hubPendingImports.get(task.fromRoomName)?.has(task.resource) && !priorityContext.storageConstrainedRooms.has(task.fromRoomName)) continue;
     if (task.blockedReason === "receiver_capacity") {
       recordTerminalStagingSuppression(
         context,
@@ -2090,7 +2126,7 @@ export function syncTerminalFeedTasks(
       );
       continue;
     }
-    if (task.blockedReason === "source_depleted") {
+    if (task.blockedReason === "source_depleted" || task.blockedReason === "source_protected") {
       recordTerminalStagingSuppression(
         context,
         task.fromRoomName,
@@ -2286,6 +2322,7 @@ export function syncTerminalFeedTasks(
           stagingBatch.resource,
           stagingBatch.amount,
           stagingBatch.transactionFee,
+          context,
         )
       : undefined;
 
@@ -2440,7 +2477,7 @@ export function syncTerminalFeedTasks(
     ) {
       desiredFeedByResource.set(
         stagingBatch.resource,
-        Math.min(snapshot.transferBatchSize, stagingBatch.amount),
+        getProtectedTerminalResourceAmount(snapshot, stagingBatch.resource, context) + Math.min(snapshot.transferBatchSize, stagingBatch.amount),
       );
     }
     if (marketCargoTarget && marketCargoOutstanding > 0 &&

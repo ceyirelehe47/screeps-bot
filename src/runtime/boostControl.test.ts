@@ -57,6 +57,19 @@ describe("boost control market gateway", () => {
     };
   });
 
+  it.each([3_000, 6_000])("供体只有%d boost 时按5000保护线选源，不能用保护库存虚报 incoming", stock => {
+    const receiver = createRoom();
+    const donor = { name: "W3N3", controller: { my: true, level: 8 }, find: () => [],
+      storage: { id: "donor-storage", store: createMockStore({ [DEFENSE_BOOST_COMPOUND]: stock }, 1_000_000) },
+      terminal: { id: "donor-terminal", cooldown: 0, structureType: STRUCTURE_TERMINAL,
+        store: createMockStore({ [RESOURCE_ENERGY]: 30_000 }, 300_000) } } as unknown as Room;
+    donor.terminal!.room = donor; Game.rooms[donor.name] = donor;
+    buyBoostIfNeeded(receiver);
+    const tasks = Object.values(Memory.data?.resourceControl?.tasks ?? {});
+    if (stock === 3_000) { expect(tasks).toHaveLength(0); expect(Game.market.deal).toHaveBeenCalled(); }
+    else { expect(tasks).toHaveLength(1); expect(tasks[0]).toMatchObject({ fromRoomName: donor.name, amount: 1_000 }); expect(Game.market.deal).not.toHaveBeenCalled(); }
+  });
+
   it("通过 arbiter 购买并记录 terminal claim", () => {
     const room = createRoom();
     Memory.data = {

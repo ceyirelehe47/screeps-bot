@@ -1,3 +1,4 @@
+import { collectResourceControlSnapshots, getResourceControlDonorAvailable } from "@/runtime/resourceControlReadModel";
 import { isDue } from "@/runtime/cadence";
 import { resolveMarketCreditReserve, getAvailableMarketCredits } from "@/runtime/marketActionArbiter";
 import { createResourceTransferTaskAmountIndex, ensureResourceTransferTaskStore, cancelResourceTransferTask, createAutomaticResourceTransferTask } from "@/runtime/logistics/resourceTransferTasks";
@@ -135,8 +136,11 @@ export function buyBoostIfNeeded(room: Room): void {
   const amount = Math.min(target - stock, room.terminal.store.getFreeCapacity(DEFENSE_BOOST_COMPOUND));
   if (amount <= 0) return;
 
-  const donor = getTickContextService().getMyRooms().find(candidate => candidate.name !== room.name && candidate.terminal &&
-    !isDefenseMode(candidate.name) && getBoostStock(candidate) >= target + amount);
+  const transfers = createResourceTransferTaskAmountIndex();
+  const donorSnapshot = collectResourceControlSnapshots().find(candidate => candidate.roomName !== room.name &&
+    !isDefenseMode(candidate.roomName) && getResourceControlDonorAvailable(candidate, DEFENSE_BOOST_COMPOUND) -
+      transfers.getOutgoing(candidate.roomName, DEFENSE_BOOST_COMPOUND) >= amount);
+  const donor = donorSnapshot ? Game.rooms[donorSnapshot.roomName] : undefined;
   if (donor) {
     const created = createAutomaticResourceTransferTask(donor.name, room.name, DEFENSE_BOOST_COMPOUND, amount, `boost:defense:${room.name}`);
     if (typeof created !== "string" && created.ok) return;
