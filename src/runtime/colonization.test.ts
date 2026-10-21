@@ -69,12 +69,14 @@ function createSpawn(room: Room): StructureSpawn {
 
 
 
+let scenarioTick = 1_000;
 describe("runColonizationByFlag", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     resetRuntimeServices();
-    Game.time += 1;
+    Game.time = ++scenarioTick;
     Memory.data = undefined;
+    Game.flags = {}; Game.creeps = {}; Game.spawns = {}; Game.rooms = {};
     (isDefenseMode as jest.Mock).mockReturnValue(false);
 
     Object.assign(Game, {
@@ -131,6 +133,41 @@ describe("runColonizationByFlag", () => {
     runColonizationByFlag();
     expect(Memory.data!.colonization!.W1N2.sourceRoom).toBe(other.name);
     expect(Memory.data!.colonization!.W1N2.sourceBlockedSince).toBeUndefined();
+  });
+
+  it.each(["bootstrapping", "managed"] as const)("%s 已承诺支援在 RESERVE 超过500 tick仍保留母房和配置", status => {
+    const source = createSourceRoom("W1N1"), target = createSourceRoom("W1N2"), other = createSourceRoom("W3N3");
+    Game.rooms = { W1N1: source, W1N2: target, W3N3: other };
+    Game.spawns = { A: createSpawn(source), B: createSpawn(other) }; Game.creeps = {};
+    Game.flags = { CL: { name: "CL", pos: { roomName: target.name }, remove: jest.fn() } as unknown as Flag,
+      RESERVE_W1N1: { name: "RESERVE_W1N1", pos: { roomName: source.name } } as Flag };
+    const name = `${source.name}:colonize:${target.name}:worker:0`;
+    Memory.data = { colonization: { W1N2: { targetRoom: target.name, sourceRoom: source.name, status,
+      flagName: "CL", planReady: true, claimCompleted: true, sourceBlockedSince: Game.time - 600,
+      createdAt: Game.time - 700, updatedAt: Game.time - 1 } },
+      creepConfigs: { [name]: { role: "colonizerWorker", roomName: source.name, args: [target.name] } } };
+    runColonizationByFlag();
+    expect(Memory.data!.colonization!.W1N2.sourceRoom).toBe(source.name);
+    expect(Memory.data!.colonization!.W1N2.sourceBlockedSince).toBeUndefined();
+    expect(getCreepConfigService().get(name)?.roomName).toBe(source.name);
+  });
+
+  it("已在途的 claimer 不因母房 RESERVE 超过500 tick被换源重复孵化", () => {
+    const source = createSourceRoom("W1N1"), other = createSourceRoom("W3N3");
+    Game.rooms = { W1N1: source, W3N3: other };
+    Game.spawns = { A: createSpawn(source), B: createSpawn(other) };
+    Game.flags = { CL: { name: "CL", pos: { roomName: "W1N2" }, remove: jest.fn() } as unknown as Flag,
+      RESERVE_W1N1: { name: "RESERVE_W1N1", pos: { roomName: source.name } } as Flag };
+    const name = "W1N1:colonize:W1N2:claimer:0";
+    Game.creeps = { claimer: { name: "claimer", memory: { configName: name, role: "claimer" }, room: source } as unknown as Creep };
+    Memory.data = { colonization: { W1N2: { targetRoom: "W1N2", sourceRoom: source.name, status: "claiming",
+      flagName: "CL", planReady: false, claimCompleted: false, sourceBlockedSince: Game.time - 600,
+      createdAt: Game.time - 700, updatedAt: Game.time - 1 } },
+      creepConfigs: { [name]: { role: "claimer", roomName: source.name, args: ["W1N2"] } } };
+    runColonizationByFlag();
+    expect(Memory.data!.colonization!.W1N2.sourceRoom).toBe(source.name);
+    expect(Memory.data!.colonization!.W1N2.sourceBlockedSince).toBeUndefined();
+    expect(getCreepConfigService().get(name)?.roomName).toBe(source.name);
   });
 
   it("reuses a failed safe-route lookup within the same tick", () => {

@@ -2,11 +2,13 @@ import { cadenceOffset, isDue } from "@/runtime/cadence";
 const cadenceTick = (tick: number): number => tick + cadenceOffset("powerDistribution.plan", 25);
 import { runPowerDistribution } from "@/runtime/powerDistribution";
 import { createMockStore } from "@mock/powerBank";
+import { createAutomaticResourceTransferTask } from "@/runtime/logistics/resourceTransferTasks";
+import { reserveProductionResource } from "@/runtime/resourceReservation";
 
 describe("Power就近分发加工", () => {
   const processors = new Map<string, StructurePowerSpawn>();
   function room(name: string, power: number, energy = 300_000, process = true): Room {
-    const r = { name, controller: { my: true }, terminal: { structureType: STRUCTURE_TERMINAL, isActive: () => true,
+    const r = { name, controller: { my: true }, find: jest.fn(() => []), terminal: { structureType: STRUCTURE_TERMINAL, isActive: () => true,
       store: createMockStore({ [RESOURCE_POWER]: power, [RESOURCE_ENERGY]: 30_000 }, 300_000) },
       storage: { store: createMockStore({ [RESOURCE_ENERGY]: energy }, 1_000_000) } } as unknown as Room;
     if (process) processors.set(name, { store: createMockStore({}, 5100), effects: [] } as unknown as StructurePowerSpawn);
@@ -14,17 +16,51 @@ describe("Power就近分发加工", () => {
   }
   const tasks = () => Object.values(Memory.data?.resourceControl?.tasks ?? {});
   beforeEach(() => {
-    processors.clear(); Game.time = cadenceTick(100); Memory.cfg = { resourceControl: { enabled: true } }; Memory.data = {};
+    processors.clear(); Game.time = cadenceTick(100); Memory.cfg = { resourceControl: { enabled: true } }; Memory.data = {}; Memory.runtime = undefined;
     Game.market = { calcTransactionCost: jest.fn((amount: number) => Math.ceil(amount / 10)), orders: {} } as unknown as Market;
     Game.map = { ...Game.map, getRoomLinearDistance: jest.fn((from: string, to: string) => from === "E1N1" && to === "E2N1" ? 1 : 5) } as GameMap;
   });
 
-  it("先分给附近的活跃处理房，源房留500处理库存，重复运行不追加相同需求", () => {
-    const rooms = [room("E1N1", 2000), room("E2N1", 0), room("E6N1", 0)];
+  it("先分给附近的活跃处理房，源房留1000处理库存，重复运行不追加相同需求", () => {
+    const rooms = [room("E1N1", 4000), room("E2N1", 0), room("E6N1", 0)];
     runPowerDistribution(rooms, processors);
     expect(tasks()).toHaveLength(2);
-    expect(tasks()[0]).toMatchObject({ fromRoomName: "E1N1", toRoomName: "E2N1", resource: RESOURCE_POWER, amount: 500, origin: "automatic", reason: "powerProcessing:nearby" });
+    expect(tasks()[0]).toMatchObject({ fromRoomName: "E1N1", toRoomName: "E2N1", resource: RESOURCE_POWER, amount: 1000, origin: "automatic", reason: "powerProcessing:nearby" });
     runPowerDistribution(rooms, processors); expect(tasks()).toHaveLength(2);
+  });
+
+  it("市场账本阻塞时不把 Storage 的 Power 当作可外发库存", () => {
+    const source = room("E1N1", 0, 300_000, false), target = room("E2N1", 0);
+    source.storage!.store = createMockStore({ energy: 300_000, power: 5_000 }, 1_000_000);
+    Memory.data!.marketSaleAutomation = { managedOrders: {}, pendingCreate: {
+      tuple: { roomName: source.name, resourceType: RESOURCE_POWER, type: ORDER_BUY }, exposure: 100,
+    } } as NonNullable<Memory["data"]>["marketSaleAutomation"];
+    runPowerDistribution([source, target], processors);
+    expect(tasks()).toHaveLength(0);
+    expect(Memory.runtime!.powerDistribution!.rooms[source.name]).toMatchObject({ movable: 0, blocker: "market_or_production_protected" });
+  });
+
+  it("生产预约的 Power 不会被再次承诺给处理房", () => {
+    const source = room("E1N1", 2_000, 300_000, false), target = room("E2N1", 0);
+    reserveProductionResource(source.name, RESOURCE_POWER, 2_000, "factory:power");
+    runPowerDistribution([source, target], processors);
+    expect(tasks()).toHaveLength(0);
+  });
+
+  it("处理房已承诺外发整笔能量时仍按真实加工能力接收 Power", () => {
+    const source = room("E1N1", 5_000, 300_000, false), target = room("E2N1", 0);
+    createAutomaticResourceTransferTask(target.name, "E9N9", RESOURCE_ENERGY, 300_000, "energy:export");
+    runPowerDistribution([source, target], processors);
+    expect(tasks().filter(task => task.resource === RESOURCE_POWER)).toEqual([expect.objectContaining({ toRoomName: target.name, amount: 1_000 })]);
+    expect(Memory.runtime!.powerDistribution).toMatchObject({ runwayTicks: 1_000, published: 1, publishedAmount: 1_000 });
+  });
+
+  it("单个候选房读取异常时只排除该房，其余来源和处理房继续配对", () => {
+    const bad = room("E9N1", 0), source = room("E1N1", 5_000, 300_000, false), target = room("E2N1", 0);
+    bad.find = jest.fn(() => { throw new Error("mineral facts unavailable"); });
+    runPowerDistribution([bad, source, target], processors);
+    expect(tasks()).toEqual([expect.objectContaining({ fromRoomName: source.name, toRoomName: target.name, amount: 1_000 })]);
+    expect(Memory.runtime!.powerDistribution!.unavailableRooms).toContain(bad.name);
   });
 
   it("没有PowerSpawn的采集源房也可分发，低能量或无处理设施的目标不接收", () => {

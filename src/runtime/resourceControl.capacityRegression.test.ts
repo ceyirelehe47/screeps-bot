@@ -1,4 +1,6 @@
 import { cadenceOffset, isDue } from "@/runtime/cadence";
+import * as carrierBoard from "@/runtime/carrierTaskBoard";
+import { getProtectedTerminalResourceAmount, getResourceControlDonorAvailable, createResourceControlTransferContext, resolveCapacityConfig } from "@/runtime/resourceControlReadModel";
 const cadenceTick = (tick: number): number => tick + cadenceOffset("resourceControl.plan", 10);
 import {
   clearCarrierTaskBoardForTest,
@@ -8,6 +10,7 @@ import {
 } from "@/runtime/carrierTaskBoard";
 import {
   createAutomaticResourceTransferTask,
+  createResourceTransferTask,
   ensureResourceTransferTaskStore,
   getResourceTransferTaskListSorted,
   markResourceTransferTaskBlocked,
@@ -528,13 +531,21 @@ describe("resource control live-like capacity recovery", () => {
       task.resource = RESOURCE_HYDROGEN;
       task.reason = `capacity:relief:${RESOURCE_HYDROGEN}`;
     }],
-  ] as const)("keeps ordinary Energy balancing available for %s outgoing relief responsibility", (_label, mutate) => {
-    const { donor, relief, synthesis } = createOutgoingEnergyReliefScenario();
+  ] as const)("reconciles %s relief before ordinary Energy balancing", (label, mutate) => {
+    const { pressureRoom, donor, relief, synthesis } = createOutgoingEnergyReliefScenario();
     // 本组只验证接收方责任；显式 UH 任务的发送优先权由上一例单独验证。
     synthesis.status = "cancelled";
     mutate(relief);
 
     runResourceControl();
+
+    if (label === "source-depleted" || label === "receiver-capacity") {
+      // 旧 blocker 已由当 tick 真实库存/容量恢复或改派；实际可执行的出向 relief
+      // 应先走，不能在同 tick 再为它反向补能。
+      expect(pressureRoom.terminal!.send).toHaveBeenCalledWith(RESOURCE_ENERGY, expect.any(Number), expect.any(String), expect.anything());
+      expect(donor.terminal!.send).not.toHaveBeenCalled();
+      return;
+    }
 
     expect(Memory.runtime?.resourceControl?.lastActions).toEqual(
       expect.arrayContaining([expect.stringMatching(/^send:E4N58->E3N59:energy=/)]),
@@ -585,6 +596,55 @@ describe("resource control live-like capacity recovery", () => {
     expect(donor.terminal!.send).not.toHaveBeenCalled();
   });
 
+  it.each([false, true])("显式任务已备货=%s：可发送时先用动作，等待备货时允许能量平衡", ready => {
+    const donor = createMutableRoom("W82N7", { energy: 400_000, H: 10_000 }, { energy: 60_000, H: ready ? 1_000 : 0 });
+    const receiver = createMutableRoom("W83N7", { energy: 50_000 }, { energy: 25_000 });
+    Game.rooms = { [donor.name]: donor, [receiver.name]: receiver };
+    createAutomaticResourceTransferTask(donor.name, receiver.name, RESOURCE_HYDROGEN, 1_000, "delivery:explicit");
+    resetRuntimeServices(); runResourceControl();
+    expect(donor.terminal!.send).toHaveBeenCalledTimes(1);
+    expect(donor.terminal!.send).toHaveBeenCalledWith(ready ? RESOURCE_HYDROGEN : RESOURCE_ENERGY, expect.any(Number), receiver.name, expect.anything());
+  });
+
+  it("市场库存增加导致过量承诺时，先完成早创建任务而非两个任务互相扣成零", () => {
+    const donor = createMutableRoom("W82N8", { energy: 300_000 }, { energy: 30_000, H: 25_000 });
+    const a = createMutableRoom("W83N8", { energy: 200_000 }, { energy: 25_000 });
+    const b = createMutableRoom("W84N8", { energy: 200_000 }, { energy: 25_000 });
+    Game.rooms = { [donor.name]: donor, [a.name]: a, [b.name]: b };
+    const first = createAutomaticResourceTransferTask(donor.name, a.name, RESOURCE_HYDROGEN, 10_000, "delivery:a");
+    const second = createAutomaticResourceTransferTask(donor.name, b.name, RESOURCE_HYDROGEN, 10_000, "delivery:b");
+    if (typeof first === "string" || typeof second === "string") throw new Error("task creation failed");
+    Memory.data!.marketSaleAutomation = { managedOrders: { order: { roomName: donor.name, resourceType: RESOURCE_HYDROGEN, remainingExposure: 10_000 } } } as unknown as NonNullable<Memory["data"]>["marketSaleAutomation"];
+    resetRuntimeServices(); runResourceControl();
+    expect(donor.terminal!.send).toHaveBeenCalledWith(RESOURCE_HYDROGEN, 10_000, a.name, expect.anything());
+    expect(first.task.status).toBe("done");
+    expect(second.task).toMatchObject({ status: "pending", blockedReason: "source_protected" });
+  });
+
+  it("手动调拨可使用 HUB 底线以内的库存", () => {
+    const donor = createMutableRoom("W82N9", { energy: 300_000 }, { energy: 30_000, G: 10_000 });
+    const receiver = createMutableRoom("W83N9", { energy: 200_000 }, { energy: 25_000 });
+    Game.rooms = { [donor.name]: donor, [receiver.name]: receiver };
+    Memory.cfg!.hub = { enabled: true, hubRoomName: donor.name };
+    const result = createResourceTransferTask(donor.name, receiver.name, RESOURCE_GHODIUM, 1_000);
+    if (typeof result === "string") throw new Error(result);
+    resetRuntimeServices(); runResourceControl();
+    expect(result.task.status).toBe("done");
+    expect(donor.terminal!.send).toHaveBeenCalledWith(RESOURCE_GHODIUM, 1_000, receiver.name, expect.anything());
+  });
+
+  it("货物或费用持续无法进入 Terminal 时100 tick后释放自动任务，而非占约5000 tick", () => {
+    const donor = createMutableRoom("W82N6", { energy: 300_000, H: 10_000 }, { energy: 30_000 });
+    const receiver = createMutableRoom("W83N6", { energy: 200_000 }, { energy: 25_000 });
+    Game.rooms = { [donor.name]: donor, [receiver.name]: receiver };
+    const result = createAutomaticResourceTransferTask(donor.name, receiver.name, RESOURCE_HYDROGEN, 1_000, "delivery:stalled");
+    if (typeof result === "string") throw new Error(result);
+    resetRuntimeServices(); runResourceControl();
+    expect(result.task.blockedReason).toBe("insufficient_terminal_resource_or_fee");
+    Game.time += 110; resetRuntimeServices(); runResourceControl();
+    expect(result.task).toMatchObject({ status: "cancelled", lastError: "automatic_terminal_staging_timeout" });
+  });
+
   it("HUB 受保护库存不因位于 Terminal 就外发，100 tick 后释放自动需求", () => {
     const donor = createMutableRoom("W82N2", { [RESOURCE_ENERGY]: 300_000 },
       { [RESOURCE_ENERGY]: 30_000, [RESOURCE_GHODIUM]: 8_000 });
@@ -599,6 +659,40 @@ describe("resource control live-like capacity recovery", () => {
     expect(created.task.blockedReason).toBe("source_protected");
     Game.time += 110; resetRuntimeServices(); runResourceControl();
     expect(created.task).toMatchObject({ status: "cancelled", lastError: "automatic_source_protected_timeout" });
+  });
+
+  it("保护量按房间 revision 聚合，同 tick 发布新供料后立即失效", () => {
+    const room = createMutableRoom("W82N10", { energy: 300_000, H: 9_000 }, { energy: 30_000, H: 1_000 });
+    Game.rooms = { [room.name]: room }; resetRuntimeServices();
+    const publish = (amount: number) => replaceCarrierTasksForProducerRoom("local", room.name, [{
+      id: "supply", type: "lab_supply", priority: 150, steps: [{ id: "h", resource: RESOURCE_HYDROGEN,
+        fromKind: "terminal", toKind: "lab", fromId: room.terminal!.id, toId: "lab", amount }],
+    }]);
+    publish(1_000);
+    const snapshot = collectResourceControlSnapshots([RESOURCE_HYDROGEN], [room])[0];
+    const context = createResourceControlTransferContext([snapshot], resolveCapacityConfig(), { count: 0 });
+    const scan = jest.spyOn(carrierBoard, "listCarrierTasksByRoom");
+    try {
+      for (let i = 0; i < 5; i++) {
+        expect(getResourceControlDonorAvailable(snapshot, RESOURCE_HYDROGEN)).toBe(4_000);
+        expect(getProtectedTerminalResourceAmount(snapshot, RESOURCE_HYDROGEN, context)).toBe(1_000);
+      }
+      expect(scan).toHaveBeenCalledTimes(1);
+      publish(2_000);
+      expect(getResourceControlDonorAvailable(snapshot, RESOURCE_HYDROGEN)).toBe(3_000);
+      expect(getProtectedTerminalResourceAmount(snapshot, RESOURCE_HYDROGEN, context)).toBe(2_000);
+      expect(scan).toHaveBeenCalledTimes(2);
+    } finally { scan.mockRestore(); }
+  });
+
+  it("同 tick 多次采集只查一次矿物静态事实，库存仍按最新状态读取", () => {
+    const room = createMutableRoom("W82N11", { energy: 300_000 }, { energy: 30_000, H: 1_000 });
+    const find = jest.spyOn(room, "find");
+    collectResourceControlSnapshots([RESOURCE_HYDROGEN], [room]);
+    (room.terminal!.store as MutableStore).set(RESOURCE_HYDROGEN, 500);
+    const next = collectResourceControlSnapshots([RESOURCE_HYDROGEN], [room])[0];
+    expect(next.terminalResourceAmounts[RESOURCE_HYDROGEN]).toBe(500);
+    expect(find.mock.calls.filter(([kind]) => (kind as number) === FIND_MINERALS)).toHaveLength(1);
   });
 
   it("recovers a sticky 50000-free terminal through real carrier moves without next-cycle jitter", () => {

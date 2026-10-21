@@ -45,7 +45,7 @@ const MEMORY_BRANCHES = {
     // 登记实际调度、独立 CPU 健康面包屑与有界生命周期事件；均由各自 owner 单写。
     // powerBankSourceIndex 由 powerBankSourceIndex.ts 单写（高速房来源索引的紧凑备份）。
     // 调度修复新增 source_protected 诊断枚举，根字段清单不变。
-    schemaFingerprint: "cf01ede3fa26e1867f01976103d43771197858cabb3be7aa44e63276d3fb3fc1",
+    schemaFingerprint: "e5e538a6600dc758bdc09d468bc2172b8dc8e6e725a2d2450f025221dfe49987",
     imports: [
       "@/runtime/cpuTickHealth:CpuTickCheckpoint",
       "@/runtime/cpuTickHealth:CpuTickHealthSummary",
@@ -57,6 +57,7 @@ const MEMORY_BRANCHES = {
       "@/runtime/hubProtectionSnapshot:HubCommittedProtectionSnapshot",
       "@/runtime/hubProtectionSnapshot:HubProtectionAttempt",
       "@/runtime/processScheduler:ProcessSchedulerMemory",
+      "@/runtime/powerDistribution:PowerDistributionRuntime",
       "@/runtime/resourceControl:MarketTerminalEnergyReadinessObservation",
       "@/runtime/runtimeEvents:RuntimeEventState",
       "@/runtime/runtimeIsolation:DefenseFaultSummary",
@@ -66,6 +67,7 @@ const MEMORY_BRANCHES = {
       "defenseFaults",
       "processScheduler",
       "cpuTickHealth",
+      "powerDistribution",
       "colonizationSupport",
       "warRebuildWatch",
       "lastDeployTag",

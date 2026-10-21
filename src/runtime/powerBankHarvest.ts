@@ -2258,7 +2258,7 @@ function processTaskImpl(task: PowerBankHarvestTask): void {
   const capacity = Game.rooms[task.sourceRoom]?.energyCapacityAvailable;
   if (task.status === POWER_BANK_STATUS.SPAWNING && capacity !== undefined && getTaskConfigNames(task).some(name => {
     const config = getCreepConfigService().get(name);
-    return config && fixedBodyExceedsCapacity(config, capacity) &&
+    return config && config.roomName === task.sourceRoom && fixedBodyExceedsCapacity(config, capacity) &&
       getTickContextService().getCreepsByConfigName(name).length === 0 &&
       !Object.values(Game.spawns).some(spawn => spawn.spawning && Memory.creeps[spawn.spawning.name]?.configName === name);
   })) {

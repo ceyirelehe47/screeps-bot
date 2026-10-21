@@ -185,6 +185,7 @@ function legacyReserve(
     updatedAt: Game.time,
     expiresAt: Game.time + ttl,
   };
+  bumpReservationStoreRevision();
   return { status: "ok", mutated: true };
 }
 
@@ -193,6 +194,7 @@ function legacyRelease(roomName: string, resource: ResourceConstant, holderId: s
   const key = legacyMakeKey(roomName, resource, holderId);
   const mutated = Object.prototype.hasOwnProperty.call(Memory.runtime.resourceReservations, key);
   delete Memory.runtime.resourceReservations[key];
+  if (mutated) bumpReservationStoreRevision();
   return { status: "ok", mutated };
 }
 
@@ -207,6 +209,7 @@ function legacyRenew(
   const key = legacyMakeKey(roomName, resource, holderId);
   if (!store[key]) return { status: "ok", mutated: false };
   store[key] = { roomName, resource, holderId, amount, updatedAt: Game.time, expiresAt: Game.time + ttl };
+  bumpReservationStoreRevision();
   return { status: "ok", mutated: true };
 }
 
@@ -437,18 +440,26 @@ function isActive(entry: ReservationEntry): boolean {
   return entry.expiresAt >= Game.time;
 }
 
+let productionAmountCache: {
+  store: ReservationStore; tick: number; revision: number; mode: ReservationAdapterMode;
+  amounts: Map<string, number>;
+} | undefined;
+
 export function getReservedProductionAmount(roomName: string, resource: ResourceConstant): number {
   const store = Memory.runtime?.resourceReservations;
   if (!store) return 0;
-  let total = 0;
   const mode = reservationAdapterMode();
-  for (const entry of Object.values(store)) {
-    if (!entry || typeof entry !== "object" || mode !== "legacy" && !Number.isSafeInteger(entry.amount)) continue;
-    if (entry.roomName === roomName && entry.resource === resource && isActive(entry)) {
-      total += entry.amount;
+  if (!productionAmountCache || productionAmountCache.store !== store || productionAmountCache.tick !== Game.time ||
+      productionAmountCache.revision !== reservationStoreRevision || productionAmountCache.mode !== mode) {
+    const amounts = new Map<string, number>();
+    for (const entry of Object.values(store)) {
+      if (!entry || typeof entry !== "object" || mode !== "legacy" && !Number.isSafeInteger(entry.amount) || !isActive(entry)) continue;
+      const key = `${entry.roomName}:${entry.resource}`;
+      amounts.set(key, (amounts.get(key) ?? 0) + entry.amount);
     }
+    productionAmountCache = { store, tick: Game.time, revision: reservationStoreRevision, mode, amounts };
   }
-  return total;
+  return productionAmountCache.amounts.get(`${roomName}:${resource}`) ?? 0;
 }
 
 /**
@@ -520,6 +531,7 @@ export function gcProductionReservations(): ReservationGcReport {
         report.removed += 1;
       }
     }
+    if (report.removed > 0) bumpReservationStoreRevision();
     return report;
   }
   if (reservationAdapterMode() === "blocked") return report;

@@ -93,6 +93,7 @@ import {
   getStock,
   getProductionCommitmentAmount,
   getHealthyOutgoingCommitment,
+  getAllocatedOutgoingCommitment,
   getOutgoingTransactionFeeReserve,
   getTerminalResourceAmount,
   resolveCapacityConfig,
@@ -763,8 +764,6 @@ function applyInternalBalancing(
     .filter(
       (snapshot) =>
         snapshot.terminal.cooldown === 0 &&
-        !context.tasks.some(task => task.fromRoomName === snapshot.roomName &&
-          isHealthyReceiverCapacityCommitment(task, resolveCapacityConfig().automaticTaskNoProgressTtl)) &&
         getEnergyBalancingSurplus(snapshot, context) > 0,
     )
     .sort(
@@ -2971,7 +2970,7 @@ function executeTransferTasks(
       synthesisDemand.status === "bounded" ? synthesisDemand.amount : Number.POSITIVE_INFINITY,
       isHubBufferExport ? Math.max(0, getStock(donor, task.resource) - HUB_T3_SUPPLY_FLOOR -
         getProductionCommitmentAmount(donor.roomName, task.resource, context) -
-        getHealthyOutgoingCommitment(donor.roomName, task.resource, context, task.id)) : Number.POSITIVE_INFINITY,
+        getAllocatedOutgoingCommitment(donor.roomName, task.resource, context, task.id)) : Number.POSITIVE_INFINITY,
     );
     if (isCapacityRelief) {
       requestedAmount = computeSafeCapacityReliefAmount(
@@ -3279,6 +3278,7 @@ function persistResourceControlState(
         task.lastError === "automatic_no_progress_timeout" ||
         task.lastError === "automatic_source_depleted_timeout" ||
         task.lastError === "automatic_source_protected_timeout" ||
+        task.lastError === "automatic_terminal_staging_timeout" ||
         task.lastError ===
           "automatic_receiver_capacity_coverage_timeout"
       )
@@ -3741,13 +3741,6 @@ export function runResourceControl(): void {
     return;
   }
 
-  const actions = applyInternalBalancing(
-    snapshots,
-    terminalBusy,
-    sendBudget,
-    context,
-    remainingEnergyNeedByRoom,
-  );
   const capacityActions = planCapacityReliefTasks(
     snapshots,
     capacityConfig,
@@ -3761,6 +3754,14 @@ export function runResourceControl(): void {
     capacityReliefRoutes,
     remainingEnergyNeedByRoom,
     context,
+  );
+  // 显式任务先使用当 tick 的动作；等待备货的任务不阻断空闲终端平衡。
+  const actions = applyInternalBalancing(
+    snapshots,
+    terminalBusy,
+    sendBudget,
+    context,
+    remainingEnergyNeedByRoom,
   );
   const preloadActions = syncTerminalFeedTasks(
     snapshots,

@@ -412,6 +412,19 @@ describe("powerBankHarvest", () => {
     expect(getCreepConfigService().get(name)).toBeUndefined();
   });
 
+  it("改选来源后旧源的孤儿配置不参与当前来源的容量失败判定", () => {
+    setupSourceRoom({ energyCapacity: 3_000 }); setupTargetRoom();
+    mockPrepareBoosts("ready");
+    const task = makeTask({ sourceRoom: SOURCE_ROOM, tier: 6, status: POWER_BANK_STATUS.SPAWNING });
+    const name = getPowerBankConfigName("W9N9", TARGET_ROOM, "attacker", 0, task.id, 0);
+    getCreepConfigService().set(name, { role: "powerBankAttacker", roomName: "W9N9", args: [TARGET_ROOM], taskId: task.id,
+      body: Array(40).fill(ATTACK) });
+    setupStore()[task.id] = task;
+    runPowerBankHarvest();
+    expect(task.failReason).not.toBe("spawn_body_capacity_lost");
+    expect(task.status).toBe(POWER_BANK_STATUS.RENEWING);
+  });
+
   it("终态解绑战斗成员同时安排母房回收，不留下无任务原地站立的单位", () => {
     setupSourceRoom(); setupTargetRoom();
     const taskId = "pb-terminal-recycle";

@@ -90,7 +90,7 @@ describe("PB 高速房来源索引", () => {
     setup([["E1N57", 7], ["E2N57", 6]]);
     runTicks(5);
     expect(index.getPowerBankSourceIndexEntry(HIGHWAY)?.map((entry) => entry.room)).toEqual(["E2N57", "E1N57"]);
-    expect(Memory.runtime!.powerBankSourceIndex!.rooms[HIGHWAY]).toMatch(/E2N57:80:6,E1N57:120:7\|[a-z0-9]+$/);
+    expect(Memory.runtime!.powerBankSourceIndex!.rooms[HIGHWAY]).toMatch(/E2N57:80:6,E1N57:120:7\|[a-z0-9]+\|\{/);
 
     index.resetPowerBankSourceIndexForTest();
     expect(index.getPowerBankSourceIndexEntry(HIGHWAY)?.map((entry) => entry.room)).toEqual(["E2N57", "E1N57"]);
@@ -129,8 +129,17 @@ describe("PB 高速房来源索引", () => {
     expect(search.mock.calls.length).toBe(measured);
   });
 
-  it("无关远处敌房变化不清空已完成条目，相关避让变化仍使条目失效", () => {
-    costs = { E1N57: 100 }; setup([["E1N57", 8]]); runTicks(5);
+  it("附近未经过的敌房不清空索引，实测途经房变危险时才失效，重启后保留依赖", () => {
+    costs = { E1N57: 100 }; setup([["E1N57", 8]]);
+    search.mockImplementation((_origin: RoomPosition, goal: { pos: RoomPosition }) => ({
+      path: [new RoomPosition(25, 25, "E2N57"), new RoomPosition(25, 25, goal.pos.roomName)], incomplete: false, ops: 10, cost: 100,
+    }));
+    runTicks(5);
+    expect(index.getPowerBankSourceIndexEntry(HIGHWAY)?.[0].room).toBe("E1N57");
+    Memory.runtime!.powerBankOwnedRoomIntel = { E3N57: { owner: "enemy", lastSeenAt: Game.time } };
+    Game.time++;
+    expect(index.getPowerBankSourceIndexEntry(HIGHWAY)?.[0].room).toBe("E1N57");
+    index.resetPowerBankSourceIndexForTest();
     expect(index.getPowerBankSourceIndexEntry(HIGHWAY)?.[0].room).toBe("E1N57");
     jest.mocked(Game.map.getRoomLinearDistance).mockImplementation((from, to) => from === "W99S99" || to === "W99S99" ? 100 : 2);
     Memory.runtime!.powerBankOwnedRoomIntel = { W99S99: { owner: "enemy", lastSeenAt: Game.time } };
@@ -153,5 +162,20 @@ describe("PB 高速房来源索引", () => {
     expect(index.getPowerBankSourceIndexEntry(HIGHWAY)?.map((entry) => entry.room)).toEqual(["E1N57", "E2N57"]);
     runTicks(4);
     expect(index.getPowerBankSourceIndexEntry(HIGHWAY)?.map((entry) => entry.room)).toEqual(["E2N57", "E1N57"]);
+  });
+
+  it("解除原有避让后重试不可达候选，不必等5000 tick刷新周期", () => {
+    costs = { E1N57: 100 }; setup([["E1N57", 8]]);
+    Memory.runtime!.powerBankPermanentDangerRooms = { E2N57: true };
+    jest.mocked(Game.map.findRoute).mockImplementation((_from, to, opts) =>
+      opts?.routeCallback?.("E2N57", "E1N57") === Infinity ? ERR_NO_PATH : [{ room: typeof to === "string" ? to : to.name, exit: FIND_EXIT_LEFT }]);
+    runTicks(4);
+    expect(index.getPowerBankSourceIndexEntry(HIGHWAY)).toBeUndefined();
+    expect(search).not.toHaveBeenCalled();
+    delete Memory.runtime!.powerBankPermanentDangerRooms.E2N57;
+    Game.time++;
+    runTicks(3);
+    expect(index.getPowerBankSourceIndexEntry(HIGHWAY)?.[0].room).toBe("E1N57");
+    expect(search).toHaveBeenCalledTimes(1);
   });
 });

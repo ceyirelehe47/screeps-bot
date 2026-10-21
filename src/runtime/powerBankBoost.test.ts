@@ -2,6 +2,7 @@ import { ensureCreepAssignmentState } from "@/runtime/creepAssignmentState";
 import {
   prepareBoosts,
   releaseBoostLabs,
+  findBestDonorRoom,
 } from "@/runtime/powerBankBoost";
 import {
   getActivePowerBankBoostLabIds,
@@ -62,14 +63,14 @@ function createRoomWithInfrastructure(options: {
   const storage = {
     id: `${roomName}-storage` as Id<StructureStorage>,
     structureType: STRUCTURE_STORAGE,
-    store: createMockStore(storageResources),
+    store: createMockStore(storageResources, 1_000_000),
     pos: new MockPos(25, 25, roomName) as unknown as RoomPosition,
   } as unknown as StructureStorage;
 
   const terminal = {
     id: `${roomName}-terminal` as Id<StructureTerminal>,
     structureType: STRUCTURE_TERMINAL,
-    store: createMockStore(terminalResources),
+    store: createMockStore(terminalResources, 300_000),
     pos: new MockPos(26, 26, roomName) as unknown as RoomPosition,
     cooldown: options.terminalCooldown ?? 0,
   } as unknown as StructureTerminal;
@@ -153,6 +154,17 @@ describe("powerBankBoost", () => {
   });
 
   describe("prepareBoosts", () => {
+
+    it("HUB低于20k不制造虚假供货，改选具有真实可动库存的房间", () => {
+      const resource = RESOURCE_CATALYZED_GHODIUM_ALKALIDE;
+      const hub = createRoomWithInfrastructure({ name: "W5N5", terminalResources: { [resource]: 12_000 } });
+      const donor = createRoomWithInfrastructure({ name: DONOR_ROOM, storageResources: { [resource]: 6_000 } });
+      Game.rooms = { [hub.name]: hub, [donor.name]: donor };
+      Memory.cfg!.hub = { enabled: true, hubRoomName: hub.name };
+      expect(findBestDonorRoom(resource, 900, [SOURCE_ROOM])).toBe(donor.name);
+      createAutomaticResourceTransferTask(donor.name, SOURCE_ROOM, resource, 1_000, "powerBankBoost:reserved");
+      expect(findBestDonorRoom(resource, 900, [SOURCE_ROOM])).toBeNull();
+    });
 
     it("库存刚好够时，已取货在途不会导致准备失败", () => {
       const compound = RESOURCE_CATALYZED_UTRIUM_ACID;

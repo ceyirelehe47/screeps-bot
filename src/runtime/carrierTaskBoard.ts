@@ -617,6 +617,14 @@ export function listCarrierTasksByRoom(roomName: string): CarrierTask[] {
     .map((entry) => entry.task);
 }
 
+/** 聚合读侧按房间 revision 失效，不扫描整张任务板。 */
+export function getCarrierTaskBoardRoomVersion(roomName: string): { readonly room: object; readonly revision: number } | undefined {
+  const board = runtimeGlobal.__carrierTaskBoard;
+  if (!isCarrierTaskBoardStore(board)) return undefined;
+  const roomStore = nativeMapGet(board, roomName);
+  return isCarrierTaskRoomStore(roomStore) ? { room: roomStore, revision: roomStore.revision } : undefined;
+}
+
 export function listCarrierTasksForProducer(producer: string): CarrierTask[] {
   if (!producer) return [];
   const board = ensureCarrierTaskBoard();

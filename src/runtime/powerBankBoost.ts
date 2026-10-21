@@ -19,6 +19,7 @@ import {
 } from "@/runtime/carrierTaskBoard";
 import { getTickContextService } from "@/runtime/runtimeServices";
 import { resolveRoomEnergyPolicyForRoom } from "@/runtime/roomEnergyPolicy";
+import { collectResourceControlSnapshots, getResourceControlDonorAvailable } from "@/runtime/resourceControlReadModel";
 import {
   ensurePowerBankBoostPrepStore,
   getActivePowerBankBoostLabIds,
@@ -480,23 +481,23 @@ export function findBestDonorRoom(
   const hubRoomName = Memory.cfg?.hub?.hubRoomName;
   const candidates: Array<{ roomName: string; surplus: number; isHub: boolean }> = [];
 
-  for (const room of getTickContextService().getMyRooms()) {
-    if (excludeRooms.includes(room.name)) continue;
-    if (!room.terminal) continue;
-    if (room.terminal.cooldown > 0) continue;
+  for (const snapshot of collectResourceControlSnapshots([resource])) {
+    if (excludeRooms.includes(snapshot.roomName)) continue;
+    if (snapshot.terminal.cooldown > 0) continue;
+    if (typeof snapshot.terminal.isActive === "function" && !snapshot.terminal.isActive()) continue;
 
     const surplus = Math.max(
       0,
-      room.terminal.store.getUsedCapacity(resource) -
-        getOutgoingResourceTransferAmount(room.name, resource),
+      getResourceControlDonorAvailable(snapshot, resource) -
+        getOutgoingResourceTransferAmount(snapshot.roomName, resource),
     );
 
     if (surplus < amount) continue;
 
     candidates.push({
-      roomName: room.name,
+      roomName: snapshot.roomName,
       surplus,
-      isHub: room.name === hubRoomName,
+      isHub: snapshot.roomName === hubRoomName,
     });
   }
 

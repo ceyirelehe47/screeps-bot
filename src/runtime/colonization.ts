@@ -1418,8 +1418,12 @@ function upsertColonizationTask(flag: Flag): boolean {
   const existingTask = Memory.data?.colonization?.[targetRoom];
   const previousSource = existingTask?.sourceRoom;
   const previousSpawns = previousSource ? getTickContextService().getSpawnsByRoom(previousSource) : [];
+  const committed = !!existingTask && (
+    ["bootstrapping", "managed", "waiting_plan"].includes(existingTask.status) && Game.rooms[targetRoom]?.controller?.my === true ||
+    existingTask.status === "claiming" && getTickContextService().getCreepsByConfigName(getTaskConfigName(existingTask, "claimer", "0")).length > 0
+  );
   const sourceReady = !!previousSource && !!Game.rooms[previousSource]?.controller?.my &&
-    !isDefenseMode(previousSource) && canStartOutboundMission(previousSource) &&
+    !isDefenseMode(previousSource) && (committed || canStartOutboundMission(previousSource)) &&
     previousSpawns.some(hasColonizationSquadProductionCapability);
   if (existingTask) {
     if (sourceReady) delete existingTask.sourceBlockedSince;

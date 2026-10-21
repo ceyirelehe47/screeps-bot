@@ -31,9 +31,12 @@ export interface PowerBankSourceIndexEntry {
   level: number;
 }
 
-interface IndexPair { ticks: number | null; at: number }
+interface IndexPair { ticks: number | null; at: number; rooms: string[] }
 interface IndexRoom {
   signature?: string;
+  routeRooms: string[];
+  avoidedRooms: string[];
+  hadUnreachable: boolean;
   pairs: Record<string, IndexPair>;
   entries: PowerBankSourceIndexEntry[];
   /** entries 来自一次完整构建；刷新期间旧 entries 继续可用。 */
@@ -78,14 +81,14 @@ function readFrame(): NonNullable<typeof frame> {
     ...Object.keys(Memory.runtime?.powerBankPermanentDangerRooms ?? {}),
     ...Object.keys(Memory.runtime?.powerBankOwnedRoomIntel ?? {}),
   ]);
-  const sig = hash(JSON.stringify(["room-scoped-v2", Game.shard?.name ?? ""]));
+  const sig = hash(JSON.stringify(["route-scoped-v3", Game.shard?.name ?? ""]));
   frame = { game: Game, tick: Game.time, sig, sources, avoid, signatures: new Map() };
   return frame;
 }
 
 function parseMemoryRoom(encoded: unknown): IndexRoom | undefined {
   if (typeof encoded !== "string") return undefined;
-  const [builtAtText, list = "", signature] = encoded.split("|");
+  const [builtAtText, list = "", signature, dependencies] = encoded.split("|");
   const builtAt = Number(builtAtText);
   if (!Number.isSafeInteger(builtAt)) return undefined;
   const entries: PowerBankSourceIndexEntry[] = [];
@@ -96,11 +99,17 @@ function parseMemoryRoom(encoded: unknown): IndexRoom | undefined {
     if (!room || !Number.isFinite(ticks) || !Number.isSafeInteger(level)) continue;
     entries.push({ room, ticks, level });
   }
-  return { pairs: {}, entries, complete: true, builtAt, buildStartedAt: builtAt, signature };
+  try {
+    const saved = JSON.parse(dependencies);
+    if (!Array.isArray(saved.r) || !Array.isArray(saved.a) || typeof saved.n !== "boolean" ||
+        [...saved.r, ...saved.a].some(room => typeof room !== "string" || !/^[WE]\d+[NS]\d+$/.test(room))) return undefined;
+    return { pairs: {}, entries, complete: true, builtAt, buildStartedAt: builtAt, signature,
+      routeRooms: saved.r, avoidedRooms: saved.a, hadUnreachable: saved.n };
+  } catch { return undefined; }
 }
 
 function encodeMemoryRoom(entry: IndexRoom): string {
-  return `${entry.builtAt}|${entry.entries.map((item) => `${item.room}:${item.ticks}:${item.level}`).join(",")}|${entry.signature ?? ""}`;
+  return `${entry.builtAt}|${entry.entries.map((item) => `${item.room}:${item.ticks}:${item.level}`).join(",")}|${entry.signature ?? ""}|${JSON.stringify({ r: entry.routeRooms, a: entry.avoidedRooms, n: entry.hadUnreachable })}`;
 }
 
 function ensureState(): IndexState {
@@ -133,7 +142,16 @@ function persist(roomName: string, entry: IndexRoom | undefined): void {
 function currentRoomEntry(highwayRoom: string, index: IndexState): IndexRoom | undefined {
   const signature = roomSignature(highwayRoom);
   const entry = index.rooms.get(highwayRoom);
-  if (entry && entry.signature === signature) return entry;
+  const avoid = readFrame().avoid;
+  if (entry && entry.signature === signature) {
+    const pairs = Object.values(entry.pairs);
+    // 新危险只影响实测路径经过它的条目；不再按几何半径广播失效。
+    const affected = [...entry.routeRooms, ...pairs.flatMap(pair => pair.rooms)].some(room => avoid.has(room));
+    // 原先不可达的候选在解除避让时可以恢复；成功路径的优化交给周期刷新。
+    const reopened = (entry.hadUnreachable || pairs.some(pair => pair.ticks === null)) &&
+      entry.avoidedRooms.some(room => !avoid.has(room));
+    if (!affected && !reopened) return entry;
+  }
   if (entry) { index.rooms.delete(highwayRoom); persist(highwayRoom, undefined); }
   return undefined;
 }
@@ -145,7 +163,6 @@ function roomSignature(highwayRoom: string): string {
   const signature = hash(JSON.stringify([
     current.sources.filter(source => linearDistance(source.room, highwayRoom) <= POWER_BANK_SEARCH_RADIUS)
       .map(source => [source.room, source.level, source.origin.x, source.origin.y]),
-    [...current.avoid].filter(room => linearDistance(room, highwayRoom) <= POWER_BANK_MAX_ROUTE_ROOMS).sort(),
   ]));
   current.signatures.set(highwayRoom, signature);
   return signature;
@@ -163,7 +180,7 @@ function lowerBoundTicks(distance: number): number {
 function computeEntries(pairs: Record<string, IndexPair>, sources: readonly IndexSource[]): PowerBankSourceIndexEntry[] {
   const measured = sources
     .map((source) => ({ source, pair: pairs[source.room] }))
-    .filter((item): item is { source: IndexSource; pair: { ticks: number; at: number } } =>
+    .filter((item): item is { source: IndexSource; pair: IndexPair & { ticks: number } } =>
       item.pair !== undefined && item.pair.ticks !== null)
     .map(({ source, pair }) => ({ room: source.room, ticks: pair.ticks, level: source.level }))
     .sort((left, right) => left.ticks - right.ticks || left.room.localeCompare(right.room));
@@ -206,12 +223,12 @@ function nextPair(highwayRoom: string, entry: IndexRoom, sources: readonly Index
   return undefined;
 }
 
-type PairResult = { kind: "measured"; ticks: number | null } | { kind: "retry" };
+type PairResult = { kind: "measured"; ticks: number | null; rooms: string[] } | { kind: "retry" };
 
 function measurePair(source: IndexSource, highwayRoom: string, avoid: ReadonlySet<string>): PairResult {
   const avoidForRoute = new Set([...avoid].filter((room) => room !== highwayRoom && room !== source.room));
   const route = measureSampledCpuPhase("sourceIndex.route", () => findPowerBankCostedRoute(source.room, highwayRoom, avoidForRoute));
-  if (!route || route.length > POWER_BANK_MAX_ROUTE_ROOMS) return { kind: "measured", ticks: null };
+  if (!route || route.length > POWER_BANK_MAX_ROUTE_ROOMS) return { kind: "measured", ticks: null, rooms: [] };
   if (!claimPowerBankTravelBudget(1)) return { kind: "retry" };
   const allowed = new Set(expandPowerBankCorridor(route, avoidForRoute));
   const result = measureSampledCpuPhase("sourceIndex.search", () => searchPlanningPath(source.origin,
@@ -230,13 +247,14 @@ function measurePair(source: IndexSource, highwayRoom: string, avoid: ReadonlySe
   if (result.incomplete) {
     // 全局 ops 预算不足不是不可达证据，下次重试。
     if (result.reason === "budgetExhausted" && result.globalBudgetLimited) return { kind: "retry" };
-    return { kind: "measured", ticks: null };
+    return { kind: "measured", ticks: null, rooms: [] };
   }
   const path = Array.isArray(result.path) ? result.path : [];
   const last = path[path.length - 1];
-  if (last && last.roomName !== highwayRoom) return { kind: "measured", ticks: null };
+  if (last && last.roomName !== highwayRoom) return { kind: "measured", ticks: null, rooms: [] };
   const ticks = Number.isFinite(result.cost) && result.cost > 0 ? result.cost : path.length;
-  return { kind: "measured", ticks };
+  const rooms = [...new Set(path.map(position => position.roomName))].filter(room => room !== source.room && room !== highwayRoom);
+  return { kind: "measured", ticks, rooms };
 }
 
 function hasDiscoveredTask(): boolean {
@@ -273,12 +291,14 @@ function runPowerBankSourceIndexImpl(): void {
     if (entry?.complete && Game.time - entry.builtAt < POWER_BANK_SOURCE_INDEX_REFRESH_TICKS &&
         entry.buildStartedAt <= entry.builtAt) continue;
     if (!entry) {
-      entry = { pairs: {}, entries: [], complete: false, builtAt: -1, buildStartedAt: Game.time, signature: roomSignature(highwayRoom) };
+      entry = { pairs: {}, entries: [], complete: false, builtAt: -1, buildStartedAt: Game.time, signature: roomSignature(highwayRoom),
+        routeRooms: [], avoidedRooms: [...current.avoid].filter(room => linearDistance(room, highwayRoom) <= POWER_BANK_MAX_ROUTE_ROOMS), hadUnreachable: false };
       index.rooms.set(highwayRoom, entry);
     } else if (entry.complete && entry.buildStartedAt <= entry.builtAt) {
       // 过期刷新：旧 entries 继续服务准入，直到新一轮完整构建覆盖。
       entry.buildStartedAt = Game.time;
       entry.pairs = {};
+      entry.avoidedRooms = [...current.avoid].filter(room => linearDistance(room, highwayRoom) <= POWER_BANK_MAX_ROUTE_ROOMS);
     }
     const source = nextPair(highwayRoom, entry, current.sources);
     if (!source) {
@@ -287,13 +307,15 @@ function runPowerBankSourceIndexImpl(): void {
         current.sources);
       entry.complete = true;
       entry.builtAt = Game.time;
+      entry.routeRooms = [...new Set(Object.values(entry.pairs).flatMap(pair => pair.rooms))];
+      entry.hadUnreachable = Object.values(entry.pairs).some(pair => pair.ticks === null);
       entry.pairs = {};
       persist(highwayRoom, entry);
       continue;
     }
     const result = measurePair(source, highwayRoom, current.avoid);
     index.cursor = position;
-    if (result.kind === "measured") entry.pairs[source.room] = { ticks: result.ticks, at: Game.time };
+    if (result.kind === "measured") entry.pairs[source.room] = { ticks: result.ticks, at: Game.time, rooms: result.rooms };
     return;
   }
   index.cursor = (index.cursor + scan) % highwayRooms.length;

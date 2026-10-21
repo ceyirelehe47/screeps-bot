@@ -545,24 +545,7 @@ export function getMovableResourceAmount(
       getTerminalActionEnergyBudget(snapshot, context, excludeTaskId),
     );
   }
-  const totalStock = getStock(snapshot, resource);
-  const movableTotal = Math.max(
-    0,
-    totalStock -
-      getProtectedResourceAmount(
-        snapshot,
-        resource,
-        config,
-        context,
-        excludeTaskId,
-      ) -
-      getHealthyOutgoingCommitment(
-        snapshot.roomName,
-        resource,
-        context,
-        excludeTaskId,
-      ),
-  );
+  const movableTotal = getTotalMovableResourceAmount(snapshot, resource, config, context, excludeTaskId);
   const structureStock =
     location === "terminal"
       ? getTerminalResourceAmount(snapshot, resource)
@@ -721,6 +704,7 @@ function createTerminalOffloadTask(
   resource: ResourceConstant,
   amount: number,
   availableAmount = getTerminalResourceAmount(room, resource),
+  destinationFreeCapacityFloor = 0,
 ): CarrierTaskDraft | null {
   if (!room.storage || amount <= 0) {
     return null;
@@ -747,7 +731,7 @@ function createTerminalOffloadTask(
         amount: movable,
         sourceFloorAmount: Math.max(0, getTerminalResourceAmount(room, resource) - movable),
         destinationTargetAmount: room.storage.store.getUsedCapacity(resource) + movable,
-        destinationFreeCapacityFloor: resolveCapacityConfig().storageReliefTargetFreeCapacity,
+        destinationFreeCapacityFloor,
       },
     ],
   };
@@ -940,6 +924,7 @@ function createEnergyTerminalTask(
 }
 
 interface TerminalOverflowPlan {
+  destinationFreeCapacityFloor?: number;
   desiredUsedCapacity: number;
   storageOffloadCapacity: number;
   recoveryOffloadBudget?: number;
@@ -1011,7 +996,7 @@ function appendTerminalOverflowDrafts(
       recoveryOffloadBudget,
     );
     if (amount <= 0) continue;
-    const draft = createTerminalOffloadTask(snapshot, resource, amount);
+    const draft = createTerminalOffloadTask(snapshot, resource, amount, undefined, plan.destinationFreeCapacityFloor ?? 0);
     if (!draft) continue;
 
     drafts.push(draft);
@@ -2329,19 +2314,19 @@ export function syncTerminalFeedTasks(
     // Terminal overflow: offload surplus above cap to storage
     // Compute offload drafts first so we can suppress conflicting feed drafts
     const offloadedResources = new Set<ResourceConstant>();
-    const effectiveStorageOffloadCapacity = snapshot.storage
+    const physicalStorageOffloadCapacity = snapshot.storage
       ? Math.max(
           0,
           snapshot.storage.store.getFreeCapacity() -
-            capacityConfig.storageReliefTargetFreeCapacity -
             getLocalCarrierDestinationCommittedAmount(snapshot.storage.id),
         )
       : 0;
+    const effectiveStorageOffloadCapacity = Math.max(0, physicalStorageOffloadCapacity - capacityConfig.storageReliefTargetFreeCapacity);
     let storageOffloadCapacity = effectiveStorageOffloadCapacity;
     if (!recoveringTerminal && energyDraft?.type === "terminal_offload") {
       const limitedEnergyOffload = limitCarrierTaskDraftAmount(
         energyDraft,
-        storageOffloadCapacity,
+        physicalStorageOffloadCapacity,
       );
       if (limitedEnergyOffload) {
         const amount = limitedEnergyOffload.steps.reduce(
@@ -2350,7 +2335,7 @@ export function syncTerminalFeedTasks(
         );
         drafts.push(limitedEnergyOffload);
         offloadedResources.add(RESOURCE_ENERGY);
-        storageOffloadCapacity -= amount;
+        storageOffloadCapacity = Math.max(0, storageOffloadCapacity - amount);
       }
     }
 
@@ -2363,6 +2348,7 @@ export function syncTerminalFeedTasks(
       {
         desiredUsedCapacity: desiredTerminalUsedCapacity,
         storageOffloadCapacity,
+        destinationFreeCapacityFloor: capacityConfig.storageReliefTargetFreeCapacity,
         recoveryOffloadBudget: recoveringTerminal
           ? Math.min(
               snapshot.terminalUsedCapacity - desiredTerminalUsedCapacity,

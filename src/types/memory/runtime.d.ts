@@ -14,6 +14,7 @@ import type { MarketTerminalEnergyReadinessObservation } from "@/runtime/resourc
 import type { DefenseFaultSummary } from "@/runtime/runtimeIsolation";
 import type { ProcessSchedulerMemory } from "@/runtime/processScheduler";
 import type { CpuTickCheckpoint, CpuTickHealthSummary } from "@/runtime/cpuTickHealth";
+import type { PowerDistributionRuntime } from "@/runtime/powerDistribution";
 
 declare global {
   interface ScreepsMemoryRuntime {
@@ -22,6 +23,8 @@ declare global {
     defenseFaults?: DefenseFaultSummary;
     processScheduler?: ProcessSchedulerMemory;
     cpuTickHealth?: { checkpoint: CpuTickCheckpoint; summary: CpuTickHealthSummary };
+    /** powerDistribution 单写，最多 32 房诊断与 8 个局部故障房。 */
+    powerDistribution?: PowerDistributionRuntime;
     colonizationSupport?: Record<string, {
       miningHandoffs?: Record<string, { creepName: string; readySince: number }>;
       routeRooms?: string[];

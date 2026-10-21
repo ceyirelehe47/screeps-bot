@@ -168,7 +168,7 @@ export function runPowerSpawnControl(): void {
   const validRoomNames = new Set<string>();
   const processors = new Map<string, StructurePowerSpawn>();
   const rooms = Object.values(Game.rooms).sort((left, right) => left.name.localeCompare(right.name));
-  let failed = false;
+  const healthyRooms: Room[] = [], unavailableRooms: string[] = [];
   for (const room of rooms) {
     const completed = runIsolatedRoutineRoomOperation("powerSpawnControl", room.name, () => {
       if (!isPowerSpawnProcessingEnabledForRoom(room.name)) return true;
@@ -179,8 +179,9 @@ export function runPowerSpawnControl(): void {
       runRoomPowerSpawnControl(room, powerSpawn);
       return true;
     });
-    if (!completed) { validRoomNames.add(room.name); failed = true; }
+    if (!completed) { validRoomNames.add(room.name); processors.delete(room.name); unavailableRooms.push(room.name); }
+    else healthyRooms.push(room);
   }
   pruneCarrierTasksForProducer(POWER_SPAWN_CARRIER_TASK_PRODUCER, validRoomNames);
-  if (!failed) runPowerDistribution(rooms, processors);
+  runPowerDistribution(healthyRooms, processors, { unavailableRooms });
 }

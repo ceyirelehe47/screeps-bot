@@ -27,6 +27,7 @@ export type ResourceTransferTaskDemandCoverageExpirationReason =
   | "automatic_no_progress_timeout"
   | "automatic_source_depleted_timeout"
   | "automatic_source_protected_timeout"
+  | "automatic_terminal_staging_timeout"
   | "automatic_receiver_capacity_coverage_timeout";
 
 export const DEFAULT_AUTOMATIC_TASK_NO_PROGRESS_TTL = 5_000;
@@ -70,7 +71,7 @@ export function isHealthyResourceTransferTaskReservation(
   if (task.status !== "pending") {
     return false;
   }
-  if (direction === "outgoing" || !["source_depleted", "source_protected"].includes(task.blockedReason ?? "")) {
+  if (direction === "outgoing" || !["source_depleted", "source_protected", "insufficient_terminal_resource_or_fee"].includes(task.blockedReason ?? "")) {
     return true;
   }
   if (!Number.isFinite(task.blockedSince)) {
@@ -94,11 +95,12 @@ export function getResourceTransferTaskDemandCoverageExpirationReason(
   }
 
   if (
-    (task.blockedReason === "source_depleted" || task.blockedReason === "source_protected") &&
+    ["source_depleted", "source_protected", "insufficient_terminal_resource_or_fee"].includes(task.blockedReason ?? "") &&
     Number.isFinite(task.blockedSince) &&
     Game.time - task.blockedSince! >= options.sourceDepletedGraceTicks
   ) {
-    return task.blockedReason === "source_protected" ? "automatic_source_protected_timeout" : "automatic_source_depleted_timeout";
+    return task.blockedReason === "insufficient_terminal_resource_or_fee" ? "automatic_terminal_staging_timeout"
+      : task.blockedReason === "source_protected" ? "automatic_source_protected_timeout" : "automatic_source_depleted_timeout";
   }
 
   if (
@@ -151,6 +153,7 @@ export function isHealthyReceiverCapacityCommitment(
   if (task.origin !== "automatic") {
     return true;
   }
+  if (task.blockedReason === "insufficient_terminal_resource_or_fee" && !isHealthyResourceTransferTaskReservation(task)) return false;
 
   const noProgressTtl = automaticTaskNoProgressTtl
     ?? resolveResourceTransferTaskHealthOptions().automaticTaskNoProgressTtl;

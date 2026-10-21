@@ -3,7 +3,7 @@ import { collectPowerCreepOpsRoomPolicies } from "@/runtime/powerCreepOpsPolicy"
 /** 从 resourceControl.ts 分离的独立职责模块；共享状态仅由此处持有。 */
 import { inspectSynthesisTransferNeed } from "@/runtime/synthesisReadModel";
 import { validateReservationStoreHealth } from "@/runtime/resourceReservation";
-import { listCarrierTasksByRoom, peekCarrierTasksByRoom } from "@/runtime/carrierTaskBoard";
+import { getCarrierTaskBoardRoomVersion, listCarrierTasksByRoom, peekCarrierTasksByRoom } from "@/runtime/carrierTaskBoard";
 import {
   DEFAULT_RECEIVER_CAPACITY_DEMAND_COVERAGE_GRACE_TICKS,
   getResourceTransferTaskListSorted,
@@ -359,6 +359,16 @@ function resolveState(
 }
 
 let emptyResourceAmounts: Partial<Record<ResourceConstant, number>> | undefined;
+const mineralFacts = new WeakMap<Room, { game: Game; tick: number; mineral: Mineral | null; extractor: boolean }>();
+
+function getMineralFacts(room: Room): { mineral: Mineral | null; extractor: boolean } {
+  const cached = mineralFacts.get(room);
+  if (cached?.game === Game && cached.tick === Game.time) return cached;
+  const facts = { game: Game, tick: Game.time, mineral: room.find(FIND_MINERALS)[0] || null,
+    extractor: getTickContextService().getRoomContext(room)?.getMyStructures().some(structure => structure.structureType === STRUCTURE_EXTRACTOR) ?? false };
+  mineralFacts.set(room, facts);
+  return facts;
+}
 export function collectResourceControlSnapshots(
   capturedResources?: readonly ResourceConstant[],
   liveRooms?: readonly Room[],
@@ -398,10 +408,7 @@ export function collectResourceControlSnapshots(
     }
     const previousCapacityState =
       Memory.runtime?.resourceControl?.rooms?.[room.name]?.capacityState;
-    const mineral = room.find(FIND_MINERALS)[0] || null;
-    const extractor = getTickContextService().getRoomContext(room)?.getMyStructures().find(
-      structure => structure.structureType === STRUCTURE_EXTRACTOR,
-    ) as StructureExtractor | undefined;
+    const { mineral, extractor } = getMineralFacts(room);
 
     return {
       roomName: room.name,
@@ -1254,6 +1261,39 @@ export function getHealthyOutgoingCommitment(
   return Math.max(0, total);
 }
 
+const outgoingTaskOrders = new WeakMap<ResourceControlCommitmentReadContext, {
+  size: number;
+  groups: Map<string, string[]>;
+}>();
+
+/** 规划新任务扣全部承诺；执行已有任务按创建顺序分配，避免互相扣成零。 */
+export function getAllocatedOutgoingCommitment(
+  roomName: string, resource: ResourceConstant, context: ResourceControlCommitmentReadContext, taskId?: string,
+): number {
+  const task = taskId ? context.taskById.get(taskId) : undefined;
+  if (!task || task.fromRoomName !== roomName || task.resource !== resource) {
+    return getHealthyOutgoingCommitment(roomName, resource, context, taskId);
+  }
+  let order = outgoingTaskOrders.get(context);
+  if (!order || order.size !== context.taskById.size) {
+    const groups = new Map<string, string[]>();
+    for (const item of [...context.taskById.values()].sort((a, b) => a.createdAt - b.createdAt)) {
+      const key = roomResourceKey(item.fromRoomName, item.resource);
+      const ids = groups.get(key) ?? [];
+      ids.push(item.id); groups.set(key, ids);
+    }
+    order = { size: context.taskById.size, groups };
+    outgoingTaskOrders.set(context, order);
+  }
+  let reserved = 0;
+  for (const id of order.groups.get(roomResourceKey(roomName, resource)) ?? []) {
+    if (id === taskId) break;
+    const earlier = context.taskById.get(id);
+    if (earlier && isHealthyResourceTransferTaskReservation(earlier, "outgoing")) reserved += earlier.remainingAmount;
+  }
+  return reserved;
+}
+
 /** 规划与执行共用的出货保护线；本房生产消费不受此出口下限约束。 */
 export function getResourceControlResourceFloor(
   snapshot: ResourceControlSnapshot,
@@ -1261,9 +1301,11 @@ export function getResourceControlResourceFloor(
   config: ResourceCapacityConfig = resolveCapacityConfig(),
   transfer?: Pick<ResourceTransferTask, "origin" | "reason">,
 ): number {
+  // 手动任务显式表达库存调拨意图；仍保留生产与市场所有权保护。
+  if (transfer?.origin === "manual") return 0;
   let safetyFloor = snapshot.mineralFloor[resource] || 0;
   const hub = Memory.cfg?.hub;
-  if (resource === RESOURCE_OPS && transfer?.origin !== "manual") {
+  if (resource === RESOURCE_OPS) {
     safetyFloor = Math.max(safetyFloor, collectPowerCreepOpsRoomPolicies().get(snapshot.roomName)?.target || 0);
   }
   const isHubSupply = transfer?.reason?.startsWith("hub:export:") && !isHubOnlyReserveCompound(resource);
@@ -1298,14 +1340,37 @@ export function getProtectedResourceAmount(
 export function getProtectedTerminalResourceAmount(
   snapshot: ResourceControlSnapshot, resource: ResourceConstant, context: ResourceControlCommitmentReadContext,
 ): number {
-  const production = listCarrierTasksByRoom(snapshot.roomName)
-    .filter(task => task.type === "lab_supply" || task.type === "factory_supply")
-    .reduce((sum, task) => sum + task.steps.filter(step => step.resource === resource && step.fromId === snapshot.terminal.id)
-      .reduce((amount, step) => amount + step.amount, 0), 0);
+  const production = getCarrierProductionAmounts(snapshot.roomName).bySource.get(`${snapshot.terminal.id}:${resource}`) ?? 0;
   const exposure = getMarketSaleTerminalExposure(snapshot.roomName, resource);
   if (exposure.blocked) return getTerminalResourceAmount(snapshot, resource);
   const cargo = context.marketCargoTargets?.get(snapshot.roomName);
   return production + Math.max(exposure.reservedAmount, cargo?.resource === resource ? cargo.targetStock : 0);
+}
+
+let carrierProductionFrame: { game: Game; tick: number; rooms: Map<string, {
+  room?: object; revision?: number; amounts: Map<ResourceConstant, number>; bySource: Map<string, number>;
+}> } | undefined;
+
+function getCarrierProductionAmounts(roomName: string) {
+  if (carrierProductionFrame?.game !== Game || carrierProductionFrame.tick !== Game.time) {
+    carrierProductionFrame = { game: Game, tick: Game.time, rooms: new Map() };
+  }
+  const version = getCarrierTaskBoardRoomVersion(roomName);
+  const cached = carrierProductionFrame.rooms.get(roomName);
+  if (cached && cached.revision === version?.revision && cached.room === version?.room) return cached;
+  const amounts = new Map<ResourceConstant, number>(), bySource = new Map<string, number>();
+  for (const task of listCarrierTasksByRoom(roomName)) {
+    if (task.type !== "lab_supply" && task.type !== "factory_supply") continue;
+    for (const step of task.steps) {
+      if (step.fromKind !== "storage" && step.fromKind !== "terminal") continue;
+      amounts.set(step.resource, (amounts.get(step.resource) ?? 0) + step.amount);
+      const key = `${step.fromId}:${step.resource}`;
+      bySource.set(key, (bySource.get(key) ?? 0) + step.amount);
+    }
+  }
+  const entry = { ...version, amounts, bySource };
+  carrierProductionFrame.rooms.set(roomName, entry);
+  return entry;
 }
 
 export function getTotalMovableResourceAmount(
@@ -1328,7 +1393,7 @@ export function getTotalMovableResourceAmount(
         context,
         excludeTaskId,
       ) -
-      getHealthyOutgoingCommitment(
+      getAllocatedOutgoingCommitment(
         snapshot.roomName,
         resource,
         context,
@@ -2056,8 +2121,6 @@ export function getResourceControlDonorAvailable(
   const exposure = getMarketSaleTerminalExposure(snapshot.roomName, resource);
   if (exposure.blocked) return 0;
   const production = protectProduction ? getReservedProductionAmount(snapshot.roomName, resource) +
-    listCarrierTasksByRoom(snapshot.roomName).filter(task => task.type === "lab_supply" || task.type === "factory_supply")
-      .reduce((sum, task) => sum + task.steps.filter(step => step.resource === resource &&
-        (step.fromKind === "storage" || step.fromKind === "terminal")).reduce((n, step) => n + step.amount, 0), 0) : 0;
+    (getCarrierProductionAmounts(snapshot.roomName).amounts.get(resource) ?? 0) : 0;
   return Math.max(0, total - floor - production - exposure.reservedAmount);
 }

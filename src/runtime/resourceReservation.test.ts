@@ -4,6 +4,7 @@ import {
   reserveProductionResource,
   releaseProductionReservation,
   listProductionReservations,
+  getReservedProductionAmount,
   repairProductionReservations,
 } from "@/runtime/resourceReservation";
 import { classifyTreasuryHolderIdAsOwner } from "@/runtime/treasury/ownerIdentity";
@@ -54,6 +55,24 @@ describe("Treasury reservation activation", () => {
 });
 
 describe("resourceReservation", () => {
+  it("聚合读取同 tick 只扫描一次，reserve/release及过期会使缓存失效", () => {
+    reserveProductionResource("E4N58", RESOURCE_HYDROGEN, 500, "cache:a", 10);
+    reserveProductionResource("E4N58", RESOURCE_OXYGEN, 300, "cache:b", 10);
+    let scans = 0;
+    Memory.runtime!.resourceReservations = new Proxy(Memory.runtime!.resourceReservations!, {
+      ownKeys(target) { scans++; return Reflect.ownKeys(target); },
+    });
+    for (let i = 0; i < 5; i++) {
+      expect(getReservedProductionAmount("E4N58", RESOURCE_HYDROGEN)).toBe(500);
+      expect(getReservedProductionAmount("E4N58", RESOURCE_OXYGEN)).toBe(300);
+    }
+    expect(scans).toBe(1);
+    releaseProductionReservation("E4N58", RESOURCE_HYDROGEN, "cache:a");
+    expect(getReservedProductionAmount("E4N58", RESOURCE_HYDROGEN)).toBe(0);
+    expect(getReservedProductionAmount("E4N58", RESOURCE_OXYGEN)).toBe(300);
+    Game.time += 11;
+    expect(getReservedProductionAmount("E4N58", RESOURCE_OXYGEN)).toBe(0);
+  });
   describe("reserveProductionResource", () => {
 
     it("uses custom TTL when provided", () => {

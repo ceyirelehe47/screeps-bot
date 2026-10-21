@@ -639,7 +639,7 @@ describe("runResourceControl terminal feed tasks", () => {
         `resourceControl:terminal_offload:${room.name}:${RESOURCE_ENERGY}`
       ]).toMatchObject({
         type: "terminal_offload",
-        steps: [expect.objectContaining({ resource: RESOURCE_ENERGY, amount: 1_000 })],
+        steps: [expect.objectContaining({ resource: RESOURCE_ENERGY, amount: 1_000, destinationFreeCapacityFloor: 0 })],
       });
 
       Game.time = cadenceTick(20);
@@ -703,5 +703,15 @@ describe("runResourceControl terminal feed tasks", () => {
     } finally {
       protectionSpy.mockRestore();
     }
+  });
+
+  it("Storage 被矿物占用且空位不足200k时，仍可将 Terminal 能量补入本房", () => {
+    const room = createRoom({ name: "E1N57", storageResources: { energy: 100_000, H: 750_000 }, storageFreeCapacity: 150_000,
+      terminalResources: { energy: 60_000 } });
+    Game.rooms[room.name] = room;
+    runResourceControl();
+    expect(getCarrierTasksByRoom(room.name)[`resourceControl:terminal_offload:${room.name}:energy`]).toMatchObject({
+      steps: [expect.objectContaining({ resource: RESOURCE_ENERGY, amount: 10_000, destinationFreeCapacityFloor: 0 })],
+    });
   });
 });

@@ -481,6 +481,7 @@ function formatTickAge(age: number): string {
 function formatBlockedReason(reason: ResourceTransferTask["blockedReason"]): string {
   if (reason === "receiver_capacity") return "capacity";
   if (reason === "source_depleted") return "depleted";
+  if (reason === "source_protected") return "protected";
   if (reason === "insufficient_terminal_resource_or_fee") return "terminal/fee";
   return "blocked";
 }

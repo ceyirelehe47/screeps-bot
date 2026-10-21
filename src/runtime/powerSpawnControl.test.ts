@@ -235,7 +235,7 @@ describe("powerSpawnControl", () => {
     expect(listCarrierTasksByRoom(removed.room.name)).toHaveLength(0);
   });
 
-  it("单房输入失败保留旧补给、继续健康房，暂停跨房分配并在恢复后重试", () => {
+  it("单房输入失败保留旧补给，健康房继续参与分配，恢复后重新纳入", () => {
     resetRuntimeServices(); resetRuntimeIsolationForTest();
     const bad = createScenario({ roomName: "W1N1", power: 1, energy: 50 });
     const good = createScenario({ roomName: "W2N2", power: 1, energy: 50 });
@@ -257,13 +257,13 @@ describe("powerSpawnControl", () => {
       expect(bad.powerSpawn.processPower).toHaveBeenCalledTimes(1);
       expect(good.powerSpawn.processPower).toHaveBeenCalledTimes(2);
       expect(listCarrierTasksByRoom(good.room.name)).toHaveLength(0);
-      expect(distribution).not.toHaveBeenCalled();
+      expect(distribution).toHaveBeenCalledWith([good.room], expect.any(Map), { unavailableRooms: [bad.room.name] });
 
       bad.room.find = oldFind;
       Game.time++; resetRuntimeServices();
       runPowerSpawnControl();
       expect(bad.powerSpawn.processPower).toHaveBeenCalledTimes(2);
-      expect(distribution).toHaveBeenCalledTimes(1);
+      expect(distribution).toHaveBeenCalledTimes(2);
     } finally { distribution.mockRestore(); resetRuntimeIsolationForTest(); }
   });
 });
