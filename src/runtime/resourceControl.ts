@@ -1,4 +1,6 @@
 import { isDue } from "@/runtime/cadence";
+import { compactMarketOwnsExecution } from "@/runtime/market/liveState";
+import { compactMarketReadiness } from "@/runtime/market/live";
 import { getPowerCreepOpsShipmentNeed } from "@/runtime/powerCreepOpsPolicy";
 import { utf8ByteLength } from "@/util/utf8";
 import { resolveMarketCreditReserve, getAvailableMarketCredits } from "@/runtime/marketActionArbiter";
@@ -506,6 +508,7 @@ export function parseMarketTerminalEnergyReadinessAuthorization(
 }
 
 function readMarketTerminalEnergyReadinessAuthorization(): MarketTerminalEnergyAuthorizationRead {
+  if (compactMarketOwnsExecution()) return compactMarketReadiness();
   const marketData = isPlainRecord(Memory.data?.marketSaleAutomation)
     ? Memory.data?.marketSaleAutomation
     : undefined;

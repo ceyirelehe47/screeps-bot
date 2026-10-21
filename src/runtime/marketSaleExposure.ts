@@ -8,6 +8,7 @@
  */
 
 import { isPermitChainStorageReady } from "@/runtime/permitChainStorageGuard";
+import { compactMarketOwnsExecution, compactMarketExposure } from "@/runtime/market/liveState";
 
 export interface MarketSaleTerminalExposure {
   reservedAmount: number;
@@ -438,6 +439,7 @@ export function compileMarketSaleTerminalExposureIndex(
 }
 
 export function compileLiveMarketSaleTerminalExposureIndex(): CompiledMarketSaleTerminalExposureIndex {
+  if (compactMarketOwnsExecution()) return { get: compactMarketExposure };
   if (!isPermitChainStorageReady()) return { get: () => ({ reservedAmount: 0, blocked: true }) };
   const config = Memory.cfg?.marketSaleAutomation;
   const directStrategyActive =
@@ -549,6 +551,7 @@ export function getMarketSaleTerminalExposure(
   roomName: string,
   resourceType: ResourceConstant,
 ): MarketSaleTerminalExposure {
+  if (compactMarketOwnsExecution()) return compactMarketExposure(roomName, resourceType);
   if (!isPermitChainStorageReady()) return { reservedAmount: 0, blocked: true };
   const config = Memory.cfg?.marketSaleAutomation;
   const directStrategyActive =

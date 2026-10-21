@@ -883,6 +883,8 @@ export function currentRosterFingerprint(
 export function readLiveMarketBaseTerminal(
   roomName: string,
   resource: ResourceConstant,
+  // 新执行器可传入自身已验证授权；仍复用同一套逐项能量readiness验证。
+  authorization?: Pick<MarketBaseResourceCanonicalReadinessRead, "ok" | "revision" | "rooms"> & { maxTransactionEnergy?: number },
 ): MarketBaseResourceTerminalRead | undefined {
   const room = Game.rooms?.[roomName];
   const terminal = room?.terminal;
@@ -911,7 +913,7 @@ export function readLiveMarketBaseTerminal(
   const marketData = isPlainRecord(Memory.data?.marketSaleAutomation)
     ? Memory.data?.marketSaleAutomation
     : undefined;
-  const canonicalAuthorization =
+  const canonicalAuthorization = authorization ??
     deriveMarketBaseResourceCanonicalReadinessAuthorization(
       marketData,
       Memory.cfg?.marketSaleAutomation?.mode,

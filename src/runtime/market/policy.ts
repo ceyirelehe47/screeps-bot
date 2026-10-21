@@ -24,6 +24,13 @@ export interface CompactMarketConfig {
   minBucket?: number;
   maxCpu?: number;
   overrides?: Partial<Record<MarketResource, Partial<CompactMarketPolicy>>>;
+  /** 显式操作者批准与本地归档绑定；存在后旧卖出入口停止接管。 */
+  cutover?: {
+    sourceCommit: string;
+    archiveHash: string;
+    authorization: string;
+    lanes: Array<{ roomName: string; resource: MarketResource; terminalId: string; controllerId: string }>;
+  };
 }
 
 // r8 的普通数据投影；在 dryRun 首发中不改变生产 V3 的政策或许可。

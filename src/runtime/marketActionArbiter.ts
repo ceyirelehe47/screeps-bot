@@ -11,6 +11,7 @@ import {
 } from "@/runtime/marketSaleExposure";
 import { hasTreasuryTerminalFence } from "@/runtime/treasuryTaskCommitmentBridge";
 import { isPermitChainStorageReady } from "@/runtime/permitChainStorageGuard";
+import { compactMarketOwnsExecution, validCompactLiveState } from "@/runtime/market/liveState";
 import { treasuryTerminalNativeGrantAllows, treasuryTerminalSendGrantAllows } from "@/runtime/treasuryTerminalDispatchAuthority";
 
 export type TerminalActionKind = "market_deal" | "terminal_send";
@@ -137,6 +138,10 @@ function isValidTick(value: unknown): value is number {
 }
 
 function getAutomationArbiterData(create: boolean): UnknownRecord | undefined {
+  if (compactMarketOwnsExecution()) {
+    const live = Memory.data?.market?.live;
+    return validCompactLiveState(live) ? live.arbiter : undefined;
+  }
   const memory = Memory as unknown as { data?: unknown };
   if (memory.data === undefined) {
     if (!create) return undefined;

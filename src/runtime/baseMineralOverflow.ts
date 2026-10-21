@@ -79,6 +79,7 @@ export function recordBaseMineralOverflow(
   entries: readonly MarketProtectionEntry[], tick: number,
   attempts: Readonly<Record<string, "no_bid" | "bid" | "waiting">> = {},
   prices: Readonly<Record<string, number>> = {},
+  preserveUnobserved = false,
 ): void {
   const state = runtime();
   if (!state) return;
@@ -108,6 +109,11 @@ export function recordBaseMineralOverflow(
     if (observation.complete && observation.tier === "liquidation" && observation.noBidRounds >= BASE_MINERAL_NO_BID_ROUNDS) observation.paused = "no_bid";
     if (storageMineralPressure(Game.rooms?.[entry.roomName])) observation.paused = "storage_full";
     next[key] = observation;
+  }
+  // 精简执行器只观察明确获批的可写 lane；不能顺带清掉其它 lane 的停采闩。
+  if (preserveUnobserved) for (const [key, value] of Object.entries(previous?.entries ?? {})) {
+    if (Object.keys(next).length >= 112) break;
+    if (!(key in next)) next[key] = value;
   }
   state.baseMineralOverflow = { updatedAt: tick, entries: next };
 }

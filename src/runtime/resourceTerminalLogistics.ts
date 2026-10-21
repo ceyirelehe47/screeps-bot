@@ -23,6 +23,7 @@ import { listProductionReservations } from "@/runtime/resourceReservation";
 import { getTerminalAmountOutsideMarketSaleExposure } from "@/runtime/marketSaleExposure";
 import { isMarketBaseResource, MARKET_BASE_RESOURCE_POLICY_BY_RESOURCE } from "@/runtime/marketBaseResourcePolicy";
 import { resolveMarketSaleAutomationConfig } from "@/runtime/marketSaleConfig";
+import { compactMarketOwnsExecution, validCompactLiveState, compactConfiguration, compactLegacyQuietReason } from "@/runtime/market/liveState";
 import {
   getMarketProtectionEntryKey,
   getMarketProtectionSellableAmount,
@@ -1952,7 +1953,7 @@ interface AuthorizedMarketCargoTarget {
 }
 
 /**
- * 仅为当前 V3 permit 允许的新成交搬运一批货。可售量仍由原保护账本
+ * 仅为当前市场执行器允许的新成交搬运一批货。可售量仍由生产保护账本
  * 扣除生产、在途与其他 exposure；这里不签发市场写权限。
  */
 export function planAuthorizedMarketCargoTargets(
@@ -1961,6 +1962,14 @@ export function planAuthorizedMarketCargoTargets(
 ): Map<string, AuthorizedMarketCargoTarget> {
   const targets = new Map<string, AuthorizedMarketCargoTarget>();
   if (!authorization.ok || !authorization.cargoLanes?.length) return targets;
+  const compactOwner = compactMarketOwnsExecution();
+  const compact = Memory.data?.market?.live;
+  let config: ReturnType<typeof resolveMarketSaleAutomationConfig>;
+  if (compactOwner) {
+    if (!validCompactLiveState(compact) || compact.phase !== "active" || compact.pending || compact.blocker || Memory.cfg?.market?.mode !== "live" ||
+        compact.configuration !== compactConfiguration(Memory.cfg.market) || compactLegacyQuietReason() || authorization.revision !== `compact:${compact.activation.archiveHash}`) return targets;
+    config = compact.pricingConfig as ReturnType<typeof resolveMarketSaleAutomationConfig>;
+  } else {
   const marketData = Memory.data?.marketSaleAutomation as unknown;
   if (!isPlainRecord(marketData) ||
       !isPlainRecord(marketData.managedOrders) ||
@@ -1977,13 +1986,15 @@ export function planAuthorizedMarketCargoTargets(
   if (!ledgerState || ledgerState.pending !== undefined || ledgerState.blocker !== undefined) {
     return targets;
   }
-  const config = resolveMarketSaleAutomationConfig(
+  config = resolveMarketSaleAutomationConfig(
     Memory.cfg?.marketSaleAutomation,
   );
   if (!config.validForPlanning || config.mode !== "direct") return targets;
+  }
 
   const snapshotByRoom = new Map(snapshots.map((snapshot) => [snapshot.roomName, snapshot] as const));
   const lanes = authorization.cargoLanes.filter((lane) => {
+    if (compactOwner && !compact!.lanes.some(pinned => pinned.roomName === lane.roomName && pinned.resource === lane.resource && pinned.terminalId === lane.terminalId)) return false;
     const snapshot = snapshotByRoom.get(lane.roomName);
     return isMarketBaseResource(lane.resource) &&
       snapshot?.terminal?.id === lane.terminalId &&

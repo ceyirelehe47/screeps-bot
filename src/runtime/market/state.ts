@@ -55,7 +55,11 @@ export interface CompactMarketComparison {
   };
 }
 
-export interface CompactMarketState { v: 1; comparison?: CompactMarketComparison }
+export interface CompactMarketState {
+  v: 1;
+  comparison?: CompactMarketComparison;
+  live?: import("@/runtime/market/liveState").CompactMarketLiveState;
+}
 
 const MAX_LANES = 128;
 const MAX_AUDIT = 20;
