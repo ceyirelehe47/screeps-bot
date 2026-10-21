@@ -43,7 +43,8 @@ const MEMORY_BRANCHES = {
     declaration: "src/types/memory/runtime.d.ts",
     interfaceName: "ScreepsMemoryRuntime",
     // 登记实际调度、独立 CPU 健康面包屑与有界生命周期事件；均由各自 owner 单写。
-    schemaFingerprint: "70e26069caebb63a263a7b57dd3e2bb4b7513ccf6ce8c749314a24ac7ffbc2ec",
+    // powerBankSourceIndex 由 powerBankSourceIndex.ts 单写（高速房来源索引的紧凑备份）。
+    schemaFingerprint: "4d585f1df1fe182f8e34bfc6727f54fafd2056ef54632df3d2d6f73715f117fe",
     imports: [
       "@/runtime/cpuTickHealth:CpuTickCheckpoint",
       "@/runtime/cpuTickHealth:CpuTickHealthSummary",
@@ -95,6 +96,7 @@ const MEMORY_BRANCHES = {
       "invaderSalvageDangerRooms",
       "powerBankPermanentDangerRooms",
       "powerBankOwnedRoomIntel",
+      "powerBankSourceIndex",
     ],
   },
   data: {

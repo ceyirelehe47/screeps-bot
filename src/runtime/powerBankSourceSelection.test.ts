@@ -240,10 +240,17 @@ describe("PB 来源准入使用真实有界 PF 缓存", () => {
     expect(completeCombatOrigins(world, NEAR_SOURCE)).toEqual([]);
   });
 
-  it("首个短 source 永远 incomplete，真实五 tick 负缓存给其它三 Spawn 来源留下测量机会", () => {
+  it("首个短 source 永远 incomplete：先在首个 hold 窗口内等待近来源，窗口到期后才由远来源生产", () => {
     const world = scenario((origin, goal) => origin.roomName === SHORT_SOURCE && goal.roomName === TARGET);
-    world.runUntilSelected();
+    world.runUntilSelected(10);
+    // 远来源已测完，但近来源首次非预算 pending 仍在等待窗口内：不静默放行。
+    expect(world.task).toMatchObject({ status: "discovered", sourceRoom: "", blocker: "path_measurement_pending" });
+    expect(world.task.lastSourceEvaluation?.reasons).toEqual(expect.arrayContaining([
+      `${SHORT_SOURCE}:pending_path_incomplete`, `${NEAR_SOURCE}:waiting_for_nearer_${SHORT_SOURCE}`,
+    ]));
+    world.runUntilSelected(40);
     expect(world.task).toMatchObject({ status: "preparing_boosts", sourceRoom: NEAR_SOURCE });
+    expect(Game.time - 1_000).toBeLessThanOrEqual(30);
     expect(completeCombatOrigins(world, NEAR_SOURCE).sort()).toEqual([11, 12, 13]);
     for (const x of [11, 12, 13]) {
       const ticks = world.calls.filter((call) => call.origin.roomName === SHORT_SOURCE &&
@@ -269,7 +276,7 @@ describe("PB 来源准入使用真实有界 PF 缓存", () => {
   it("某一 Spawn 缺完整路径的 source 不可选择；所有来源 incomplete 时保持 discovered", () => {
     {
       const world = scenario((origin, goal) => origin.roomName === SHORT_SOURCE && origin.x === 11 && goal.roomName === TARGET);
-      world.runUntilSelected();
+      world.runUntilSelected(40);
       expect(world.task).toMatchObject({ status: "preparing_boosts", sourceRoom: NEAR_SOURCE });
       expect(completeCombatOrigins(world, SHORT_SOURCE).sort()).toEqual([12, 13]);
       expect(completeCombatOrigins(world, NEAR_SOURCE).sort()).toEqual([11, 12, 13]);
@@ -305,5 +312,66 @@ describe("PB 来源准入使用真实有界 PF 缓存", () => {
     if (gate === "expiry") expect(world.task).toMatchObject({ status: "failed", failReason: "bank_expired" });
     if (gate === "resource") expect(world.task.failReason).toContain("insufficient_boost_compound");
     if (gate === "threat") expect(world.task).toMatchObject({ status: "discovered", blocker: "target_combat_threat" });
+  });
+  it("近来源暂时 path_incomplete 时不被已测完 ready 的远来源抢走；hold 内重测完成后选近来源", () => {
+    const world = scenario(() => false);
+    const base = world.search.getMockImplementation()!;
+    // 前若干 tick 近来源原生返回坏路径（非预算、非 engine incomplete 的 5 tick 退避）。
+    world.search.mockImplementation((origin: RoomPosition, goal: { pos: RoomPosition; range: number }, options: NativeSearchOptions) =>
+      origin.roomName === SHORT_SOURCE && Game.time < 1_006
+        ? { path: null, incomplete: false, ops: 1, cost: 0 }
+        : base(origin, goal, options));
+    world.runUntilSelected(40);
+    // 远来源 W1N57 三个 Spawn 都已测出完整路径（cached ready），仍选更近的 E1N57。
+    expect(completeCombatOrigins(world, NEAR_SOURCE).sort()).toEqual([11, 12, 13]);
+    expect(world.task).toMatchObject({ status: "preparing_boosts", sourceRoom: SHORT_SOURCE });
+    expect(world.task.sourcePendingHolds).toBeUndefined();
+    expect(Game.time - 1_000).toBeLessThanOrEqual(26);
+  });
+
+  it("来源索引存在时按索引顺序准入：第一个完全合格者胜出，不测索引外来源", () => {
+    const world = scenario(() => false);
+    const index = require("@/runtime/powerBankSourceIndex") as typeof import("@/runtime/powerBankSourceIndex");
+    jest.spyOn(index, "getPowerBankSourceIndexEntry").mockImplementation((room) => room === TARGET
+      ? [{ room: NEAR_SOURCE, ticks: 60, level: 8 }, { room: SHORT_SOURCE, ticks: 80, level: 8 }]
+      : undefined);
+    jest.spyOn(index, "getPowerBankSourceIndexTicks").mockImplementation((_room, source) =>
+      source === NEAR_SOURCE ? 60 : source === SHORT_SOURCE ? 80 : undefined);
+    world.runUntilSelected();
+    expect(world.task).toMatchObject({ status: "preparing_boosts", sourceRoom: NEAR_SOURCE });
+    expect(world.task.lastSourceEvaluation).toMatchObject({ mode: "index", chosen: NEAR_SOURCE });
+    expect(world.calls.some((call) => call.origin.roomName === SHORT_SOURCE || call.origin.roomName === FAR_SOURCE)).toBe(false);
+  });
+
+  it("索引来源全部不合格时记录 index_exhausted 并回退全量评估", () => {
+    const world = scenario(() => false);
+    const index = require("@/runtime/powerBankSourceIndex") as typeof import("@/runtime/powerBankSourceIndex");
+    jest.spyOn(index, "getPowerBankSourceIndexEntry").mockImplementation((room) => room === TARGET
+      ? [{ room: SHORT_SOURCE, ticks: 40, level: 8 }]
+      : undefined);
+    (Game.rooms[SHORT_SOURCE].storage!.store as unknown as Record<string, number>)[RESOURCE_CATALYZED_GHODIUM_ALKALIDE] = 0;
+    world.runTick();
+    expect(world.task.lastSourceEvaluation?.mode).toBe("all");
+    expect(world.task.lastSourceEvaluation?.reasons).toEqual(expect.arrayContaining([
+      `${SHORT_SOURCE}:insufficient_boost_compound`, "index_exhausted",
+    ]));
+    world.runUntilSelected();
+    expect(world.task).toMatchObject({ status: "preparing_boosts", sourceRoom: NEAR_SOURCE });
+  });
+
+  it("静默跳过的来源写入拒绝原因，并经 powerBankStatus 输出", () => {
+    const world = scenario(() => false);
+    const policy = require("@/runtime/outboundMissionPolicy") as typeof import("@/runtime/outboundMissionPolicy");
+    jest.spyOn(policy, "canStartOutboundMission").mockImplementation((room) => room !== SHORT_SOURCE);
+    (Game.rooms[FAR_SOURCE].controller as { level: number }).level = 5;
+    world.runTick();
+    const reasons = world.task.lastSourceEvaluation?.reasons ?? [];
+    expect(reasons).toEqual(expect.arrayContaining([
+      `${SHORT_SOURCE}:outbound_blocked`, `${FAR_SOURCE}:rcl_below_min`, `${NEAR_SOURCE}:pending_budget`,
+    ]));
+    const status = require("@/runtime/powerBankStatus") as typeof import("@/runtime/powerBankStatus");
+    const snapshot = status.powerBankStatusRaw().tasks.find((task) => task.taskId === world.task.id)!;
+    expect(snapshot.sourceEvaluation).toMatchObject({ mode: "all", chosen: null, age: 1 });
+    expect(snapshot.sourceEvaluation!.reasons).toContain(`${SHORT_SOURCE}:outbound_blocked`);
   });
 });

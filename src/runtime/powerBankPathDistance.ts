@@ -9,6 +9,7 @@ import { measureSampledCpuPhase } from "@/runtime/cpuPhaseProfiler";
 import { getPowerBankRoomStatus } from "@/runtime/powerBankMapFacts";
 import { normalizeCpuMonitorConfig } from "@/runtime/cpuMonitor";
 import { POWER_BANK_MAX_ROUTE_ROOMS } from "@/runtime/powerBankConstants";
+import { POWER_BANK_MAX_ALLOWED_ROOMS } from "@/runtime/powerBankRouteCost";
 
 const CACHE_LIMIT = 64;
 const CACHE_TTL = 100;
@@ -83,7 +84,7 @@ type DiagnosticCounter = keyof PowerBankPathDiagnosticCounts;
 const DIAGNOSTIC_PENDING_COUNTERS: Record<string, DiagnosticCounter> = Object.assign(Object.create(null), {
   budget: "budgetWait", invalid_input: "invalidInput", endpoint_not_visible: "endpointNotVisible",
   unsafe_route: "unsafeRoute", route_observation_failed: "routeObservationFailed",
-  path_incomplete: "pathIncomplete", path_search_failed: "pathSearchFailed",
+  path_incomplete: "pathIncomplete", path_search_failed: "pathSearchFailed", search_budget: "budgetWait",
 });
 type SearchStage = "combat" | "outbound" | "return";
 interface DiagnosticCall {
@@ -178,6 +179,8 @@ export interface PowerBankTravelMeasurementInput {
   bankPos: RoomPosition;
   returnTargetPos: RoomPosition;
   routeRooms: readonly string[];
+  /** PF 可搜索房间（走廊 ∪ 邻房）；缺省时只允许走廊本身。必须包含 routeRooms。 */
+  allowedRooms?: readonly string[];
   avoidRooms: readonly string[];
   profile: PowerBankTierProfile;
   haulerCarryParts: number;
@@ -257,6 +260,18 @@ export function canMeasurePowerBankTravelThisTick(): boolean {
   return measurementsThisTick < MAX_MEASUREMENTS_PER_TICK && searchesThisTick < MAX_SEARCHES_PER_TICK;
 }
 
+/**
+ * 其它 PB 预计算（来源索引）与准入共用同一 tick 测量名额：成功时占用
+ * 1 次测量与 searches 次原生搜索，不足时不消耗任何配额。
+ */
+export function claimPowerBankTravelBudget(searches: number): boolean {
+  refreshBudget();
+  if (measurementsThisTick >= MAX_MEASUREMENTS_PER_TICK || searchesThisTick + searches > MAX_SEARCHES_PER_TICK) return false;
+  measurementsThisTick += 1;
+  searchesThisTick += searches;
+  return true;
+}
+
 function pending(reason: string, retryTicks = RETRY_TICKS): PowerBankTravelMeasurementResult {
   return Object.freeze({ status: "pending", reason, retryAt: Game.time + retryTicks });
 }
@@ -308,7 +323,11 @@ function measurePowerBankTravelImpl(input: PowerBankTravelMeasurementInput, call
     input.routeRooms[input.routeRooms.length - 1] !== input.bankPos.roomName ||
     new Set(input.routeRooms).size !== input.routeRooms.length || !Array.isArray(input.avoidRooms) ||
     input.routeRooms.some((room) => typeof room !== "string" || !roomCoordinates(room)) ||
-    input.avoidRooms.some((room) => typeof room !== "string" || !roomCoordinates(room)))) {
+    input.avoidRooms.some((room) => typeof room !== "string" || !roomCoordinates(room)) ||
+    (input.allowedRooms !== undefined && (!Array.isArray(input.allowedRooms) ||
+      input.allowedRooms.length > POWER_BANK_MAX_ALLOWED_ROOMS || new Set(input.allowedRooms).size !== input.allowedRooms.length ||
+      input.allowedRooms.some((room) => typeof room !== "string" || !roomCoordinates(room)) ||
+      input.routeRooms.some((room) => !input.allowedRooms!.includes(room)))))) {
     if (Array.isArray(input.routeRooms) && input.routeRooms.length > POWER_BANK_MAX_ROUTE_ROOMS) diagnostic(call, "invalidRouteTooLong");
     return pending("invalid_input");
   }
@@ -316,7 +335,8 @@ function measurePowerBankTravelImpl(input: PowerBankTravelMeasurementInput, call
   if (!Game.rooms[input.sourceSpawnPos.roomName] || !Game.rooms[input.bankPos.roomName]) {
     return pending("endpoint_not_visible");
   }
-  const allowedRooms = new Set(input.routeRooms);
+  const searchRooms: readonly string[] = input.allowedRooms ?? input.routeRooms;
+  const allowedRooms = new Set(searchRooms);
   const avoidedRooms = new Set(input.avoidRooms);
   const endpointRooms = new Set([input.sourceSpawnPos.roomName, input.bankPos.roomName]);
   if (input.routeRooms.some((room) => !endpointRooms.has(room) && avoidedRooms.has(room))) {
@@ -330,6 +350,7 @@ function measurePowerBankTravelImpl(input: PowerBankTravelMeasurementInput, call
       [input.bankPos.roomName, input.bankPos.x, input.bankPos.y],
       [input.returnTargetPos.roomName, input.returnTargetPos.x, input.returnTargetPos.y],
       input.routeRooms,
+      searchRooms.length === input.routeRooms.length ? 0 : [...searchRooms].sort(),
       [...avoidedRooms].sort(),
       input.profile.tier,
       input.profile.attacker.body,
@@ -379,8 +400,11 @@ function measurePowerBankTravelImpl(input: PowerBankTravelMeasurementInput, call
   try {
     if (measureSampledCpuPhase("worldProof", () => measureSampledCpuPhase("status", () =>
       input.routeRooms.some((room) => !safeRoom(room))))) return pending("unsafe_route");
+    // 走廊房的视野与拓扑都会改变静态矩阵；外扩邻房只跟踪拓扑修订，
+    // 避免 Observer 轮换视野让已测 ready 频繁失效。
     worldKey = measureSampledCpuPhase("worldProof", () => measureSampledCpuPhase("topology", () =>
-      JSON.stringify(input.routeRooms.map((room) => [room, Boolean(Game.rooms[room]), getRoomTopologyRevision(room)]))));
+      JSON.stringify([input.routeRooms.map((room) => [room, Boolean(Game.rooms[room]), getRoomTopologyRevision(room)]),
+        searchRooms.filter((room) => !input.routeRooms.includes(room)).map((room) => [room, getRoomTopologyRevision(room)])])));
   } catch {
     return pending("route_observation_failed");
   }
@@ -402,7 +426,7 @@ function measurePowerBankTravelImpl(input: PowerBankTravelMeasurementInput, call
 
   // 房名到世界坐标是纯几何转换；同一次测量的三段路径共用已验证的
   // route 输入，逐格只校验本地坐标和相邻步，不反复解析相同房名。
-  const routeCoordinates = new Map(input.routeRooms.map(room => [room, roomCoordinates(room)!]));
+  const routeCoordinates = new Map(searchRooms.map(room => [room, roomCoordinates(room)!]));
   const matrices = new Map<string, CostMatrix>();
   const roads = new Map<string, Set<string>>();
   const terrains = new Map<string, RoomTerrain>();
@@ -449,6 +473,9 @@ function measurePowerBankTravelImpl(input: PowerBankTravelMeasurementInput, call
   const search = (origin: RoomPosition, goal: RoomPosition, plainCost: number, swampCost: number, stage: SearchStage): RoomPosition[] | undefined => {
     if (searchesThisTick >= MAX_SEARCHES_PER_TICK || !hasPlanningCpuHeadroom()) {
       diagnostic(call, searchesThisTick >= MAX_SEARCHES_PER_TICK ? "searchBudgetWait" : "searchHeadroomWait");
+      // 本 tick 搜索配额/CPU 余量不足不是“走廊不可达”的证据：标为预算等待，
+      // 下一 tick 重试，且不写入 path_incomplete 负缓存。
+      globalBudgetWait = true;
       return undefined;
     }
     searchesThisTick += 1;
@@ -459,7 +486,7 @@ function measurePowerBankTravelImpl(input: PowerBankTravelMeasurementInput, call
         plainCost,
         swampCost,
         maxOps: SEARCH_MAX_OPS,
-        maxRooms: input.routeRooms.length,
+        maxRooms: Math.min(POWER_BANK_MAX_ALLOWED_ROOMS, searchRooms.length),
         roomCallback,
       }));
     } catch (error) {
@@ -511,9 +538,10 @@ function measurePowerBankTravelImpl(input: PowerBankTravelMeasurementInput, call
   const travelTicks = (path: readonly RoomPosition[], body: MovementBody): number => measureSampledCpuPhase("travelEstimation", () => path.reduce(
     (total, pos) => total + Math.max(1, Math.ceil(body.weight * terrainFatigue(pos) / (body.moves * 2))), 0,
   ));
-  const incompleteResult = (): PowerBankTravelMeasurementResult => remember(key, worldKey,
-    pending(globalBudgetWait ? "search_budget" : "path_incomplete", globalBudgetWait ? 1 : engineIncomplete ? ENGINE_INCOMPLETE_HOLD_TICKS : RETRY_TICKS), call,
-    engineIncomplete && !globalBudgetWait ? true : undefined);
+  const incompleteResult = (): PowerBankTravelMeasurementResult => globalBudgetWait
+    ? pending("search_budget", 1)
+    : remember(key, worldKey, pending("path_incomplete", engineIncomplete ? ENGINE_INCOMPLETE_HOLD_TICKS : RETRY_TICKS), call,
+      engineIncomplete ? true : undefined);
   try {
     const combat = search(input.sourceSpawnPos, input.bankPos, 2, 8, "combat");
     if (!combat) return incompleteResult();

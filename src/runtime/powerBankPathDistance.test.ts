@@ -101,6 +101,30 @@ describe("Power Bank 静态完整路径测量", () => {
     canMeasure = module.canMeasurePowerBankTravelThisTick;
   });
 
+  it("搜索途中 CPU 余量不足记为 search_budget 预算等待，不写 path_incomplete 负缓存", () => {
+    jest.mocked(Game.cpu.getUsed).mockReturnValueOnce(0).mockReturnValueOnce(0).mockReturnValueOnce(200);
+    expect(measure(input())).toEqual({ status: "pending", reason: "search_budget", retryAt: Game.time + 1 });
+    expect(search).toHaveBeenCalledTimes(1);
+    Game.time += 1;
+    // 未缓存：下一 tick 直接重新测量并得到 ready，而不是命中 100/5 tick 的 incomplete 等待。
+    expect(measure(input()).status).toBe("ready");
+    expect(search).toHaveBeenCalledTimes(4);
+  });
+
+  it("allowedRooms 外扩邻房可被 PF 搜索；不包含走廊房时为无效输入", () => {
+    Game.rooms.W2N1 = visibleRoom("W2N1");
+    const seen: string[] = [];
+    search.mockImplementation((origin: RoomPosition, goal: { pos: RoomPosition; range: number },
+      options: { roomCallback: (room: string) => CostMatrix | false; maxRooms: number }) => {
+      seen.push(String(options.roomCallback("W2N1") !== false), String(options.roomCallback("W3N1") !== false),
+        String(options.maxRooms));
+      return straightSameRoom(origin, goal);
+    });
+    expect(measure({ ...input(), allowedRooms: ["W1N1", "W2N1"] }).status).toBe("ready");
+    expect(seen.slice(0, 3)).toEqual(["true", "false", "2"]);
+    expect(measure({ ...input(), bankPos: pos(20), allowedRooms: ["W2N1"] })).toMatchObject({ status: "pending", reason: "invalid_input" });
+  });
+
   it("采样诊断关闭或未到采样 tick 时零写入且不额外读取 CPU", () => {
     delete Memory.analytics;
     Memory.cfg!.cpuProfiler = { enabled: false, sampleInterval: 1 };
@@ -187,7 +211,8 @@ describe("Power Bank 静态完整路径测量", () => {
     Game.time += 1;
     const searchesBeforeWait = search.mock.calls.length;
     jest.mocked(Game.cpu.getUsed).mockReturnValueOnce(80).mockReturnValueOnce(200);
-    expect(measure({ ...input(), bankPos: pos(18) })).toEqual({ status: "pending", reason: "path_incomplete", retryAt: Game.time + 5 });
+    // 搜索前 CPU 余量不足是预算等待：下一 tick 重试，不记为 path_incomplete。
+    expect(measure({ ...input(), bankPos: pos(18) })).toEqual({ status: "pending", reason: "search_budget", retryAt: Game.time + 1 });
     expect(search).toHaveBeenCalledTimes(searchesBeforeWait);
     const data = Memory.analytics!.powerBankPathDiagnostics!;
     expect(data).toBeDefined();
@@ -195,7 +220,7 @@ describe("Power Bank 静态完整路径测量", () => {
       searchCombat: 5, searchOutbound: 2, searchReturn: 1,
       engineIncomplete: 2, incompleteOutbound: 1, incompleteReturn: 1, incompleteOps: 6_000,
       maxOpsReachedCount: 1, malformedPath: 1, invalidPath: 1, searchCallThrow: 1,
-      searchHeadroomWait: 1, pathIncomplete: 5, pathSearchFailed: 1,
+      searchHeadroomWait: 1, pathIncomplete: 4, budgetWait: 1, pathSearchFailed: 1,
     });
     expect(JSON.stringify(data)).not.toContain("not-persisted-search-error");
     expect(Object.values(data.totals).every(Number.isFinite)).toBe(true);

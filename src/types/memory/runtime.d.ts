@@ -663,6 +663,11 @@ declare global {
     powerBankPermanentDangerRooms?: Record<string, true>;
     /** 原生视野确认的敌方所有权；失去视野保留，再次确认无主/己方后删除。 */
     powerBankOwnedRoomIntel?: Record<string, { owner: string; lastSeenAt: number }>;
+    /**
+     * 高速房 -> 最近来源房索引的紧凑备份：sig 为来源集合/RCL/长期避让的哈希；
+     * rooms 值为 `builtAt|room:ticks:rcl,...`，只存已完成条目。
+     */
+    powerBankSourceIndex?: { sig: string; rooms: Record<string, string> };
   }
 }
 

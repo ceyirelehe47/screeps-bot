@@ -491,6 +491,15 @@ declare global {
     lastRepathAt?: number;
   }
 
+  interface PowerBankSourceEvaluationSummary {
+    at: number;
+    mode: "index" | "all";
+    chosen: string | null;
+    reasons: string[];
+    /** reasons 超出上限被截断的条数。 */
+    truncated?: number;
+  }
+
   interface PowerBankHarvestTask {
     id: string;
     status: PowerBankHarvestStatus;
@@ -506,6 +515,10 @@ declare global {
     lastSeenTick: number;
     /** 最近实际消耗新测路预算的 tick；只用于公平调度，不代表路径已准入。 */
     admissionLastMeasuredAt?: number;
+    /** 选源阶段各来源首次非预算 pending 的等待窗口；选定来源后删除。 */
+    sourcePendingHolds?: Record<string, { since: number; retryAt: number }>;
+    /** 最近一次选源评估摘要（有界）：模式、选中来源与各来源被跳过的原因。 */
+    lastSourceEvaluation?: PowerBankSourceEvaluationSummary;
     attackerId?: string;
     healerId?: string;
     haulerIds: string[];
@@ -649,6 +662,8 @@ declare global {
     deliveredPower: number;
     lostPower: number;
     outcome: PowerBankHarvestOutcome | null;
+    /** 最近一次选源评估：age 为距今 tick，reasons 为 `${room}:${reason}`。 */
+    sourceEvaluation: (PowerBankSourceEvaluationSummary & { age: number }) | null;
   }
 
   interface PowerBankStatusSnapshot {

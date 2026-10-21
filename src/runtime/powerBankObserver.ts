@@ -7,6 +7,7 @@ import { getPowerBankRoomStatus } from "@/runtime/powerBankMapFacts";
 import { getPowerBankRoomThreat } from "@/runtime/powerBankThreat";
 import { getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
 import { measureSampledCpuPhase } from "@/runtime/cpuPhaseProfiler";
+import { runPowerBankSourceIndex } from "@/runtime/powerBankSourceIndex";
 
 export { getPowerBankRoomThreat } from "@/runtime/powerBankThreat";
 
@@ -284,6 +285,8 @@ function isOpenRoom(roomName: string): boolean {
 
 export function runPowerBankObserver(): void {
   measureSampledCpuPhase("pb.observer", runPowerBankObserverImpl);
+  // 观察调度之后推进来源索引；有待准入任务时自动让出测量名额。
+  runPowerBankSourceIndex();
 }
 
 function runPowerBankObserverImpl(): void {

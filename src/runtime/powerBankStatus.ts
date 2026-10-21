@@ -97,6 +97,10 @@ function toTaskSnapshot(task: PowerBankHarvestTask): PowerBankStatusTaskSnapshot
     deliveredPower: task.deliveredPower ?? 0,
     lostPower: task.lostPower ?? 0,
     outcome: task.outcome ?? null,
+    sourceEvaluation: task.lastSourceEvaluation
+      ? { ...task.lastSourceEvaluation, reasons: [...task.lastSourceEvaluation.reasons],
+        age: Math.max(0, Game.time - task.lastSourceEvaluation.at) }
+      : null,
   };
 }
 
