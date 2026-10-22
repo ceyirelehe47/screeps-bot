@@ -1,13 +1,14 @@
 import { runCompactMarketLive, runCompactMarketPreflight, compactMarketReadiness, type CompactMarketLiveDependencies } from "@/runtime/market/live";
-import { compactConfiguration, compactMarketOwnsExecution, validCompactLiveState, type CompactMarketLiveState } from "@/runtime/market/liveState";
+import { compactConfiguration, compactMarketOwnsExecution, compactMarketExposure, validCompactLiveState, type CompactMarketLiveState } from "@/runtime/market/liveState";
 import { MARKET_RESOURCES, resolveCompactMarketPolicy } from "@/runtime/market/policy";
 import { resolveMarketSaleAutomationConfig } from "@/runtime/marketSaleConfig";
-import { clearMarketActionArbiterForTest, declareMarketActionIntent } from "@/runtime/marketActionArbiter";
+import { clearMarketActionArbiterForTest, declareMarketActionIntent, executeTerminalAction } from "@/runtime/marketActionArbiter";
 import { getMarketSaleTerminalExposure, compileLiveMarketSaleTerminalExposureIndex } from "@/runtime/marketSaleExposure";
 import { runMarketSalePreflight } from "@/runtime/marketSaleAutomation";
 import { runLiveMarketSaleAutomation } from "@/runtime/marketSaleRuntime";
 import { isPermitChainStorageReady } from "@/runtime/permitChainStorageGuard";
 import { planAuthorizedMarketCargoTargets } from "@/runtime/resourceTerminalLogistics";
+import { getResourceControlDonorAvailable } from "@/runtime/resourceControlReadModel";
 import * as protectionAdapter from "@/runtime/marketSaleProtectionAdapter";
 
 const commit = "a".repeat(40), roomName = "E1N57", resource = "L";
@@ -55,7 +56,7 @@ function transaction(amount = 1000): any {
 beforeEach(() => {
   Game.time = 10000; (Game as any).shard = { name: "shard1" };
   stock = 30000;
-  Memory.cfg = { market: { mode: "live", minBucket: 9000, maxCpu: 3, cutover: { sourceCommit: commit, archiveHash: "b".repeat(64), authorization: "用户明确批准切换", lanes: [pinned] } }, marketSaleAutomation: rawConfig() as any };
+  Memory.cfg = { market: { mode: "live", overrides: { L: { maxPerDeal: 1000 } }, minBucket: 9000, maxCpu: 3, cutover: { sourceCommit: commit, archiveHash: "b".repeat(64), authorization: "用户明确批准切换", lanes: [pinned] } }, marketSaleAutomation: rawConfig() as any };
   Memory.runtime = { lastDeployCommit: commit, lastDeployBranch: "default", resourceControl: { updatedAt: Game.time } } as any;
   Memory.data = { market: { v: 1 }, marketSaleAutomation: { managedOrders: {}, pendingMutations: {}, pendingDirectDeals: {}, marketStaging: {}, marketReservations: {}, trustedFloors: {},
     directAutomation: { ledger: {}, pendingDirectDeals: {}, quarantinedPendingDirectDeals: {}, baseResourceV3: { scope: { laneLifecycles: [{ sellerRoomName: roomName, resource, stage: "continuous", status: "writable" }] }, ledger: { confirmedCooldownNotBefore: 9000, checkpoint: { confirmedCooldownNotBeforeHighWater: 8000 }, receipts: [] }, dynamicFloorProjection: { modelRevision: "direct-net-v2", schemaVersion: 1, updatedAt: Game.time, entries: [] } } } } } as any;
@@ -74,6 +75,89 @@ beforeEach(() => {
 });
 
 describe("精简市场正式执行与交接", () => {
+  it("配置未初始化或绑定过期不接管库存账本，初始化失败留可见原因", () => {
+    delete Memory.data!.market!.live;
+    Memory.cfg!.market!.mode = "off";
+    expect(compactMarketOwnsExecution()).toBe(false);
+    expect(compactMarketExposure("E9N9", RESOURCE_ENERGY)).toEqual({ reservedAmount: 0, blocked: false });
+    Memory.cfg!.market!.mode = "live";
+    Memory.cfg!.market!.cutover!.sourceCommit = "c".repeat(40);
+    expect(runMarketSalePreflight().rejectedByReason).toEqual({ activation_invalid: 1 });
+    expect(Memory.data!.market!.initialization).toEqual({ tick: Game.time, reason: "activation_invalid" });
+    expect(compactMarketOwnsExecution()).toBe(false);
+    expect(Game.market.deal).not.toHaveBeenCalled();
+  });
+  it("损坏市场根只隔离已知lane，普通终端动作不被许可链总闸卡住", () => {
+    (state as any).receipts = {};
+    expect(isPermitChainStorageReady()).toBe(true);
+    expect(compactMarketExposure(roomName, resource).blocked).toBe(true);
+    expect(compactMarketExposure("E9N9", RESOURCE_POWER).blocked).toBe(false);
+    const action = jest.fn(() => OK);
+    expect(executeTerminalAction("E9N9", "resourceControl", "terminal_send", action)).toBe(OK);
+    expect(action).toHaveBeenCalledTimes(1);
+    runCompactMarketLive(deps); expect(Game.market.deal).not.toHaveBeenCalled();
+  });
+  it.each(["reconcile_mismatch", "receipt_capacity", "deal_threw"])("%s只停止市场新单并保护本房在途", blocker => {
+    runCompactMarketLive(deps); state.blocker = blocker;
+    expect(compactMarketExposure(roomName, resource)).toEqual({ reservedAmount: 1000, blocked: false });
+    expect(compactMarketExposure(roomName, RESOURCE_ENERGY)).toEqual({ reservedAmount: 100, blocked: false });
+    expect(compactMarketExposure(roomName, RESOURCE_POWER)).toEqual({ reservedAmount: 0, blocked: false });
+    expect(compactMarketExposure("E9N9", resource)).toEqual({ reservedAmount: 0, blocked: false });
+    const snapshot = { roomName: "E9N9", storageResourceAmounts: { power: 5000 }, terminalResourceAmounts: { power: 0 }, mineralFloor: {}, terminalEnergy: 30000, terminalEnergyReserve: 25000 } as any;
+    expect(getResourceControlDonorAvailable(snapshot, RESOURCE_POWER, false)).toBe(5000);
+    next(100); runCompactMarketLive(deps);
+    expect(state.pending).toBeDefined(); expect(state.blocker).toBe(blocker);
+    expect(Game.market.deal).toHaveBeenCalledTimes(1);
+  });
+  it("缺收据100tick且历史完整、终端实物不变时释放未执行占用，下tick重新读单", () => {
+    runCompactMarketLive(deps); next(100); runCompactMarketLive(deps);
+    expect(state.pending).toBeUndefined(); expect(state.blocker).toBeUndefined();
+    expect(state.lastReason).toBe("not_executed:history_and_stock_unchanged");
+    expect(state.arbiter).not.toHaveProperty("directMarketClaim");
+    expect(Game.market.deal).toHaveBeenCalledTimes(1); expect(state.confirmed).toBe(0);
+    next(5); runCompactMarketLive(deps); expect(Game.market.deal).toHaveBeenCalledTimes(2);
+  });
+  it.each(["unknown", "stock", "energy", "identity", "history", "legacy"])("缺收据但%s证据不足保持pending", kind => {
+    runCompactMarketLive(deps);
+    if (kind === "unknown") state.pending!.status = "unknown";
+    if (kind === "legacy") delete state.pending!.terminalBefore;
+    const terminal = Game.rooms[roomName].terminal!;
+    if (kind === "stock" || kind === "energy") (terminal.store.getUsedCapacity as any) = (r: string) => r === RESOURCE_ENERGY ? (kind === "energy" ? 99900 : 100000) : 49000;
+    if (kind === "identity") (terminal as any).id = "replacement";
+    if (kind === "history") Game.market.outgoingTransactions = Array.from({ length: 100 }, (_, i) => ({ ...transaction(), transactionId: `other${i}`, time: Game.time + 1, order: { id: "other" } })) as any;
+    next(101); runCompactMarketLive(deps);
+    expect(state.pending).toBeDefined(); expect(state.blocker).toBe("reconcile_gap");
+    expect(Game.market.deal).toHaveBeenCalledTimes(1);
+  });
+  it("成交记录在第100条以后仍能确认", () => {
+    runCompactMarketLive(deps); Game.market.outgoingTransactions = [...Array.from({ length: 101 }, (_, i) => ({ ...transaction(), transactionId: `other${i}`, order: { id: "other" } })), transaction()];
+    next(); runCompactMarketPreflight(); expect(state.confirmed).toBe(1); expect(state.pending).toBeUndefined();
+  });
+  it("无当tick搬运目标仍保护各lane已入终端的一批货，暂停后释放非在途", () => {
+    expect(compactMarketExposure(roomName, resource).reservedAmount).toBe(1000);
+    runCompactMarketLive(deps);
+    const other = { ...pinned, roomName: "E2N57", terminalId: "terminal2", controllerId: "controller2" };
+    state.lanes.push(other);
+    Memory.cfg!.market!.cutover = { ...state.activation, lanes: [...state.lanes] };
+    state.activation = Memory.cfg!.market!.cutover!; state.configuration = compactConfiguration(Memory.cfg!.market!);
+    Game.rooms.E2N57 = { ...Game.rooms[roomName], name: "E2N57", controller: { my: true, id: other.controllerId }, terminal: { ...Game.rooms[roomName].terminal, id: other.terminalId } } as any;
+    expect(compactMarketExposure("E2N57", resource).reservedAmount).toBe(1000);
+    Memory.cfg!.market!.mode = "off";
+    expect(compactMarketExposure("E2N57", resource).reservedAmount).toBe(0);
+  });
+  it.each([400, 10000])("普通档允许变额%s，终端冷却结束即可再成交", amount => {
+    delete Memory.cfg!.market!.overrides; state.configuration = compactConfiguration(Memory.cfg!.market!);
+    order.amount = order.remainingAmount = amount;
+    runCompactMarketLive(deps); expect(state.pending?.amount).toBe(amount);
+    Game.market.outgoingTransactions = [transaction(amount)]; next(10); runCompactMarketLive(deps);
+    expect(Game.market.deal).toHaveBeenCalledTimes(2);
+  });
+  it("变额大单自动缩到1000费用预算内，不因整笔费用过高丢掉可成交部分", () => {
+    delete Memory.cfg!.market!.overrides; state.configuration = compactConfiguration(Memory.cfg!.market!);
+    (Game.market.calcTransactionCost as jest.Mock).mockImplementation((amount: number) => Math.ceil(amount * .5));
+    runCompactMarketLive(deps); expect(state.pending).toMatchObject({ amount: 2000, transactionEnergy: 1000 });
+  });
+
   it("dryRun没有获得执行所有权", () => {
     delete Memory.data!.market!.live; Memory.cfg!.market = { mode: "dryRun" };
     expect(compactMarketOwnsExecution()).toBe(false); expect(Game.market.deal).not.toHaveBeenCalled();
@@ -106,7 +190,7 @@ describe("精简市场正式执行与交接", () => {
     Game.market.outgoingTransactions = [transaction()]; next(); runCompactMarketPreflight();
     expect(state.pending).toBeUndefined(); expect(state.confirmed).toBe(1); expect(state.confirmedAmount).toBe(1000); expect(state.confirmedEnergy).toBe(100);
     runCompactMarketPreflight(); expect(state.confirmed).toBe(1);
-    expect(compileLiveMarketSaleTerminalExposureIndex().get(roomName, resource).reservedAmount).toBe(0);
+    expect(compileLiveMarketSaleTerminalExposureIndex().get(roomName, resource).reservedAmount).toBe(1000);
     expect(JSON.stringify(Memory.data!.marketSaleAutomation)).toBe(before);
   });
   it("部分成交按实际数量、能量和净额入账", () => {
@@ -122,7 +206,8 @@ describe("精简市场正式执行与交接", () => {
   it("无成交证据即使过期也保持占用，不能重试", () => {
     runCompactMarketLive(deps); next(11); runCompactMarketLive(deps);
     expect(state.blocker).toBe("reconcile_gap"); expect(state.pending).toBeDefined(); expect(Game.market.deal).toHaveBeenCalledTimes(1);
-    expect(getMarketSaleTerminalExposure(roomName, resource).blocked).toBe(true);
+    expect(getMarketSaleTerminalExposure(roomName, resource)).toEqual({ reservedAmount: 1000, blocked: false });
+    expect(getMarketSaleTerminalExposure("E9N9", RESOURCE_ENERGY)).toEqual({ reservedAmount: 0, blocked: false });
   });
   it("明确非OK释放pending但不虚构确认", () => {
     (Game.market.deal as jest.Mock).mockReturnValue(ERR_FULL);
@@ -147,7 +232,7 @@ describe("精简市场正式执行与交接", () => {
   });
   it.each(["bucket", "cooldown", "window", "claim", "identity", "corrupt", "config"])("%s安全边界阻止写入", kind => {
     if (kind === "bucket") (Game.cpu as any).bucket = 100;
-    if (kind === "cooldown") state.lastDealAt = Game.time - 100;
+    if (kind === "cooldown") { Memory.cfg!.market!.overrides = { L: { minIntervalTicks: 1000 } }; state.configuration = compactConfiguration(Memory.cfg!.market!); state.lastDealAt = Game.time - 100; }
     if (kind === "window") { Memory.cfg!.market!.overrides = { L: { maxPerWindow: 1000 } }; state.configuration = compactConfiguration(Memory.cfg!.market!); state.receipts = [{ tick: Game.time-2000, roomName, resource, transactionId: "old", amount: 1000, transactionEnergy: 100, netCreditsMilli: 1 }]; }
     if (kind === "claim") declareMarketActionIntent("other", "market_deal", roomName);
     if (kind === "identity") (Game as any).shard.name = "shard2";
@@ -173,6 +258,22 @@ describe("精简市场正式执行与交接", () => {
     (Game.market as any).getHistory = jest.fn(history);
     expect(runCompactMarketLive({ collectProtection: deps.collectProtection }).writes).toBe(1);
     expect(Game.market.getHistory).toHaveBeenCalled(); expect(Game.market.getAllOrders).toHaveBeenCalledWith({ resourceType: resource });
+  });
+  it("历史缓存跨UTC日期立即刷新，不等待5000tick", () => {
+    jest.useFakeTimers();
+    try {
+      jest.setSystemTime(new Date("2030-01-01T23:59:50Z"));
+      (Game.market as any).getHistory = jest.fn((r: string) => Array.from({ length: 13 }, (_, i) => { const date = new Date(); date.setUTCDate(date.getUTCDate() - i - 1); return { resourceType: r, date: date.toISOString().slice(0,10), transactions: 1000, volume: 1000000, avgPrice: r === RESOURCE_ENERGY ? 20 : 900, stddevPrice: 1 }; }));
+      order.price = 1;
+      runCompactMarketLive({ collectProtection: deps.collectProtection });
+      const calls = (Game.market.getHistory as jest.Mock).mock.calls.length;
+      expect(calls).toBeGreaterThan(0);
+      next(5); runCompactMarketLive({ collectProtection: deps.collectProtection });
+      expect(Game.market.getHistory).toHaveBeenCalledTimes(calls);
+      jest.setSystemTime(new Date("2030-01-02T00:00:01Z"));
+      next(5); runCompactMarketLive({ collectProtection: deps.collectProtection });
+      expect((Game.market.getHistory as jest.Mock).mock.calls.length).toBeGreaterThan(calls);
+    } finally { jest.useRealTimers(); }
   });
   it("多个匹配交易导致隔离，不能释放实物或重复成交", () => {
     runCompactMarketLive(deps);
@@ -210,6 +311,17 @@ describe("精简市场正式执行与交接", () => {
       expect(planAuthorizedMarketCargoTargets(snapshots, auth).get(roomName)).toEqual({ resource, targetStock: 1000 });
       expect(planAuthorizedMarketCargoTargets(snapshots, { ...auth, cargoLanes: [{ roomName, resource: "X", terminalId: "terminal", maxDealAmount: 1000 }] }).size).toBe(0);
       runCompactMarketLive(deps); expect(planAuthorizedMarketCargoTargets(snapshots, auth).size).toBe(0);
+    } finally { spy.mockRestore(); }
+  });
+  it("变额补货沿用实际live上限且余量不足一整批仍可备货", () => {
+    delete Memory.cfg!.market!.overrides; state.configuration = compactConfiguration(Memory.cfg!.market!);
+    stock = 15000;
+    const spy = jest.spyOn(protectionAdapter, "collectLiveMarketSaleProtectionLedger").mockImplementation(protection);
+    try {
+      const snapshots = [{ roomName, terminal: Game.rooms[roomName].terminal, storage: Game.rooms[roomName].storage,
+        storageResourceAmounts: { L: 15000 }, terminalResourceAmounts: { L: 0 } }] as any;
+      expect(compactMarketReadiness().cargoLanes?.[0].maxDealAmount).toBe(10000);
+      expect(planAuthorizedMarketCargoTargets(snapshots, compactMarketReadiness()).get(roomName)).toEqual({ resource, targetStock: 5000 });
     } finally { spy.mockRestore(); }
   });
   it.each(["reserve", "stale", "tampered", "missing"])("能量readiness %s时不交易", kind => {

@@ -1185,13 +1185,13 @@ export function getTerminalActionEnergyBudget(
       RESOURCE_ENERGY,
       context,
     ),
-    otherOutgoingEnergyCommitment: getHealthyOutgoingCommitment(
+    otherOutgoingEnergyCommitment: getAllocatedOutgoingCommitment(
       snapshot.roomName,
       RESOURCE_ENERGY,
       context,
       excludeTaskId,
     ),
-    otherOutgoingFeeCommitment: getOutgoingTransactionFeeReserve(
+    otherOutgoingFeeCommitment: getAllocatedOutgoingFeeReserve(
       snapshot,
       context,
       excludeTaskId,
@@ -1262,36 +1262,41 @@ export function getHealthyOutgoingCommitment(
 }
 
 const outgoingTaskOrders = new WeakMap<ResourceControlCommitmentReadContext, {
-  size: number;
-  groups: Map<string, string[]>;
+  entries: Array<{ task: ResourceTransferTask; createdAt: number }>;
+  ordered: ResourceTransferTask[];
 }>();
+
+function earlierOutgoingTasks(roomName: string, context: ResourceControlCommitmentReadContext, taskId?: string): ResourceTransferTask[] | undefined {
+  const task = taskId ? context.taskById.get(taskId) : undefined;
+  if (!task || task.fromRoomName !== roomName) return undefined;
+  let order = outgoingTaskOrders.get(context);
+  // 数量相同的替换和原对象 createdAt 变更也必须失效。
+  if (!order || order.entries.length !== context.taskById.size || order.entries.some(entry => context.taskById.get(entry.task.id) !== entry.task || entry.task.createdAt !== entry.createdAt)) {
+    const entries = [...context.taskById.values()].map(task => ({ task, createdAt: task.createdAt }));
+    order = { entries, ordered: entries.map(entry => entry.task).sort((a, b) => a.createdAt - b.createdAt) };
+    outgoingTaskOrders.set(context, order);
+  }
+  const earlier: ResourceTransferTask[] = [];
+  for (const item of order.ordered) {
+    if (item.id === taskId) break;
+    if (item.fromRoomName === roomName && isHealthyResourceTransferTaskReservation(item, "outgoing")) earlier.push(item);
+  }
+  return earlier;
+}
 
 /** 规划新任务扣全部承诺；执行已有任务按创建顺序分配，避免互相扣成零。 */
 export function getAllocatedOutgoingCommitment(
   roomName: string, resource: ResourceConstant, context: ResourceControlCommitmentReadContext, taskId?: string,
 ): number {
-  const task = taskId ? context.taskById.get(taskId) : undefined;
-  if (!task || task.fromRoomName !== roomName || task.resource !== resource) {
-    return getHealthyOutgoingCommitment(roomName, resource, context, taskId);
-  }
-  let order = outgoingTaskOrders.get(context);
-  if (!order || order.size !== context.taskById.size) {
-    const groups = new Map<string, string[]>();
-    for (const item of [...context.taskById.values()].sort((a, b) => a.createdAt - b.createdAt)) {
-      const key = roomResourceKey(item.fromRoomName, item.resource);
-      const ids = groups.get(key) ?? [];
-      ids.push(item.id); groups.set(key, ids);
-    }
-    order = { size: context.taskById.size, groups };
-    outgoingTaskOrders.set(context, order);
-  }
-  let reserved = 0;
-  for (const id of order.groups.get(roomResourceKey(roomName, resource)) ?? []) {
-    if (id === taskId) break;
-    const earlier = context.taskById.get(id);
-    if (earlier && isHealthyResourceTransferTaskReservation(earlier, "outgoing")) reserved += earlier.remainingAmount;
-  }
-  return reserved;
+  const earlier = earlierOutgoingTasks(roomName, context, taskId);
+  return earlier ? earlier.reduce((sum, task) => sum + (task.resource === resource ? task.remainingAmount : 0), 0)
+    : getHealthyOutgoingCommitment(roomName, resource, context, taskId);
+}
+
+function getAllocatedOutgoingFeeReserve(snapshot: ResourceControlSnapshot, context: ResourceControlCommitmentReadContext, taskId?: string): number {
+  const earlier = earlierOutgoingTasks(snapshot.roomName, context, taskId);
+  return earlier ? earlier.reduce((sum, task) => sum + (context.outgoingFeeByTaskId.get(task.id) ?? 0), 0)
+    : getOutgoingTransactionFeeReserve(snapshot, context, taskId);
 }
 
 /** 规划与执行共用的出货保护线；本房生产消费不受此出口下限约束。 */

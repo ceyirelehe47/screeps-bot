@@ -23,6 +23,7 @@ import { listProductionReservations } from "@/runtime/resourceReservation";
 import { getTerminalAmountOutsideMarketSaleExposure } from "@/runtime/marketSaleExposure";
 import { isMarketBaseResource, MARKET_BASE_RESOURCE_POLICY_BY_RESOURCE } from "@/runtime/marketBaseResourcePolicy";
 import { resolveMarketSaleAutomationConfig } from "@/runtime/marketSaleConfig";
+import { resolveCompactLivePolicy } from "@/runtime/market/policy";
 import { compactMarketOwnsExecution, validCompactLiveState, compactConfiguration, compactLegacyQuietReason } from "@/runtime/market/liveState";
 import {
   getMarketProtectionEntryKey,
@@ -1999,7 +2000,7 @@ export function planAuthorizedMarketCargoTargets(
     return isMarketBaseResource(lane.resource) &&
       snapshot?.terminal?.id === lane.terminalId &&
       snapshot.storage !== undefined &&
-      lane.maxDealAmount === MARKET_BASE_RESOURCE_POLICY_BY_RESOURCE[lane.resource].maxDealAmount &&
+      lane.maxDealAmount === (compactOwner ? resolveCompactLivePolicy(lane.resource, Memory.cfg?.market)?.maxPerDeal : MARKET_BASE_RESOURCE_POLICY_BY_RESOURCE[lane.resource].maxDealAmount) &&
       getStock(snapshot, lane.resource) > 0;
   });
   if (lanes.length === 0) return targets;
@@ -2010,7 +2011,7 @@ export function planAuthorizedMarketCargoTargets(
     })),
     laneReserveByEntry: Object.fromEntries(lanes.map((lane) => [
       getMarketProtectionEntryKey(lane.roomName, lane.resource),
-      MARKET_BASE_RESOURCE_POLICY_BY_RESOURCE[lane.resource as keyof typeof MARKET_BASE_RESOURCE_POLICY_BY_RESOURCE].laneReserve,
+      compactOwner ? resolveCompactLivePolicy(lane.resource as import("@/runtime/market/policy").MarketResource, Memory.cfg?.market)!.reserve : MARKET_BASE_RESOURCE_POLICY_BY_RESOURCE[lane.resource as keyof typeof MARKET_BASE_RESOURCE_POLICY_BY_RESOURCE].laneReserve,
     ])),
   });
   if (protection.globalBlocked) return targets;
@@ -2020,7 +2021,7 @@ export function planAuthorizedMarketCargoTargets(
     const surplus = getMarketProtectionSellableAmount(entry, Game.time, {
       requireTerminalBacking: false,
     });
-    return surplus >= lane.maxDealAmount
+    return surplus >= (compactOwner ? 1 : lane.maxDealAmount)
       ? [{ lane, surplus }]
       : [];
   }).sort((left, right) =>
@@ -2028,11 +2029,11 @@ export function planAuthorizedMarketCargoTargets(
     left.lane.roomName.localeCompare(right.lane.roomName) ||
     left.lane.resource.localeCompare(right.lane.resource),
   );
-  for (const { lane } of ranked) {
+  for (const { lane, surplus } of ranked) {
     if (!targets.has(lane.roomName)) {
       targets.set(lane.roomName, {
         resource: lane.resource,
-        targetStock: lane.maxDealAmount,
+        targetStock: Math.min(lane.maxDealAmount, surplus),
       });
     }
   }

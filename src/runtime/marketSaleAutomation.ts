@@ -1,5 +1,5 @@
 import { AUTHORITY_EXECUTOR_SHARD, AUTHORITY_ROOMS } from "@/config/deployment";
-import { compactMarketOwnsExecution } from "@/runtime/market/liveState";
+import { compactMarketRequested } from "@/runtime/market/liveState";
 import { runCompactMarketPreflight } from "@/runtime/market/live";
 import { measureMarketSubPhase } from "@/runtime/marketSaleDiagnostics";
 import {
@@ -2639,7 +2639,7 @@ function registerOperatorControls(): void {
 }
 
 export function runMarketSalePreflight(): MarketSaleAutomationResult {
-  if (compactMarketOwnsExecution()) return runCompactMarketPreflight();
+  if (compactMarketRequested()) return runCompactMarketPreflight();
   const session = currentMarketTickSession();
   const context = session.context;
   if (!session.latchDone) {
@@ -2710,7 +2710,7 @@ export function runMarketSalePreflight(): MarketSaleAutomationResult {
 export function runMarketSaleAutomation(
   input: MarketSaleAutomationInput = {},
 ): MarketSaleAutomationResult {
-  if (compactMarketOwnsExecution()) return runCompactMarketPreflight();
+  if (compactMarketRequested()) return runCompactMarketPreflight();
   const session = currentMarketTickSession();
   const context = session.context;
   if (!session.latchDone) {

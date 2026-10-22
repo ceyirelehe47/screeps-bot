@@ -1,5 +1,5 @@
 import { beginMarketComparisonCycle, stageMarketComparisonProtection, flushMarketComparison } from "@/runtime/market/comparison";
-import { compactMarketOwnsExecution } from "@/runtime/market/liveState";
+import { compactMarketRequested } from "@/runtime/market/liveState";
 import { runCompactMarketLive } from "@/runtime/market/live";
 import { baseMineralOverflowNetFloor, recordBaseMineralOverflow, liveBaseMineralOverflow } from "@/runtime/baseMineralOverflow";
 import { bumpMarketPerformanceCounter, snapshotMarketPerformanceCounters } from "@/runtime/marketPerformanceCounters";
@@ -1185,7 +1185,7 @@ function runMarketSaleRuntimeCycle(
 export function runLiveMarketSaleAutomation(
   dependencies: MarketSaleRuntimeDependencies = {},
 ): MarketSaleAutomationResult {
-  if (compactMarketOwnsExecution()) return runCompactMarketLive(dependencies);
+  if (compactMarketRequested()) return runCompactMarketLive(dependencies);
   try { beginMarketComparisonCycle(); } catch { /* 观察不可用不影响生产。 */ }
   try { return runMarketSaleRuntimeCycle(dependencies); }
   finally { try { flushMarketComparison(); } catch { /* 观察失败不影响生产。 */ } }

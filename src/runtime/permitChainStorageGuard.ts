@@ -1,4 +1,4 @@
-import { compactMarketOwnsExecution, validCompactLiveState } from "@/runtime/market/liveState";
+import { compactMarketOwnsExecution } from "@/runtime/market/liveState";
 // 只保存当前 tick 的可用性，不保存任何授权判断。冷引用未展开时，禁止
 // 正常数据恢复器把它当成损坏的业务链清空，市场/Terminal 入口也保守等待。
 let blocked: { memory: Memory; game: typeof Game; tick: number; reason: string } | undefined;
@@ -24,7 +24,8 @@ export function getPermitChainContainer(memory: Memory): Record<string, unknown>
 }
 
 export function permitChainStorageUnavailableReason(): string | undefined {
-  if (compactMarketOwnsExecution()) return validCompactLiveState(Memory.data?.market?.live) ? undefined : "compact_market_unavailable";
+  // compact 的数据校验由自身入口负责，不是普通 Terminal 物流的存储依赖。
+  if (compactMarketOwnsExecution()) return undefined;
   if (blocked?.memory === Memory && blocked.game === Game && blocked.tick === Game.time) return blocked.reason;
   const chain = getPermitChainContainer(Memory)?.permitChain;
   if (chain && typeof chain === "object" && ("kind" in chain || "manifestHash" in chain)) return "cold_reference_not_hydrated";

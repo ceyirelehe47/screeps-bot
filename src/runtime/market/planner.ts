@@ -45,6 +45,7 @@ export interface CompactMarketPlanInput {
   /** 对照旧管线时明确传 1000；未来普通政策允许变额。 */
   minDealAmount?: number;
   shouldStop?: () => boolean;
+  fitTransactionEnergy?: boolean;
 }
 
 export interface CompactMarketPlan {
@@ -112,7 +113,7 @@ export function planCompactMarket(input: CompactMarketPlanInput): CompactMarketP
     for (const order of orders) {
       if (input.shouldStop?.() || ++evaluatedTuples > 24_000) return incomplete("cpu_budget");
       const remaining = Math.min(order.amount, order.remainingAmount ?? order.amount);
-      const amount = Math.min(remaining, lane.sellable, terminal.resourceAmount, policy.maxPerDeal,
+      let amount = Math.min(remaining, lane.sellable, terminal.resourceAmount, policy.maxPerDeal,
         Math.max(0, policy.maxPerWindow - (lane.windowAmount ?? 0)));
       if (!validAmount(amount)) return incomplete("amount_invalid");
       if (amount < minimum) continue;
@@ -123,10 +124,27 @@ export function planCompactMarket(input: CompactMarketPlanInput): CompactMarketP
         if (notional < (minimumNotional === 0 ? 0 : priceToMilliUp(minimumNotional))) continue;
       } catch { return incomplete("unsafe_arithmetic"); }
       // 对照时 callback 只读 memo，缺失绝不重跑原 V3 的成本回调。
-      const fee = input.transactionEnergy(amount, lane.roomName, order.roomName!);
+      let fee = input.transactionEnergy(amount, lane.roomName, order.roomName!);
       const worst = input.transactionEnergy(1, lane.roomName, order.roomName!);
       if (fee === undefined || worst === undefined) return incomplete("cost_evidence_missing");
       if (![fee, worst].every(validAmount)) return incomplete("cost_invalid");
+      if (input.fitTransactionEnergy) {
+        const budget = Math.min(policy.maxTransactionEnergy, terminal.energy - Math.max(terminal.reserve, policy.terminalEnergyReserve));
+        if (worst > budget) continue;
+        if (fee > budget) {
+          let low = 0, high = amount;
+          while (low < high) {
+            if (input.shouldStop?.()) return incomplete("cpu_budget");
+            const mid = Math.ceil((low + high) / 2), cost = input.transactionEnergy(mid, lane.roomName, order.roomName!);
+            if (cost === undefined || !validAmount(cost)) return incomplete("cost_evidence_missing");
+            if (cost <= budget) low = mid; else high = mid - 1;
+          }
+          amount = low;
+          if (amount < minimum) continue;
+          fee = input.transactionEnergy(amount, lane.roomName, order.roomName!);
+          if (fee === undefined || !validAmount(fee)) return incomplete("cost_evidence_missing");
+        }
+      }
       if (fee > policy.maxTransactionEnergy || worst > policy.maxTransactionEnergy ||
           terminal.energy - Math.max(fee, worst) < Math.max(terminal.reserve, policy.terminalEnergyReserve)) continue;
       const quote = quoteNetDeal(order.price, amount, fee, worst, input.energyPrice,

@@ -24,7 +24,7 @@ export interface CompactMarketConfig {
   minBucket?: number;
   maxCpu?: number;
   overrides?: Partial<Record<MarketResource, Partial<CompactMarketPolicy>>>;
-  /** 显式操作者批准与本地归档绑定；存在后旧卖出入口停止接管。 */
+  /** 显式操作者批准与本地归档绑定；成功初始化后旧卖出入口停止接管。 */
   cutover?: {
     sourceCommit: string;
     archiveHash: string;
@@ -57,4 +57,11 @@ export function resolveCompactMarketPolicy(resource: MarketResource, config?: Co
       ![policy.reserve, policy.maxPerDeal, policy.minIntervalTicks, policy.maxPerWindow, policy.windowTicks,
         policy.maxTransactionEnergy, policy.terminalEnergyReserve].every(Number.isSafeInteger)) return undefined;
   return policy;
+}
+
+/** live 已接管 lane 的变额政策；dryRun 继续使用原政策作等价对照。 */
+export function resolveCompactLivePolicy(resource: MarketResource, config?: CompactMarketConfig): CompactMarketPolicy | undefined {
+  return resolveCompactMarketPolicy(resource, { ...config, overrides: { ...config?.overrides, [resource]: {
+    maxPerDeal: 10_000, minIntervalTicks: 0, minNotional: 0, ...config?.overrides?.[resource],
+  } } });
 }

@@ -1,4 +1,4 @@
-import { isBaseMarketResource, type CompactMarketConfig, type MarketResource } from "@/runtime/market/policy";
+import { isBaseMarketResource, resolveCompactLivePolicy, type CompactMarketConfig, type MarketResource } from "@/runtime/market/policy";
 import type { CompactMarketCandidate } from "@/runtime/market/planner";
 import type { MarketBaseDynamicFloorState } from "@/runtime/marketBaseResourcePolicy";
 import type { MarketSaleAutomationConfig } from "@/runtime/marketSaleConfig";
@@ -26,6 +26,7 @@ export interface CompactLivePending extends CompactMarketCandidate {
   attemptAt: number;
   atMs: number;
   energyPrice: number;
+  terminalBefore?: { id: string; resource: number; energy: number };
   status: "prepared" | "submitted" | "unknown";
 }
 export interface CompactMarketLiveState extends MarketSalePricingDataStore {
@@ -64,7 +65,11 @@ const text = (value: unknown): value is string => typeof value === "string" && v
 
 /** ownership 是粘性的；mode=off 只停止新单，不让旧执行器在 pending 中复活。 */
 export function compactMarketOwnsExecution(): boolean {
-  return Memory.cfg?.market?.cutover !== undefined || Memory.cfg?.market?.mode === "live" || Memory.data?.market?.live !== undefined;
+  return Memory.data?.market?.live !== undefined;
+}
+/** 请求接管只进入 preflight；初始化成功前继续使用原库存账本。 */
+export function compactMarketRequested(): boolean {
+  return compactMarketOwnsExecution() || Memory.cfg?.market?.mode === "live";
 }
 export function compactConfiguration(config: CompactMarketConfig): string {
   const sorted = (value: any): any => Array.isArray(value) ? value.map(sorted) : compactRecord(value)
@@ -81,8 +86,9 @@ export function validCompactReceipt(row: unknown): row is CompactLiveReceipt {
 }
 export function validCompactPending(row: unknown): row is CompactLivePending {
   return compactRecord(row) && roomName(row.roomName) && roomName(row.orderRoom) && isBaseMarketResource(row.resource) &&
-    text(row.requestId) && text(row.orderId) && compactCount(row.attemptAt) && compactCount(row.atMs) && row.atMs > 0 && row.atMs <= 8.64e15 && compactCount(row.amount) && row.amount > 0 && row.amount <= 1000 &&
-    compactCount(row.transactionEnergy) && row.transactionEnergy <= 1000 && compactCount(row.grossPriceMilli) && row.grossPriceMilli > 0 &&
+    text(row.requestId) && text(row.orderId) && compactCount(row.attemptAt) && compactCount(row.atMs) && row.atMs > 0 && row.atMs <= 8.64e15 && compactCount(row.amount) && row.amount > 0 && row.amount <= 100_000 &&
+    compactCount(row.transactionEnergy) && row.transactionEnergy <= 1000 &&
+    (row.terminalBefore === undefined || compactRecord(row.terminalBefore) && text(row.terminalBefore.id) && compactCount(row.terminalBefore.resource) && compactCount(row.terminalBefore.energy)) && compactCount(row.grossPriceMilli) && row.grossPriceMilli > 0 &&
     compactCount(row.floorMilli) && row.floorMilli > 0 && compactCount(row.netCreditsMilli) &&
     Number.isFinite(row.energyPrice) && row.energyPrice > 0 && ["prepared", "submitted", "unknown"].includes(row.status);
 }
@@ -123,9 +129,20 @@ export function compactLegacyQuietReason(): string | undefined {
   if (!Game.market?.orders || Object.values(Game.market.orders).some(order => order.type === ORDER_SELL)) return "own_sell_orders";
   return undefined;
 }
+/** 市场停止只停新单；未知成交仍仅占用本房的货物和费用。 */
 export function compactMarketExposure(room: string, resource: ResourceConstant): { reservedAmount: number; blocked: boolean } {
-  const state = Memory.data?.market?.live;
-  if (!validCompactLiveState(state) || state.phase !== "active" || state.blocker) return { reservedAmount: 0, blocked: true };
+  const state: unknown = Memory.data?.market?.live;
+  if (!validCompactLiveState(state)) {
+    // 损坏根不恢复旧写入者，保护范围限于仍能识别的 lane。
+    const lanes = compactRecord(state) && Array.isArray(state.lanes) ? state.lanes.slice(0, 128).filter(validCompactLane) : [];
+    return { reservedAmount: 0, blocked: lanes.some(lane => lane.roomName === room && (resource === lane.resource || resource === RESOURCE_ENERGY)) };
+  }
   const p = state.pending;
-  return { reservedAmount: p?.roomName !== room ? 0 : resource === RESOURCE_ENERGY ? p.transactionEnergy : resource === p.resource ? p.amount : 0, blocked: false };
+  let reservedAmount = p?.roomName !== room ? 0 : resource === RESOURCE_ENERGY ? p.transactionEnergy : resource === p.resource ? p.amount : 0;
+  // 待售一批货的所有权不依赖当 tick 是否生成搬运目标。
+  if (state.phase === "active" && !state.blocker && Memory.cfg?.market?.mode === "live") {
+    const lane = state.lanes.find(lane => lane.roomName === room && lane.resource === resource && compactLanePresent(lane));
+    if (lane) reservedAmount = Math.max(reservedAmount, Math.min(Game.rooms[room].terminal!.store.getUsedCapacity(resource), resolveCompactLivePolicy(lane.resource, Memory.cfg.market)?.maxPerDeal ?? 0));
+  }
+  return { reservedAmount, blocked: false };
 }

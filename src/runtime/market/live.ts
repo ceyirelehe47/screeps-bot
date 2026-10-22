@@ -7,7 +7,7 @@ import { baseMineralOverflowNetFloor, liveBaseMineralOverflow, recordBaseMineral
 import { computeEffectiveNetFloor, priceToMilliDown } from "@/runtime/marketSalePricing";
 import { productionSellableAmount } from "@/runtime/market/surplus";
 import { planCompactMarket, type CompactMarketLane, type CompactMarketPlan } from "@/runtime/market/planner";
-import { resolveCompactMarketPolicy, type CompactMarketConfig, type MarketResource } from "@/runtime/market/policy";
+import { resolveCompactLivePolicy, type CompactMarketConfig, type MarketResource } from "@/runtime/market/policy";
 import { quoteNetDeal } from "@/runtime/market/pricing";
 import { compactConfiguration, compactCount, compactLanePresent, compactLegacyQuietReason, compactRecord, validCompactLane, validCompactLiveState, validCompactReceipt, type CompactMarketLiveState, type CompactLiveReceipt, type CompactLivePending } from "@/runtime/market/liveState";
 import type { MarketSaleAutomationResult } from "@/runtime/marketSaleAutomation";
@@ -17,7 +17,7 @@ import { readLiveMarketBaseTerminal } from "@/runtime/marketBaseResourceReadines
 
 const ACTOR = "market:compact";
 const copy = <T>(value: T): T => JSON.parse(JSON.stringify(value));
-const historyCache = new Map<string, { tick: number; game: typeof Game; rows: PriceHistory[] }>();
+const historyCache = new Map<string, { tick: number; date: string; game: typeof Game; rows: PriceHistory[] }>();
 
 function note(state: CompactMarketLiveState, reason: string): void {
   state.lastReason = reason;
@@ -66,10 +66,21 @@ export function reconcileCompactMarketPending(state: CompactMarketLiveState): vo
   if (pending.attemptAt > Game.time) { state.blocker = "pending_future_tick"; return; }
   if (pending.attemptAt === Game.time) return;
   const outgoing = Game.market.outgoingTransactions;
-  if (!Array.isArray(outgoing)) { state.blocker = "reconcile_unavailable"; return; }
-  const matches = outgoing.slice(0, 100).filter(row => row.order?.id === pending.orderId && row.time === pending.attemptAt && row.from === pending.roomName && row.to === pending.orderRoom && row.resourceType === pending.resource);
+  if (!Array.isArray(outgoing)) { if (!state.blocker || state.blocker === "reconcile_gap") state.blocker = "reconcile_unavailable"; return; }
+  const matches = outgoing.filter(row => row.order?.id === pending.orderId && row.time === pending.attemptAt && row.from === pending.roomName && row.to === pending.orderRoom && row.resourceType === pending.resource);
   if (matches.length === 0) {
-    if (Game.time - pending.attemptAt > 10) state.blocker = "reconcile_gap";
+    if (Game.time - pending.attemptAt > 10 && (!state.blocker || ["reconcile_gap", "reconcile_unavailable"].includes(state.blocker))) state.blocker = "reconcile_gap";
+    const before = pending.terminalBefore, terminal = Game.rooms[pending.roomName]?.terminal;
+    // 历史必须仍完整覆盖尝试 tick；不凭“等了很久”释放未知成交。
+    const covered = outgoing.length < 100 || outgoing.some(row => row.time < pending.attemptAt);
+    if (state.blocker === "reconcile_gap" && pending.status === "submitted" && Game.time - pending.attemptAt >= 100 && covered && before && terminal?.id === before.id &&
+        terminal.store.getUsedCapacity(pending.resource) === before.resource && terminal.store.getUsedCapacity(RESOURCE_ENERGY) === before.energy) {
+      releasePreparedDirectMarketClaims(pending.requestId);
+      delete state.pending; delete state.blocker;
+      // 本 tick 不立即重试；下一次完整规划重新读盘口。
+      state.lastPlanningAt = Game.time;
+      note(state, "not_executed:history_and_stock_unchanged");
+    }
     return;
   }
   const row = matches[0];
@@ -112,6 +123,7 @@ export function runCompactMarketPreflight(): MarketSaleAutomationResult {
       if (!Memory.data) throw Error("data_root_missing");
       if (Memory.data.market?.v !== 1) throw Error("market_schema_invalid");
       Memory.data.market.live = state;
+      delete Memory.data.market.initialization;
     }
     if (state.configuration !== compactConfiguration(config)) return result(state, "configuration_changed");
     if (state.blocker) return result(state, state.blocker);
@@ -126,6 +138,7 @@ export function runCompactMarketPreflight(): MarketSaleAutomationResult {
   } catch (error) {
     const reason = error instanceof Error ? error.message : "compact_preflight_failed";
     if (state) { state.blocker = reason; note(state, reason); }
+    else if (Memory.data?.market?.v === 1) Memory.data.market.initialization = { tick: Game.time, reason };
     return result(state, reason);
   }
 }
@@ -136,7 +149,7 @@ export function compactMarketReadiness(): MarketTerminalEnergyAuthorizationRead 
   const lanes = state.lanes.filter(lane => compactLanePresent(lane) && !hasTreasuryTerminalFence(lane.roomName));
   return { ok: true, revision: `compact:${state.activation.archiveHash}`, maxTransactionEnergy: 1000,
     rooms: [...new Map(lanes.map(lane => [lane.roomName, { roomName: lane.roomName, roomInstanceId: `compact:${lane.controllerId}:${lane.terminalId}`, terminalId: lane.terminalId }])).values()],
-    cargoLanes: lanes.map(lane => ({ ...lane, maxDealAmount: 1000 })) };
+    cargoLanes: lanes.map(lane => ({ ...lane, maxDealAmount: resolveCompactLivePolicy(lane.resource, Memory.cfg?.market)?.maxPerDeal ?? 0 })) };
 }
 
 export interface CompactMarketLiveDependencies {
@@ -163,7 +176,7 @@ export function runCompactMarketLive(dependencies: CompactMarketLiveDependencies
     if (!lanes.length) return result(state, "no_live_lanes");
     const resources = [...new Set(lanes.map(lane => lane.resource))];
     const protectionOptions = () => ({ candidates: lanes.map(lane => ({ roomName: lane.roomName, resource: lane.resource })),
-      laneReserveByEntry: Object.fromEntries(lanes.map(lane => [`${lane.roomName}:${lane.resource}`, resolveCompactMarketPolicy(lane.resource, config)!.reserve])) });
+      laneReserveByEntry: Object.fromEntries(lanes.map(lane => [`${lane.roomName}:${lane.resource}`, resolveCompactLivePolicy(lane.resource, config)!.reserve])) });
     const protection = collect(state.pricingConfig, undefined, protectionOptions());
     if (protection.globalBlocked || protection.observedAt !== Game.time || !protection.fresh) return result(state, "protection_incomplete");
     const rawBooks = new Map<MarketResource, Order[]>();
@@ -177,10 +190,11 @@ export function runCompactMarketLive(dependencies: CompactMarketLiveDependencies
       getHistory: resource => {
         if (!resource) throw Error("resource_required");
         let cached = historyCache.get(resource);
-        if (!cached || cached.game !== Game || Game.time - cached.tick >= 5000 || cached.tick > Game.time) {
+        const date = new Date().toISOString().slice(0, 10);
+        if (!cached || cached.date !== date || cached.game !== Game || Game.time - cached.tick >= 5000 || cached.tick > Game.time) {
           const rows = Game.market.getHistory(resource);
           if (!Array.isArray(rows) || rows.length > 100) throw Error("history_incomplete");
-          cached = { game: Game, tick: Game.time, rows: rows.map(row => ({ ...row })) }; historyCache.set(resource, cached);
+          cached = { date, game: Game, tick: Game.time, rows: rows.map(row => ({ ...row })) }; historyCache.set(resource, cached);
         }
         return cached.rows.map(row => ({ ...row }));
       },
@@ -190,7 +204,7 @@ export function runCompactMarketLive(dependencies: CompactMarketLiveDependencies
     if (!pricing.energyShadowEvidence?.trusted || !(pricing.energyShadowEvidence.effective! > 0)) throw Error("energy_shadow_incomplete");
     const energyPrice = pricing.energyShadowEvidence.effective!;
     const bestPrices = resources.flatMap(resource => {
-      const rows = rawBooks.get(resource)!.filter(row => row.type === ORDER_BUY && !Game.market.orders[row.id] && row.amount >= 1000 && row.price > 0 && row.roomName);
+      const rows = rawBooks.get(resource)!.filter(row => row.type === ORDER_BUY && !Game.market.orders[row.id] && row.amount > 0 && row.price > 0 && row.roomName);
       return rows.length ? [{ resource, price: Math.max(...rows.map(row => row.price)) }] : [];
     });
     state.dynamicFloor = buildMarketBaseDynamicFloorState({ previous: state.dynamicFloor, tick: Game.time, marketDate: pricing.asOfDate,
@@ -201,9 +215,9 @@ export function runCompactMarketLive(dependencies: CompactMarketLiveDependencies
     const floors: Record<string, number> = {};
     const normalFloors: Record<string, number> = {};
     for (const lane of lanes) {
-      const policy = resolveCompactMarketPolicy(lane.resource, config);
+      const policy = resolveCompactLivePolicy(lane.resource, config);
       const key = `${lane.roomName}:${lane.resource}`, entry = protection.entries[key], price = pricing.snapshots[lane.resource];
-      if (!policy || policy.maxPerDeal > 1000 || policy.maxTransactionEnergy > 1000 || policy.windowTicks > 30_000 || !entry?.fresh || entry.blocked || !price?.historyResult?.trusted || !(price.historyFloor! > 0) || !(price.ratchetFloor! > 0)) throw Error("lane_incomplete");
+      if (!policy || policy.maxPerDeal > 100_000 || policy.maxTransactionEnergy > 1000 || policy.windowTicks > 30_000 || !entry?.fresh || entry.blocked || !price?.historyResult?.trusted || !(price.historyFloor! > 0) || !(price.ratchetFloor! > 0)) throw Error("lane_incomplete");
       const normal = computeEffectiveNetFloor({ hardFloor: policy.hardNetFloor, economicFloor: policy.economicNetFloor, historyFloor: price.historyFloor, ratchetFloor: price.ratchetFloor, dynamicFloor: dynamic[lane.resource] });
       if (!normal.valid || !normal.floor) throw Error("floor_invalid");
       normalFloors[key] = normal.floor;
@@ -215,7 +229,7 @@ export function runCompactMarketLive(dependencies: CompactMarketLiveDependencies
       floors[key] = floor;
       const terminal = Game.rooms[lane.roomName].terminal!;
       const energyReadiness = readLiveMarketBaseTerminal(lane.roomName, lane.resource, compactMarketReadiness());
-      const due = Game.time >= Math.max(state.cooldownHighWater, state.lastDealAt + (tier === "normal" ? 1000 : tier === "overflow" ? 100 : 0));
+      const due = Game.time >= Math.max(state.cooldownHighWater, state.lastDealAt + policy.minIntervalTicks);
       const receipts = state.receipts.filter(row => row.roomName === lane.roomName && row.resource === lane.resource && row.tick > Game.time - policy.windowTicks);
       plannedLanes.push({ roomName: lane.roomName, resource: lane.resource, fresh: entry.observedAt === Game.time && entry.expiresAt >= Game.time,
         sellable: productionSellableAmount(entry, Game.time, policy.reserve), floor, minNotional: policy.minNotional, policy,
@@ -226,7 +240,7 @@ export function runCompactMarketLive(dependencies: CompactMarketLiveDependencies
     const planningStarted = Game.cpu.getUsed();
     const costs = new Map<string, number>();
     const plan: CompactMarketPlan = planCompactMarket({ tick: Game.time, energyPrice, lanes: plannedLanes, books: resources.map(resource => ({ resource, complete: true,
-      orders: rawBooks.get(resource)!.filter(row => row.type === ORDER_BUY).map(row => ({ ...row, type: "buy" as const })), ownOrderIds: Object.keys(Game.market.orders) })), minDealAmount: 1000,
+      orders: rawBooks.get(resource)!.filter(row => row.type === ORDER_BUY).map(row => ({ ...row, type: "buy" as const })), ownOrderIds: Object.keys(Game.market.orders) })), minDealAmount: 1, fitTransactionEnergy: true,
       transactionEnergy: (amount, from, to) => { const key = `${amount}:${from}:${to}`; if (!costs.has(key)) costs.set(key, Game.market.calcTransactionCost(amount, from, to)); return costs.get(key); },
       shouldStop: () => Game.cpu.getUsed() - planningStarted > (config.maxCpu ?? 3) || Game.cpu.getUsed() - started > 15 });
     const budgetExceeded = Game.cpu.getUsed() - planningStarted > (config.maxCpu ?? 3) || Game.cpu.getUsed() - started > 15;
@@ -256,7 +270,7 @@ export function runCompactMarketLive(dependencies: CompactMarketLiveDependencies
     if (Game.cpu.getUsed() - started > 15 || Game.cpu.limit - Game.cpu.getUsed() < 5) return result(state, "cpu_budget");
     enforceLegacyMarketSafetyLatch();
     const requestId = `compact:${Game.time}:${++state.attempts}`;
-    const pending: CompactLivePending = { ...selected, requestId, attemptAt: Game.time, atMs: Date.now(), energyPrice, status: "prepared" };
+    const pending: CompactLivePending = { ...selected, requestId, attemptAt: Game.time, atMs: Date.now(), energyPrice, terminalBefore: { id: terminal.id, resource: terminal.store.getUsedCapacity(selected.resource), energy: terminal.store.getUsedCapacity(RESOURCE_ENERGY) }, status: "prepared" };
     state.pending = pending;
     const claim = { requestId, roomName: selected.roomName, actor: ACTOR, attemptAt: Game.time };
     if (!claimPreparedDirectMarketClaims(claim)) { delete state.pending; note(state, "arbiter_busy"); return result(state, "arbiter_busy"); }

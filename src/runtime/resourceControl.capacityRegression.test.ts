@@ -1,6 +1,6 @@
 import { cadenceOffset, isDue } from "@/runtime/cadence";
 import * as carrierBoard from "@/runtime/carrierTaskBoard";
-import { getProtectedTerminalResourceAmount, getResourceControlDonorAvailable, createResourceControlTransferContext, resolveCapacityConfig } from "@/runtime/resourceControlReadModel";
+import { getAllocatedOutgoingCommitment, getTerminalActionEnergyBudget, getProtectedTerminalResourceAmount, getResourceControlDonorAvailable, createResourceControlTransferContext, resolveCapacityConfig } from "@/runtime/resourceControlReadModel";
 const cadenceTick = (tick: number): number => tick + cadenceOffset("resourceControl.plan", 10);
 import {
   clearCarrierTaskBoardForTest,
@@ -619,6 +619,42 @@ describe("resource control live-like capacity recovery", () => {
     expect(donor.terminal!.send).toHaveBeenCalledWith(RESOURCE_HYDROGEN, 10_000, a.name, expect.anything());
     expect(first.task.status).toBe("done");
     expect(second.task).toMatchObject({ status: "pending", blockedReason: "source_protected" });
+  });
+
+  it("多条能量任务按FIFO分配货物及费用，新规划仍扣全部预约", () => {
+    const donor = createMutableRoom("W82N18", {}, { energy: 45_000 });
+    const a = createMutableRoom("W83N18", { energy: 200_000 }, { energy: 25_000 });
+    const b = createMutableRoom("W84N18", { energy: 200_000 }, { energy: 25_000 });
+    Game.rooms = { [donor.name]: donor, [a.name]: a, [b.name]: b };
+    const first = createAutomaticResourceTransferTask(donor.name, a.name, RESOURCE_ENERGY, 20_000, "delivery:a");
+    const second = createAutomaticResourceTransferTask(donor.name, b.name, RESOURCE_ENERGY, 20_000, "delivery:b");
+    if (typeof first === "string" || typeof second === "string") throw new Error("task creation failed");
+    (Game.market.calcTransactionCost as jest.Mock).mockReturnValue(2000);
+    const snapshot = collectResourceControlSnapshots().find(s => s.roomName === donor.name)!;
+    const context = createResourceControlTransferContext([snapshot], resolveCapacityConfig(), { count: 0 });
+    expect(getTerminalActionEnergyBudget(snapshot, context)).toBe(0);
+    expect(getTerminalActionEnergyBudget(snapshot, context, first.task.id)).toBe(20000);
+    expect(getTerminalActionEnergyBudget(snapshot, context, second.task.id)).toBe(0);
+    resetRuntimeServices(); runResourceControl();
+    expect(donor.terminal!.send).toHaveBeenCalledWith(RESOURCE_ENERGY, expect.any(Number), a.name, expect.anything());
+  });
+
+  it("同tick等量替换及createdAt原地变化使FIFO排序失效", () => {
+    const donor = createMutableRoom("W82N19", { energy: 300_000 }, { energy: 30_000, H: 30000 });
+    const a = createMutableRoom("W83N19", { energy: 200_000 }, { energy: 25_000 });
+    Game.rooms = { [donor.name]: donor, [a.name]: a };
+    const first = createAutomaticResourceTransferTask(donor.name, a.name, RESOURCE_HYDROGEN, 1000, "delivery:a");
+    const second = createAutomaticResourceTransferTask(donor.name, a.name, RESOURCE_HYDROGEN, 2000, "delivery:b");
+    if (typeof first === "string" || typeof second === "string") throw new Error("task creation failed");
+    first.task.createdAt = Game.time - 2; second.task.createdAt = Game.time - 1;
+    const snapshot = collectResourceControlSnapshots().find(s => s.roomName === donor.name)!;
+    const context = createResourceControlTransferContext([snapshot], resolveCapacityConfig(), { count: 0 });
+    expect(getAllocatedOutgoingCommitment(donor.name, RESOURCE_HYDROGEN, context, second.task.id)).toBe(1000);
+    context.taskById.delete(first.task.id);
+    context.taskById.set("replacement", { ...first.task, id: "replacement", createdAt: Game.time });
+    expect(getAllocatedOutgoingCommitment(donor.name, RESOURCE_HYDROGEN, context, second.task.id)).toBe(0);
+    second.task.createdAt = Game.time + 1;
+    expect(getAllocatedOutgoingCommitment(donor.name, RESOURCE_HYDROGEN, context, second.task.id)).toBe(1000);
   });
 
   it("手动调拨可使用 HUB 底线以内的库存", () => {

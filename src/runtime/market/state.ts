@@ -58,6 +58,7 @@ export interface CompactMarketComparison {
 export interface CompactMarketState {
   v: 1;
   comparison?: CompactMarketComparison;
+  initialization?: { tick: number; reason: string };
   live?: import("@/runtime/market/liveState").CompactMarketLiveState;
 }
 
