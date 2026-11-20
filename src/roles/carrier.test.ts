@@ -535,13 +535,16 @@ describe("carrierRole mineral hauling", () => {
     Game.creeps = { [creep.name]: creep };
     installCarrierTaskTestObjects([storage, receiver]);
     getEnergyStoreTarget.mockReturnValue(null);
+    const approaching = createCreep(room); approaching.name = "incoming-carrier";
+    Game.creeps[approaching.name] = approaching;
+    expect(reservePickupTarget(approaching, receiver, 300)).toBe(true);
     const role = carrierRole();
     expect(role.source(creep)).toBe(false);
-    expect(creep.withdraw).toHaveBeenCalledWith(receiver, RESOURCE_ENERGY);
+    expect(creep.withdraw).toHaveBeenCalledWith(receiver, RESOURCE_ENERGY, 500);
     expect(role.source(creep)).toBe(false);
     expect(creep.withdraw).toHaveBeenCalledTimes(1);
     expect(ensureCreepAssignmentState(creep.name).carrierStorageOnlyMode).toBe(true);
-    Game.time++; cargo = 800; energy = 0;
+    Game.time++; cargo = 500; energy = 300;
     expect(role.source(creep)).toBe(true);
     role.target(creep);
     expect(creep.transfer).toHaveBeenCalledWith(storage, RESOURCE_ENERGY);

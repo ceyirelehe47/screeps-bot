@@ -266,6 +266,12 @@ export function getReservedPickupTarget(
     target = Game.getObjectById(targetId as Id<AnyStoreStructure | Tombstone | Ruin>);
   }
 
+  if (target && target.pos.roomName !== creep.room.name) {
+    // 兼容只记录目标 ID 的旧预约，用目标所在房释放原来的份额。
+    assignmentState.energyPickupRoomName ??= target.pos.roomName;
+    releasePickupReservation(creep, targetId);
+    return null;
+  }
   if (!target || getPickupTargetEnergyAmount(target, options) <= 0) {
     releasePickupReservation(creep, targetId);
     return null;

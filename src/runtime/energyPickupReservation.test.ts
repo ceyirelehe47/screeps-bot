@@ -95,4 +95,18 @@ describe("getPickupTargetEnergyAmount", () => {
     )).toBe(true);
     expect(getPickupReservationClaimAmount(second, terminal.id)).toBe(800);
   });
+
+  it("单位换房后释放原房预约，即使原目标依然可见且有能量", () => {
+    const target = createEnergyStoreTarget(STRUCTURE_CONTAINER, 100);
+    const creep = { name: "traveler", room: { name: "W1N1" }, memory: {} } as unknown as Creep;
+    const other = { name: "next-worker", room: creep.room, memory: {} } as unknown as Creep;
+    Game.creeps = { traveler: creep, "next-worker": other };
+    Game.getObjectById = jest.fn(() => target) as unknown as Game["getObjectById"];
+    expect(reservePickupTarget(creep, target, 100)).toBe(true);
+    creep.room = { name: "W2N1" } as Room;
+    Game.time++;
+    expect(getReservedPickupTarget(creep)).toBeNull();
+    expect(reservePickupTarget(other, target, 100)).toBe(true);
+    expect(getPickupReservationClaimAmount(other)).toBe(100);
+  });
 });

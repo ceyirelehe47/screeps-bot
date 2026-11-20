@@ -433,39 +433,21 @@ function pickupEnergyForCarrier(creep: Creep, options?: CarrierPickupOptions): {
     return { picked: pickupCode === OK, outOfRange: false };
   }
 
-  if (isTombstonePickupTarget(sourceTarget)) {
-    const withdrawCode = measureCreepIntent(() => creep.withdraw(sourceTarget, RESOURCE_ENERGY));
-    if (withdrawCode === ERR_NOT_IN_RANGE) {
-      moveToTarget(creep, sourceTarget);
-      return { picked: false, outOfRange: true };
-    }
-
-    if (withdrawCode === ERR_NOT_ENOUGH_RESOURCES || withdrawCode === ERR_INVALID_TARGET) {
-      releasePickupReservation(creep, sourceTarget.id);
-      return { picked: false, outOfRange: false };
-    }
-
-    return { picked: withdrawCode === OK, outOfRange: false };
-  }
-
   let exposureClaim:
     | ReturnType<typeof claimTerminalAmountOutsideMarketSaleExposure>
     | undefined;
   let withdrawCode: ScreepsReturnCode;
   try {
     withdrawCode = measureCreepIntent(() => {
+      const claimed = Math.min(desiredAmount, getPickupReservationClaimAmount(creep, sourceTarget.id));
+      if (claimed <= 0) return ERR_NOT_ENOUGH_RESOURCES;
       if ("structureType" in sourceTarget && sourceTarget.structureType === STRUCTURE_TERMINAL) {
         if (terminalHeldForTreasuryT1(sourceTarget)) return ERR_BUSY;
         const roomName = sourceTarget.room?.name || creep.room.name;
         if (hasTerminalActionClaim(roomName)) return ERR_BUSY;
-        const claimAmount = getPickupReservationClaimAmount(
-          creep,
-          sourceTarget.id,
-        );
         const amount = Math.min(
-          creep.store.getFreeCapacity(RESOURCE_ENERGY) ?? 0,
+          claimed,
           getCarrierPickupAmount(sourceTarget, roomName, options),
-          claimAmount,
         );
         if (amount <= 0) return ERR_NOT_ENOUGH_RESOURCES;
         exposureClaim = claimTerminalAmountOutsideMarketSaleExposure(
@@ -482,7 +464,8 @@ function pickupEnergyForCarrier(creep: Creep, options?: CarrierPickupOptions): {
           claimedAmount,
         ));
       }
-      return creep.withdraw(sourceTarget, RESOURCE_ENERGY);
+      const nativeAmount = Math.min(desiredAmount, sourceTarget.store.getUsedCapacity(RESOURCE_ENERGY));
+      return claimed < nativeAmount ? creep.withdraw(sourceTarget, RESOURCE_ENERGY, claimed) : creep.withdraw(sourceTarget, RESOURCE_ENERGY);
     });
   } catch (error) {
     exposureClaim?.release();

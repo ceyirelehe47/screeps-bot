@@ -280,8 +280,10 @@ export function pickupEnergyFromPreferredTarget(
   }
 
   const amount = getPickupReservationClaimAmount(creep, sourceTarget.id);
+  const nativeAmount = Math.min(desiredAmount, sourceTarget.store.getUsedCapacity(RESOURCE_ENERGY));
   const withdrawCode = amount > 0
-    ? measureCreepIntent(() => executeTreasuryFencedTerminalCargo(sourceTarget, () => creep.withdraw(sourceTarget, RESOURCE_ENERGY, amount)))
+    ? measureCreepIntent(() => executeTreasuryFencedTerminalCargo(sourceTarget, () => amount < nativeAmount
+      ? creep.withdraw(sourceTarget, RESOURCE_ENERGY, amount) : creep.withdraw(sourceTarget, RESOURCE_ENERGY)))
     : ERR_NOT_ENOUGH_RESOURCES;
   if (withdrawCode === ERR_NOT_IN_RANGE) {
     moveToTarget(creep, sourceTarget, 1, moveOptions);
