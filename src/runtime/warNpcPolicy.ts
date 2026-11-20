@@ -4,11 +4,16 @@ import { isWalkableStructure } from "@/movement/common";
 
 const NPC_USERS = new Set(["Invader", "TooAngel"]);
 
-export function isNpcWarTarget(room: Room): boolean {
+export function classifyNpcWarTarget(room: Room): "empty" | "npc" | "other" {
   const owners = [room.controller?.owner?.username, room.controller?.reservation?.username,
     ...room.find(FIND_HOSTILE_CREEPS).map(actor => actor.owner.username),
     ...room.find(FIND_HOSTILE_STRUCTURES).map(structure => "owner" in structure ? (structure as OwnedStructure).owner?.username : undefined)].filter((name): name is string => !!name);
-  return owners.length > 0 && owners.every(name => NPC_USERS.has(name));
+  if (!owners.length) return "empty";
+  return owners.every(name => NPC_USERS.has(name)) ? "npc" : "other";
+}
+
+export function isNpcWarTarget(room: Room): boolean {
+  return classifyNpcWarTarget(room) === "npc";
 }
 
 /** 首先尝试现有无强化身体。这里只决定生产配置，实际推进仍由战术退路门逐步验证。 */

@@ -1,6 +1,6 @@
 import { OBSERVATION_REQUEST_TTL, requestCombatObservation } from "@/runtime/powerBankObserver";
 import { getSquadPolicy } from "./squadPolicy";
-import { assessUnboostedNpc, isNpcWarTarget } from "@/runtime/warNpcPolicy";
+import { assessUnboostedNpc, classifyNpcWarTarget } from "@/runtime/warNpcPolicy";
 import { MAX_STAGING_TICKS, T3_ATTACKER_BODY, T3_HEALER_BODY, TOWER_DRAIN_ATTACKER_BODY, TOWER_DRAIN_HEALER_BODY, WAR_CLEAR_DEBOUNCE_TICKS } from "./constants";
 import { advancePatrol, completePatrolTarget } from "./patrol";
 import { clearControllerAttackConfig, disableTaskProduction, ensureCombatConfigs, ensureControllerAttackConfig, prepareCombatSquad, reconcileGenerationLifecycle, releaseWarBoosts, synchronizeGenerationRoleArgs, transitionWarTaskTerminal } from "./production";
@@ -30,11 +30,7 @@ function canDispatch(task: WarTask): boolean {
     task.squadAssessedAt = Game.time;
     const room = Game.rooms[task.targetRoom];
     if (!room) { task.failReason = "npc_policy_awaiting_vision"; return false; }
-    if (!isNpcWarTarget(room)) {
-      // 空房继续既有清空判定；出现其它玩家的实际实体时停止自动升级。
-      const otherOwner = room.controller?.owner?.username;
-      if (otherOwner && otherOwner !== "Invader" && otherOwner !== "TooAngel") { task.failReason = "npc_identity_changed"; return false; }
-    }
+    if (classifyNpcWarTarget(room) === "other") { task.failReason = "npc_identity_changed"; return false; }
     const decision = assessUnboostedNpc(room, task.routeRooms, TOWER_DRAIN_ATTACKER_BODY, TOWER_DRAIN_HEALER_BODY, Game.rooms[task.sourceRoom]?.energyCapacityAvailable);
     task.squadAssessedAt = Game.time;
     task.squadDecision = decision.reason;

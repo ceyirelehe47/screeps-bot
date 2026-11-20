@@ -772,6 +772,27 @@ describe("towerDrainDuo 战争控制", () => {
     expect(Memory.data!.war!.E4N57.activeGeneration).toBeUndefined();
   });
 
+  it.each(["initial", "recheck"])("NPC 预定房混入玩家单位时不自动升级 T3（%s）", phase => {
+    const intruders: Creep[] = [];
+    const room = createTargetRoom(intruders);
+    room.controller!.reservation = { username: "Invader", ticksToEnd: 2000 };
+    Game.rooms[room.name] = room;
+    const players = ["red", "green"].map(name => ({ name, owner: { username: "player" },
+      body: Array.from({ length: 50 }, () => ({ type: HEAL, hits: 100 })) } as Creep));
+    if (phase === "initial") intruders.push(...players);
+    requestWarRoomClear(room.name, "E1N57", { reason: "npc_reservation" });
+    if (phase === "recheck") { intruders.push(...players); Game.time += 100; }
+    runWarControl();
+    const task = Memory.data!.war![room.name];
+    expect(task).toMatchObject({ squad: "towerDrainDuo", failReason: "npc_identity_changed" });
+    expect(task.activeGeneration).toBeUndefined();
+    expect(Game.spawns.Spawn1.memory.spawnList).toHaveLength(0);
+    intruders.length = 0;
+    Game.time += 100; runWarControl();
+    expect(task.failReason).toBeUndefined();
+    expect(task.order).toBe("confirm");
+  });
+
   it("源房装不下无强化身体时使用可孵化T3；两种都不足时等待而不预约实验室", () => {
     const room = createTargetRoom(); room.controller!.owner = { username: "Invader" };
     Game.rooms[room.name] = room;

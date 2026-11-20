@@ -1,6 +1,6 @@
 import { sameArray } from "./store";
 import { getCreepConfigService, getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
-import { assessUnboostedNpc, isNpcWarTarget } from "@/runtime/warNpcPolicy";
+import { assessUnboostedNpc, classifyNpcWarTarget, isNpcWarTarget } from "@/runtime/warNpcPolicy";
 import { DEFAULT_PATROL_INTERVAL_TICKS, MIN_PATROL_INTERVAL_TICKS, TOWER_DRAIN_ATTACKER_BODY, TOWER_DRAIN_HEALER_BODY } from "./constants";
 import type { StartWarOptions, StartWarPatrolOptions, StartWarPatrolResult, StartWarResult, StopWarOptions, StopWarResult, WarBoostTier, WarSquad, WarStatus, WarStatusSnapshot } from "./store";
 import { buildTaskStatusSnapshot, writeWarTelemetry } from "./telemetry";
@@ -33,7 +33,9 @@ export function requestWarRoomClear(
   const inheritedRoute = existing?.sourceRoom === sourceRoom ? existing.routeRooms : undefined;
   const plan = options?.routeRooms || inheritedRoute ? undefined : defaultWarMapRoute(sourceRoom, targetRoom);
   const routeRooms = options?.routeRooms ?? inheritedRoute ?? plan?.rooms;
-  const decision = npcAuto && Game.rooms[targetRoom] ? assessUnboostedNpc(Game.rooms[targetRoom], routeRooms, TOWER_DRAIN_ATTACKER_BODY, TOWER_DRAIN_HEALER_BODY, Game.rooms[sourceRoom]?.energyCapacityAvailable) : undefined;
+  const room = Game.rooms[targetRoom];
+  const identityChanged = npcAuto && room && classifyNpcWarTarget(room) === "other";
+  const decision = npcAuto && room && !identityChanged ? assessUnboostedNpc(room, routeRooms, TOWER_DRAIN_ATTACKER_BODY, TOWER_DRAIN_HEALER_BODY, Game.rooms[sourceRoom]?.energyCapacityAvailable) : undefined;
   const needsT3 = !restarting && existing?.squad === "t3Duo" || decision && !decision.sufficient && decision.reason !== "entry_not_proven";
   const squad = options?.squad ?? (npcAuto ? needsT3 ? "t3Duo" : "towerDrainDuo" : existing?.squad);
   const changedSquad = !!existing && existing.squad !== squad;
@@ -60,7 +62,7 @@ export function requestWarRoomClear(
     routeTrace: options?.routeRooms ? { hops: Math.max(0, options.routeRooms.length - 1), avoided: {}, policy: "manual" } : inheritedRoute ? existing?.routeTrace ?? { hops: inheritedRoute.length - 1, avoided: {}, policy: existing?.routeOrigin === "map" ? "map_combat" : "manual" } : plan?.trace,
     autoTactic: options?.autoTactic === undefined ? existing?.autoTactic : options.autoTactic || undefined,
     npcAuto,
-    squadDecision: npcAuto ? decision?.reason ?? "awaiting_vision" : "explicit_or_player_default",
+    squadDecision: npcAuto ? decision?.reason ?? (identityChanged ? "npc_identity_changed" : "awaiting_vision") : "explicit_or_player_default",
     squadAssessedAt: npcAuto && decision && decision.reason !== "entry_not_proven" ? now : undefined,
     squad,
     tactic: squad === "t3Duo" ? options?.tactic ?? (options?.autoTactic === false && existing?.autoTactic ? undefined : existing?.tactic) : undefined,
