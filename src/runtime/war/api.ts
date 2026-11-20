@@ -64,7 +64,8 @@ export function requestWarRoomClear(
     squadAssessedAt: npcAuto && decision && decision.reason !== "entry_not_proven" ? now : undefined,
     squad,
     tactic: squad === "t3Duo" ? options?.tactic ?? (options?.autoTactic === false && existing?.autoTactic ? undefined : existing?.tactic) : undefined,
-    boostTier: squad === "towerDrainDuo" ? undefined : options?.boostTier ?? (npcAuto && squad === "t3Duo" ? "t3" : existing?.boostTier),
+    boostTier: squad === "towerDrainDuo" ? undefined : options?.boostTier
+      ?? (npcAuto && squad === "t3Duo" ? "t3" : changedSquad ? undefined : existing?.boostTier),
     boostLabs: restart ? undefined : existing?.boostLabs,
     boostStatus: restart ? undefined : existing?.boostStatus,
     oneShot: options?.oneShot ?? existing?.oneShot,

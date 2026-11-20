@@ -1,4 +1,4 @@
-import { requestSpawn } from "@/runtime/spawnRequests";
+import { recordAcceptedSpawn, requestSpawn } from "@/runtime/spawnRequests";
 jest.mock("@/runtime/powerBankObserver", () => ({ ...jest.requireActual("@/runtime/powerBankObserver"), requestCombatObservation: jest.fn(() => true) }));
 
 import { configureWarRebuildWatch, getWarStatus, requestWarRoomClear, runWarControl, startWarRoom, stopWarRoom } from "@/runtime/warControl";
@@ -561,6 +561,51 @@ describe("towerDrainDuo 战争控制", () => {
     Game.time += 1;
     resetRuntimeServices();
   }
+
+  it("手动由 T3 切回标准编队后按两攻一疗生产", () => {
+    startWarRoom("E3N57", "E1N57", { squad: "t3Duo" });
+    startWarRoom("E3N57", "E1N57", { squad: "standard" });
+    const prepare = jest.spyOn(combatBoosts, "prepareBoosts");
+    runWarControl();
+    const task = Memory.data!.war!.E3N57;
+    expect(task.boostTier).toBeUndefined();
+    expect(task.activeGeneration).toBeUndefined();
+    expect(Object.values(Memory.data!.creepConfigs!).map(config => config.role).sort()).toEqual(["healer", "meleeAttacker", "meleeAttacker"]);
+    expect(prepare).not.toHaveBeenCalled();
+  });
+
+  it("一次性 T3 在源房失去成员后结束任务并释放强化预约", () => {
+    jest.spyOn(combatBoosts, "prepareBoosts").mockReturnValue({ status: "ready", labs: [] });
+    const release = jest.spyOn(combatBoosts, "releaseBoostLabs");
+    startWarRoom("E3N57", "E1N57", { squad: "t3Duo", oneShot: true });
+    runWarControl();
+    const task = Memory.data!.war!.E3N57;
+    const gen = task.activeGeneration!;
+    const red = createWarCreep("red", "meleeAttacker", gen.configNames.meleeAttacker);
+    const green = createWarCreep("green", "healer", gen.configNames.healer);
+    Game.creeps = { red, green };
+    Game.spawns.Spawn1.memory.spawnList = [];
+    nextTick(); runWarControl();
+    expect(gen.phase).toBe("assembling");
+    delete Game.creeps.green;
+    nextTick(); runWarControl();
+    expect(task).toMatchObject({ status: "failed", failReason: "generation_exhausted" });
+    expect(red.memory._warDetached).toBe(true);
+    expect(release).toHaveBeenCalledWith(gen.boostTaskId, task.sourceRoom);
+  });
+
+  it("Spawn 接受成员的同一 tick 再调度，不能判定该成员损失", () => {
+    startDrain();
+    runWarControl();
+    const task = Memory.data!.war!.E3N57;
+    const gen = task.activeGeneration!;
+    const spawn = Game.spawns.Spawn1;
+    spawn.memory.spawnList = [gen.configNames.healer];
+    recordAcceptedSpawn(spawn, gen.configNames.meleeAttacker, "new-red");
+    runWarControl();
+    expect(task.activeGeneration!.id).toBe(gen.id);
+    expect(spawn.memory.spawnList).toEqual([gen.configNames.healer]);
+  });
 
   it("自动出征先看塔火，显式普通 T3 不切换耗塔", () => {
     const name = "E3N57";

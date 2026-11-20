@@ -1,5 +1,5 @@
 import { authorizeReplacement, observeGeneration } from "./campaign";
-import { replaceSpawnQueue } from "@/runtime/spawnRequests";
+import { hasAcceptedSpawn, replaceSpawnQueue } from "@/runtime/spawnRequests";
 import { getCreepConfigService, getTickContextService } from "@/runtime/runtimeServices";
 import { retireCreep, retireCreepMemory } from "@/runtime/retirement";
 import { canContinueWarMission } from "./outbound";
@@ -93,7 +93,7 @@ export function hasTaskWarActivity(task: WarTask): boolean {
 }
 
 export function isConfigSpawning(configName: string): boolean {
-  return spawningForConfig(configName).length > 0;
+  return spawningForConfig(configName).length > 0 || hasAcceptedSpawn(configName);
 }
 
 export function enqueueConfig(spawn: StructureSpawn, configName: string, toFront: boolean): void {
@@ -458,10 +458,8 @@ export function reconcileGenerationLifecycle(task: WarTask): boolean {
     cleanupGenerationConfigs(task, generation);
   }
 
-  // 每个耗塔 generation 的角色只生成一次。排队/生成中不是损失；
-  // 已排队过而当前完全没有活动的角色，才表示本代在出发前耗尽。
-  const exhaustedBeforeDeployment = getSquadPolicy(task).parallel
-    && generation.phase === "assembling"
+  // spawnOnce 已经投入过的成员不能再用旧名补充，排队或生成中仍算本代活动。
+  const exhaustedBeforeDeployment = generation.phase === "assembling"
     && Object.values(generation.configNames).some((configName) =>
       ensureConfigStore()[configName]?.spawnOnce?.queuedAt !== undefined
       && !hasConfigActivity(task, configName)
@@ -472,7 +470,7 @@ export function reconcileGenerationLifecycle(task: WarTask): boolean {
   }
 
   const generationConfigs = new Set(Object.values(generation.configNames));
-  const unfinishedSpawns = getSquadPolicy(task).parallel ? collectSpawningForConfigs(generationConfigs) : [];
+  const unfinishedSpawns = collectSpawningForConfigs(generationConfigs);
   detachWarTaskCreeps(task, generationConfigs, isPatrolTask(task));
   for (const spawn of unfinishedSpawns) cancelSpawning(spawn);
   cleanupGenerationConfigs(task, generation);
