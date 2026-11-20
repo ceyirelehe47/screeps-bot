@@ -166,6 +166,7 @@ describe("moveToTargetRoom", () => {
     const creep = {
       name: "scout1",
       fatigue: 0,
+      memory: { role: "scout" },
       room,
       pos: new MockRoomPosition(49, 25, "W1N1") as unknown as RoomPosition,
       move,
@@ -200,6 +201,7 @@ describe("moveToTargetRoom", () => {
     const creep = {
       name: "scout-wrong-edge",
       fatigue: 0,
+      memory: { role: "scout" },
       room,
       pos: new MockRoomPosition(39, 0, "W1N2") as unknown as RoomPosition,
       move,

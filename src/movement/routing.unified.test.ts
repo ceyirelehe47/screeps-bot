@@ -196,7 +196,7 @@ describe("外出 creep 与常驻 creep 的统一房内寻路", () => {
     creep.pos = new MockRoomPosition(49, 10, creep.room.name) as unknown as RoomPosition;
     expect(moveToTargetRoom(creep, "W0N1", "W1N1|W0N1", { canMoveStep: allow })).toBe(ERR_BUSY);
     expect(creep.move).not.toHaveBeenCalled();
-    expect(allow).toHaveBeenLastCalledWith(expect.objectContaining({ roomName: "W0N1", x: 0 }));
+    expect(allow).toHaveBeenCalledWith(expect.objectContaining({ roomName: "W0N1", x: 0 }));
   });
 
   it("下一房业务许可等待不销毁通路、不累积几何卡死，恢复后使用原通路", () => {

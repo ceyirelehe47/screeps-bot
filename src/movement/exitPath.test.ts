@@ -60,6 +60,17 @@ describe("出口搜索的引擎语义边界", () => {
       expect(PathFinder.search).not.toHaveBeenCalled();
     } finally { restrict.mockRestore(); zone.mockRestore(); }
   });
+  it("受安全区约束的单位已站上出口时，退入房内允许格以避免帧末跨房", () => {
+    const creep = unit();
+    creep.pos = new RoomPosition(49, 10, creep.room.name);
+    const restrict = jest.spyOn(safeZoneHelpers, "shouldRestrictToSafeZone").mockReturnValue(true);
+    const zone = jest.spyOn(safeZone, "getSafeZone").mockReturnValue(new Set([48 * 50 + 10]));
+    try {
+      expect(moveToTargetRoom(creep, "W0N1", "W1N1|W0N1")).toBe(ERR_BUSY);
+      expect(creep.move).toHaveBeenCalledWith(LEFT);
+      expect(creep.move).toHaveBeenCalledTimes(1);
+    } finally { restrict.mockRestore(); zone.mockRestore(); }
+  });
   it("密集母房的 PB 两人都能绕过障碍发出移动意图，选路不再重复搜索", () => {
     const attacker = unit("attacker", "powerBankAttacker"), healer = unit("healer", "powerBankHealer");
     healer.pos = new RoomPosition(9, 10, healer.room.name);
@@ -137,6 +148,15 @@ describe("出口搜索的引擎语义边界", () => {
     (PathFinder.search as jest.Mock).mockReturnValue({ path: [], cost: 0, incomplete: true, ops: 1 });
     expect(searchRoomExitPath(creep, RIGHT, { ignoreCreeps: false })).toMatchObject({ rejectTransition: false });
     expect(searchRoomExitPath(creep, RIGHT, { ignoreCreeps: true })).toMatchObject({ rejectTransition: true });
+  });
+  it("跨房搜索预算耗尽时等待下一帧，不累计物理卡死或封锁房间", () => {
+    const creep = unit();
+    (PathFinder.search as jest.Mock).mockImplementationOnce((_origin, _goals, opts) => ({ path: [], cost: 0, incomplete: true, ops: opts.maxOps }));
+    expect(moveToTargetRoom(creep, "W0N1", "W1N1|W0N1")).toBe(ERR_BUSY);
+    expect(getCreepMovementState(creep)!.travelState!.rejectedTransitions).toBeUndefined();
+    Game.time++;
+    expect(moveToTargetRoom(creep, "W0N1", "W1N1|W0N1")).toBe(OK);
+    expect(getCreepMovementState(creep)!.travelState!.stuckTicks).toBe(0);
   });
   it("A* 夹具按 maxOps 返回 incomplete，再增加预算可完成", () => {
     const creep = unit();

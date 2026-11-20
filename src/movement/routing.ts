@@ -211,11 +211,15 @@ export function moveToTargetRoom(
     updateTravelState(creep, travelState);
     return ERR_NO_PATH;
   }
+  const policy = resolveMovementPolicy(creep, moveOptions);
+  const { canMoveStep } = policy;
   if (isOnExitDirection(creep.pos, exitDirection as DirectionConstant)) {
-    if (options.canMoveStep) {
+    if (canMoveStep) {
       const destination = getMoveIntentDestination(creep.pos, exitDirection as DirectionConstant);
       if (!destination) return ERR_NO_PATH;
-      if (!options.canMoveStep(new RoomPosition(destination.x, destination.y, destination.roomName))) {
+      if (!canMoveStep(new RoomPosition(destination.x, destination.y, destination.roomName))) {
+        // 原地等待也会在帧末跨房，尝试退回当前房的许可格。
+        moveOffExit(creep, true, (_direction, pos) => canMoveStep(pos));
         movementState.stepPolicyWaitAt = Game.time;
         updateTravelState(creep, travelState);
         return ERR_BUSY;
@@ -228,12 +232,11 @@ export function moveToTargetRoom(
   }
   // 迁房入口0/49不可沿边等待；先用共用交通层离开错误边缘，再走房内出口路径。
   if (isExitTile(creep.pos)) {
-    const result = moveOffExit(creep, true, (_direction, pos) => options.canMoveStep?.(pos) ?? true);
+    const result = moveOffExit(creep, true, (_direction, pos) => canMoveStep?.(pos) ?? true);
     updateTravelState(creep, travelState);
     return result;
   }
   const revision = getRoomTopologyRevision(creep.room.name);
-  const policy = resolveMovementPolicy(creep, moveOptions);
   const key = JSON.stringify([creep.room.name, nextRoom, revision,
     moveOptions.plainCost, moveOptions.swampCost, policy.cacheKey]);
   let exit = travelState.exitTarget;
@@ -257,7 +260,10 @@ export function moveToTargetRoom(
       }
       delete movementState.movePathState;
       updateTravelState(creep, travelState);
-      if (selected.reason === "policyDenied") { movementState.stepPolicyWaitAt = Game.time; return ERR_BUSY; }
+      if (selected.reason === "policyDenied" || selected.reason === "budgetExhausted") {
+        movementState.stepPolicyWaitAt = Game.time;
+        return ERR_BUSY;
+      }
       return ERR_NO_PATH;
     }
     if (selected.complete) {
@@ -465,8 +471,8 @@ function findDynamicNextRoom(
   const cached = cacheable ? dynamicNextRoomCache[cacheKey] : undefined;
   const cachedSafe = cached?.nextRoom
     ? routeRoomCost ? Number.isFinite(routeRoomCost(cached.nextRoom)) : cached.nextRoom === targetRoom || isLiveTransitionRoomSafe(cached.nextRoom, combat, allowSourceKeepers)
-    : cached?.computedAt === Game.time;
-  if (cached && cached.expiresAt > Game.time && (!(combat || allowSourceKeepers || routeRoomCost) || cachedSafe)) {
+    : cached?.computedAt === Game.time || !(combat || allowSourceKeepers || routeRoomCost);
+  if (cached && cached.expiresAt > Game.time && cachedSafe) {
     recordMovementMetric("dynamicRouteCacheHits");
     return cached.nextRoom;
   }

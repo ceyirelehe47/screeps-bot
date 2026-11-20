@@ -23,6 +23,15 @@ it("清剿可续接无实际塔伤的中途房，经济角色不复用其缓存"
   expect(getNextTravelRoom(SOURCE, TARGET, undefined, undefined, "combat")).toBe(MIDDLE);
   expect(getNextTravelRoom(SOURCE, TARGET)).toBeNull();
 });
+it("经济角色的缓存路线在下一跳出现敌情时立即重选", () => {
+  const hostileRoom = Game.rooms[MIDDLE];
+  delete Game.rooms[MIDDLE];
+  expect(getNextTravelRoom(SOURCE, TARGET)).toBe(MIDDLE);
+  Game.time++;
+  Game.rooms[MIDDLE] = hostileRoom;
+  expect(getNextTravelRoom(SOURCE, TARGET)).toBeNull();
+  expect(Game.map.findRoute).toHaveBeenCalledTimes(2);
+});
 it("下一tick实际补能后重新校验清剿缓存，而不是沿用25tick旧安全结论", () => {
   expect(getNextTravelRoom(SOURCE, TARGET, undefined, undefined, "combat")).toBe(MIDDLE);
   tower.store[RESOURCE_ENERGY] = 10;
