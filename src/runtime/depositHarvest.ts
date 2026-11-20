@@ -121,12 +121,14 @@ function spawnsIn(roomName: string): StructureSpawn[] {
 }
 function queueDelay(spawn: StructureSpawn, ownConfigName?: string): number {
   const service = getCreepConfigService();
-  return (spawn.spawning?.remainingTime ?? 0) + (spawn.memory.spawnList ?? []).reduce((sum, name) => {
-    if (name === ownConfigName) return sum;
+  let delay = spawn.spawning?.remainingTime ?? 0;
+  for (const name of spawn.memory.spawnList ?? []) {
+    if (name === ownConfigName) break;
     const config = service.get(name);
     const body = config?.body ?? (config && spawnProfiles[config.role]?.(spawn.room));
-    return sum + (body?.length ?? 50) * 3;
-  }, 0);
+    delay += (body?.length ?? MAX_CREEP_SIZE) * CREEP_SPAWN_TIME;
+  }
+  return delay;
 }
 function receiver(room: Room): StructureStorage | StructureTerminal | undefined {
   return [room.storage, room.terminal].find((s): s is StructureStorage | StructureTerminal =>
@@ -148,6 +150,7 @@ function bind(task: DepositHarvestTask, creep: Creep): void {
   else { task.bornAt ??= Game.time; task.spawnStartedAt ??= Game.time; if (task.status === "spawning") setDepositTaskStatus(task, "outbound"); }
 }
 function actualSpawning(task: DepositHarvestTask): string | undefined {
+  if (!task.configName) return undefined;
   return Object.values(Game.spawns).find((spawn) => spawn.spawning &&
     Memory.creeps?.[spawn.spawning.name]?.configName === task.configName)?.spawning?.name;
 }
@@ -215,12 +218,12 @@ function validateWaitingSpawn(task: DepositHarvestTask, config: DepositHarvestCo
   delete task.blocker; delete task.nextAttemptAt;
 }
 function reconcile(task: DepositHarvestTask, config: DepositHarvestConfig): void {
+  if (isDepositTerminal(task)) { cleanupDepositSpawnOwner(task); return; }
   const enabled = config.enabled;
-  const creep = taskCreep(task) ?? (task.creepName ? Game.creeps[task.creepName] : undefined);
-  if (creep && creep.memory.configName === task.configName) bind(task, creep);
+  const creep = taskCreep(task);
+  if (creep) bind(task, creep);
   const spawningName = actualSpawning(task);
   if (spawningName) { task.spawnStartedAt ??= Game.time; task.creepName ??= spawningName; }
-  if (isDepositTerminal(task)) { cleanupDepositSpawnOwner(task); return; }
   if (task.spawnStartedAt !== undefined && !creep && !spawningName) {
     finishDepositTask(task, "failed", "creep_died"); return;
   }

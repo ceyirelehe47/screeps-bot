@@ -102,6 +102,16 @@ describe("Deposit mounted source/target闭环", () => {
     amount = 0; Game.time += 1; c.work();
     expect(c.suicide).toHaveBeenCalledTimes(1); expect(finishDepositTask).not.toHaveBeenCalled();
   });
+  it("任务已中止时仍按实际卸货量对账，保留原终态和结束原因", () => {
+    task.status = "aborted"; task.stopReason = "disabled"; task.terminalAt = Game.time - 1;
+    const c = creep(); amount = 200; c.room = home; c.pos = pos(19, "E1N1");
+    c.work();
+    expect(c.transfer).toHaveBeenCalledTimes(1);
+    amount = 0; Game.time++; c.work();
+    expect(task).toMatchObject({ status: "aborted", stopReason: "disabled", deliveredAmount: 200, terminalAt: 99 });
+    expect(finishDepositTask).not.toHaveBeenCalled();
+    expect(c.suicide).toHaveBeenCalledTimes(1);
+  });
   it("transfer返回OK但cargo未减少，不计交付并可再次尝试", () => {
     amount = 200; const c = creep(); c.room = home; c.pos = pos(19, "E1N1");
     c.memory.working = true; c.work(); Game.time += 1; c.work();

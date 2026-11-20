@@ -43,6 +43,27 @@ beforeEach(() => {
   recordDepositDiscovery(deposit());
 });
 describe("Deposit 一代owner与孵化门", () => {
+  it("尚无配置的发现记录不能认领其它正在出生的单位", () => {
+    Object.assign(Game.spawns.Spawn1, { spawning: { name: "manual-worker", remainingTime: 1 } });
+    Memory.creeps["manual-worker"] = { role: "worker" };
+    runDepositHarvest();
+    const task = Memory.data!.depositHarvest!.d1;
+    expect(task.spawnStartedAt).toBeUndefined();
+    expect(task.creepName).toBeUndefined();
+    expect(task.status).toBe("spawning");
+    expect(canSpawnDepositConfig(task.configName!, Memory.data!.creepConfigs![task.configName!])).toBe(true);
+  });
+
+  it("期限复核只计本请求前方的队列，排在后方的工作不占用等待时间", () => {
+    runDepositHarvest();
+    const task = Memory.data!.depositHarvest!.d1;
+    task.expiresAt = Game.time + 750;
+    Memory.data!.creepConfigs!.worker = { role: "worker", args: [], body: Array(50).fill(WORK) };
+    Game.spawns.Spawn1.memory.spawnList = [task.configName!, ...Array(5).fill("worker")];
+    Game.time++; runDepositHarvest();
+    expect(task.status).toBe("spawning");
+    expect(canSpawnDepositConfig(task.configName!, Memory.data!.creepConfigs![task.configName!])).toBe(true);
+  });
   it("只在完整路径ready后创建spawnOnce，并以实际出生绑定任务", () => {
     runDepositHarvest();
     const task = Memory.data!.depositHarvest!.d1; const cfg = Memory.data!.creepConfigs![task.configName!];

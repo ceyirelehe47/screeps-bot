@@ -29,7 +29,7 @@ function getTask(creep: Creep, taskId?: string): DepositHarvestTask | undefined 
   const mem = memory(creep);
   const id = mem.taskId ?? taskId;
   const task = id ? Memory.data?.depositHarvest?.[id] : undefined;
-  if (!task || task.configName !== creep.memory.configName || (task.creepName && task.creepName !== creep.name)) return undefined;
+  if (!task?.configName || task.configName !== creep.memory.configName || (task.creepName && task.creepName !== creep.name)) return undefined;
   mem.taskId = task.id; mem.depositHomeRoom = task.sourceRoom; mem.depositResourceType = task.resourceType;
   return task;
 }
@@ -196,6 +196,6 @@ export const depositHarvesterRole: RoleFactory = (taskId?: string, homeRoom?: st
     const task = getTask(creep, taskId);
     confirmPreviousActions(creep, task);
     stop(creep, task, task?.stopReason ?? "single_trip_return");
-    return deliver(creep, task);
+    return deliver(creep, task && !isDepositTerminal(task) ? task : undefined);
   },
 });
