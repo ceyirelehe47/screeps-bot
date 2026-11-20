@@ -1,7 +1,6 @@
 import { isDefenseMode } from "@/runtime/defenseMode";
 import { isRoomInReserveMode } from "@/runtime/roomReserve";
-import { outboundStageEnded } from "@/runtime/outboundMissionLifecycle";
-import { resolveOutboundMissionIntent, type OutboundRequest } from "@/runtime/outboundMissionRegistry";
+import { outboundSourceOccupied, resolveOutboundMissionIntent, type OutboundRequest } from "@/runtime/outboundMissionRegistry";
 import { getRoleSpawnIntent } from "@/runtime/spawnIntent";
 import type { CreepConfig } from "@/types/system";
 
@@ -17,12 +16,9 @@ export function evaluateOutboundAdmission(mode: RoomMissionMode, request: Outbou
   if (mode.defense && request.intent !== "local") return { allowed: false, reason: "defense" };
   if (mode.reserve && request.intent === "expedition" && !request.committed) return { allowed: false, reason: "reserve" };
   if (request.blockedReason) return { allowed: false, reason: request.blockedReason };
-  if (request.family === "deposit" && mode.sourceRoom) {
-    const powerBank = Object.values(Memory.data?.powerBankHarvest ?? {}).some(task =>
-      task.sourceRoom === mode.sourceRoom && !outboundStageEnded("powerBank", task.status));
-    const otherDeposit = Object.values(Memory.data?.depositHarvest ?? {}).some(task => task.id !== request.taskId &&
-      task.sourceRoom === mode.sourceRoom && task.status !== "discovered" && !outboundStageEnded("deposit", task.status));
-    if (powerBank || otherDeposit) return { allowed: false, reason: "source_busy" };
+  if (request.family === "deposit" && mode.sourceRoom &&
+      (outboundSourceOccupied("powerBank", mode.sourceRoom) || outboundSourceOccupied("deposit", mode.sourceRoom, request.taskId))) {
+    return { allowed: false, reason: "source_busy" };
   }
   return { allowed: true };
 }

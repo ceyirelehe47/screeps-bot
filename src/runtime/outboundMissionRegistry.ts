@@ -12,6 +12,7 @@ export interface OutboundRequest {
 
 export interface OutboundMissionOwner {
   id: string;
+  occupiesSource?(roomName: string, exceptTaskId?: string): boolean;
   matches(name: string, config: CreepConfig): boolean;
   evaluate(name: string, config: CreepConfig, mode: RoomMissionMode): OutboundRequest;
 }
@@ -27,4 +28,9 @@ export function registerOutboundMissionOwner(owner: OutboundMissionOwner): void 
 export function resolveOutboundMissionIntent(name: string, config: CreepConfig, mode: RoomMissionMode) {
   for (const owner of owners.values()) if (owner.matches(name, config)) return owner.evaluate(name, config, mode);
   return undefined;
+}
+
+/** 共享调度器询问各任务 owner 的实际投入，存档读取和世代解释由 owner 负责。 */
+export function outboundSourceOccupied(family: NonNullable<OutboundRequest["family"]>, roomName: string, exceptTaskId?: string): boolean {
+  return owners.get(family)?.occupiesSource?.(roomName, exceptTaskId) ?? false;
 }

@@ -3,6 +3,8 @@ import type { OutboundMissionOwner } from "@/runtime/outboundMissionRegistry";
 
 export const powerBankMissionOwner: OutboundMissionOwner = {
   id: "powerBank",
+  occupiesSource: roomName => Object.values(Memory.data?.powerBankHarvest ?? {}).some(task =>
+    task.sourceRoom === roomName && !outboundStageEnded("powerBank", task.status)),
   matches: (_name, config) => ["powerBankAttacker", "powerBankHealer", "powerBankHauler"].includes(config.role),
   evaluate(_name, config) {
     const task = config.taskId ? Memory.data?.powerBankHarvest?.[config.taskId] : undefined;

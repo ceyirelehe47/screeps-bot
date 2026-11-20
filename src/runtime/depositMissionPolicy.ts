@@ -1,7 +1,10 @@
+import { outboundStageEnded } from "@/runtime/outboundMissionLifecycle";
 import type { OutboundMissionOwner } from "@/runtime/outboundMissionRegistry";
 
 export const depositMissionOwner: OutboundMissionOwner = {
   id: "deposit",
+  occupiesSource: (roomName, exceptTaskId) => Object.values(Memory.data?.depositHarvest ?? {}).some(task =>
+    task.id !== exceptTaskId && task.sourceRoom === roomName && task.status !== "discovered" && !outboundStageEnded("deposit", task.status)),
   matches: (_name, config) => config.role === "depositHarvester",
   evaluate(name, config) {
     const task = config.taskId ? Memory.data?.depositHarvest?.[config.taskId] : undefined;
