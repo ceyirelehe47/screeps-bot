@@ -105,8 +105,8 @@ const MEMORY_BRANCHES = {
   data: {
     declaration: "src/types/memory/data.d.ts",
     interfaceName: "ScreepsMemoryData",
-    // 登记殖民 sourceBlockedSince 与运输 source_protected；根字段清单保持不变。
-    schemaFingerprint: "e3c45cb6d7e0e8992f7171931005d16555435e6fd71e77ea36cc66a047d731bc",
+    // war 的持久化契约统一归属 WarTask，兼容性由下方探针验证。
+    schemaFingerprint: "25b2702920c1c6b5aadcd749b6aac46e6754f7ea29ec8df02f29cd7420f3d335",
     imports: [
       "@/runtime/market/state:CompactMarketState",
       "@/runtime/depositHarvest:DepositHarvestTask",
@@ -122,6 +122,7 @@ const MEMORY_BRANCHES = {
       "@/runtime/marketSaleDirectPending:PendingDirectDeal",
       "@/runtime/marketSaleFeeLedger:MarketSaleFeeLedgerState",
       "@/runtime/remoteMining:RemoteMiningTask",
+      "@/runtime/war/store:WarTask",
       "@/types/system:CreepConfig",
     ],
     fields: [
@@ -776,6 +777,14 @@ const dataBlockedReason:
   | "source_protected"
   | "insufficient_terminal_resource_or_fee"
   | undefined = data.resourceControl?.tasks?.contract?.blockedReason;
+type Campaign = NonNullable<DataRoot["war"]>[string];
+const legacyWar: Campaign = {
+  targetRoom: "E2N1", sourceRoom: "E1N1", status: "staging", reason: "manual",
+  attempts: 1, createdAt: 10, updatedAt: 10,
+  activeGeneration: { id: 1, phase: "deployed", createdAt: 10, boostTaskId: "g1",
+    configNames: { meleeAttacker: "red", healer: "green" } },
+};
+type WarReviewAction = Expect<Equal<NonNullable<Campaign["review"]>["action"], "replace" | "reroute" | "stop">>;
 const colonySourceBlockedSince: number | undefined = data.colonization?.contract?.sourceBlockedSince;
 const analyticsStoredEnergy: number | undefined =
   analytics.production?.rooms?.["E1N1"]?.latest?.storedEnergy;
