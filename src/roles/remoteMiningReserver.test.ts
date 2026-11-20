@@ -52,8 +52,14 @@ describe("remoteMiningReserverRole", () => {
       const creep = makeCreep(room, {memory: {configName:"W5N4:remoteMine:W5N5:reserver:0"} as CreepMemory});
       Memory.data = {remoteMining: {W5N5:{sourceRoom:"W5N4", targetRoom:"W5N5", status:"defending",
         assignedAt:1, updatedAt:1, sourceIds:[]}}};
-      remoteMiningReserverRole("W5N5").target(creep);
+      const role = remoteMiningReserverRole("W5N5", "W5N4|W5N5");
+      role.target(creep);
       expect(moveToTargetRoom).toHaveBeenCalledWith(creep,"W5N4","W5N5|W5N4",expect.anything());
+      expect(creep.reserveController).not.toHaveBeenCalled();
+      creep.room = makeRoom("W5N4", makeController({ my: true }));
+      Memory.data!.remoteMining!.W5N5.status = "active";
+      role.target(creep);
+      expect(moveToTargetRoom).toHaveBeenLastCalledWith(creep, "W5N5", "W5N4|W5N5", expect.anything());
       expect(creep.reserveController).not.toHaveBeenCalled();
     });
 

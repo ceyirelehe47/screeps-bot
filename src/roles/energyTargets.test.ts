@@ -7,9 +7,9 @@ jest.mock("@/runtime/safeZone", () => ({
   getSafeZone: jest.fn(() => new Set()),
 }));
 
-import { getEnergyStoreTarget } from "@/roles/energyTargets";
+import { getEnergyStoreTarget, pickupEnergyFromPreferredTarget } from "@/roles/energyTargets";
 import { clearCreepAssignmentStateForTest } from "@/runtime/creepAssignmentState";
-import { clearPickupReservationStoreForTest } from "@/runtime/energyPickupReservation";
+import { clearPickupReservationStoreForTest, reservePickupTarget } from "@/runtime/energyPickupReservation";
 import { isDefenseMode } from "@/runtime/defenseMode";
 import { getSafeZone } from "@/runtime/safeZone";
 import { resetPowerCreepControlCacheForTest } from "@/runtime/powerCreepControl";
@@ -129,6 +129,20 @@ describe("energyTargets", () => {
     (Game as Game & { powerCreeps: Record<string, PowerCreep> }).powerCreeps = {};
     resetPowerCreepControlCacheForTest();
     clearSpawnActiveCacheForTest();
+  });
+
+  it.each([50, 40])("容器有 50 能量且已预约 %i 时，仅领取可用量或改取小堆", reserved => {
+    const container = { id: "container", structureType: STRUCTURE_CONTAINER, pos: createPos(25), store: createStore(50, 2000) } as unknown as StructureContainer;
+    const pile = { id: "pile", resourceType: RESOURCE_ENERGY, amount: 8, pos: createPos(26) } as Resource;
+    const room = createRoom({ structures: [container], dropped: [pile] });
+    Game.rooms[room.name] = room;
+    const worker = createCreep(room);
+    const other = createCreep(room); other.name = "other";
+    Game.creeps = { [worker.name]: worker, other };
+    expect(reservePickupTarget(other, container, reserved)).toBe(true);
+    expect(pickupEnergyFromPreferredTarget(worker).picked).toBe(true);
+    if (reserved === 50) expect(worker.pickup).toHaveBeenCalledWith(pile);
+    else expect(worker.withdraw).toHaveBeenCalledWith(container, RESOURCE_ENERGY, 10);
   });
 
   it("Storage 满时改选有空位的 Terminal，两者满时不返回满结构", () => {

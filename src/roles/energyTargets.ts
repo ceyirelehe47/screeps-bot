@@ -1,5 +1,6 @@
 import { executeTreasuryFencedTerminalCargo } from "@/runtime/treasuryTerminalCargo";
 import {
+  getPickupReservationClaimAmount,
   getPickupTargetEnergyAmount,
   getReservedPickupTarget,
   releasePickupReservation,
@@ -222,10 +223,8 @@ function getPreferredEnergyPickupCandidates(creep: Creep): EnergyPickupTarget[] 
       }))
       .filter((entry) => entry.amount > 0);
 
-    const hasRichCandidate = scored.some((entry) => entry.amount >= threshold);
     return scored
-      .filter((entry) => !hasRichCandidate || entry.amount >= threshold)
-      .sort((left, right) => left.distance - right.distance)
+      .sort((left, right) => Number(right.amount >= threshold) - Number(left.amount >= threshold) || left.distance - right.distance)
       .map((entry) => entry.target);
   });
 }
@@ -280,7 +279,10 @@ export function pickupEnergyFromPreferredTarget(
     return { picked: pickupCode === OK, outOfRange: false };
   }
 
-  const withdrawCode = measureCreepIntent(() => executeTreasuryFencedTerminalCargo(sourceTarget, () => creep.withdraw(sourceTarget, RESOURCE_ENERGY)));
+  const amount = getPickupReservationClaimAmount(creep, sourceTarget.id);
+  const withdrawCode = amount > 0
+    ? measureCreepIntent(() => executeTreasuryFencedTerminalCargo(sourceTarget, () => creep.withdraw(sourceTarget, RESOURCE_ENERGY, amount)))
+    : ERR_NOT_ENOUGH_RESOURCES;
   if (withdrawCode === ERR_NOT_IN_RANGE) {
     moveToTarget(creep, sourceTarget, 1, moveOptions);
     return { picked: false, outOfRange: true };

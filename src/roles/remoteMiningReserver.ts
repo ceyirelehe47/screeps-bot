@@ -5,10 +5,7 @@ import { measureCreepIntent } from "@/runtime/cpuPhaseProfiler";
 import { getMyUsername } from "@/runtime/remoteMining";
 
 /**
- * Passive remote mining reserver – travels to target room and reserves the
- * controller when it is neutral/unreserved or already self-reserved.
- *
- * Conservative v1: never overwrites hostile reservations, never claims or attacks.
+ * 只在指定外矿房续约，遇到 Invader 预定时先清除。避险回家后仍可从工作阶段恢复行程。
  */
 export const remoteMiningReserverRole: RoleFactory = (targetRoom?: string, encodedRouteRooms?: string) => ({
   source: (creep): boolean => {
@@ -21,6 +18,10 @@ export const remoteMiningReserverRole: RoleFactory = (targetRoom?: string, encod
   },
   target: (creep): boolean => {
     if (shelterRemoteMiningCivilian(creep, targetRoom)) return false;
+    if (targetRoom && creep.room.name !== targetRoom) {
+      moveToTargetRoom(creep, targetRoom, encodedRouteRooms, { plainCost: 2, swampCost: 10 });
+      return false;
+    }
     const controller = creep.room.controller;
     if (!controller) return false;
 
