@@ -289,7 +289,8 @@ describe("精简市场正式执行与交接", () => {
     expect(runCompactMarketLive({ collectProtection: deps.collectProtection }).writes).toBe(1);
     expect(Game.market.getHistory).toHaveBeenCalled(); expect(Game.market.getAllOrders).toHaveBeenCalledWith({ resourceType: resource });
   });
-  it("历史缓存跨UTC日期立即刷新，不等待5000tick", () => {
+  it("每 tick 重建 Game 时复用市场历史，跨 UTC 日期或 5000 tick 后刷新", () => {
+    const originalGame = Game;
     jest.useFakeTimers();
     try {
       jest.setSystemTime(new Date("2030-01-01T23:59:50Z"));
@@ -298,12 +299,17 @@ describe("精简市场正式执行与交接", () => {
       runCompactMarketLive({ collectProtection: deps.collectProtection });
       const calls = (Game.market.getHistory as jest.Mock).mock.calls.length;
       expect(calls).toBeGreaterThan(0);
-      next(5); runCompactMarketLive({ collectProtection: deps.collectProtection });
+      next(5);
+      Object.assign(global, { Game: { ...Game } });
+      runCompactMarketLive({ collectProtection: deps.collectProtection });
       expect(Game.market.getHistory).toHaveBeenCalledTimes(calls);
       jest.setSystemTime(new Date("2030-01-02T00:00:01Z"));
       next(5); runCompactMarketLive({ collectProtection: deps.collectProtection });
-      expect((Game.market.getHistory as jest.Mock).mock.calls.length).toBeGreaterThan(calls);
-    } finally { jest.useRealTimers(); }
+      const afterMidnight = (Game.market.getHistory as jest.Mock).mock.calls.length;
+      expect(afterMidnight).toBeGreaterThan(calls);
+      next(5000); runCompactMarketLive({ collectProtection: deps.collectProtection });
+      expect((Game.market.getHistory as jest.Mock).mock.calls.length).toBeGreaterThan(afterMidnight);
+    } finally { Object.assign(global, { Game: originalGame }); jest.useRealTimers(); }
   });
   it("多个匹配交易导致隔离，不能释放实物或重复成交", () => {
     runCompactMarketLive(deps);

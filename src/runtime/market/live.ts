@@ -17,7 +17,7 @@ import { readLiveMarketBaseTerminal } from "@/runtime/marketBaseResourceReadines
 
 const ACTOR = "market:compact";
 const copy = <T>(value: T): T => JSON.parse(JSON.stringify(value));
-const historyCache = new Map<string, { tick: number; date: string; game: typeof Game; rows: PriceHistory[] }>();
+const historyCache = new Map<string, { tick: number; date: string; rows: PriceHistory[] }>();
 
 function note(state: CompactMarketLiveState, reason: string): void {
   state.lastReason = reason;
@@ -210,10 +210,10 @@ export function runCompactMarketLive(dependencies: CompactMarketLiveDependencies
         if (!resource) throw Error("resource_required");
         let cached = historyCache.get(resource);
         const date = new Date().toISOString().slice(0, 10);
-        if (!cached || cached.date !== date || cached.game !== Game || Game.time - cached.tick >= 5000 || cached.tick > Game.time) {
+        if (!cached || cached.date !== date || Game.time - cached.tick >= 5000 || cached.tick > Game.time) {
           const rows = Game.market.getHistory(resource);
           if (!Array.isArray(rows) || rows.length > 100) throw Error("history_incomplete");
-          cached = { date, game: Game, tick: Game.time, rows: rows.map(row => ({ ...row })) }; historyCache.set(resource, cached);
+          cached = { date, tick: Game.time, rows: rows.map(row => ({ ...row })) }; historyCache.set(resource, cached);
         }
         return cached.rows.map(row => ({ ...row }));
       },
