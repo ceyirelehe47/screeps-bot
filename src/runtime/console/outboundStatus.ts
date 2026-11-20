@@ -41,8 +41,15 @@ export function outboundStatusRaw(filter: { room?: string; family?: OutboundFami
   }
   if (!filter.family || filter.family === "colonizationSupport") {
     for (const [target, task] of Object.entries(Memory.runtime?.colonizationSupport ?? {})) {
+      let reason: string | undefined;
+      if (task.status === "waiting_claim") reason = "waiting_claim";
+      if (task.status === "paused") {
+        if (!Memory.cfg?.colonizationSupport?.[target]?.enabled) reason = "disabled";
+        else if (!Game.rooms[task.sourceRoom]?.controller?.my) reason = "source_unavailable";
+        else reason = "source_outbound_blocked";
+      }
       add({ family: "colonizationSupport", id: task.runId, source: task.sourceRoom, target,
-        status: task.status, phase: outboundPhase("colonizationSupport", task), reason: task.blocker });
+        status: task.status, phase: outboundPhase("colonizationSupport", task), reason });
     }
   }
   return { tick: Game.time, total, truncated: total > rows.length, tasks: rows };

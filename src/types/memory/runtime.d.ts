@@ -31,7 +31,6 @@ declare global {
       sourceRoom: string;
       runId: string;
       status: "waiting_claim" | "supporting" | "complete" | "paused";
-      blocker?: string;
       updatedAt: number;
       completedAt?: number;
     }>;
