@@ -130,6 +130,11 @@ function queueDelay(spawn: StructureSpawn, ownConfigName?: string): number {
   }
   return delay;
 }
+
+function sourceQueueDelay(spawns: StructureSpawn[], configName?: string): number {
+  const queued = configName ? spawns.filter(spawn => spawn.memory.spawnList?.includes(configName)) : [];
+  return Math.max(0, ...(queued.length ? queued : spawns).map(spawn => queueDelay(spawn, configName)));
+}
 function receiver(room: Room): StructureStorage | StructureTerminal | undefined {
   return [room.storage, room.terminal].find((s): s is StructureStorage | StructureTerminal =>
     Boolean(s && s.store.getFreeCapacity() >= 500));
@@ -184,7 +189,7 @@ function assessDepositSource(task: DepositHarvestTask, deposit: Deposit, route: 
   const outboundTravelTicks = Math.max(...ready.map(path => path.outboundTravelTicks));
   const returnTravelTicks = Math.max(...ready.map(path => path.returnTravelTicks));
   const economics = assessDepositViability({ currentTick: Game.time, expiresAt: task.expiresAt,
-    queueDelay: Math.max(...spawns.map(spawn => queueDelay(spawn, task.configName))), spawnTime: DEPOSIT_BODY.length * CREEP_SPAWN_TIME,
+    queueDelay: sourceQueueDelay(spawns, task.configName), spawnTime: DEPOSIT_BODY.length * CREEP_SPAWN_TIME,
     outboundTravelTicks, returnTravelTicks, bornTtl: CREEP_LIFE_TIME, bodyEnergy: DEPOSIT_BODY.reduce((sum, part) => sum + BODYPART_COST[part], 0),
     lastCooldown: deposit.lastCooldown, cooldown: deposit.cooldown, workParts: 10, capacity: 500,
     maxCooldown: config.maxCooldown, minExpectedAmount: config.minExpectedAmount, minUnitsPerEnergy: config.minUnitsPerEnergy });
@@ -210,7 +215,11 @@ function validateWaitingSpawn(task: DepositHarvestTask, config: DepositHarvestCo
   const assessment = assessDepositSource(task, deposit, route, destination, spawns, config);
   if (assessment.status === "pending") { block(task, assessment.reason, assessment.retryAt - Game.time); return; }
   const { economics, outboundTravelTicks, returnTravelTicks } = assessment;
-  if (!economics.viable) { finishDepositTask(task, "aborted", economics.reasons.join(",")); return; }
+  if (!economics.viable) {
+    finishDepositTask(task, "aborted", economics.reasons.includes("deposit_expires_before_harvest")
+      ? "spawn_queue_missed_deadline" : economics.reasons.join(","));
+    return;
+  }
   task.routeRooms = route; task.returnTargetId = destination.id;
   task.outboundTravelTicks = outboundTravelTicks; task.returnTravelTicks = returnTravelTicks;
   task.expectedAmount = economics.expectedAmount; task.expectedHarvestTicks = economics.harvestTicks;
@@ -244,14 +253,9 @@ function reconcile(task: DepositHarvestTask, config: DepositHarvestConfig): void
     const cfg = name ? getCreepConfigService().get(name) : undefined;
     if (!name || !cfg || !configOwned(task, cfg)) { finishDepositTask(task, "failed", "spawn_owner_lost"); return; }
     if (!bodyMatches(cfg)) { finishDepositTask(task, "failed", "spawn_body_changed"); return; }
-    const delay = Math.max(0, ...spawnsIn(task.sourceRoom).map((s) => queueDelay(s, task.configName)));
     if (hasAcceptedSpawn(name)) return;
     const admission = getSpawnAdmission(name, cfg, task.sourceRoom);
     if (admission.allowed === false) { reconsiderDepositSource(task, admission.reason); return; }
-    if (Game.time + delay + DEPOSIT_BODY.length * 3 + (task.outboundTravelTicks ?? Infinity) +
-      (task.expectedHarvestTicks ?? Infinity) >= task.expiresAt) {
-      finishDepositTask(task, "aborted", "spawn_queue_missed_deadline"); return;
-    }
     validateWaitingSpawn(task, config);
   }
 }

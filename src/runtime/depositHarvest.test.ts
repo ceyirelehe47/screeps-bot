@@ -64,6 +64,30 @@ describe("Deposit 一代owner与孵化门", () => {
     expect(task.status).toBe("spawning");
     expect(canSpawnDepositConfig(task.configName!, Memory.data!.creepConfigs![task.configName!])).toBe(true);
   });
+
+  it("Deposit 已分配到空闲 Spawn 时，另一台的积压不消耗本任务期限", () => {
+    runDepositHarvest();
+    const task = Memory.data!.depositHarvest!.d1;
+    task.expiresAt = Game.time + 750;
+    Game.spawns.Spawn1.memory.spawnList = [task.configName!];
+    Memory.data!.creepConfigs!.worker = { role: "worker", args: [], body: Array(50).fill(WORK) };
+    Game.spawns.Spawn2 = { ...Game.spawns.Spawn1, name: "Spawn2", memory: { spawnList: Array(6).fill("worker") } } as StructureSpawn;
+    Game.time++; runDepositHarvest();
+    expect(task.status).toBe("spawning");
+    expect(canSpawnDepositConfig(task.configName!, Memory.data!.creepConfigs![task.configName!])).toBe(true);
+  });
+
+  it("原预计满载采集时间不足时按新收益复核，仍可获利的部分载荷可出发", () => {
+    runDepositHarvest();
+    const task = Memory.data!.depositHarvest!.d1;
+    const originalAmount = task.expectedAmount!;
+    task.expiresAt = Game.time + 120 + task.outboundTravelTicks! + task.expectedHarvestTicks! - 5;
+    Game.time++; runDepositHarvest();
+    expect(task.status).toBe("spawning");
+    expect(task.expectedAmount).toBeGreaterThanOrEqual(200);
+    expect(task.expectedAmount).toBeLessThan(originalAmount);
+    expect(canSpawnDepositConfig(task.configName!, Memory.data!.creepConfigs![task.configName!])).toBe(true);
+  });
   it("只在完整路径ready后创建spawnOnce，并以实际出生绑定任务", () => {
     runDepositHarvest();
     const task = Memory.data!.depositHarvest!.d1; const cfg = Memory.data!.creepConfigs![task.configName!];
