@@ -1,7 +1,8 @@
 import { registerOutboundMissionOwners } from "@/runtime/registerOutboundMissionOwners";
 registerOutboundMissionOwners();
 jest.mock("@/runtime/defenseMode", () => ({ isDefenseMode: jest.fn(() => false) }));
-import { enqueueConfig, prepareCombatSquad } from "@/runtime/war/production";
+import { enqueueConfig, ensureControllerAttackConfig, prepareCombatSquad } from "@/runtime/war/production";
+import { getSpawnAdmission } from "@/runtime/outboundMissionPolicy";
 import { isDefenseMode } from "@/runtime/defenseMode";
 import * as boosts from "@/runtime/powerBankBoost";
 import type { WarTask } from "@/runtime/war/store";
@@ -54,4 +55,27 @@ it("已投入战争的强化准备可继续，新任务与防御模式仍保留�
   jest.mocked(isDefenseMode).mockReturnValue(true);
   expect(prepareCombatSquad(task)).toBe(false);
   expect(prepare).toHaveBeenCalledTimes(1);
+});
+
+it("战争已有强化投入时，仍只允许配置指定的源房出生", () => {
+  const { task, green } = setup();
+  task.activeGeneration!.boostGateOpenedAt = Game.time;
+  task.activeGeneration!.phase = "assembling";
+  const cfg = Memory.data!.creepConfigs![green];
+  expect(getSpawnAdmission(green, cfg, task.sourceRoom).allowed).toBe(true);
+  expect(getSpawnAdmission(green, cfg, "W8N8").allowed).toBe(false);
+});
+
+it("控制器兵被储备策略拒绝后不记为已排队，解除储备即可真正入队", () => {
+  const { task, spawn } = setup();
+  const configName = "W1N1:war:W2N2:controllerAttacker:0";
+  Game.rooms.W2N2 = { controller: { upgradeBlocked: 300 } } as Room;
+  ensureControllerAttackConfig(task);
+  expect(spawn.memory.spawnList).toEqual([]);
+  expect(task.controllerAttackerLastQueuedAt).toBeUndefined();
+  Game.flags = {};
+  Game.time++;
+  ensureControllerAttackConfig(task);
+  expect(spawn.memory.spawnList).toEqual([configName]);
+  expect(task.controllerAttackerLastQueuedAt).toBe(Game.time);
 });

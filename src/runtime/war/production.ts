@@ -96,26 +96,22 @@ export function isConfigSpawning(configName: string): boolean {
   return spawningForConfig(configName).length > 0 || hasAcceptedSpawn(configName);
 }
 
-export function enqueueConfig(spawn: StructureSpawn, configName: string, toFront: boolean): void {
+export function enqueueConfig(spawn: StructureSpawn, configName: string, toFront: boolean): boolean {
   const config = ensureConfigStore()[configName];
   if (!canStartOutboundMission(spawn.room.name) && (!config || config.roomName !== spawn.room.name ||
-      isSpawnConfigEconomicallyBlocked(configName, config))) return;
+      isSpawnConfigEconomicallyBlocked(configName, config))) return false;
   const queue = spawn.memory.spawnList || [];
   if (toFront) {
     const next = [configName, ...queue.filter((name) => name !== configName)];
     if (!sameArray(queue, next)) { replaceSpawnQueue(spawn, next); invalidateWarSpawnQueues(); }
-    if (config?.spawnOnce && config.spawnOnce.queuedAt === undefined) {
-      getCreepConfigService().patch(configName, { spawnOnce: { ...config.spawnOnce, queuedAt: Game.time } });
-    }
-    return;
-  }
-
-  if (!queue.includes(configName)) {
+  } else if (!queue.includes(configName)) {
     spawn.addTask(configName); invalidateWarSpawnQueues();
-    if (config?.spawnOnce && config.spawnOnce.queuedAt === undefined) {
-      getCreepConfigService().patch(configName, { spawnOnce: { ...config.spawnOnce, queuedAt: Game.time } });
-    }
   }
+  if (!spawn.memory.spawnList?.includes(configName)) return false;
+  if (config?.spawnOnce && config.spawnOnce.queuedAt === undefined) {
+    getCreepConfigService().patch(configName, { spawnOnce: { ...config.spawnOnce, queuedAt: Game.time } });
+  }
+  return true;
 }
 
 export function shouldQueueWarConfig(config: CreepConfig | undefined): boolean {
@@ -320,8 +316,7 @@ export function ensureControllerAttackConfig(task: WarTask): void {
   }
 
   const spawn = selectLeastLoadedSpawn(spawns);
-  if (spawn) {
-    enqueueConfig(spawn, configName, true);
+  if (spawn && enqueueConfig(spawn, configName, true)) {
     task.controllerAttackerLastQueuedAt = Game.time;
   }
 }

@@ -55,14 +55,14 @@ export const warMissionOwner: OutboundMissionOwner = {
   evaluate(name, config, mode) {
     const task = Memory.data?.war?.[config.args[0]];
     if (!mode.reserve && task && task.sourceRoom === config.roomName) delete task.reserveContinuationUntil;
-    if (!mode.reserve || mode.defense) return { intent: "expedition", committed: false };
+    if (!mode.reserve || mode.defense) return { family: "war", intent: "expedition", committed: false };
     if (name === `${config.roomName}:war:${config.args[0]}:controllerAttacker:0` && config.role === "claimer" && config.args[2] === "attack") {
       const active = task && task.sourceRoom === config.roomName && ["staging", "clearing", "downgrading", "patrol_waiting"].includes(task.status);
       const spawns = getTickContextService().getSpawnsByRoom(config.roomName!);
       const committed = !!active && (hasAcceptedSpawn(name, new Set(spawns.map(spawn => spawn.name))) || spawns.some(spawn =>
         (spawn.memory.spawnList ?? []).includes(name) || !!spawn.spawning && Memory.creeps?.[spawn.spawning.name]?.configName === name));
-      return { intent: "expedition", committed };
+      return { family: "war", intent: "expedition", committed };
     }
-    return { intent: "expedition", committed: !!task && ownsWarConfig(task, name, config) && canContinueWarMission(task) };
+    return { family: "war", intent: "expedition", committed: !!task && ownsWarConfig(task, name, config) && canContinueWarMission(task) };
   },
 };
