@@ -21,6 +21,26 @@ it("新版房间总数不受 512 条摘要上限影响，错误 shard 摘要不�
   expect(getGlobalOwnedRoomCount()).toBe(600);
 });
 
+it("远端读取接口重建不能让停止推进的摘要续期，远端真正推进后恢复房间数", () => {
+  Game.time = 31000; Game.shard = { name: "shard1" } as Game["shard"];
+  Game.rooms = {}; Game.cpu = { shardLimits: { shard2: 0 } } as unknown as CPU; Memory.runtime = {};
+  const installReader = (version: number) => Object.assign(global, { InterShardMemory: {
+    getRemote: () => JSON.stringify({ version: 1, shard: "shard2", updatedAt: version, ownedRoomCount: 4 }),
+  } });
+  installReader(800); expect(getGlobalOwnedRoomCount()).toBe(4);
+  Game.time += 1001; installReader(800); expect(getGlobalOwnedRoomCount()).toBe(0);
+  Game.time++; installReader(801); expect(getGlobalOwnedRoomCount()).toBe(4);
+});
+
+it("负数的远端时间不能占用账号 GCL 名额", () => {
+  Game.time = 33000; Game.shard = { name: "shard1" } as Game["shard"];
+  Game.rooms = {}; Game.cpu = { shardLimits: { shard2: 0 } } as unknown as CPU; Memory.runtime = {};
+  Object.assign(global, { InterShardMemory: {
+    getRemote: () => JSON.stringify({ version: 1, shard: "shard2", updatedAt: -1, ownedRoomCount: 8 }),
+  } });
+  expect(getGlobalOwnedRoomCount()).toBe(0);
+});
+
 it("无效 shard 或版本时间不打断后续 shard 同步，GCL 跳过损坏的房间列表", () => {
   Game.time = 21000 + cadenceOffset("interShard.sync", 5);
   Game.shard = { name: "shard1" } as Game["shard"];

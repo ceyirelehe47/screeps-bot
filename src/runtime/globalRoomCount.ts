@@ -8,7 +8,7 @@ interface RoomSummaryPayload {
 }
 let cache: { tick: number; game: typeof Game; reader: typeof InterShardMemory.getRemote;
   remotes: Map<string, number> } | undefined;
-const observations = new Map<string, { version: number; seenAt: number; reader: typeof InterShardMemory.getRemote }>();
+const observations = new Map<string, { version: number; seenAt: number }>();
 
 export function getGlobalOwnedRoomCount(extraShards: string[] = []): number {
   let count = Object.values(Game.rooms).filter(room => room.controller?.my).length;
@@ -25,11 +25,11 @@ export function getGlobalOwnedRoomCount(extraShards: string[] = []): number {
       let payload: RoomSummaryPayload | undefined;
       try { payload = JSON.parse(InterShardMemory.getRemote(shard) || "null"); } catch { /* 无效摘要留给原生 claim 错误冷却。 */ }
       let remoteCount = 0;
-      if (payload?.version === 1 && payload.shard === shard && Number.isSafeInteger(payload.updatedAt)) {
+      if (payload?.version === 1 && payload.shard === shard && Number.isSafeInteger(payload.updatedAt) && payload.updatedAt! >= 0) {
         const version = payload.updatedAt!;
         let observed = observations.get(shard);
-        if (!observed || observed.reader !== reader || observed.version !== version || observed.seenAt > Game.time) {
-          observations.set(shard, observed = { version, seenAt: Game.time, reader });
+        if (!observed || observed.version !== version || observed.seenAt > Game.time) {
+          observations.set(shard, observed = { version, seenAt: Game.time });
         }
         if (Game.time - observed.seenAt <= 1000) {
           remoteCount = Number.isSafeInteger(payload.ownedRoomCount) && payload.ownedRoomCount! >= 0
