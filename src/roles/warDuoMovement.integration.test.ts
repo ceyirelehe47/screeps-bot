@@ -173,6 +173,7 @@ class DuoWorld {
 
   public terrain(x: number, y: number, roomName = ROOM): number {
     if (this.scenario?.march) {
+      if (roomName === ROOM && !this.scenario.blockedLanding && y <= 2 && x !== 21) return TERRAIN_MASK_WALL;
       const gateway = x === 21 || (this.scenario.blockedLanding && x === 24);
       if (this.scenario.blockedLanding && roomName === ROOM && y === 1 && x >= 20 && x <= 22) return TERRAIN_MASK_WALL;
       const open = roomName === RETREAT ? y >= 40 && (y === 49 ? gateway : x >= 18 && x <= 24)

@@ -44,7 +44,6 @@ export function observeGeneration(task: WarTask, generation: WarGenerationState)
   const field = fieldStrength(task, room);
   generation.baseline ??= field;
   generation.lastObserved = { at: Game.time, field };
-
 }
 
 function evaluateGeneration(task: WarTask, generation: WarGenerationState): WarReview["result"] {

@@ -92,6 +92,7 @@ export function processTask(task: WarTask): void {
   if (room) selectAutomaticTactic(task, room);
   if (!room) {
     task.order = "observe";
+    delete task.clearSince;
     const observerAvailable = requestCombatObservation(task.targetRoom);
     if (task.autoTactic && !task.activeGeneration && observerAvailable && Game.time - task.createdAt < OBSERVATION_REQUEST_TTL) return;
   } else if (getSquadPolicy(task).parallel || task.tactic === "t3TowerDrainDuo") {
