@@ -259,8 +259,7 @@ function searchCombatApproach(creep: Creep, target: Creep | Structure, towerDrai
   const structures = geometry.structures;
   const barriers = structures.filter((s): s is StructureRampart | StructureWall => isBreachTarget(s) && !(s.structureType === STRUCTURE_RAMPART && s.my));
   const covering = barriers.find((s) => s.structureType === STRUCTURE_RAMPART && s.pos.x === target.pos.x && s.pos.y === target.pos.y);
-  if (covering) return { open: false, breach: covering };
-  if (creep.pos.getRangeTo(target.pos) <= 1) return { open: true, breach: null };
+  if (creep.pos.getRangeTo(target.pos) <= 1) return { open: !covering, breach: covering ?? null };
   if (barriers.length === 0 && !towerDrain && straightApproachOpen(creep.pos, target.pos, geometry.blocked)) {
     return { open: true, breach: null };
   }
@@ -290,7 +289,10 @@ function searchCombatApproach(creep: Creep, target: Creep | Structure, towerDrai
   const openPath = search(matrix);
   const end = openPath.path[openPath.path.length - 1];
   if (!openPath.incomplete && end && Math.max(Math.abs(end.x - target.pos.x), Math.abs(end.y - target.pos.y)) <= 1
-    && openPath.path.every((step) => matrix.get(step.x, step.y) < 0xff)) return { open: true, breach: null, path: openPath.path };
+    && openPath.path.every((step) => matrix.get(step.x, step.y) < 0xff)) {
+    // 只有能走到攻击格时，覆盖目标的 rampart 才是第一道屏障。
+    return { open: !covering, breach: covering ?? null, path: openPath.path };
+  }
   // 开放搜索耗尽预算时仍做有界突破搜索；只有完整突破路径才授予屏障攻击许可。
   // 退路门按当前未拆墙的世界封锁墙后区域。突破搜索只用原物理几何寻找第一道屏障，
   // 不能继承袋外的255；这不授予墙后移动许可，实际每步仍走 fresh 安全回调。

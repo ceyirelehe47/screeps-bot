@@ -492,6 +492,39 @@ describe("war duo 真实角色与共享移动的多 tick 集成", () => {
     expect(w.core.hits).toBe(1500);
   });
 
+  it("核心有 rampart 且外墙封闭时先拆可抵达的外墙", () => {
+    const w = new DuoWorld("leader-first");
+    const outer = { ...w.core, id: "seal-gap" as Id<Structure>, pos: position(17, 23), structureType: STRUCTURE_WALL, hits: 150 };
+    const cover = { ...w.core, id: "cover" as Id<Structure>, structureType: STRUCTURE_RAMPART };
+    w.structures.push(outer, cover);
+    expect(w.hasPhysicalCoreRouteFrom(w.red.pos)).toBe(false);
+    for (let tick = 0; tick < 25 && outer.hits === 150; tick++) w.step();
+    expect(outer.hits).toBeLessThan(150);
+    expect(cover.hits).toBe(1_000_000);
+  });
+
+  it.each(["meleeAttacker", "healer"])("搭档 %s 仍在强化时，已就绪成员不能发出双人行军指令", waitingRole => {
+    const w = new DuoWorld("leader-first", { march: true, openGap: true, geometry: { left: 18, right: 24, coreX: 21, coreY: 8, wallY: 4 } });
+    for (const member of [w.red, w.green]) {
+      member.room = Game.rooms[RETREAT];
+      member.memory.roleArgs = [ROOM, [RETREAT, ROOM].join("|"), "boost", "compound"];
+      member.memory.ready = member.memory.role !== waitingRole;
+      delete member.memory._warTowerDrain;
+    }
+    w.red.pos = position(21, 46, RETREAT);
+    w.green.pos = position(21, 45, RETREAT);
+    const runReadyMember = () => waitingRole === "healer"
+      ? meleeAttackerRole(ROOM, [RETREAT, ROOM].join("|"), "boost", "compound", GREEN_CONFIG).target(w.red)
+      : healerRole(ROOM, [RETREAT, ROOM].join("|"), "boost", "compound", RED_CONFIG).target(w.green);
+    runReadyMember();
+    expect(w.red.move).not.toHaveBeenCalled();
+    expect(w.green.move).not.toHaveBeenCalled();
+    w.green.memory.ready = w.red.memory.ready = true;
+    Game.time++; runReadyMember();
+    expect(w.red.move).toHaveBeenCalled();
+    expect(w.green.move).toHaveBeenCalled();
+  });
+
   it.each(["leader-first", "healer-first"] as const)("%s 从弯通道抵达核心，绿持续贴随且墙血量不变", order => {
     const w = new DuoWorld(order);
     for (let tick = 0; tick < 25 && w.red.pos.getRangeTo(w.core.pos) > 1; tick += 1) { w.step(); verifyFrame(w); }

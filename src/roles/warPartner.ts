@@ -2,6 +2,12 @@ import { registerSquadMovement } from "@/movement/traffic";
 import { bindSquad, findSquadPartner, type Squad } from "@/runtime/squads/squad";
 import { getTickContextService } from "@/runtime/runtimeServices";
 
+/** 同队成员可以先后完成强化。尚在 prepare 的成员仍须保有自己的实验室移动指令。 */
+export function warBoostPending(creep: Creep): boolean {
+  const args = creep.memory.roleArgs;
+  return !creep.memory.ready && !!args?.[2] && !!args[3];
+}
+
 /** 配置索引是 tick 快照；共享小队换名后必须再次核对当前归属。 */
 export function warPartner(creep: Creep, role?: string, configName = creep.memory._warPartnerConfigName, readyOnly = false): Creep | undefined {
   if (!configName) return undefined;

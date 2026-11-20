@@ -1,7 +1,7 @@
 import { parseEncodedRouteRooms } from "@/movement/common";
 import { issueMove, registerSquadMovement, getMoveIntentReceipt, cancelMoveIntent } from "@/movement/traffic";
 import { warGeometry, warTerrain, warTerrainVersion } from "@/roles/warGeometry";
-import { warPartner, warSquad } from "@/roles/warPartner";
+import { warBoostPending, warPartner, warSquad } from "@/roles/warPartner";
 import {
   getHostileTowers as activeTowers,
   getHostileTowerThreats as towerThreats,
@@ -642,6 +642,7 @@ export function runTowerDrainPair(creep: Creep, targetRoom: string, partnerConfi
   requestCombatObservation(targetRoom);
   const red = creep.memory.role === "meleeAttacker";
   const partner = warPartner(creep, red ? "healer" : "meleeAttacker", partnerConfigName, true);
+  if (partner && warBoostPending(partner)) return true;
   const attacker = red ? creep : partner;
   const healer = red ? partner : creep;
   let state = (attacker?.memory as DrainMemory | undefined)?._warTowerDrain ?? (creep.memory as DrainMemory)._warTowerDrain;

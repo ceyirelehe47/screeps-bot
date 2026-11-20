@@ -2,7 +2,7 @@ import { getPositionAtDirection, isExitTile, isWalkableConstructionSite, isWalka
 import { cancelMoveIntent, getMoveIntentDestination, getMoveIntentReceipt, hasMoveDestinationConflict, issueMove, moveOffExit } from "@/movement/traffic";
 import { moveToTarget, moveToTargetRoom } from "./shared";
 import { claimSquadMovement } from "@/runtime/squads/squad";
-import { warSquad } from "./warPartner";
+import { warBoostPending, warSquad } from "./warPartner";
 
 const travel = { profile: "combat", routePurpose: "combat", plainCost: 2, swampCost: 8, ignoreCreeps: false } as const;
 const reunion = { ...travel, maxRooms: 1, reusePath: 3 } as const;
@@ -65,6 +65,7 @@ function marchTravelOptions(leader: Creep) {
 
 /** 行军由一方选路，后排占用领队腾出的格子。跨房期间保存精确的原房出口。 */
 export function runWarMarch(leader: Creep, follower: Creep, target: string, encodedRoute?: string): boolean {
+  if (warBoostPending(leader) || warBoostPending(follower)) return true;
   const squad = warSquad(leader, follower);
   // 首帧旧角色可能尚未登记反向搭档。只等待跨房，已在目标房时允许自身动作。
   if (!squad) return leader.room.name !== target || follower.room.name !== target;

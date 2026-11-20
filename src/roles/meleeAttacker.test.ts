@@ -412,6 +412,7 @@ describe("meleeAttackerRole 目标策略与移动请求安全边界", () => {
     attacker.attack = jest.fn(() => ERR_NOT_IN_RANGE);
     Game.creeps = { red: attacker, green: healer };
     const drainGate = jest.spyOn(towerDrainPair, "runTowerDrainPair").mockReturnValue(false);
+    (PathFinder.search as jest.Mock).mockReturnValue({ path: combatPathThrough([1, 28], [2, 27], [24, 25]), incomplete: false, ops: 100 });
     try {
       meleeAttackerRole(TARGET_ROOM, "", "", "", HEALER_CONFIG, "towerDrainDuo").target(attacker);
     } finally {
@@ -422,7 +423,7 @@ describe("meleeAttackerRole 目标策略与移动请求安全边界", () => {
     expect(attacker.attack).not.toHaveBeenCalledWith(wall);
     expect(attacker.memory._warBreachTargetId).toBe(covering.id);
     expect(moveToTarget).toHaveBeenCalledWith(attacker, covering, 1, expect.objectContaining({ costCallback: expect.any(Function) }));
-    expect(PathFinder.search).not.toHaveBeenCalled();
+    expect(PathFinder.search).toHaveBeenCalledTimes(1);
   });
 
   it.each([100, 8000])("搜索无完整证明时拒绝邻墙，屏障消失后重新请求目标移动（ops=%s）", (ops) => {
