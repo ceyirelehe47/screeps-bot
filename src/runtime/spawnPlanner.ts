@@ -1,5 +1,5 @@
 import { searchRoomPath } from "@/movement/roomPath";
-import { replaceSpawnQueue, readSpawnQueue } from "@/runtime/spawnRequests";
+import { getAcceptedSpawnReceipts, replaceSpawnQueue, readSpawnQueue } from "@/runtime/spawnRequests";
 import { selectLeastLoadedSpawn as selectSpawnByLoad } from "@/runtime/spawnHelpers";
 import { isSpawnActive } from "@/runtime/tickContext";
 import { spawnProfiles } from "@/config/spawnProfiles";
@@ -109,7 +109,7 @@ function isConfigQueued(spawn: StructureSpawn, configName: string): boolean {
 }
 
 function createSpawnPlanningContext(): SpawnPlanningContext {
-  const spawningConfigNames = new Set<string>();
+  const spawningConfigNames = new Set(getAcceptedSpawnReceipts().map(receipt => receipt.configName));
   const tickContext = getTickContextService();
   const creepMemory = Memory.creeps || {};
 

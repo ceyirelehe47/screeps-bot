@@ -1,4 +1,5 @@
 import { type CreepConfig } from "@/types/system";
+import { hasAcceptedSpawn } from "@/runtime/spawnRequests";
 
 export interface SpawnRequestOwner {
   readonly id: string;
@@ -13,6 +14,7 @@ export function registerSpawnRequestOwner(owner: SpawnRequestOwner): void {
   owners.set(owner.id, owner);
 }
 export function canExecuteSpawnRequest(name: string, config: CreepConfig): boolean {
+  if (config.spawnOnce && hasAcceptedSpawn(name)) return false;
   for (const owner of owners.values()) if (owner.matches(name, config) && owner.canExecute?.(name, config) === false) return false;
   return true;
 }

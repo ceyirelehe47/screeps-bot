@@ -10,6 +10,7 @@ import { getCreepConfigService } from "@/runtime/runtimeServices";
 import { isRcl8MaintenanceUpgraderConfig } from "@/runtime/upgraderPolicy";
 import { type CreepConfig, type RoleName } from "@/types/system";
 import { canExecuteSpawnRequest, notifySpawnRequestAccepted } from "@/runtime/spawnRequestOwners";
+import { removeQueuedSpawnConfig } from "@/runtime/spawnHelpers";
 
 let spawnNameGame: typeof Game | undefined;
 let spawnNameTick = -1;
@@ -313,6 +314,7 @@ export function mountSpawn(): void {
 
     if (code === OK) {
       recordAcceptedSpawn(this, configName, name);
+      if (config.spawnOnce) removeQueuedSpawnConfig(Object.values(Game.spawns), configName);
       notifySpawnRequestAccepted(configName, config, name);
       recordFixedCpuAction("spawnWork");
       if (isTransientConfigName(configName)) {

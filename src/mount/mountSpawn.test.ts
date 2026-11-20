@@ -166,6 +166,24 @@ describe("mountSpawn", () => {
     expect(Memory.creeps["war-born"].configName).toBeUndefined();
   });
 
+  it("两个 Spawn 排到同一 spawnOnce 时只出生一次，第二台继续其它任务", () => {
+    const room = { name: "W1N1", energyAvailable: 800, energyCapacityAvailable: 800 } as Room;
+    const once = "W1N1:once", other = "W1N1:worker:1";
+    Memory.data!.creepConfigs = {
+      [once]: { role: "worker", args: [], roomName: room.name, body: [WORK, CARRY, MOVE], spawnOnce: { queuedAt: Game.time } },
+      [other]: { role: "worker", args: [], roomName: room.name, body: [WORK, CARRY, MOVE] },
+    };
+    const a = createSpawn("A", room, [once]), b = createSpawn("B", room, [once, other]);
+    Object.setPrototypeOf(a, prototype); Object.setPrototypeOf(b, prototype);
+    Game.rooms = { W1N1: room }; Game.spawns = { A: a, B: b };
+    a.work();
+    expect((a.spawnCreep as jest.Mock).mock.calls[0][2].memory.configName).toBe(once);
+    expect(b.mainSpawn(once)).toBe(false);
+    expect(b.memory.spawnList).toEqual([other]);
+    b.work();
+    expect((b.spawnCreep as jest.Mock).mock.calls[0][2].memory.configName).toBe(other);
+  });
+
   it("同tick多Spawn生产同角色不重名，配对Memory归属保持独立", () => {
     const room = { name: "E1N57", energyAvailable: 5600, energyCapacityAvailable: 5600 } as Room;
     const configs = ["E1N57:powerbank:E0N58:attacker", "E1N57:powerbank:W0N57:attacker"];

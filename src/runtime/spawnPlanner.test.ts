@@ -1,5 +1,5 @@
 import { setupPathFinderGlobal, setupRoomPositionGlobal, setDefaultMapMocks } from "@mock/movement";
-import { readSpawnQueue, consumeSpawnRequest } from "@/runtime/spawnRequests";
+import { readSpawnQueue, consumeSpawnRequest, recordAcceptedSpawn } from "@/runtime/spawnRequests";
 import { registerSpawnRequestOwners } from "@/runtime/registerSpawnRequestOwners";
 registerSpawnRequestOwners();
 import { registerOutboundMissionOwners } from "@/runtime/registerOutboundMissionOwners";
@@ -97,6 +97,19 @@ const resetScenarioWorld = () => {
 };
 
 describe("采矿持续补员回归", () => {
+  it("本 tick 已接受但尚未出现在 spawning 的常驻单位不重复排队", () => {
+    resetScenarioWorld();
+    const room = createRoom("W6N1");
+    const spawn = createSpawn(room, "accepted-worker");
+    Game.rooms[room.name] = room; Game.spawns[spawn.name] = spawn; addLiveCarrier(room);
+    const name = room.name + ":worker:0";
+    Memory.data = { creepConfigs: { [name]: { role: "worker", args: [], roomName: room.name } } };
+    scheduleSpawnTasks();
+    expect(consumeSpawnRequest(spawn, name)).toBe(true);
+    recordAcceptedSpawn(spawn, name, "new-worker");
+    scheduleSpawnTasks();
+    expect(spawn.memory.spawnList).not.toContain(name);
+  });
   function stalledRoom(energy: number) {
     resetScenarioWorld();
     const room = createRoom("E3N54", 3);
