@@ -77,6 +77,9 @@ function findDelivery(creep: Creep, loadedAmount: number): Delivery | DeliveryPe
   if (loadedAmount > maxCarry) return undefined;
   let pending = false;
   for (const target of deliveryCandidates(creep, memory(creep).depositReturning ? 1 : loadedAmount)) {
+    if (memory(creep).depositReturning && target.pos.roomName === creep.room.name && creep.pos.isNearTo(target)) {
+      return { target, routeRooms: [creep.room.name], travelTicks: 0 };
+    }
     const routeRooms = findDepositSafeRoute(creep.room.name, target.pos.roomName);
     if (!routeRooms) continue;
     const result = measureDepositReturn({ origin: creep.pos, returnTarget: target.pos, body, loadedAmount,

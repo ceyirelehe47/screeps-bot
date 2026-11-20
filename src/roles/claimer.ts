@@ -16,6 +16,7 @@ export const claimerRole: RoleFactory = (
     return true;
   },
   target: (creep): boolean => {
+    if (targetRoom && creep.room.name !== targetRoom) return true;
     const controller = creep.room.controller;
     if (!controller) {
       return false;

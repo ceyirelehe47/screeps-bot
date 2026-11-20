@@ -28,6 +28,7 @@ export const crossShardClaimerRole: RoleFactory = (
     return true;
   },
   target: (creep): boolean => {
+    if (Game.shard.name !== targetShard || creep.room.name !== targetRoom) return true;
     const controller = creep.room.controller;
     if (!controller) {
       return false;

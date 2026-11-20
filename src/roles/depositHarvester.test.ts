@@ -112,6 +112,19 @@ describe("Deposit mounted source/target闭环", () => {
     expect(finishDepositTask).not.toHaveBeenCalled();
     expect(c.suicide).toHaveBeenCalledTimes(1);
   });
+  it("返仓单位已在接收建筑旁，寿命不足或 MOVE 损毁仍能卸货", () => {
+    amount = 120;
+    const c = creep();
+    c.room = home; c.pos = pos(19, home.name); c.memory.working = true; c.ticksToLive = 2;
+    for (const part of c.body) if (part.type === MOVE) part.hits = 0;
+    jest.mocked(measureDepositReturn).mockReturnValue({ status: "pending", reason: "invalid_body", retryAt: 105 });
+    c.work();
+    expect(c.transfer).toHaveBeenCalledWith(home.storage, RESOURCE_METAL, 120);
+    expect(measureDepositReturn).not.toHaveBeenCalled();
+    expect(task.deliveredAmount).toBe(0);
+    amount = 0; Game.time++; c.work();
+    expect(task.deliveredAmount).toBe(120);
+  });
   it("transfer返回OK但cargo未减少，不计交付并可再次尝试", () => {
     amount = 200; const c = creep(); c.room = home; c.pos = pos(19, "E1N1");
     c.memory.working = true; c.work(); Game.time += 1; c.work();

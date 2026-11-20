@@ -8,7 +8,8 @@ jest.mock("@/runtime/cpuPhaseProfiler", () => ({
 }));
 
 import { claimerRole } from "@/roles/claimer";
-import { moveToTarget } from "@/roles/shared";
+import { crossShardClaimerRole } from "@/roles/crossShardClaimer";
+import { moveToTarget, moveToTargetRoom } from "@/roles/shared";
 
 function createRoom(): Room {
   return {
@@ -33,6 +34,20 @@ function createCreep(room: Room): Creep {
 describe("claimerRole", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+  });
+
+  it.each(["claim", "attack", "crossShard"])("工作中的 %s 被挤出目标后重新旅行，只在指定房间操作控制器", mode => {
+    const creep = createCreep(createRoom());
+    const nextRoom = "W8N9";
+    Game.shard = { name: "shard1", type: "normal", ptr: false };
+    const role = mode === "crossShard"
+      ? crossShardClaimerRole("other-shard", creep.room.name, nextRoom)
+      : claimerRole(nextRoom, undefined, mode);
+    expect(role.target(creep)).toBe(true);
+    expect(creep.claimController).not.toHaveBeenCalled();
+    expect(creep.attackController).not.toHaveBeenCalled();
+    role.source!(creep);
+    expect(moveToTargetRoom).toHaveBeenCalledWith(creep, nextRoom, undefined, expect.anything());
   });
 
   it("attacks a hostile reservation when claimController returns invalid target", () => {
