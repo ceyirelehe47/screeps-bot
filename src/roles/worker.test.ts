@@ -185,6 +185,20 @@ describe("workerRole", () => {
     }
   });
 
+  it("工人已有部分能量时，等候已选取能目标，供能耗尽则用现有能量施工", () => {
+    const { creep } = createCreep(20, 100);
+    const role = workerRole();
+    mockedPickupEnergy.mockReturnValueOnce({ picked: false, outOfRange: true });
+    expect(role.source!(creep)).toBe(false);
+    expect(mockedReleasePickupReservation).not.toHaveBeenCalled();
+    mockedPickupEnergy.mockReturnValueOnce({ picked: false, outOfRange: false });
+    expect(role.source!(creep)).toBe(true);
+    expect(mockedReleasePickupReservation).toHaveBeenCalledWith(creep);
+    arrangeTask("build");
+    role.target(creep);
+    expect(creep.build).toHaveBeenCalledWith(target);
+  });
+
   it("handles missing, vanished, and unsafe task preconditions without issuing work", () => {
     for (const energy of [50, 0]) {
       resetWorkerFixture();

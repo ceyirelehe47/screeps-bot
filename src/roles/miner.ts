@@ -24,6 +24,7 @@ function unloadOverflow(creep: Creep): boolean {
 export const minerRole: RoleFactory = (sourceId?: string) => {
  const role: RoleLifecycle = {
   source: (creep): boolean => {
+    if (creep.store.getUsedCapacity(RESOURCE_ENERGY) > 0 && creep.store.getFreeCapacity(RESOURCE_ENERGY) === 0) return true;
     const source = getSource(sourceId);
     if (!source) {
       return false;
@@ -70,11 +71,6 @@ export const minerRole: RoleFactory = (sourceId?: string) => {
       return creep.store.getUsedCapacity(RESOURCE_ENERGY) === 0;
     }
 
-    const link = getSourceAdjacentLink(source);
-    if (!link) {
-      return true;
-    }
-
     const usedEnergy = creep.store.getUsedCapacity(RESOURCE_ENERGY);
     if (usedEnergy <= 0) {
       return true;
@@ -85,8 +81,8 @@ export const minerRole: RoleFactory = (sourceId?: string) => {
       return true;
     }
 
-    const linkFreeCapacity = link.store.getFreeCapacity(RESOURCE_ENERGY);
-    if (linkFreeCapacity <= 0) {
+    const link = getSourceAdjacentLink(source);
+    if (!link || link.store.getFreeCapacity(RESOURCE_ENERGY) <= 0) {
       return unloadOverflow(creep);
     }
 
