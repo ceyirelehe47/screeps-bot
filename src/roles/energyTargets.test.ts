@@ -145,6 +145,19 @@ describe("energyTargets", () => {
     else expect(worker.withdraw).toHaveBeenCalledWith(container, RESOURCE_ENERGY, 10);
   });
 
+  it.each([20, 50])("地面能量已有 40 预约时，剩余容量为 %i 的单位只取允许的资源堆", free => {
+    const shared = { id: "shared", resourceType: RESOURCE_ENERGY, amount: 60, pos: createPos(25) } as Resource;
+    const fallback = { id: "fallback", resourceType: RESOURCE_ENERGY, amount: 8, pos: createPos(26) } as Resource;
+    const room = createRoom({ dropped: [shared, fallback] });
+    Game.rooms[room.name] = room;
+    const worker = createCreep(room); worker.store = createStore(0, free) as StoreDefinition;
+    const other = createCreep(room); other.name = "other"; other.store = createStore(0, 40) as StoreDefinition;
+    Game.creeps = { [worker.name]: worker, other };
+    expect(reservePickupTarget(other, shared, 40)).toBe(true);
+    expect(pickupEnergyFromPreferredTarget(worker).picked).toBe(true);
+    expect(worker.pickup).toHaveBeenCalledWith(free === 20 ? shared : fallback);
+  });
+
   it("Storage 满时改选有空位的 Terminal，两者满时不返回满结构", () => {
     const storage = { id: "full-storage", structureType: STRUCTURE_STORAGE, pos: createPos(25), store: createStore(1000, 1000) } as unknown as StructureStorage;
     const terminal = { id: "available-terminal", structureType: STRUCTURE_TERMINAL, pos: createPos(26), store: createStore(0, 1000) } as unknown as StructureTerminal;

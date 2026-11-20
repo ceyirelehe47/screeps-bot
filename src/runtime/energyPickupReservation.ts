@@ -196,6 +196,10 @@ export function reservePickupTarget(
   }
 
   const claimAmount = Math.min(availableForThisCreep, wanted);
+  // 地面拾取不能指定数量，须能预约原生 pickup 会一次拿走的全部能量。
+  if (targetKind === "resource" && claimAmount < Math.min(available, creep.store.getFreeCapacity(RESOURCE_ENERGY))) {
+    return false;
+  }
 
   const previous = getCreepAssignmentState(creep.name);
   if (previous?.energyPickupTargetId && (previous.energyPickupTargetId !== target.id || previous.energyPickupRoomName !== target.pos.roomName)) {
