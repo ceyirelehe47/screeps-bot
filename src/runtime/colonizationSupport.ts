@@ -1,8 +1,8 @@
-import { createTaskLifecycle } from "@/runtime/taskLifecycle";
+import { createOutboundLifecycle } from "@/runtime/outboundMissionLifecycle";
 import { replaceSpawnQueue } from "@/runtime/spawnRequests";
 import { getCreepConfigService, getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
 import { countBoostableParts } from "@/runtime/boostParts";
-import { canStartOutboundMission } from "@/runtime/outboundMissionPolicy";
+import { evaluateOutboundAdmission, getRoomMissionMode } from "@/runtime/outboundMissionPolicy";
 
 import { prepareBoosts, releaseBoostLabs } from "@/runtime/powerBankBoost";
 
@@ -150,9 +150,14 @@ export function runColonizationSupport(): void {
     }
     state.updatedAt = Game.time;
     state.routeRooms = [...route];
-    if (state.status === "complete" || raw.enabled !== true || !Game.rooms[sourceRoom]?.controller?.my ||
-        !controller?.my || !canStartOutboundMission(sourceRoom)) {
-      if (state.status !== "complete") supportLifecycle.transition(state, raw.enabled && !controller?.my ? "waiting_claim" : "paused");
+    const admission = evaluateOutboundAdmission(getRoomMissionMode(sourceRoom), { family: "colonizationSupport", intent: "expedition", committed: false });
+    const pause = raw.enabled !== true ? "disabled" : !Game.rooms[sourceRoom]?.controller?.my ? "source_unavailable"
+      : !controller?.my ? "waiting_claim" : admission.allowed === false ? admission.reason : undefined;
+    if (state.status === "complete" || pause) {
+      if (state.status !== "complete") {
+        supportLifecycle.transition(state, pause === "waiting_claim" ? "waiting_claim" : "paused");
+        state.blocker = pause;
+      } else delete state.blocker;
       stopConfig(configName, sourceRoom, boostOwner);
       const temporaryPause = raw.enabled === true && !!controller?.my && controller.level < 6 && !!Game.rooms[sourceRoom]?.controller?.my;
       for (const name of Object.keys(configs).filter(name => name.startsWith(`${sourceRoom}:colonizationSupport:${targetRoom}:harvester:`))) {
@@ -166,6 +171,7 @@ export function runColonizationSupport(): void {
       continue;
     }
     supportLifecycle.transition(state, "supporting");
+    delete state.blocker;
     const miningPrefix = `${sourceRoom}:colonizationSupport:${targetRoom}:harvester:`;
     const validMiningNames = new Set<string>();
     const handoffs = state.miningHandoffs ??= {};
@@ -240,6 +246,6 @@ export function runColonizationSupport(): void {
 
 type SupportState = NonNullable<ScreepsMemoryRuntime["colonizationSupport"]>[string];
 const SUPPORT_STATES = ["waiting_claim", "supporting", "complete", "paused"] as const;
-const supportLifecycle = createTaskLifecycle<SupportState["status"], SupportState>("colonizationSupport", {
+const supportLifecycle = createOutboundLifecycle<"colonizationSupport", SupportState>("colonizationSupport", {
   waiting_claim: SUPPORT_STATES, supporting: SUPPORT_STATES, paused: SUPPORT_STATES, complete: ["complete"],
 }, state => state.runId);

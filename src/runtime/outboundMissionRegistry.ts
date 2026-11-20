@@ -2,10 +2,18 @@ import type { CreepConfig } from "@/types/system";
 import type { SpawnIntent } from "@/runtime/spawnIntent";
 import type { RoomMissionMode } from "@/runtime/outboundMissionPolicy";
 
+export interface OutboundRequest {
+  intent: SpawnIntent;
+  committed: boolean;
+  family?: "remoteMining" | "deposit" | "powerBank" | "colonizationSupport";
+  taskId?: string;
+  blockedReason?: "mission_paused";
+}
+
 export interface OutboundMissionOwner {
   id: string;
   matches(name: string, config: CreepConfig): boolean;
-  evaluate(name: string, config: CreepConfig, mode: RoomMissionMode): { intent: SpawnIntent; committed: boolean };
+  evaluate(name: string, config: CreepConfig, mode: RoomMissionMode): OutboundRequest;
 }
 const owners = new Map<string, OutboundMissionOwner>();
 

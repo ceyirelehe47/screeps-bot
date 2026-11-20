@@ -1,11 +1,11 @@
 import { runIsolatedRoomOperation } from "@/runtime/runtimeIsolation";
-import { createTaskLifecycle } from "@/runtime/taskLifecycle";
+import { createOutboundLifecycle, orderOutboundWork } from "@/runtime/outboundMissionLifecycle";
 import { isDue } from "@/runtime/cadence";
 import { searchPlanningPath } from "@/movement/pathSearch";
 import { replaceSpawnQueue } from "@/runtime/spawnRequests";
 import { getCreepConfigService, getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
 import { isOwnedManagedRoom } from "@/runtime/roomTypes";
-import { isDefenseMode } from "@/runtime/defenseMode";
+import { canStartOutboundMission } from "@/runtime/outboundMissionPolicy";
 import { requestRemoteObservation } from "@/runtime/powerBankObserver";
 import { claimHeavyPlanningSlot, hasPlanningCpuHeadroom } from "@/runtime/planningCpuBudget";
 
@@ -589,9 +589,13 @@ function abandonTask(
 function processScoutLifecycle(store: Record<string, RemoteMiningTask>, config: RemoteMiningConfig): void {
   const now = Game.time;
 
-  for (const task of Object.values(store)) {
+  const scouting = Object.values(store).filter(task => task.status === "scouting");
+  for (const task of orderOutboundWork("remoteMining", scouting, (a, b) => a.assignedAt - b.assignedAt)) {
     runIsolatedRoomOperation("processScoutLifecycle", `${task.sourceRoom}:${task.targetRoom}`, () => {
-    if (task.status !== "scouting") {
+    const blocker = remoteSourceBlocker(task.sourceRoom);
+    if (blocker) {
+      suspendRemoteTask(task, blocker);
+      removeScoutConfigAndSpawnQueues(task.sourceRoom, task.targetRoom);
       return 0 as const;
     }
 
@@ -1080,25 +1084,10 @@ function isSourceRoomValidForRemote(sourceRoomName: string): boolean {
   return room.controller.level >= 7;
 }
 
-function isRemoteManagedConfig(configName: string, sourceRoom: string, targetRoom: string): boolean {
-  const prefix = `${sourceRoom}:remoteMine:${targetRoom}:`;
-  if (!configName.startsWith(prefix)) return false;
-  const suffix = configName.slice(prefix.length);
-  return suffix.startsWith("harvester:") || suffix.startsWith("carrier:") || suffix.startsWith("reserver:");
-}
-
-function discoverStaleConfigNames(sourceRoom: string, targetRoom: string): string[] {
-  const prefix = `${sourceRoom}:remoteMine:${targetRoom}:`;
-  const creepConfigs = getCreepConfigService();
-  const allConfigs = creepConfigs.list(prefix);
-  const staleNames: string[] = [];
-  for (const configName of Object.keys(allConfigs)) {
-    const suffix = configName.slice(prefix.length);
-    if (suffix.startsWith("harvester:") || suffix.startsWith("carrier:") || suffix.startsWith("reserver:")) {
-      staleNames.push(configName);
-    }
-  }
-  return staleNames;
+function remoteSourceBlocker(roomName: string): "source_room_invalid" | "source_room_defense_mode" | undefined {
+  if (!isSourceRoomValidForRemote(roomName)) return "source_room_invalid";
+  if (!canStartOutboundMission(roomName, "income", "remoteMining")) return "source_room_defense_mode";
+  return undefined;
 }
 
 function removeRemoteConfig(configName: string): void {
@@ -1130,74 +1119,21 @@ function removeReserverConfig(sourceRoom: string, targetRoom: string): void {
   }
 }
 
-function removeRemotePrefixFromSpawnQueues(
-  sourceRoom: string,
-  targetRoom: string,
-): void {
-  const tickContext = getTickContextService();
-  for (const spawn of tickContext.getSpawnsByRoom(sourceRoom)) {
+/** 收入单位与全体队员共用配置、队列清理；侦察由独立的观察租约管理。 */
+function cleanupRemoteConfigs(task: RemoteMiningTask, scope: "income" | "all" = "income"): void {
+  const prefix = `${task.sourceRoom}:remoteMine:${task.targetRoom}:`;
+  const matches = (name: string): boolean => {
+    if (!name.startsWith(prefix)) return false;
+    const job = name.slice(prefix.length).split(":")[0];
+    return job === "harvester" || job === "carrier" || job === "reserver" ||
+      (scope === "all" && (job === "worker" || job === "defender"));
+  };
+  for (const spawn of getTickContextService().getSpawnsByRoom(task.sourceRoom)) {
     const queue = spawn.memory.spawnList;
-    if (!queue || queue.length === 0) continue;
-    replaceSpawnQueue(spawn, queue.filter(
-      name => !isRemoteManagedConfig(name, sourceRoom, targetRoom),
-    ));
+    if (queue?.some(matches)) replaceSpawnQueue(spawn, queue.filter(name => !matches(name)));
   }
-}
-
-function cleanupRemoteConfigs(
-  task: RemoteMiningTask,
-): void {
-  const staleNames = discoverStaleConfigNames(task.sourceRoom, task.targetRoom);
-  removeRemotePrefixFromSpawnQueues(task.sourceRoom, task.targetRoom);
-  for (const configName of staleNames) {
-    removeRemoteConfig(configName);
-  }
-}
-
-function isRemoteAllManagedConfig(configName: string, sourceRoom: string, targetRoom: string): boolean {
-  const prefix = `${sourceRoom}:remoteMine:${targetRoom}:`;
-  if (!configName.startsWith(prefix)) return false;
-  const suffix = configName.slice(prefix.length);
-  return suffix.startsWith("harvester:") || suffix.startsWith("carrier:") || suffix.startsWith("reserver:") ||
-    suffix.startsWith("worker:") || suffix.startsWith("defender:");
-}
-
-function discoverAllStaleConfigNames(sourceRoom: string, targetRoom: string): string[] {
-  const prefix = `${sourceRoom}:remoteMine:${targetRoom}:`;
-  const creepConfigs = getCreepConfigService();
-  const allConfigs = creepConfigs.list(prefix);
-  const staleNames: string[] = [];
-  for (const configName of Object.keys(allConfigs)) {
-    const suffix = configName.slice(prefix.length);
-    if (suffix.startsWith("harvester:") || suffix.startsWith("carrier:") || suffix.startsWith("reserver:") ||
-      suffix.startsWith("worker:") || suffix.startsWith("defender:")) {
-      staleNames.push(configName);
-    }
-  }
-  return staleNames;
-}
-
-function removeAllRemotePrefixFromSpawnQueues(
-  sourceRoom: string,
-  targetRoom: string,
-): void {
-  const tickContext = getTickContextService();
-  for (const spawn of tickContext.getSpawnsByRoom(sourceRoom)) {
-    const queue = spawn.memory.spawnList;
-    if (!queue || queue.length === 0) continue;
-    replaceSpawnQueue(spawn, queue.filter(
-      name => !isRemoteAllManagedConfig(name, sourceRoom, targetRoom),
-    ));
-  }
-}
-
-function cleanupAllRemoteConfigs(
-  task: RemoteMiningTask,
-): void {
-  const staleNames = discoverAllStaleConfigNames(task.sourceRoom, task.targetRoom);
-  removeAllRemotePrefixFromSpawnQueues(task.sourceRoom, task.targetRoom);
-  for (const configName of staleNames) {
-    removeRemoteConfig(configName);
+  for (const name of Object.keys(getCreepConfigService().list(prefix))) {
+    if (matches(name)) removeRemoteConfig(name);
   }
 }
 
@@ -1453,9 +1389,7 @@ function maintainInvaderCoreClearance(
 
 function suspendInvaderCoreForInsufficientCapacity(task: RemoteMiningTask): void {
   suspendRemoteTask(task, "invader_core_insufficient_capacity");
-  cleanupAllRemoteConfigs(task);
-  removeRemoteWorkerConfig(task.sourceRoom, task.targetRoom);
-  removeRemoteDefenderConfig(task.sourceRoom, task.targetRoom);
+  cleanupRemoteConfigs(task, "all");
 }
 
 export function processRemoteConfigLifecycle(
@@ -1470,7 +1404,7 @@ export function processRemoteConfigLifecycle(
 
     if (task.status === "abandoned") {
       if (isDue("remoteMining.abandonedGc", 50) || task.updatedAt === Game.time) {
-        cleanupAllRemoteConfigs(task);
+        cleanupRemoteConfigs(task, "all");
         removeScoutConfigAndSpawnQueues(task.sourceRoom, task.targetRoom);
       }
       return 0 as const;
@@ -1480,39 +1414,41 @@ export function processRemoteConfigLifecycle(
     // Abandon the task and clean up all remote configs/spawn entries regardless of current status.
     const earlyVisibleTarget = Game.rooms[task.targetRoom];
     if (earlyVisibleTarget && earlyVisibleTarget.controller?.my) {
-      taskLifecycle.transition(task, "abandoned");
-      task.abandonedReason = "owned_room";
-      task.updatedAt = Game.time;
-      task.nextRetryAt = Game.time + 5000;
+      abandonTask(task, "owned_room");
       delete task.suspendReason;
       delete task.suspendedAt;
       delete task.lastThreatAt;
       delete task.safeSince;
-      delete task.defendingSince;
-      delete task.lastDefenseThreatAt;
-      delete task.defenseReason;
-      delete task.lastDefenseSafeAt;
-      delete task.damageSnapshots;
-      cleanupAllRemoteConfigs(task);
-      removeRemoteWorkerConfig(task.sourceRoom, task.targetRoom);
-      removeRemoteDefenderConfig(task.sourceRoom, task.targetRoom);
+      clearRemoteDefenseState(task);
+      cleanupRemoteConfigs(task, "all");
       removeScoutConfigAndSpawnQueues(task.sourceRoom, task.targetRoom);
       return 0 as const;
     }
 
-    if ((task.status === "active" || task.suspendReason === "source_room_invalid") && !isSourceRoomValidForRemote(task.sourceRoom)) {
-      if (task.status === "active") suspendRemoteTask(task, "source_room_invalid");
-      cleanupAllRemoteConfigs(task);
+    const sourceBlocker = remoteSourceBlocker(task.sourceRoom);
+    if (sourceBlocker) {
+      if (task.suspendReason !== "manual_war_pause" && task.suspendReason !== sourceBlocker) suspendRemoteTask(task, sourceBlocker);
+      cleanupRemoteConfigs(task, "all");
       removeScoutConfigAndSpawnQueues(task.sourceRoom, task.targetRoom);
       return 0 as const;
     }
 
     if (task.status === "suspended") {
-      cleanupAllRemoteConfigs(task);
+      cleanupRemoteConfigs(task, "all");
 
       if (task.suspendReason === "manual_war_pause") {
-        removeScoutConfig(task.sourceRoom, task.targetRoom);
-        removeScoutFromSpawnQueues(task.sourceRoom, task.targetRoom);
+        removeScoutConfigAndSpawnQueues(task.sourceRoom, task.targetRoom);
+        return 0 as const;
+      }
+
+      if (!task.sourceIds.length && (task.suspendReason === "source_room_invalid" || task.suspendReason === "source_room_defense_mode")) {
+        taskLifecycle.transition(task, "scouting");
+        task.assignedAt = Game.time;
+        delete task.suspendReason;
+        delete task.suspendedAt;
+        delete task.lastThreatAt;
+        delete task.safeSince;
+        upsertScoutConfig(task.sourceRoom, task.targetRoom);
         return 0 as const;
       }
 
@@ -1520,11 +1456,7 @@ export function processRemoteConfigLifecycle(
       const visibleTarget = Game.rooms[task.targetRoom];
       if (visibleTarget) {
         const supportedCore = getSupportedInvaderCore(visibleTarget);
-        if (
-          supportedCore &&
-          isSourceRoomValidForRemote(task.sourceRoom) &&
-          !isDefenseMode(task.sourceRoom)
-        ) {
+        if (supportedCore) {
           if (!hasInvaderCoreClearanceCapacity(task)) {
             suspendInvaderCoreForInsufficientCapacity(task);
             upsertScoutConfig(task.sourceRoom, task.targetRoom);
@@ -1556,16 +1488,8 @@ export function processRemoteConfigLifecycle(
         }
       }
       if (!resumed) {
-        if (isSourceRoomValidForRemote(task.sourceRoom) && !isDefenseMode(task.sourceRoom)) {
-          if (!Game.rooms[task.targetRoom]) {
-            upsertScoutConfig(task.sourceRoom, task.targetRoom);
-          } else {
-            removeScoutConfig(task.sourceRoom, task.targetRoom);
-            removeScoutFromSpawnQueues(task.sourceRoom, task.targetRoom);
-          }
-        } else {
-          removeScoutConfigAndSpawnQueues(task.sourceRoom, task.targetRoom);
-        }
+        if (!visibleTarget) upsertScoutConfig(task.sourceRoom, task.targetRoom);
+        else removeScoutConfigAndSpawnQueues(task.sourceRoom, task.targetRoom);
         return 0 as const;
       }
     }
@@ -1573,49 +1497,9 @@ export function processRemoteConfigLifecycle(
     if (task.status === "defending") {
       const visibleTarget = Game.rooms[task.targetRoom];
 
-      if (!isSourceRoomValidForRemote(task.sourceRoom)) {
-        taskLifecycle.transition(task, "suspended");
-        task.suspendReason = "source_room_invalid";
-        task.suspendedAt = Game.time;
-        task.lastThreatAt = Game.time;
-        delete task.safeSince;
-        delete task.defendingSince;
-        delete task.lastDefenseThreatAt;
-        delete task.defenseReason;
-        delete task.lastDefenseSafeAt;
-        delete task.damageSnapshots;
-        task.updatedAt = Game.time;
-        cleanupRemoteConfigs(task);
-        removeRemoteWorkerConfig(task.sourceRoom, task.targetRoom);
-        removeRemoteDefenderConfig(task.sourceRoom, task.targetRoom);
-        removeScoutConfigAndSpawnQueues(task.sourceRoom, task.targetRoom);
-        return 0 as const;
-      }
-
-      if (isDefenseMode(task.sourceRoom)) {
-        taskLifecycle.transition(task, "suspended");
-        task.suspendReason = "source_room_defense_mode";
-        task.suspendedAt = Game.time;
-        task.lastThreatAt = Game.time;
-        delete task.safeSince;
-        delete task.defendingSince;
-        delete task.lastDefenseThreatAt;
-        delete task.defenseReason;
-        delete task.lastDefenseSafeAt;
-        delete task.damageSnapshots;
-        task.updatedAt = Game.time;
-        cleanupRemoteConfigs(task);
-        removeRemoteWorkerConfig(task.sourceRoom, task.targetRoom);
-        removeRemoteDefenderConfig(task.sourceRoom, task.targetRoom);
-        removeScoutConfigAndSpawnQueues(task.sourceRoom, task.targetRoom);
-        return 0 as const;
-      }
-
       if (task.defenseReason === "npc_invader_core") {
         if (!visibleTarget) {
-          cleanupRemoteConfigs(task);
-          removeRemoteWorkerConfig(task.sourceRoom, task.targetRoom);
-          removeRemoteDefenderConfig(task.sourceRoom, task.targetRoom);
+          cleanupRemoteConfigs(task, "all");
           upsertScoutConfig(task.sourceRoom, task.targetRoom);
           return 0 as const;
         }
@@ -1623,11 +1507,8 @@ export function processRemoteConfigLifecycle(
         const passiveThreat = getRemoteThreatReason(visibleTarget);
         if (passiveThreat !== null) {
           suspendRemoteTask(task, passiveThreat);
-          cleanupAllRemoteConfigs(task);
-          removeRemoteWorkerConfig(task.sourceRoom, task.targetRoom);
-          removeRemoteDefenderConfig(task.sourceRoom, task.targetRoom);
-          removeScoutConfig(task.sourceRoom, task.targetRoom);
-          removeScoutFromSpawnQueues(task.sourceRoom, task.targetRoom);
+          cleanupRemoteConfigs(task, "all");
+          removeScoutConfigAndSpawnQueues(task.sourceRoom, task.targetRoom);
           return 0 as const;
         }
 
@@ -1650,8 +1531,7 @@ export function processRemoteConfigLifecycle(
           cleanupRemoteConfigs(task);
           removeRemoteWorkerConfig(task.sourceRoom, task.targetRoom);
           upsertRemoteDefenderConfig(task);
-          removeScoutConfig(task.sourceRoom, task.targetRoom);
-          removeScoutFromSpawnQueues(task.sourceRoom, task.targetRoom);
+          removeScoutConfigAndSpawnQueues(task.sourceRoom, task.targetRoom);
           return 0 as const;
         }
 
@@ -1659,52 +1539,25 @@ export function processRemoteConfigLifecycle(
         clearRemoteDefenseState(task);
         task.updatedAt = Game.time;
         removeRemoteDefenderConfig(task.sourceRoom, task.targetRoom);
-        removeScoutConfig(task.sourceRoom, task.targetRoom);
-        removeScoutFromSpawnQueues(task.sourceRoom, task.targetRoom);
+        removeScoutConfigAndSpawnQueues(task.sourceRoom, task.targetRoom);
         return 0 as const;
       }
 
       if (visibleTarget) {
         const passiveThreat = getRemoteThreatReason(visibleTarget);
         if (passiveThreat !== null) {
-          taskLifecycle.transition(task, "suspended");
-          task.suspendReason = passiveThreat;
-          task.suspendedAt = Game.time;
-          task.lastThreatAt = Game.time;
-          delete task.safeSince;
-          delete task.defendingSince;
-          delete task.lastDefenseThreatAt;
-          delete task.defenseReason;
-          delete task.lastDefenseSafeAt;
-          delete task.damageSnapshots;
-          task.updatedAt = Game.time;
-          cleanupRemoteConfigs(task);
-          removeRemoteWorkerConfig(task.sourceRoom, task.targetRoom);
-          removeRemoteDefenderConfig(task.sourceRoom, task.targetRoom);
-          removeScoutConfig(task.sourceRoom, task.targetRoom);
-          removeScoutFromSpawnQueues(task.sourceRoom, task.targetRoom);
+          suspendRemoteTask(task, passiveThreat);
+          cleanupRemoteConfigs(task, "all");
+          removeScoutConfigAndSpawnQueues(task.sourceRoom, task.targetRoom);
           return 0 as const;
         }
 
         const defenseReason = getActiveDefenseReason(visibleTarget, task);
         if (defenseReason !== null) {
           if (task.defendingSince !== undefined && Game.time - task.defendingSince > 750) {
-            taskLifecycle.transition(task, "suspended");
-            task.suspendReason = "defense_timeout";
-            task.suspendedAt = Game.time;
-            task.lastThreatAt = Game.time;
-            delete task.safeSince;
-            delete task.defendingSince;
-            delete task.lastDefenseThreatAt;
-            delete task.defenseReason;
-            delete task.lastDefenseSafeAt;
-            delete task.damageSnapshots;
-            task.updatedAt = Game.time;
-            cleanupRemoteConfigs(task);
-            removeRemoteWorkerConfig(task.sourceRoom, task.targetRoom);
-            removeRemoteDefenderConfig(task.sourceRoom, task.targetRoom);
-            removeScoutConfig(task.sourceRoom, task.targetRoom);
-            removeScoutFromSpawnQueues(task.sourceRoom, task.targetRoom);
+            suspendRemoteTask(task, "defense_timeout");
+            cleanupRemoteConfigs(task, "all");
+            removeScoutConfigAndSpawnQueues(task.sourceRoom, task.targetRoom);
             return 0 as const;
           }
 
@@ -1725,8 +1578,7 @@ export function processRemoteConfigLifecycle(
           cleanupRemoteConfigs(task);
           removeRemoteWorkerConfig(task.sourceRoom, task.targetRoom);
           upsertRemoteDefenderConfig(task);
-          removeScoutConfig(task.sourceRoom, task.targetRoom);
-          removeScoutFromSpawnQueues(task.sourceRoom, task.targetRoom);
+          removeScoutConfigAndSpawnQueues(task.sourceRoom, task.targetRoom);
           return 0 as const;
         } else {
           if (task.lastDefenseSafeAt === undefined) {
@@ -1735,21 +1587,15 @@ export function processRemoteConfigLifecycle(
           const safeTicks = Game.time - task.lastDefenseSafeAt;
           if (safeTicks >= config.remoteSafeTicksToResume) {
             taskLifecycle.transition(task, "active");
-            delete task.defendingSince;
-            delete task.lastDefenseThreatAt;
-            delete task.defenseReason;
-            delete task.lastDefenseSafeAt;
-            delete task.damageSnapshots;
+            clearRemoteDefenseState(task);
             task.updatedAt = Game.time;
             removeRemoteDefenderConfig(task.sourceRoom, task.targetRoom);
-            removeScoutConfig(task.sourceRoom, task.targetRoom);
-            removeScoutFromSpawnQueues(task.sourceRoom, task.targetRoom);
+            removeScoutConfigAndSpawnQueues(task.sourceRoom, task.targetRoom);
             return 0 as const;
           } else {
             task.updatedAt = Game.time;
             upsertRemoteDefenderConfig(task);
-            removeScoutConfig(task.sourceRoom, task.targetRoom);
-            removeScoutFromSpawnQueues(task.sourceRoom, task.targetRoom);
+            removeScoutConfigAndSpawnQueues(task.sourceRoom, task.targetRoom);
             return 0 as const;
           }
         }
@@ -1760,31 +1606,13 @@ export function processRemoteConfigLifecycle(
       }
     }
 
-    if (!isSourceRoomValidForRemote(task.sourceRoom)) {
-      cleanupAllRemoteConfigs(task);
-      removeScoutConfigAndSpawnQueues(task.sourceRoom, task.targetRoom);
-      return 0 as const;
-    }
-
-    if (isDefenseMode(task.sourceRoom)) {
-      cleanupAllRemoteConfigs(task);
-      removeScoutConfigAndSpawnQueues(task.sourceRoom, task.targetRoom);
-      return 0 as const;
-    }
-
     const visibleTarget = Game.rooms[task.targetRoom];
     if (visibleTarget) {
       const threatReason = getRemoteThreatReason(visibleTarget);
       if (threatReason !== null) {
-        taskLifecycle.transition(task, "suspended");
-        task.suspendReason = threatReason;
-        task.suspendedAt = Game.time;
-        task.lastThreatAt = Game.time;
-        delete task.safeSince;
-        task.updatedAt = Game.time;
-        cleanupAllRemoteConfigs(task);
-        removeScoutConfig(task.sourceRoom, task.targetRoom);
-        removeScoutFromSpawnQueues(task.sourceRoom, task.targetRoom);
+        suspendRemoteTask(task, threatReason);
+        cleanupRemoteConfigs(task, "all");
+        removeScoutConfigAndSpawnQueues(task.sourceRoom, task.targetRoom);
         return 0 as const;
       }
 
@@ -1816,8 +1644,7 @@ export function processRemoteConfigLifecycle(
     if (!Game.rooms[task.targetRoom]) {
       upsertScoutConfig(task.sourceRoom, task.targetRoom);
     } else {
-      removeScoutConfig(task.sourceRoom, task.targetRoom);
-      removeScoutFromSpawnQueues(task.sourceRoom, task.targetRoom);
+      removeScoutConfigAndSpawnQueues(task.sourceRoom, task.targetRoom);
     }
 
     // Defense configs with live creeps are first orphaned so the role can
@@ -1879,7 +1706,7 @@ export function runRemoteMining(): void {
       if (!room.controller || !room.controller.my) {
         return false;
       }
-      return room.controller.level >= 7;
+      return room.controller.level >= 7 && canStartOutboundMission(room.name, "income", "remoteMining");
     })
     .sort((a, b) => a.name.localeCompare(b.name));
 
@@ -1906,7 +1733,7 @@ export function runRemoteMining(): void {
       const previous = store[targetRoom];
       if (previous) {
         if (previous.status !== "abandoned" || Game.time < (previous.nextRetryAt ?? previous.updatedAt + 5000)) continue;
-        cleanupAllRemoteConfigs(previous);
+        cleanupRemoteConfigs(previous, "all");
         removeScoutConfigAndSpawnQueues(previous.sourceRoom, previous.targetRoom);
         delete store[targetRoom];
       }
@@ -1966,4 +1793,4 @@ export function runRemoteMining(): void {
 }
 
 const TASK_STATUSES = ["scouting","active","suspended","defending","abandoned"] as const;
-const taskLifecycle = createTaskLifecycle<RemoteMiningStatus, RemoteMiningTask>("remoteMining", { scouting: TASK_STATUSES, active: TASK_STATUSES, suspended: TASK_STATUSES, defending: TASK_STATUSES, abandoned: TASK_STATUSES }, task => task.targetRoom);
+const taskLifecycle = createOutboundLifecycle<"remoteMining", RemoteMiningTask>("remoteMining", { scouting: TASK_STATUSES, active: TASK_STATUSES, suspended: TASK_STATUSES, defending: TASK_STATUSES, abandoned: TASK_STATUSES }, task => task.targetRoom);

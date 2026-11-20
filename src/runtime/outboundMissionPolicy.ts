@@ -1,6 +1,7 @@
 import { isDefenseMode } from "@/runtime/defenseMode";
 import { isRoomInReserveMode } from "@/runtime/roomReserve";
-import { resolveOutboundMissionIntent } from "@/runtime/outboundMissionRegistry";
+import { outboundStageEnded } from "@/runtime/outboundMissionLifecycle";
+import { resolveOutboundMissionIntent, type OutboundRequest } from "@/runtime/outboundMissionRegistry";
 import { getRoleSpawnIntent } from "@/runtime/spawnIntent";
 import type { CreepConfig } from "@/types/system";
 
@@ -9,22 +10,37 @@ export function getRoomMissionMode(roomName: string): RoomMissionMode {
   return { defense: isDefenseMode(roomName), reserve: isRoomInReserveMode(roomName), sourceRoom: roomName };
 }
 
-/** 只控制新增昂贵出征，已部署单位与外矿收入继续执行。 */
-export function canStartOutboundMission(roomName: string): boolean {
-  const mode = getRoomMissionMode(roomName);
-  return !mode.defense && !mode.reserve;
+export type OutboundBlocker = "defense" | "reserve" | "source_busy" | "mission_paused";
+export type SpawnAdmission = { allowed: true } | { allowed: false; reason: OutboundBlocker };
+
+export function evaluateOutboundAdmission(mode: RoomMissionMode, request: OutboundRequest): SpawnAdmission {
+  if (mode.defense && request.intent !== "local") return { allowed: false, reason: "defense" };
+  if (mode.reserve && request.intent === "expedition" && !request.committed) return { allowed: false, reason: "reserve" };
+  if (request.blockedReason) return { allowed: false, reason: request.blockedReason };
+  if (request.family === "deposit" && mode.sourceRoom) {
+    const powerBank = Object.values(Memory.data?.powerBankHarvest ?? {}).some(task =>
+      task.sourceRoom === mode.sourceRoom && !outboundStageEnded("powerBank", task.status));
+    const otherDeposit = Object.values(Memory.data?.depositHarvest ?? {}).some(task => task.id !== request.taskId &&
+      task.sourceRoom === mode.sourceRoom && task.status !== "discovered" && !outboundStageEnded("deposit", task.status));
+    if (powerBank || otherDeposit) return { allowed: false, reason: "source_busy" };
+  }
+  return { allowed: true };
 }
 
-export type SpawnAdmission = { allowed: true } | { allowed: false; reason: "defense" | "reserve" };
+/** 旧调用方默认申请一次新远征；收入任务显式使用 income，已投入任务在出生处提交 owner 证据。 */
+export function canStartOutboundMission(roomName: string, intent: OutboundRequest["intent"] = "expedition",
+  family?: OutboundRequest["family"]): boolean {
+  return evaluateOutboundAdmission(getRoomMissionMode(roomName), { intent, family, committed: false }).allowed;
+}
+
 export function getSpawnAdmission(configName: string, config: CreepConfig, actualSpawnRoom?: string): SpawnAdmission {
   const roomName = config.roomName ?? actualSpawnRoom;
   if (!roomName) return { allowed: true };
   const mode = getRoomMissionMode(roomName);
-  const mission = resolveOutboundMissionIntent(configName, config, mode);
-  const intent = mission?.intent ?? getRoleSpawnIntent(config.role);
-  if (mode.defense && intent !== "local") return { allowed: false, reason: "defense" };
-  if (mode.reserve && intent === "expedition" && !mission?.committed) return { allowed: false, reason: "reserve" };
-  return { allowed: true };
+  const request = resolveOutboundMissionIntent(configName, config, mode) ??
+    { intent: getRoleSpawnIntent(config.role), committed: false };
+  if (request.family && actualSpawnRoom && config.roomName && config.roomName !== actualSpawnRoom) return { allowed: false, reason: "mission_paused" };
+  return evaluateOutboundAdmission(mode, request);
 }
 
 export function isSpawnConfigEconomicallyBlocked(configName: string, config: CreepConfig): boolean {

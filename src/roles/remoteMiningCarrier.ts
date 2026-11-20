@@ -1,3 +1,4 @@
+import { remoteCivilianMustReturn } from "@/runtime/remoteMiningMissionPolicy";
 import { retireCreep } from "@/runtime/retirement";
 import { executeTreasuryFencedTerminalCargo } from "@/runtime/treasuryTerminalCargo";
 import { clearMovementState, moveToTarget, moveToTargetRoom } from "@/roles/shared";
@@ -55,7 +56,7 @@ function isRemoteSuspendedOrDangerous(targetRoom: string): boolean {
   }
   const remoteTask = Memory.data?.remoteMining?.[targetRoom];
   // "defending" means an NPC Invader is present; carriers must avoid the room like "suspended".
-  if (remoteTask?.status === "suspended" || remoteTask?.status === "defending") {
+  if (remoteTask && remoteCivilianMustReturn(remoteTask)) {
     safetyCache.set(targetRoom, true);
     return true;
   }

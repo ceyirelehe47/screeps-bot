@@ -1,8 +1,7 @@
-import { createTaskLifecycle } from "@/runtime/taskLifecycle";
-import { replaceSpawnQueue } from "@/runtime/spawnRequests";
-import { canStartOutboundMission } from "@/runtime/outboundMissionPolicy";
+import { createOutboundLifecycle, deferOutboundTask, orderOutboundWork, outboundStageEnded, outboundRetryDue } from "@/runtime/outboundMissionLifecycle";
+import { hasAcceptedSpawn, replaceSpawnQueue } from "@/runtime/spawnRequests";
+import { evaluateOutboundAdmission, getRoomMissionMode, getSpawnAdmission } from "@/runtime/outboundMissionPolicy";
 import { spawnProfiles } from "@/config/spawnProfiles";
-import { isDefenseMode } from "@/runtime/defenseMode";
 import { ensureDepositDiscoveryStore, cleanupDepositDiscoveryTasks } from "@/runtime/depositDiscovery";
 import { isDepositRoomSafe, measureDepositTravel } from "@/runtime/depositPathDistance";
 import { requestDepositObservation } from "@/runtime/powerBankObserver";
@@ -60,7 +59,7 @@ export function getDepositHarvestConfig(): DepositHarvestConfig {
   };
 }
 export function isDepositTerminal(task: DepositHarvestTask): boolean {
-  return task.status === "complete" || task.status === "aborted" || task.status === "failed";
+  return outboundStageEnded("deposit", task.status);
 }
 export function getDepositAvoidRooms(): string[] {
   return [...new Set([
@@ -95,7 +94,7 @@ export function canSpawnDepositConfig(configName: string, config: CreepConfig): 
   return Boolean(task && task.status === "spawning" && task.spawnStartedAt === undefined &&
     Number.isSafeInteger(task.generation) && task.generation >= 0 && task.configName === configName &&
     configName === `${task.sourceRoom}:deposit:${task.id}:g${task.generation}` && task.spawnReadyAt === Game.time &&
-    config.spawnOnce && configOwned(task, config) && bodyMatches(config));
+    config.spawnOnce && configOwned(task, config) && bodyMatches(config) && getSpawnAdmission(configName, config, task.sourceRoom).allowed);
 }
 /** 只删除本代 owner 的配置/排队；活货由 memory 角色继续返仓。 */
 export function cleanupDepositSpawnOwner(task: DepositHarvestTask): void {
@@ -114,11 +113,7 @@ export function finishDepositTask(task: DepositHarvestTask, status: "complete" |
   cleanupDepositSpawnOwner(task);
 }
 function block(task: DepositHarvestTask, reason: string, retry = 5): void {
-  task.blocker = reason; task.nextAttemptAt = Game.time + retry;
-}
-function hasPowerBankPriority(roomName: string): boolean {
-  return Object.values(Memory.data?.powerBankHarvest ?? {}).some((task) => task.sourceRoom === roomName &&
-    !["complete", "failed", "aborted"].includes(task.status));
+  deferOutboundTask(task, reason, retry);
 }
 function spawnsIn(roomName: string): StructureSpawn[] {
   return Object.values(Game.spawns).filter((s) => s.room.name === roomName &&
@@ -156,13 +151,48 @@ function actualSpawning(task: DepositHarvestTask): string | undefined {
   return Object.values(Game.spawns).find((spawn) => spawn.spawning &&
     Memory.creeps?.[spawn.spawning.name]?.configName === task.configName)?.spawning?.name;
 }
+/** 出生尚未被接受时交还来源名额。同一 Deposit 保留身份，用新世代重新选房。 */
+function reconsiderDepositSource(task: DepositHarvestTask, reason: string): void {
+  if (task.configName && hasAcceptedSpawn(task.configName)) return;
+  cleanupDepositSpawnOwner(task);
+  setDepositTaskStatus(task, "discovered");
+  task.generation++;
+  task.sourceRoom = "";
+  delete task.configName;
+  delete task.spawnReadyAt;
+  delete task.routeRooms;
+  delete task.returnTargetId;
+  delete task.outboundTravelTicks;
+  delete task.returnTravelTicks;
+  delete task.expectedAmount;
+  delete task.expectedHarvestTicks;
+  delete task.unitsPerEnergy;
+  block(task, reason, 1);
+}
+
+function assessDepositSource(task: DepositHarvestTask, deposit: Deposit, route: string[],
+  destination: StructureStorage | StructureTerminal, spawns: StructureSpawn[], config: DepositHarvestConfig) {
+  const avoidRooms = getDepositAvoidRooms();
+  const paths = spawns.map(spawn => measureDepositTravel({ origin: spawn.pos, target: deposit.pos,
+    returnTarget: destination.pos, body: DEPOSIT_BODY, loadedAmount: 500, routeRooms: route, avoidRooms }));
+  const pending = paths.filter(path => path.status === "pending").sort((a, b) => a.retryAt - b.retryAt)[0];
+  if (pending) return { status: "pending" as const, reason: `path_${pending.reason}`, retryAt: pending.retryAt };
+  const ready = paths.filter(path => path.status === "ready");
+  const outboundTravelTicks = Math.max(...ready.map(path => path.outboundTravelTicks));
+  const returnTravelTicks = Math.max(...ready.map(path => path.returnTravelTicks));
+  const economics = assessDepositViability({ currentTick: Game.time, expiresAt: task.expiresAt,
+    queueDelay: Math.max(...spawns.map(spawn => queueDelay(spawn, task.configName))), spawnTime: DEPOSIT_BODY.length * CREEP_SPAWN_TIME,
+    outboundTravelTicks, returnTravelTicks, bornTtl: CREEP_LIFE_TIME, bodyEnergy: DEPOSIT_BODY.reduce((sum, part) => sum + BODYPART_COST[part], 0),
+    lastCooldown: deposit.lastCooldown, cooldown: deposit.cooldown, workParts: 10, capacity: 500,
+    maxCooldown: config.maxCooldown, minExpectedAmount: config.minExpectedAmount, minUnitsPerEnergy: config.minUnitsPerEnergy });
+  return { status: "ready" as const, economics, outboundTravelTicks, returnTravelTicks };
+}
+
 function validateWaitingSpawn(task: DepositHarvestTask, config: DepositHarvestConfig): void {
   delete task.spawnReadyAt;
   const room = Game.rooms[task.sourceRoom];
   const spawns = spawnsIn(task.sourceRoom);
-  if (!room || spawns.length === 0 || hasPowerBankPriority(task.sourceRoom) || isDefenseMode(task.sourceRoom)) {
-    finishDepositTask(task, "aborted", "power_bank_defense_or_spawn_unavailable"); return;
-  }
+  if (!room || spawns.length === 0) { reconsiderDepositSource(task, "source_unavailable"); return; }
   requestDepositObservation(task.targetRoom);
   if (!Game.rooms[task.targetRoom]) { block(task, "target_not_visible"); return; }
   const deposit = Game.getObjectById<Deposit>(task.depositId as Id<Deposit>);
@@ -173,19 +203,10 @@ function validateWaitingSpawn(task: DepositHarvestTask, config: DepositHarvestCo
   const route = findDepositSafeRoute(task.sourceRoom, task.targetRoom); const destination = receiver(room);
   const cost = DEPOSIT_BODY.reduce((sum, p) => sum + BODYPART_COST[p], 0);
   if (!route || !destination || room.energyAvailable < cost) { block(task, "spawn_path_capacity_or_energy_pending"); return; }
-  const measured = spawns.map((spawn) => measureDepositTravel({ origin: spawn.pos, target: deposit.pos,
-    returnTarget: destination.pos, body: DEPOSIT_BODY, loadedAmount: 500, routeRooms: route, avoidRooms: getDepositAvoidRooms() }));
-  const waiting = measured.find((r) => r.status === "pending");
-  if (waiting?.status === "pending") { block(task, `path_${waiting.reason}`, 1); return; }
-  const ready = measured.filter((r): r is Extract<typeof r, { status: "ready" }> => r.status === "ready");
-  const outboundTravelTicks = Math.max(...ready.map((r) => r.outboundTravelTicks));
-  const returnTravelTicks = Math.max(...ready.map((r) => r.returnTravelTicks));
   task.expiresAt = Math.min(task.expiresAt, Game.time + deposit.ticksToDecay);
-  const economics = assessDepositViability({ currentTick: Game.time, expiresAt: task.expiresAt,
-    queueDelay: Math.max(...spawns.map((s) => queueDelay(s, task.configName))), spawnTime: DEPOSIT_BODY.length * 3,
-    outboundTravelTicks, returnTravelTicks, bornTtl: CREEP_LIFE_TIME, bodyEnergy: cost,
-    lastCooldown: deposit.lastCooldown, cooldown: deposit.cooldown, workParts: 10, capacity: 500,
-    maxCooldown: config.maxCooldown, minExpectedAmount: config.minExpectedAmount, minUnitsPerEnergy: config.minUnitsPerEnergy });
+  const assessment = assessDepositSource(task, deposit, route, destination, spawns, config);
+  if (assessment.status === "pending") { block(task, assessment.reason, assessment.retryAt - Game.time); return; }
+  const { economics, outboundTravelTicks, returnTravelTicks } = assessment;
   if (!economics.viable) { finishDepositTask(task, "aborted", economics.reasons.join(",")); return; }
   task.routeRooms = route; task.returnTargetId = destination.id;
   task.outboundTravelTicks = outboundTravelTicks; task.returnTravelTicks = returnTravelTicks;
@@ -216,13 +237,14 @@ function reconcile(task: DepositHarvestTask, config: DepositHarvestConfig): void
     finishDepositTask(task, "aborted", enabled ? "deposit_expired" : "disabled"); return;
   }
   if (task.status === "spawning" && !spawningName && !creep) {
-    const cfg = task.configName ? getCreepConfigService().get(task.configName) : undefined;
-    if (!configOwned(task, cfg)) { finishDepositTask(task, "failed", "spawn_owner_lost"); return; }
-    if (!bodyMatches(cfg!)) { finishDepositTask(task, "failed", "spawn_body_changed"); return; }
+    const name = task.configName;
+    const cfg = name ? getCreepConfigService().get(name) : undefined;
+    if (!name || !cfg || !configOwned(task, cfg)) { finishDepositTask(task, "failed", "spawn_owner_lost"); return; }
+    if (!bodyMatches(cfg)) { finishDepositTask(task, "failed", "spawn_body_changed"); return; }
     const delay = Math.max(0, ...spawnsIn(task.sourceRoom).map((s) => queueDelay(s, task.configName)));
-    if (hasPowerBankPriority(task.sourceRoom) || isDefenseMode(task.sourceRoom)) {
-      finishDepositTask(task, "aborted", "power_bank_or_defense_priority"); return;
-    }
+    if (hasAcceptedSpawn(name)) return;
+    const admission = getSpawnAdmission(name, cfg, task.sourceRoom);
+    if (admission.allowed === false) { reconsiderDepositSource(task, admission.reason); return; }
     if (Game.time + delay + DEPOSIT_BODY.length * 3 + (task.outboundTravelTicks ?? Infinity) +
       (task.expectedHarvestTicks ?? Infinity) >= task.expiresAt) {
       finishDepositTask(task, "aborted", "spawn_queue_missed_deadline"); return;
@@ -230,23 +252,25 @@ function reconcile(task: DepositHarvestTask, config: DepositHarvestConfig): void
     validateWaitingSpawn(task, config);
   }
 }
-function admit(task: DepositHarvestTask, tasks: DepositHarvestTask[], config: DepositHarvestConfig): void {
+function admit(task: DepositHarvestTask, config: DepositHarvestConfig): boolean {
   requestDepositObservation(task.targetRoom);
   const target = Game.rooms[task.targetRoom];
-  if (!target) { block(task, "target_not_visible"); return; }
+  if (!target) { block(task, "target_not_visible"); return false; }
   const deposit = Game.getObjectById<Deposit>(task.depositId as Id<Deposit>);
   if (!deposit || deposit.depositType !== task.resourceType || deposit.pos.x !== task.depositPos.x ||
     deposit.pos.y !== task.depositPos.y || deposit.pos.roomName !== task.targetRoom) {
-    finishDepositTask(task, "aborted", "deposit_missing_or_changed"); return;
+    finishDepositTask(task, "aborted", "deposit_missing_or_changed"); return false;
   }
   task.cooldown = deposit.cooldown; task.lastCooldown = deposit.lastCooldown; task.lastSeenAt = Game.time;
   task.expiresAt = Math.min(task.expiresAt, Game.time + deposit.ticksToDecay);
   const cost = DEPOSIT_BODY.reduce((sum, p) => sum + BODYPART_COST[p], 0);
   // 房间 route 只做廉价候选排序；每个来源仍须所有 active Spawn 完整 PF。
   const sources: Array<{ room: Room; route: string[]; destination: StructureStorage | StructureTerminal; spawns: StructureSpawn[] }> = [];
+  let sourceBlocker: string | undefined;
   for (const room of getTickContextService().getMyRooms()) {
-    if (room.energyCapacityAvailable < cost || room.energyAvailable < cost || !canStartOutboundMission(room.name) ||
-      hasPowerBankPriority(room.name) || tasks.some((t) => t.sourceRoom === room.name && !isDepositTerminal(t) && t.status !== "discovered")) continue;
+    if (room.energyCapacityAvailable < cost || room.energyAvailable < cost) continue;
+    const admission = evaluateOutboundAdmission(getRoomMissionMode(room.name), { family: "deposit", intent: "expedition", committed: false, taskId: task.id });
+    if (admission.allowed === false) { sourceBlocker ??= admission.reason; continue; }
     const route = findDepositSafeRoute(room.name, task.targetRoom);
     const destination = receiver(room);
     const spawns = spawnsIn(room.name);
@@ -257,43 +281,37 @@ function admit(task: DepositHarvestTask, tasks: DepositHarvestTask[], config: De
   let pendingRetryAt: number | undefined;
   let pendingReason: string | undefined;
   for (const { room, route, destination, spawns } of sources) {
-    const measured = spawns.map((spawn) => measureDepositTravel({ origin: spawn.pos, target: deposit.pos,
-      returnTarget: destination.pos, body: DEPOSIT_BODY, loadedAmount: 500, routeRooms: route, avoidRooms: getDepositAvoidRooms() }));
-    const waiting = measured.filter((r): r is Extract<typeof r, { status: "pending" }> => r.status === "pending");
-    if (waiting.length > 0) {
-      pendingRetryAt = Math.min(pendingRetryAt ?? Infinity, ...waiting.map((r) => r.retryAt));
-      pendingReason ??= `path_${waiting[0].reason}`;
-      // pending 只排除此来源。继续读其它 ready/负缓存，并给预算排队者
-      // 保留 +1 重试；不能每次等首源的负缓存到期后又重复耗尽测量配额。
+    const assessment = assessDepositSource(task, deposit, route, destination, spawns, config);
+    if (assessment.status === "pending") {
+      if (pendingRetryAt === undefined || assessment.retryAt < pendingRetryAt) {
+        pendingRetryAt = assessment.retryAt;
+        pendingReason = assessment.reason;
+      }
       continue;
     }
-    const ready = measured.filter((r): r is Extract<typeof r, { status: "ready" }> => r.status === "ready");
-    const outboundTravelTicks = Math.max(...ready.map((r) => r.outboundTravelTicks));
-    const returnTravelTicks = Math.max(...ready.map((r) => r.returnTravelTicks));
-    const economics = assessDepositViability({ currentTick: Game.time, expiresAt: task.expiresAt,
-      queueDelay: Math.max(...spawns.map((s) => queueDelay(s))), spawnTime: DEPOSIT_BODY.length * 3,
-      outboundTravelTicks, returnTravelTicks, bornTtl: CREEP_LIFE_TIME, bodyEnergy: cost,
-      lastCooldown: task.lastCooldown, cooldown: task.cooldown, workParts: 10, capacity: 500,
-      maxCooldown: config.maxCooldown, minExpectedAmount: config.minExpectedAmount, minUnitsPerEnergy: config.minUnitsPerEnergy });
+    const { economics, outboundTravelTicks, returnTravelTicks } = assessment;
     task.expectedAmount = economics.expectedAmount; task.expectedHarvestTicks = economics.harvestTicks;
     task.unitsPerEnergy = economics.unitsPerEnergy;
     if (!economics.viable) { block(task, economics.reasons.join(","), 25); continue; }
     task.sourceRoom = room.name; task.routeRooms = route; task.returnTargetId = destination.id;
     task.outboundTravelTicks = outboundTravelTicks; task.returnTravelTicks = returnTravelTicks;
     task.configName = `${room.name}:deposit:${task.id}:g${task.generation}`;
-    if (getCreepConfigService().get(task.configName)) { finishDepositTask(task, "failed", "spawn_owner_conflict"); return; }
+    if (getCreepConfigService().get(task.configName)) { finishDepositTask(task, "failed", "spawn_owner_conflict"); return false; }
     getCreepConfigService().set(task.configName, { role: "depositHarvester", args: [task.id, room.name], roomName: room.name,
       body: [...DEPOSIT_BODY], taskId: task.id, spawnOnce: {} });
     setDepositTaskStatus(task, "spawning"); task.spawnReadyAt = Game.time; delete task.blocker; delete task.nextAttemptAt;
-    return;
+    return true;
   }
   if (pendingRetryAt !== undefined) block(task, pendingReason!, Math.max(1, pendingRetryAt - Game.time));
-  else if (!task.blocker) block(task, "no_available_source", 25);
+  else if (!sources.length) block(task, sourceBlocker ?? "no_available_source", 25);
+  else if (!task.blocker || outboundRetryDue(task)) block(task, "no_viable_source", 25);
+  return false;
 }
 
 export function runDepositHarvest(): void {
   const store = ensureDepositDiscoveryStore(); const config = getDepositHarvestConfig();
-  const tasks = Object.values(store);
+  const tasks = orderOutboundWork("deposit", Object.values(store), (a, b) =>
+    (a.nextAttemptAt ?? 0) - (b.nextAttemptAt ?? 0) || a.discoveredAt - b.discoveredAt || a.id.localeCompare(b.id));
   for (const task of tasks) reconcile(task, config);
   cleanupDepositDiscoveryTasks();
   // 孤立的一代配置不交给 generic spawnOnce 重试；活体从 memory fallback 返仓。
@@ -304,15 +322,15 @@ export function runDepositHarvest(): void {
   }
   if (!config.enabled) return;
   let active = tasks.filter((t) => !isDepositTerminal(t) && t.status !== "discovered").length;
-  for (const task of tasks.filter((t) => t.status === "discovered" && (t.nextAttemptAt ?? 0) <= Game.time)
-    .sort((a, b) => (a.nextAttemptAt ?? 0) - (b.nextAttemptAt ?? 0) || a.discoveredAt - b.discoveredAt || a.id.localeCompare(b.id))) {
+  for (const task of tasks) {
+    if (task.status !== "discovered" || !outboundRetryDue(task)) continue;
     if (active >= config.maxActiveTasks) break;
-    admit(task, tasks, config); if (task.status === "spawning") active += 1;
+    if (admit(task, config)) active += 1;
   }
 }
 
-const depositLifecycle = createTaskLifecycle<DepositHarvestStatus, DepositHarvestTask>("deposit", {
-  discovered: ["spawning", "aborted", "failed"], spawning: ["outbound", "harvesting", "unloading", "returning", "complete", "aborted", "failed"],
+const depositLifecycle = createOutboundLifecycle<"deposit", DepositHarvestTask>("deposit", {
+  discovered: ["spawning", "aborted", "failed"], spawning: ["discovered", "outbound", "harvesting", "unloading", "returning", "complete", "aborted", "failed"],
   outbound: ["harvesting", "returning", "unloading", "complete", "aborted", "failed"],
   harvesting: ["returning", "unloading", "complete", "aborted", "failed"],
   returning: ["unloading", "complete", "aborted", "failed"], unloading: ["returning", "complete", "aborted", "failed"],

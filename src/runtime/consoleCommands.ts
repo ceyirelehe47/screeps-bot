@@ -1,3 +1,4 @@
+import { outboundStatusRaw } from "@/runtime/console/outboundStatus";
 import { jsonCommand } from "@/runtime/console/jsonCommand";
 import { utf8ByteLength } from "@/util/utf8";
 import {
@@ -173,6 +174,7 @@ export function memoryAuditRaw(): MemoryAuditSnapshot {
 export const memoryAudit = jsonCommand(() => memoryAuditRaw(), 2);
 
 export function registerConsoleCommands(): void {
+  global.outboundStatusRaw = outboundStatusRaw;
   global.depositStatus = depositStatusCommand;
   global.depositStatusRaw = depositStatusRaw;
   registerOperationsConsoleCommands();

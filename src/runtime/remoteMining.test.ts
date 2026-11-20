@@ -225,6 +225,15 @@ describe("remote Invader Core clearance", () => {
     expect(task.safeSince).toBe(Game.time);
   });
 
+  it("尚未核准矿源的侦察被母房防御中断，解禁后重新侦察并重启期限", () => {
+    setupSourceRoom();
+    const task = setupTask("suspended");
+    Object.assign(task,{sourceIds:[], suspendReason:"source_room_defense_mode", assignedAt:1});
+    Game.time = 5000;
+    processRemoteConfigLifecycle(store,getRemoteMiningConfig());
+    expect(task).toMatchObject({status:"scouting",assignedAt:5000});
+    expect(task.suspendReason).toBeUndefined();
+  });
   it("清掉 core 后的 Invader 预定仍保留 reserver 配置", () => {
     setupSourceRoom(); setupTask();
     const target = createVisibleTargetRoom("W1N0", { reservationUsername: "Invader" });

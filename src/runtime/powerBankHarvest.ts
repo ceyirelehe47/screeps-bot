@@ -1,3 +1,4 @@
+import { orderOutboundWork, outboundRetryDue } from "@/runtime/outboundMissionLifecycle";
 import { retireCreep } from "@/runtime/retirement";
 import { isDue } from "@/runtime/cadence";
 import { replaceSpawnQueue } from "@/runtime/spawnRequests";
@@ -682,7 +683,7 @@ function evaluateSourceCandidatesImpl(task: PowerBankHarvestTask, index?: readon
         rejectionReasons.push(`${room.name}:rcl_below_min`);
         continue;
       }
-      if (!canStartOutboundMission(room.name)) {
+      if (!canStartOutboundMission(room.name, "expedition", "powerBank")) {
         rejectionReasons.push(`${room.name}:outbound_blocked`);
         continue;
       }
@@ -2299,7 +2300,7 @@ function processTaskImpl(task: PowerBankHarvestTask): void {
     }
   }
 
-  if (task.nextAttemptAt !== undefined && Game.time < task.nextAttemptAt) {
+  if (!outboundRetryDue(task)) {
     return;
   }
   if (task.status === POWER_BANK_STATUS.TRAVELLING) {
@@ -2418,11 +2419,7 @@ function orderAdmissionTasks(tasks: PowerBankHarvestTask[]): PowerBankHarvestTas
     const tick = task.admissionLastMeasuredAt;
     return typeof tick === "number" && Number.isFinite(tick) && tick >= 0 && tick <= Game.time ? tick : -1;
   };
-  const waiting = tasks.filter(task => task.status === POWER_BANK_STATUS.DISCOVERED)
-    .sort((left, right) => lastMeasuredAt(left) - lastMeasuredAt(right));
-  let index = 0;
-  // 只重排 discovered 所占的位置，保留战斗、运输与终态清理的原有相对顺序。
-  return tasks.map(task => task.status === POWER_BANK_STATUS.DISCOVERED ? waiting[index++] : task);
+  return orderOutboundWork("powerBank", tasks, (left, right) => lastMeasuredAt(left) - lastMeasuredAt(right));
 }
 
 export function runPowerBankHarvest(): void {

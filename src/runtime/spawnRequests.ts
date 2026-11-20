@@ -39,7 +39,7 @@ export function consumeSpawnRequest(spawn: StructureSpawn, expected: string): bo
 }
 
 export function rejectSpawnRequest(spawn: StructureSpawn, configName: string,
-  reason: "missing_config" | "body_capacity" | "defense" | "reserve"): void {
+  reason: NonNullable<SpawnMemory["_lastSpawnReject"]>["reason"]): void {
   spawn.memory._lastSpawnReject = { tick: Game.time, configName, reason };
   consumeSpawnRequest(spawn, configName);
 }

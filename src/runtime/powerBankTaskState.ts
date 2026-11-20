@@ -1,4 +1,4 @@
-import { createTaskLifecycle } from "@/runtime/taskLifecycle";
+import { createOutboundLifecycle, deferOutboundTask, outboundStageEnded } from "@/runtime/outboundMissionLifecycle";
 import { POWER_BANK_STATUS } from "@/runtime/powerBankConstants";
 
 const DEFAULT_STAGE_TIMEOUTS: Partial<Record<PowerBankHarvestStatus, number>> = {
@@ -14,9 +14,7 @@ const VISIBILITY_GRACE_TICKS = 75;
 const HAULING_TIMEOUT_TICKS = 1200;
 
 export function isTerminalPowerBankStatus(status: PowerBankHarvestStatus): boolean {
-  return status === POWER_BANK_STATUS.FAILED ||
-    status === POWER_BANK_STATUS.ABORTED ||
-    status === POWER_BANK_STATUS.COMPLETE;
+  return outboundStageEnded("powerBank", status);
 }
 
 export function initializePowerBankTaskRuntime(task: PowerBankHarvestTask): void {
@@ -85,8 +83,7 @@ export function setPowerBankBlocker(
   blocker: string,
   retryAfter = 1,
 ): void {
-  task.blocker = blocker;
-  task.nextAttemptAt = Game.time + Math.max(1, retryAfter);
+  deferOutboundTask(task, blocker, retryAfter);
 }
 
 export function getPowerBankStageTimeout(task: PowerBankHarvestTask): number | undefined {
@@ -191,4 +188,4 @@ const transitions: Record<PowerBankHarvestStatus, readonly PowerBankHarvestStatu
   boosting: activeStates, travelling: activeStates, attacking: activeStates, hauling: activeStates,
   complete: ["complete"], failed: ["failed"], aborted: ["aborted"],
 };
-const lifecycle = createTaskLifecycle<PowerBankHarvestStatus, PowerBankHarvestTask>("powerBank", transitions, task => task.id);
+const lifecycle = createOutboundLifecycle<"powerBank", PowerBankHarvestTask>("powerBank", transitions, task => task.id);

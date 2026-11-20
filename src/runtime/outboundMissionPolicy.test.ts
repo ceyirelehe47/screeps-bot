@@ -132,6 +132,21 @@ describe("本房防御与储备的出征边界", () => {
     jest.mocked(isDefenseMode).mockReturnValue(true);
     expect(isSpawnConfigEconomicallyBlocked("W1N1:rescue:W2N2:worker:0", cfg)).toBe(true);
   });
+  it("外矿防守时拒绝旧采运队列，保留守军和侦察；平静后恢复收入", () => {
+    const home = "W1N1", target = "W2N1";
+    Memory.data!.remoteMining = { [target]: { sourceRoom:home, targetRoom:target, status:"defending", sourceIds:["s"],
+      updatedAt:Game.time, assignedAt:Game.time - 5 } };
+    const carrier = {role:"remoteMiningCarrier" as const, args:[target,"s"], roomName:home};
+    const defender = {role:"remoteDefender" as const, args:[target], roomName:home};
+    const name = home + ":remoteMine:" + target + ":carrier:0";
+    expect(getSpawnAdmission(name,carrier,home)).toEqual({allowed:false,reason:"mission_paused"});
+    expect(getSpawnAdmission(home+":remoteMine:"+target+":defender:0",defender,home).allowed).toBe(true);
+    Memory.data!.remoteMining[target].status = "active";
+    expect(getSpawnAdmission(name,carrier,home).allowed).toBe(true);
+    expect(getSpawnAdmission(name,carrier,"W9N9").allowed).toBe(false);
+    expect(getSpawnAdmission(name,{...carrier,roomName:undefined},home).allowed).toBe(false);
+  });
+
   it("储备期暂停昂贵出征，保留本地采矿和外矿收入补员", () => {
     jest.mocked(isRoomInReserveMode).mockReturnValue(true);
     expect(canStartOutboundMission("W1N1")).toBe(false);

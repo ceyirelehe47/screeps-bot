@@ -174,7 +174,9 @@ describe("mountSpawn", () => {
     const war = "E1N57:war:E3N57:controllerAttacker:0";
     const mine = "E1N57:remoteMine:E1N58:harvester:source";
     Memory.data!.creepConfigs![war] = { role: "claimer", roomName: room.name, args: [], body: [...Array(19).fill(CLAIM), ...Array(19).fill(MOVE)] };
-    Memory.data!.creepConfigs![mine] = { role: "colonizerHarvester", roomName: room.name, args: [], body: [WORK, CARRY, MOVE] };
+    Memory.data!.remoteMining = {E1N58:{ sourceRoom:room.name, targetRoom:"E1N58", status:"active",
+      sourceIds:["source"], assignedAt:Game.time, updatedAt:Game.time }};
+    Memory.data!.creepConfigs![mine] = { role: "colonizerHarvester", roomName: room.name, args: ["E1N58","source"], body: [WORK, CARRY, MOVE] };
     const first = createSpawn("Spawn1", room, condition === "behind" ? [mine, war] : [war]);
     const second = createSpawn("Spawn2", room, [mine]);
     if (condition === "busy") { room.energyAvailable = 12900; first.spawning = { name: "old", remainingTime: 100 } as Spawning; }

@@ -126,3 +126,24 @@ it("孵化资格跟随 owner 的当前代，旧代名称和非整数世代不能
   task.generation = 2.5;
   expect(canSpawnDepositConfig(task.configName, cfg)).toBe(false);
 });
+
+it("PB 占用已排队 Deposit 的来源时保留目标、交还旧代，空闲后重新受理", () => {
+  runDepositHarvest();
+  const task = Memory.data!.depositHarvest!.d1, priorName = task.configName!;
+  const priorConfig = Memory.data!.creepConfigs![priorName];
+  Game.spawns.Spawn1.memory.spawnList = [priorName];
+  Memory.data!.powerBankHarvest = { p: { sourceRoom: "E1N1", status: "travelling" } as PowerBankHarvestTask };
+  expect(canSpawnDepositConfig(priorName, priorConfig)).toBe(false);
+  Game.time++;
+  runDepositHarvest();
+  expect(task).toMatchObject({status: "discovered", sourceRoom: "", blocker: "source_busy", generation: 1});
+  expect(Game.spawns.Spawn1.memory.spawnList).not.toContain(priorName);
+  expect(Memory.data!.creepConfigs![priorName]).toBeUndefined();
+  delete Memory.data!.powerBankHarvest!.p;
+  Game.time++;
+  runDepositHarvest();
+  expect(task).toMatchObject({status:"spawning", generation:1, sourceRoom:"E1N1"});
+  expect(task.configName).not.toBe(priorName);
+  expect(canSpawnDepositConfig(priorName, priorConfig)).toBe(false);
+  expect(canSpawnDepositConfig(task.configName!,Memory.data!.creepConfigs![task.configName!])).toBe(true);
+});

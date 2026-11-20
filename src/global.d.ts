@@ -434,6 +434,7 @@ declare global {
   var powerBankStatus: () => string;
   var powerBankStatusRaw: () => PowerBankStatusSnapshot;
   var depositStatus: typeof import("@/runtime/depositStatus").depositStatusCommand;
+  var outboundStatusRaw: typeof import("@/runtime/console/outboundStatus").outboundStatusRaw;
   var depositStatusRaw: typeof import("@/runtime/depositStatus").depositStatusRaw;
 
   type PowerBankHarvestStatus =
@@ -791,7 +792,7 @@ declare global {
 
   interface SpawnMemory {
     spawnList?: readonly string[];
-    _lastSpawnReject?: { tick: number; configName: string; reason: "missing_config" | "body_capacity" | "defense" | "reserve" };
+    _lastSpawnReject?: { tick: number; configName: string; reason: "missing_config" | "body_capacity" | import("@/runtime/outboundMissionPolicy").OutboundBlocker };
     _lastSpawnFail?: {
       tick: number;
       spawnName: string;
