@@ -211,6 +211,20 @@ describe("remote Invader Core clearance", () => {
     return task;
   }
 
+  it("低于 RCL7 的母房暂停既有任务，恢复等级后再侦察", () => {
+    const task = setupTask();
+    Game.rooms.W1N1 = createRclRoom("W1N1", 6);
+    processRemoteConfigLifecycle(store, getRemoteMiningConfig());
+    expect(task).toMatchObject({ status: "suspended", suspendReason: "source_room_invalid" });
+    Game.time++;
+    setupTarget();
+    processRemoteConfigLifecycle(store, getRemoteMiningConfig());
+    expect(task.safeSince).toBeUndefined();
+    setupSourceRoom();
+    processRemoteConfigLifecycle(store, getRemoteMiningConfig());
+    expect(task.safeSince).toBe(Game.time);
+  });
+
   it("清掉 core 后的 Invader 预定仍保留 reserver 配置", () => {
     setupSourceRoom(); setupTask();
     const target = createVisibleTargetRoom("W1N0", { reservationUsername: "Invader" });

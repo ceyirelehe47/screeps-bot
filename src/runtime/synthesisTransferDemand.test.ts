@@ -143,6 +143,21 @@ describe("自动合成补料的实需与物理 staging", () => {
       .flatMap((entry) => entry.steps.filter((step) => step.resource === RESOURCE_HYDROXIDE).map((step) => step.amount));
   }
 
+  it("卫星 Hub 回收在 58k 空位中只备已承诺批次，仍保留终端压力底线", () => {
+    Memory.cfg!.hub = {enabled:true, hubRoomName:target.name} as NonNullable<NonNullable<Memory["cfg"]>["hub"]>;
+    task.reason = "hub:reclaim:OH";
+    task.amount = task.remainingAmount = 560;
+    (source.terminal!.store as MutableStore).set(RESOURCE_ZYNTHIUM, 62_549);
+    (target.terminal!.store as MutableStore).set(RESOURCE_ENERGY, 30_000);
+    (source.storage!.store as MutableStore).set(RESOURCE_HYDROXIDE, 5_560);
+    expect(source.terminal!.store.getFreeCapacity()).toBe(58_476);
+    runResourceControl();
+    expect(feeds()).toEqual([560]);
+    const step = Object.values(getCarrierTasksByRoom(source.name)).flatMap(t => t.steps)
+      .find(s => s.boundResourceTransferTaskId === task.id);
+    expect(step?.destinationTargetAmount).toBe(560);
+  });
+
   it("在 41k 物理空位与零 ordinary headroom 中只搬真实所需 26，保留原 913 承诺", () => {
     expect(source.storage!.store.getFreeCapacity()).toBe(152_616);
     expect(source.terminal!.store.getFreeCapacity()).toBe(41_019);

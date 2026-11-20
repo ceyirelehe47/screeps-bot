@@ -1500,6 +1500,13 @@ export function processRemoteConfigLifecycle(
       return 0 as const;
     }
 
+    if ((task.status === "active" || task.suspendReason === "source_room_invalid") && !isSourceRoomValidForRemote(task.sourceRoom)) {
+      if (task.status === "active") suspendRemoteTask(task, "source_room_invalid");
+      cleanupAllRemoteConfigs(task);
+      removeScoutConfigAndSpawnQueues(task.sourceRoom, task.targetRoom);
+      return 0 as const;
+    }
+
     if (task.status === "suspended") {
       cleanupAllRemoteConfigs(task);
 

@@ -26,6 +26,9 @@ export interface CompactLivePending extends CompactMarketCandidate {
   attemptAt: number;
   atMs: number;
   energyPrice: number;
+  creditsBefore?: number;
+  firstCoveredMiss?: number;
+  walletCheck?: { requestId: string; checkedAt: number; latestTick: number; entryId: string };
   terminalBefore?: { id: string; resource: number; energy: number };
   status: "prepared" | "submitted" | "unknown";
 }
@@ -39,6 +42,7 @@ export interface CompactMarketLiveState extends MarketSalePricingDataStore {
   pricingConfig: MarketSaleAutomationConfig;
   dynamicFloor?: MarketBaseDynamicFloorState;
   pending?: CompactLivePending;
+  lastWalletResolution?: CompactLivePending["walletCheck"];
   receipts: CompactLiveReceipt[];
   lastDealAt: number;
   cooldownHighWater: number;

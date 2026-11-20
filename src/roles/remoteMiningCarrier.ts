@@ -162,19 +162,34 @@ function findSourceContainerSite(room: Room, sourcePos: RoomPosition, workPos?: 
   return null;
 }
 
-function findDroppedEnergyNear(room: Room, pos: RoomPosition, exact = false): Resource | null {
+function findDroppedEnergyNear(room: Room, pos: RoomPosition, sourceId?: string): Resource | null {
   const ctx = getRoomContext(room);
   const resources = ctx
     ? ctx.getDroppedEnergyResources()
     : room.find(FIND_DROPPED_RESOURCES, {
         filter: (r): r is Resource => r.resourceType === RESOURCE_ENERGY,
       });
+  const positions = Memory.data?.remoteMining?.[room.name]?.containerPositions;
+  const workPos = sourceId && positions?.[sourceId];
+  let best: Resource | null = null;
   for (const resource of resources) {
-    if (resource.amount > 0 && (exact ? samePosition(resource.pos, pos) : pos.getRangeTo(resource.pos) <= 2)) {
-      return resource;
-    }
+    if (resource.amount <= (best?.amount ?? 0)) continue;
+    if (workPos && positions) {
+      // 相邻矿源分别负责离自己工位最近的掉落。同距时固定归属。
+      let owner: string | undefined;
+      let distance = 2;
+      for (const [id, p] of Object.entries(positions)) {
+        const range = Math.max(Math.abs(resource.pos.x - p.x), Math.abs(resource.pos.y - p.y));
+        if (p.roomName === room.name && range <= 1 && (range < distance || range === distance && owner !== undefined && id < owner)) {
+          owner = id;
+          distance = range;
+        }
+      }
+      if (owner !== sourceId) continue;
+    } else if (pos.getRangeTo(resource.pos) > 2) continue;
+    best = resource;
   }
-  return null;
+  return best;
 }
 
 
@@ -203,7 +218,7 @@ function selectBestSourceTarget(room: Room, targetRoom: string): {
     if (!source) continue;
     const workPos = getRemoteSourceWorkPos(targetRoom, sourceId);
     const container = findSourceContainer(room, source.pos, workPos);
-    const dropped = findDroppedEnergyNear(room, workPos ?? source.pos, !!workPos);
+    const dropped = findDroppedEnergyNear(room, workPos ?? source.pos, sourceId);
     const containerEnergy = container?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0;
     const droppedEnergy = dropped?.amount ?? 0;
     const totalEnergy = containerEnergy + droppedEnergy;
@@ -357,6 +372,14 @@ export const remoteMiningCarrierRole: RoleFactory = (targetRoom: string, sourceI
       const sourcePos = resolvedSourcePos || creep.pos;
       const container = resolvedContainer;
 
+      const dropped = resolvedDropped ?? findDroppedEnergyNear(creep.room, resolvedWorkPos ?? sourcePos, sourceId);
+      // 优先收取会衰减的散落能量；小堆不能拖住一整箱可直接运走的能量。
+      if (dropped && dropped.amount >= Math.min(getFreeCapacity(creep), container?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0)) {
+        const code = measureCreepIntent(() => creep.pickup(dropped));
+        if (code === ERR_NOT_IN_RANGE) moveToTarget(creep, dropped, 1);
+        if (code === OK || code === ERR_NOT_IN_RANGE) return false;
+      }
+
       if (container) {
         const containerEnergy = container.store.getUsedCapacity(RESOURCE_ENERGY);
 
@@ -382,19 +405,6 @@ export const remoteMiningCarrierRole: RoleFactory = (targetRoom: string, sourceI
 
       if (buildSourceContainerSite(creep, sourcePos, resolvedWorkPos)) {
         return true;
-      }
-
-      const dropPos = container?.pos || containerSite?.pos || sourcePos;
-      const dropped = resolvedDropped ?? findDroppedEnergyNear(creep.room, dropPos, !!(resolvedWorkPos && samePosition(dropPos, resolvedWorkPos)));
-      if (dropped) {
-        const code = measureCreepIntent(() => creep.pickup(dropped));
-        if (code === ERR_NOT_IN_RANGE) {
-          moveToTarget(creep, dropped, 1);
-          return false;
-        }
-        if (code === OK) {
-          return false;
-        }
       }
 
       if (getCarriedEnergy(creep) > 0) {

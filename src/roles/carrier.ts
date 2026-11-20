@@ -1,3 +1,4 @@
+import { resolveRoomEnergyPolicyForRoom } from "@/runtime/roomEnergyPolicy";
 import { retireCreep } from "@/runtime/retirement";
 import { refreshCarrierCargoActor } from "@/runtime/carrierCargo";
 import type { RoleFactory } from "@/types/system";
@@ -1943,6 +1944,23 @@ export const carrierRole: RoleFactory = () => ({
         assignedRoomName,
         terminalBootstrapReserve,
       ).switched;
+    }
+
+    const terminal = creep.room.terminal;
+    if (terminal && creep.room.name === assignedRoomName) {
+      const policy = resolveRoomEnergyPolicyForRoom(assignedRoomName);
+      const terminalEnergy = terminal.store.getUsedCapacity(RESOURCE_ENERGY);
+      if (terminalEnergy < policy.terminalEnergyReserve &&
+          (creep.room.storage?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0) > policy.energyFloor) {
+        const feed = pickupSynthesisCarrierResource(creep, task => isResourceControlTerminalPreloadTask(task) &&
+          task.steps.some(step => step.resource === RESOURCE_ENERGY && step.toId === terminal.id) &&
+          (terminalEnergy < Math.min(1000, policy.terminalEnergyReserve) || Game.time - task.createdAt >= 100), false);
+        if (feed.picked || feed.outOfRange) {
+          delete deliveryState.carrierStorageOnlyMode;
+          if (feed.picked) releasePickupReservation(creep);
+          return feed.picked;
+        }
+      }
     }
 
     if (hasRunnablePowerBankBoostCarrierTask(assignedRoomName)) {

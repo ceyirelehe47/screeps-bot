@@ -178,6 +178,23 @@ describe("外矿入口 link 卸载", () => {
 
 describe("partial withdrawal and maintenance", () => {
 
+  it("自己的工位旁堆积掉落优先于少量箱存，邻矿工位上的掉落由邻矿回收", () => {
+    const name = "W5N5", pos = makePos(10, 10, name);
+    const container = makeSourceContainer(10, pos);
+    const drops = [[11, 10, 4500], [9, 10, 4200]].map(([x, y, amount]) =>
+      ({ pos: makePos(x, y, name), amount, resourceType: RESOURCE_ENERGY }) as Resource);
+    const room = makeRoom(name, { structures: [container], droppedResources: drops });
+    Game.getObjectById = jest.fn(() => ({ pos })) as unknown as typeof Game.getObjectById;
+    Memory.data = { remoteMining: { [name]: { sourceRoom: "W1N1", targetRoom: name, status: "active",
+      sourceIds: ["a", "b"], assignedAt: 1, updatedAt: 1, containerPositions: {
+        a: {x: 10,y: 10,roomName:name}, b: {x:11,y:10,roomName:name},
+      } } } };
+    const creep = makeCreep({ room, energy: 0, pos });
+    remoteMiningCarrierRole(name, "a").source?.(creep);
+    expect(creep.pickup).toHaveBeenCalledWith(drops[1]);
+    expect(creep.withdraw).not.toHaveBeenCalled();
+  });
+
   it("explicit-source carrier uses its planned container position instead of a neighboring source container", () => {
     const source1Pos = makePos(5, 31, "W5N5");
     const source2Pos = makePos(6, 32, "W5N5");

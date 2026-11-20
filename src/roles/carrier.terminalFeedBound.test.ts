@@ -298,6 +298,20 @@ describe("carrier terminal_feed 的实时绝对目的库存约束", () => {
     expect(carrier.withdraw).not.toHaveBeenCalledWith(scenario.terminal, RESOURCE_HYDROXIDE, expect.any(Number));
   });
 
+  it("终端接近断能时采用已规划的能量备货，先于普通实验室任务", () => {
+    const sc = createFeedScenario({ storageCapacity: 250_000 });
+    sc.storageInventory.set(RESOURCE_ENERGY, 143_000);
+    const step = {id:"energy", resource:RESOURCE_ENERGY, fromKind:"storage", toKind:"terminal",
+      fromId:sc.storage.id, toId:sc.terminal.id, amount:1000, destinationTargetAmount:1000} as const;
+    replaceCarrierTasksForProducerRoom("resourceControl:preload", sc.room.name,
+      [{id:"refill",type:"terminal_feed",priority:80,steps:[step]}]);
+    replaceCarrierTasksForProducerRoom("synthesisControl", sc.room.name,
+      [{id:"lab",type:"lab_supply",priority:100,steps:[{...step,resource:RESOURCE_HYDROXIDE}]}]);
+    const carrier = sc.addCarrier("refill");
+    carrierRole().source?.(carrier.creep);
+    expect(carrier.withdraw).toHaveBeenCalledWith(sc.storage, RESOURCE_ENERGY, 800);
+  });
+
   it("陈旧 offload 草稿跨多个 tick 与两名 carrier 只卸出一次额度", () => {
     const scenario = createFeedScenario({ terminalStock: 2_000, storageStock: 0 });
     const first = scenario.addCarrier("offload-first");

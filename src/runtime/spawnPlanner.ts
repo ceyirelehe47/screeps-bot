@@ -321,8 +321,11 @@ function baseSourceWorkerPreSpawnThreshold(
     return threshold;
   }
 
-  const result = searchRoomPath(anchor, workPos, { swampCost: 2 });
-  const commuteTime = (result.incomplete ? anchor.getRangeTo(workPos) : result.path.length) + anchorBuffer;
+  const roomDistance = anchor.roomName === workPos.roomName ? 0 : Game.map.getRoomLinearDistance(anchor.roomName, workPos.roomName);
+  const result = searchRoomPath(anchor, workPos, { swampCost: 2, maxRooms: Math.min(16, roomDistance + 1) });
+  // 跨房 getRangeTo 返回 Infinity；即使预算耗尽也不能提前整整一生补产。
+  const fallback = roomDistance > 0 ? 50 * roomDistance : Math.max(Math.abs(anchor.x - workPos.x), Math.abs(anchor.y - workPos.y));
+  const commuteTime = (result.incomplete ? fallback : result.path.length) + anchorBuffer;
   const produceTime = getSpawnTime(spawn, configName, context);
   const threshold = commuteTime + produceTime;
 

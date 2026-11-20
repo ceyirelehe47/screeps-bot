@@ -1,3 +1,4 @@
+import { shelterRemoteMiningCivilian } from "@/roles/remoteMiningCivilian";
 import type { RoleFactory } from "@/types/system";
 import { moveToTarget, moveToTargetRoom } from "@/roles/shared";
 import { measureCreepIntent } from "@/runtime/cpuPhaseProfiler";
@@ -11,6 +12,7 @@ import { getMyUsername } from "@/runtime/remoteMining";
  */
 export const remoteMiningReserverRole: RoleFactory = (targetRoom?: string, encodedRouteRooms?: string) => ({
   source: (creep): boolean => {
+    if (shelterRemoteMiningCivilian(creep, targetRoom)) return false;
     if (targetRoom && creep.room.name !== targetRoom) {
       moveToTargetRoom(creep, targetRoom, encodedRouteRooms, { plainCost: 2, swampCost: 10 });
       return false;
@@ -18,6 +20,7 @@ export const remoteMiningReserverRole: RoleFactory = (targetRoom?: string, encod
     return true;
   },
   target: (creep): boolean => {
+    if (shelterRemoteMiningCivilian(creep, targetRoom)) return false;
     const controller = creep.room.controller;
     if (!controller) return false;
 

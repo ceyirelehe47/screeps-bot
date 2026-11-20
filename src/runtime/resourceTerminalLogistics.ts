@@ -8,6 +8,7 @@ import { terminalFeedBoundTaskIdentity } from "@/runtime/terminalFeedTarget";
 import {
   inspectAutomaticSynthesisTransferDemand,
   resolveSynthesisStagingFeedCapacity,
+  isHubReclaimStaging,
 } from "@/runtime/synthesisTransferDemand";
 import {
   listCarrierDispatchEntriesByRoom,
@@ -75,6 +76,7 @@ interface TerminalStagingBatch {
   transactionFee: number;
   dispatchClass?: CarrierTaskDispatchClass;
   productionDemandBounded?: boolean;
+  hubReclaim?: boolean;
   productionResourceTransferTaskId?: string;
 }
 
@@ -1688,9 +1690,9 @@ function assessTransferTaskStagingBatch(
     capacityConfig,
   );
   const productionFeedCapacity = resolveSynthesisStagingFeedCapacity(
-    feedCapacity, source.terminalFreeCapacity,
+    feedCapacity, isHubReclaimStaging(task) ? Math.max(0, source.terminalFreeCapacity - capacityConfig.terminalPressureFreeCapacity) : source.terminalFreeCapacity,
     getLocalCarrierDestinationCommittedAmount(source.terminal.id),
-    synthesisDemand.status === "bounded",
+    synthesisDemand.status === "bounded" || isHubReclaimStaging(task),
   );
   const getSuppressionReason = (
     amount: number,
@@ -1800,6 +1802,7 @@ function reserveTransferTaskStagingBatch(
       resource: task.resource,
       amount: reservedAmount,
       ...(inspectTaskSynthesisDemand(task, context).status === "bounded" ? { productionDemandBounded: true, productionResourceTransferTaskId: task.id } : {}),
+      ...(isHubReclaimStaging(task) ? { hubReclaim: true, productionResourceTransferTaskId: task.id } : {}),
       transactionFee: Game.market.calcTransactionCost(
         reservedAmount,
         source.roomName,
@@ -2429,9 +2432,9 @@ export function syncTerminalFeedTasks(
       ? Math.min(snapshot.terminalFreeCapacity, marketCargoOutstanding)
       : 0;
     const productionFeedCapacity = resolveSynthesisStagingFeedCapacity(
-      safeFeedCapacity, snapshot.terminalFreeCapacity,
+      safeFeedCapacity, stagingBatch?.hubReclaim ? Math.max(0, snapshot.terminalFreeCapacity - capacityConfig.terminalPressureFreeCapacity) : snapshot.terminalFreeCapacity,
       getLocalCarrierDestinationCommittedAmount(snapshot.terminal.id),
-      stagingBatch?.productionDemandBounded === true,
+      stagingBatch?.productionDemandBounded === true || stagingBatch?.hubReclaim === true,
       stagingFeedRequirement?.total,
     );
     let feedCapacity = Math.max(productionFeedCapacity, marketCargoFeedCapacity);

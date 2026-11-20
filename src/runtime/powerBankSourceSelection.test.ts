@@ -359,6 +359,18 @@ describe("PB 来源准入使用真实有界 PF 缓存", () => {
     expect(world.task).toMatchObject({ status: "preparing_boosts", sourceRoom: NEAR_SOURCE });
   });
 
+  it("储备暂时关闭所有来源时保留发现，恢复后重新选源", () => {
+    const world = scenario(() => false);
+    const policy = require("@/runtime/outboundMissionPolicy") as typeof import("@/runtime/outboundMissionPolicy");
+    const gate = jest.spyOn(policy, "canStartOutboundMission").mockReturnValue(false);
+    world.runTick();
+    expect(world.task).toMatchObject({status: "discovered", blocker: "source_outbound_blocked", sourceRoom: ""});
+    gate.mockReturnValue(true);
+    Game.time = world.task.nextAttemptAt!;
+    world.runUntilSelected();
+    expect(world.task.status).toBe("preparing_boosts");
+  });
+
   it("静默跳过的来源写入拒绝原因，并经 powerBankStatus 输出", () => {
     const world = scenario(() => false);
     const policy = require("@/runtime/outboundMissionPolicy") as typeof import("@/runtime/outboundMissionPolicy");

@@ -129,6 +129,36 @@ describe("精简市场正式执行与交接", () => {
     expect(state.pending).toBeDefined(); expect(state.blocker).toBe("reconcile_gap");
     expect(Game.market.deal).toHaveBeenCalledTimes(1);
   });
+  it("货物库存变动但两次被完整覆盖的缺帧与原余额一致时释放旧单", () => {
+    runCompactMarketLive(deps);
+    const terminal = Game.rooms[roomName].terminal!;
+    Object.assign(terminal.store, { getUsedCapacity: () => 48500 });
+    next(12); runCompactMarketPreflight();
+    expect(state.pending?.firstCoveredMiss).toBe(Game.time);
+    next(100); runCompactMarketPreflight();
+    expect(state.pending).toBeUndefined();
+    expect(state.lastReason).toBe("not_executed:history_and_credits_unchanged");
+    expect(state.confirmed).toBe(0);
+  });
+
+  it("已滚出引擎窗口的流水凭据只解开同一请求并留下记录", () => {
+    runCompactMarketLive(deps);
+    const pending = state.pending!;
+    Game.market.outgoingTransactions = Array.from({length: 100}, (_, i) =>
+      ({...transaction(), transactionId: String(i), time: pending.attemptAt + 1})) as Transaction[];
+    next(101);
+    const walletCheck = { requestId: "other", checkedAt: Game.time, latestTick: pending.attemptAt-1, entryId: "a".repeat(24) };
+    pending.walletCheck = walletCheck;
+    runCompactMarketPreflight();
+    expect(state.pending).toBe(pending);
+    walletCheck.requestId = pending.requestId;
+    runCompactMarketPreflight();
+    expect(state.pending).toBeUndefined();
+    expect(state.lastWalletResolution).toEqual(walletCheck);
+    expect(state.confirmed).toBe(0);
+    expect(Game.market.deal).toHaveBeenCalledTimes(1);
+  });
+
   it("成交记录在第100条以后仍能确认", () => {
     runCompactMarketLive(deps); Game.market.outgoingTransactions = [...Array.from({ length: 101 }, (_, i) => ({ ...transaction(), transactionId: `other${i}`, order: { id: "other" } })), transaction()];
     next(); runCompactMarketPreflight(); expect(state.confirmed).toBe(1); expect(state.pending).toBeUndefined();

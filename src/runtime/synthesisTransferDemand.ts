@@ -24,6 +24,14 @@ export function inspectAutomaticSynthesisTransferDemand(
   return { ...demand, amount: Math.max(0, demand.amount - covered) };
 }
 
+/** 自动回收只可为配置中的 Hub 从卫星终端中转一笔在途任务。 */
+export function isHubReclaimStaging(task: ResourceTransferTask): boolean {
+  const hub = Memory.cfg?.hub;
+  return hub?.enabled === true && task.origin === "automatic" && task.status === "pending" &&
+    task.toRoomName === hub.hubRoomName && task.fromRoomName !== task.toRoomName &&
+    task.treasurySlice === undefined && task.resource !== RESOURCE_ENERGY && task.reason === `hub:reclaim:${task.resource}`;
+}
+
 /** 已确认的单批生产补料可使用物理空位；不修改全局 Storage/Terminal 保留线。 */
 export function resolveSynthesisStagingFeedCapacity(
   ordinaryFeedCapacity: number,

@@ -1,7 +1,7 @@
 import { getCarrierCargoByActor } from "@/runtime/carrierCargo";
 import type { CarrierTask, CarrierTaskStep } from "@/runtime/carrierTaskBoard";
 import { getCreepAssignmentState } from "@/runtime/creepAssignmentState";
-import { inspectAutomaticSynthesisTransferDemand } from "@/runtime/synthesisTransferDemand";
+import { inspectAutomaticSynthesisTransferDemand, isHubReclaimStaging } from "@/runtime/synthesisTransferDemand";
 import type { ResourceTransferTask } from "@/runtime/logistics/resourceTransferTasks";
 
 export function terminalFeedBoundTaskIdentity(task: ResourceTransferTask): string {
@@ -28,6 +28,7 @@ export function readTerminalFeedTargetAmount(task: CarrierTask, step: CarrierTas
     const live = Memory.data?.resourceControl?.tasks?.[step.boundResourceTransferTaskId];
     if (!live || live.fromRoomName !== task.roomName || live.resource !== step.resource ||
         step.boundResourceTransferTaskIdentity !== undefined && step.boundResourceTransferTaskIdentity !== terminalFeedBoundTaskIdentity(live)) return 0;
+    if (isHubReclaimStaging(live)) return Math.min(target ?? live.remainingAmount, live.remainingAmount);
     const demand = inspectAutomaticSynthesisTransferDemand(live);
     return demand.status === "bounded" ? Math.min(target ?? demand.amount, demand.amount) : 0;
   }
@@ -52,6 +53,7 @@ export function revalidateTerminalFeedSnapshotTarget(
   const task = Memory.data?.resourceControl?.tasks?.[boundTaskId];
   if (!task || task.fromRoomName !== target.room?.name || task.resource !== resource ||
       boundTaskIdentity !== undefined && boundTaskIdentity !== terminalFeedBoundTaskIdentity(task)) return 0;
+  if (isHubReclaimStaging(task)) return Math.min(targetAmount, task.remainingAmount);
   const demand = inspectAutomaticSynthesisTransferDemand(task);
   return demand.status === "bounded" ? Math.min(targetAmount, demand.amount) : 0;
 }

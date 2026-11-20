@@ -1,3 +1,4 @@
+import { shelterRemoteMiningCivilian } from "@/roles/remoteMiningCivilian";
 import { clearMovementState, moveToTarget, moveToTargetRoom } from "@/roles/shared";
 import { moveOffExit } from "@/movement/traffic";
 
@@ -148,6 +149,7 @@ function compareRemoteEnergyCandidates(creep: Creep, a: RemoteEnergyCandidate, b
 export const remoteWorkerRole: RoleFactory = (targetRoom: string) => {
   return {
     source: (creep): boolean => {
+      if (shelterRemoteMiningCivilian(creep, targetRoom)) return false;
       clearRepairTarget(creep);
 
       if (isFull(creep)) {
@@ -180,6 +182,7 @@ export const remoteWorkerRole: RoleFactory = (targetRoom: string) => {
     },
 
     target: (creep): boolean => {
+      if (shelterRemoteMiningCivilian(creep, targetRoom)) return false;
       if (creep.room.name !== targetRoom) {
         moveToTargetRoom(creep, targetRoom, undefined, TRAVEL_OPTS);
         return false;

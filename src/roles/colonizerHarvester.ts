@@ -1,3 +1,4 @@
+import { shelterRemoteMiningCivilian } from "@/roles/remoteMiningCivilian";
 import { getCreepConfigService, getTickContextService } from "@/runtime/runtimeServices";
 import { createHarvesterRole } from "@/roles/harvester";
 import { moveToTarget, moveToTargetRoom } from "@/roles/shared";
@@ -33,6 +34,7 @@ export const colonizerHarvesterRole: RoleFactory = (targetRoom?: string, sourceI
 
   return {
     source: (creep): boolean => {
+      if (shelterRemoteMiningCivilian(creep, targetRoom)) return false;
       const configName = creep.memory.configName;
       const [home, kind, supportedRoom, role] = (configName ?? "").split(":");
       const recycleRoom = creep.memory._colonizationRetiring;

@@ -1179,6 +1179,11 @@ function processDiscoveredImpl(task: PowerBankHarvestTask): void {
     setPowerBankBlocker(task, "path_measurement_pending", Math.max(1, evaluation.pendingRetryAt - Game.time));
     return;
   }
+  if (!selected && evaluation.rejectionReasons.some(reason => reason.endsWith(":outbound_blocked"))) {
+    // 储备与防守会在 Bank 存活期间恢复；等待期间不占出生队列。
+    setPowerBankBlocker(task, "source_outbound_blocked", 50);
+    return;
+  }
   if (!selected) {
     const reasons = evaluation.rejectionReasons.length > 0
       ? evaluation.rejectionReasons.join(",")

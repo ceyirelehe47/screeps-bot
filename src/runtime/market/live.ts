@@ -71,15 +71,34 @@ export function reconcileCompactMarketPending(state: CompactMarketLiveState): vo
   if (matches.length === 0) {
     if (Game.time - pending.attemptAt > 10 && (!state.blocker || ["reconcile_gap", "reconcile_unavailable"].includes(state.blocker))) state.blocker = "reconcile_gap";
     const before = pending.terminalBefore, terminal = Game.rooms[pending.roomName]?.terminal;
-    // 历史必须仍完整覆盖尝试 tick；不凭“等了很久”释放未知成交。
+    // 引擎侧的无成交证明要求历史仍完整覆盖尝试 tick。
     const covered = outgoing.length < 100 || outgoing.some(row => row.time < pending.attemptAt);
-    if (state.blocker === "reconcile_gap" && pending.status === "submitted" && Game.time - pending.attemptAt >= 100 && covered && before && terminal?.id === before.id &&
-        terminal.store.getUsedCapacity(pending.resource) === before.resource && terminal.store.getUsedCapacity(RESOURCE_ENERGY) === before.energy) {
+    const sameTerminal = before !== undefined && terminal?.id === before.id;
+    const sameStock = sameTerminal && terminal.store.getUsedCapacity(pending.resource) === before.resource &&
+      terminal.store.getUsedCapacity(RESOURCE_ENERGY) === before.energy;
+    const sameCredits = Number.isFinite(pending.creditsBefore) && Game.market.credits === pending.creditsBefore;
+    // 在两个不同 tick 核对覆盖交易时刻的历史和账户余额，房内搬运不影响余额。
+    if (covered && sameCredits && sameTerminal && Game.time > pending.attemptAt + 10) {
+      pending.firstCoveredMiss ??= Game.time;
+    } else {
+      delete pending.firstCoveredMiss;
+    }
+    const repeatedMiss = pending.firstCoveredMiss !== undefined && pending.firstCoveredMiss > pending.attemptAt &&
+      Game.time - pending.firstCoveredMiss >= 10;
+    // 对已滚出引擎窗口的旧单，运维可核对账户最新流水。凭据只绑定这一笔提交。
+    const wallet = pending.walletCheck;
+    const walletProvesMiss = wallet?.requestId === pending.requestId && /^[a-f0-9]{24}$/.test(wallet.entryId) &&
+      Number.isSafeInteger(wallet.latestTick) && wallet.latestTick >= state.lastDealAt && wallet.latestTick < pending.attemptAt &&
+      Number.isSafeInteger(wallet.checkedAt) && wallet.checkedAt > pending.attemptAt && wallet.checkedAt <= Game.time;
+    if (state.blocker === "reconcile_gap" && pending.status === "submitted" && Game.time - pending.attemptAt >= 100 &&
+        (walletProvesMiss || covered && (sameStock || repeatedMiss))) {
       releasePreparedDirectMarketClaims(pending.requestId);
       delete state.pending; delete state.blocker;
       // 本 tick 不立即重试；下一次完整规划重新读盘口。
       state.lastPlanningAt = Game.time;
-      note(state, "not_executed:history_and_stock_unchanged");
+      if (walletProvesMiss) state.lastWalletResolution = wallet;
+      note(state, walletProvesMiss ? "not_executed:wallet_history" : sameStock
+        ? "not_executed:history_and_stock_unchanged" : "not_executed:history_and_credits_unchanged");
     }
     return;
   }
@@ -270,7 +289,7 @@ export function runCompactMarketLive(dependencies: CompactMarketLiveDependencies
     if (Game.cpu.getUsed() - started > 15 || Game.cpu.limit - Game.cpu.getUsed() < 5) return result(state, "cpu_budget");
     enforceLegacyMarketSafetyLatch();
     const requestId = `compact:${Game.time}:${++state.attempts}`;
-    const pending: CompactLivePending = { ...selected, requestId, attemptAt: Game.time, atMs: Date.now(), energyPrice, terminalBefore: { id: terminal.id, resource: terminal.store.getUsedCapacity(selected.resource), energy: terminal.store.getUsedCapacity(RESOURCE_ENERGY) }, status: "prepared" };
+    const pending: CompactLivePending = { ...selected, requestId, attemptAt: Game.time, atMs: Date.now(), energyPrice, creditsBefore: Game.market.credits, terminalBefore: { id: terminal.id, resource: terminal.store.getUsedCapacity(selected.resource), energy: terminal.store.getUsedCapacity(RESOURCE_ENERGY) }, status: "prepared" };
     state.pending = pending;
     const claim = { requestId, roomName: selected.roomName, actor: ACTOR, attemptAt: Game.time };
     if (!claimPreparedDirectMarketClaims(claim)) { delete state.pending; note(state, "arbiter_busy"); return result(state, "arbiter_busy"); }
