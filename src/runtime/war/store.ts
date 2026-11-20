@@ -15,7 +15,23 @@ export type WarRole = "meleeAttacker" | "healer";
 
 export type WarGenerationPhase = "preparing" | "assembling" | "deployed";
 
+export type WarOrder = "observe" | "engage" | "suppress" | "confirm" | "patrol";
+export interface WarFieldStrength {
+  structures: number;
+  hits: number;
+  towerEnergy: number;
+}
+export interface WarReview {
+  action: "replace" | "reroute" | "stop";
+  observedAt?: number;
+  generation: number;
+  result: "structure_removed" | "structure_damaged" | "tower_drained" | "unconfirmed" | "no_progress";
+  consecutiveLosses: number;
+  avoidedIngress?: string;
+}
 export interface WarGenerationState {
+  baseline?: WarFieldStrength;
+  lastObserved?: { at: number; field: WarFieldStrength };
   id: number;
   phase: WarGenerationPhase;
   createdAt: number;
@@ -42,6 +58,9 @@ export function registerWarSpawn(configName: string, creepName: string): void {
 }
 
 export interface WarTask {
+  autoTactic?: true;
+  order?: WarOrder;
+  review?: WarReview;
   reserveContinuationUntil?: number;
   entryEffect?: string;
   members?: Record<string, WarMember>;
@@ -175,6 +194,9 @@ export interface WarStatusCreepSnapshot {
 }
 
 export interface WarStatusTaskSnapshot {
+  order?: WarOrder;
+  review?: WarReview;
+  failReason?: string;
   targetRoom: string;
   sourceRoom: string;
   status: WarStatus;

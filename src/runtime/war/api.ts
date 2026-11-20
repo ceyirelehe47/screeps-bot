@@ -11,12 +11,13 @@ import { hasTaskWarActivity, releaseWarTaskAssets } from "./production";
 export function requestWarRoomClear(
   targetRoom: string,
   sourceRoom: string,
-  options?: { routeRooms?: string[]; reason?: "npc_reservation" | "manual"; squad?: WarSquad; tactic?: "t3TowerDrainDuo"; boostTier?: WarBoostTier; oneShot?: boolean; npcAuto?: true; forcePolicyAssessment?: true },
+  options?: { routeRooms?: string[]; reason?: "npc_reservation" | "manual"; squad?: WarSquad; tactic?: "t3TowerDrainDuo"; boostTier?: WarBoostTier; oneShot?: boolean; npcAuto?: true; forcePolicyAssessment?: true; autoTactic?: boolean },
 ): void {
   const store = ensureWarStore();
   const existing = store[targetRoom];
   const now = Game.time;
   const sameRequest = existing && existing.status !== "done" && existing.status !== "failed" && existing.sourceRoom === sourceRoom
+    && (options?.autoTactic === undefined || options.autoTactic === !!existing.autoTactic)
     && !options?.forcePolicyAssessment
     && (options?.routeRooms === undefined || existing.routeOrigin === "manual" && sameArray(existing.routeRooms, options.routeRooms))
     && (options?.reason ?? existing.reason) === existing.reason
@@ -57,11 +58,12 @@ export function requestWarRoomClear(
     routeOrigin: options?.routeRooms ? "manual" : existing?.sourceRoom === sourceRoom && existing.routeRooms ? existing.routeOrigin ?? "manual" : "map",
     routePlannedAt: options?.routeRooms || !existing?.routeRooms ? now : existing.routePlannedAt,
     routeTrace: options?.routeRooms ? { hops: Math.max(0, options.routeRooms.length - 1), avoided: {}, policy: "manual" } : inheritedRoute ? existing?.routeTrace ?? { hops: inheritedRoute.length - 1, avoided: {}, policy: existing?.routeOrigin === "map" ? "map_combat" : "manual" } : plan?.trace,
+    autoTactic: options?.autoTactic === undefined ? existing?.autoTactic : options.autoTactic || undefined,
     npcAuto,
     squadDecision: npcAuto ? decision?.reason ?? "awaiting_vision" : "explicit_or_player_default",
     squadAssessedAt: npcAuto && decision && decision.reason !== "entry_not_proven" ? now : undefined,
     squad,
-    tactic: squad === "t3Duo" ? options?.tactic ?? existing?.tactic : undefined,
+    tactic: squad === "t3Duo" ? options?.tactic ?? (options?.autoTactic === false && existing?.autoTactic ? undefined : existing?.tactic) : undefined,
     boostTier: squad === "towerDrainDuo" ? undefined : options?.boostTier ?? (npcAuto && squad === "t3Duo" ? "t3" : existing?.boostTier),
     boostLabs: restart ? undefined : existing?.boostLabs,
     boostStatus: restart ? undefined : existing?.boostStatus,
@@ -104,6 +106,7 @@ export function startWarRoom(targetRoom: string, sourceRoom: string, options: St
     tactic: options.tactic,
     boostTier,
     oneShot,
+    autoTactic: !npcAuto && options.squad === undefined && options.boostTier === undefined && options.tactic === undefined,
     npcAuto: npcAuto ? true : undefined,
   });
 

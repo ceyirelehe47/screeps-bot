@@ -1,3 +1,4 @@
+import { authorizeReplacement, observeGeneration } from "./campaign";
 import { replaceSpawnQueue } from "@/runtime/spawnRequests";
 import { getCreepConfigService, getTickContextService } from "@/runtime/runtimeServices";
 import { retireCreep, retireCreepMemory } from "@/runtime/retirement";
@@ -51,6 +52,8 @@ export function resetWarCreepTargetState(creep: Creep): void {
   delete creep.memory._warCounterstrikeSuppressedTargetIds;
   delete creep.memory._warQueued;
   delete creep.memory._warTowerDrain;
+  delete creep.memory._warCrossing;
+  delete creep.memory._warBlockedExit;
 }
 
 export function synchronizeGenerationRoleArgs(task: WarTask, resetTargets: boolean): void {
@@ -464,6 +467,7 @@ export function reconcileGenerationLifecycle(task: WarTask): boolean {
       && !hasConfigActivity(task, configName)
     );
   if (!exhaustedBeforeDeployment && (generation.phase !== "deployed" || isGenerationComplete(generation))) {
+    if (generation.phase === "deployed") observeGeneration(task, generation);
     return false;
   }
 
@@ -473,8 +477,8 @@ export function reconcileGenerationLifecycle(task: WarTask): boolean {
   for (const spawn of unfinishedSpawns) cancelSpawning(spawn);
   cleanupGenerationConfigs(task, generation);
 
-  if (task.oneShot) {
-    transitionWarTaskTerminal(task, "failed", "generation_exhausted");
+  if (!authorizeReplacement(task, generation)) {
+    transitionWarTaskTerminal(task, "failed", task.oneShot ? "generation_exhausted" : "campaign_no_progress");
     return true;
   }
 

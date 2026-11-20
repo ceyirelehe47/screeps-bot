@@ -22,6 +22,9 @@ export function buildTaskStatusSnapshot(task: WarTask): WarStatusTaskSnapshot {
   const generation = task.activeGeneration;
   const controller = room?.controller;
   return {
+    order: task.order,
+    review: task.review && { ...task.review },
+    failReason: task.failReason,
     targetRoom: task.targetRoom,
     sourceRoom: task.sourceRoom,
     status: task.status,
@@ -74,7 +77,7 @@ export function buildTaskStatusSnapshot(task: WarTask): WarStatusTaskSnapshot {
 export function writeWarTelemetry(): void {
   const analytics = getMemoryService().ensureAnalytics();
   const store = ensureWarStore();
-  const revision = Object.values(store).map(t => `${t.targetRoom}:${t.createdAt}:${t.attempts}:${t.status}:${t.statusSince}:${t.activeGeneration?.id}:${t.activeGeneration?.phase}:${t.failReason}:${t.routeRooms?.join("|")}`).join(";");
+  const revision = Object.values(store).map(t => `${t.targetRoom}:${t.createdAt}:${t.attempts}:${t.status}:${t.statusSince}:${t.activeGeneration?.id}:${t.activeGeneration?.phase}:${t.failReason}:${t.order}:${t.review?.generation}:${t.routeRooms?.join("|")}`).join(";");
   const interval = Game.cpu?.bucket < 2000 ? 20 : 10;
   if (telemetryRevision === revision && Game.time - (analytics.war?.updatedAt ?? -Infinity) < interval) return;
   telemetryRevision = revision;

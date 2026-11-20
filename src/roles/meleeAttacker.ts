@@ -1,3 +1,6 @@
+import { runWarMarch } from "./warMarch";
+import { effectivePower } from "@/runtime/powerBankCapability";
+import { blockRoomExits } from "@/movement/matrixLayers";
 import { getRoomStaticMatrix } from "@/movement/pathing";
 import { searchMovementPath } from "@/movement/pathSearch";
 import { getTickContextService } from "@/runtime/runtimeServices";
@@ -5,8 +8,8 @@ import { warGeometry } from "@/roles/warGeometry";
 import { getRefillableHostileTowers } from "@/runtime/combatTowerThreat";
 import { warPartner } from "@/roles/warPartner";
 import { clearMovementState, moveToTarget, moveToTargetRoom } from "@/roles/shared";
-import { isWalkableConstructionSite, isWalkableStructure, parseEncodedRouteRooms } from "@/movement/common";
-import { cancelMoveIntent, getMoveIntentReceipt, hasMoveDestinationConflict, issueMove, moveOffExit } from "@/movement/traffic";
+import { isExitTile, isWalkableConstructionSite, isWalkableStructure } from "@/movement/common";
+import { cancelMoveIntent, getMoveIntentReceipt, hasMoveDestinationConflict, issueMove } from "@/movement/traffic";
 import { getCreepMovementState } from "@/movement/creepState";
 import { prepareWarCombatBoost } from "@/runtime/war/boostPreparation";
 import { constrainTowerDrainBreachPath, moveTowerDrainBorderAttack, runTowerDrainPair, towerDrainMovementPolicy } from "@/roles/towerDrainPair";
@@ -107,6 +110,27 @@ export function findTarget(creep: Creep): Creep | Structure | null {
   return creep.pos.findClosestByRange(hostileStructures);
 }
 
+// 核心设施用完成拆除所需的近似 tick 与解除的威胁比较，路径许可另行验证。
+function rankCoreObjectives(creep: Creep, structures: Structure[]): Structure[] {
+  const power = Math.max(ATTACK_POWER, effectivePower(creep.body, ATTACK));
+  const candidates: { structure: Structure; score: number }[] = [];
+  for (const structure of structures) {
+    let value: number;
+    switch (structure.structureType) {
+      case STRUCTURE_TOWER:
+        value = (structure as StructureTower).store?.getUsedCapacity(RESOURCE_ENERGY) >= TOWER_ENERGY_COST ? 12 : 3;
+        break;
+      case STRUCTURE_SPAWN: value = 8; break;
+      case STRUCTURE_INVADER_CORE: value = 6; break;
+      case STRUCTURE_STORAGE: case STRUCTURE_TERMINAL: value = 1; break;
+      default: continue;
+    }
+    const ticks = Math.max(0, creep.pos.getRangeTo(structure.pos) - 1) + Math.ceil(structure.hits / power);
+    candidates.push({ structure, score: value / Math.max(1, ticks) });
+  }
+  return candidates.sort((a, b) => b.score - a.score || a.structure.id.localeCompare(b.structure.id)).map(entry => entry.structure);
+}
+
 export function findWarObjectiveTarget(creep: Creep, includeNeutralWalls = false): Creep | Structure | null {
   const hostileCreeps = getHostileCreeps(creep.room);
   const hostileStructures = getHostileStructures(creep.room, includeNeutralWalls, creep);
@@ -119,13 +143,8 @@ export function findWarObjectiveTarget(creep: Creep, includeNeutralWalls = false
     rampartPositions.has(`${target.pos.x}:${target.pos.y}`);
   const closest = <T extends Creep | Structure>(targets: T[]): T | null =>
     targets.length > 0 ? creep.pos.findClosestByRange(targets) : null;
-  const coreOrder: StructureConstant[] = [
-    STRUCTURE_SPAWN,
-    STRUCTURE_TOWER,
-    STRUCTURE_STORAGE,
-    STRUCTURE_TERMINAL,
-    STRUCTURE_INVADER_CORE,
-  ];
+  const core = rankCoreObjectives(creep, hostileStructures)[0];
+  if (core) return core;
   const utilityOrder: StructureConstant[] = [
     STRUCTURE_POWER_SPAWN,
     STRUCTURE_NUKER,
@@ -136,12 +155,6 @@ export function findWarObjectiveTarget(creep: Creep, includeNeutralWalls = false
     STRUCTURE_EXTENSION,
     STRUCTURE_EXTRACTOR,
   ];
-
-  for (const structureType of coreOrder) {
-    const candidates = hostileStructures.filter((structure) => structure.structureType === structureType);
-    const target = closest(candidates);
-    if (target) return target;
-  }
 
   const nonBarriers = hostileStructures.filter(
     (structure) => structure.structureType !== STRUCTURE_RAMPART && structure.structureType !== STRUCTURE_WALL,
@@ -229,6 +242,16 @@ function findCombatApproach(creep: Creep, target: Creep | Structure, towerDrain 
 }
 interface WarCombatApproach { open: boolean; breach: StructureRampart | StructureWall | null; path?: RoomPosition[] }
 
+function straightApproachOpen(from: RoomPosition, to: RoomPosition, blocked: Uint8Array): boolean {
+  let { x, y } = from;
+  while (Math.max(Math.abs(to.x - x), Math.abs(to.y - y)) > 1) {
+    x += Math.sign(to.x - x);
+    y += Math.sign(to.y - y);
+    if (x === 0 || y === 0 || x === 49 || y === 49 || blocked[x * 50 + y]) return false;
+  }
+  return true;
+}
+
 /** 先证明开放路线；不把拆墙耗时折成少量移动代价，也不让旧破墙目标锁住现成通道。 */
 function searchCombatApproach(creep: Creep, target: Creep | Structure, towerDrain = false): WarCombatApproach {
   if (target.pos.roomName !== creep.room.name) return { open: false, breach: null };
@@ -238,12 +261,15 @@ function searchCombatApproach(creep: Creep, target: Creep | Structure, towerDrai
   const covering = barriers.find((s) => s.structureType === STRUCTURE_RAMPART && s.pos.x === target.pos.x && s.pos.y === target.pos.y);
   if (covering) return { open: false, breach: covering };
   if (creep.pos.getRangeTo(target.pos) <= 1) return { open: true, breach: null };
-  if (barriers.length === 0 && !towerDrain) return { open: true, breach: null };
+  if (barriers.length === 0 && !towerDrain && straightApproachOpen(creep.pos, target.pos, geometry.blocked)) {
+    return { open: true, breach: null };
+  }
   const memo = approachTickMemo();
   const geometryKey = `${creep.room.name}:${geometry.signature}`;
   let base = memo.matrices.get(geometryKey);
   if (!base) { base = getRoomStaticMatrix(creep.room.name); memo.matrices.set(geometryKey, base); }
   const matrix = base.clone();
+  if (!towerDrain) blockRoomExits(matrix);
   const healer = findPairedWarHealer(creep);
   for (const site of creep.room.find(FIND_CONSTRUCTION_SITES)) {
     if (site.my && !isWalkableConstructionSite(site)) matrix.set(site.pos.x, site.pos.y, 0xff);
@@ -268,6 +294,7 @@ function searchCombatApproach(creep: Creep, target: Creep | Structure, towerDrai
   // 开放搜索耗尽预算时仍做有界突破搜索；只有完整突破路径才授予屏障攻击许可。
   // 退路门按当前未拆墙的世界封锁墙后区域。突破搜索只用原物理几何寻找第一道屏障，
   // 不能继承袋外的255；这不授予墙后移动许可，实际每步仍走 fresh 安全回调。
+  if (!barriers.length) return { open: false, breach: null };
   const breachMatrix = base.clone();
   const breachByPosition = new Map<string, StructureRampart | StructureWall>();
   const hostileCreeps = getHostileCreeps(creep.room);
@@ -279,6 +306,7 @@ function searchCombatApproach(creep: Creep, target: Creep | Structure, towerDrai
   for (const other of [...creep.room.find(FIND_MY_CREEPS), ...hostileCreeps]) if (other.name !== creep.name) {
     breachMatrix.set(other.pos.x, other.pos.y, Math.max(breachMatrix.get(other.pos.x, other.pos.y), 0xfe));
   }
+  if (!towerDrain) blockRoomExits(breachMatrix);
   const result = search(breachMatrix);
   if (!result.incomplete) for (const step of result.path) {
     const breach = breachByPosition.get(`${step.x}:${step.y}`);
@@ -293,7 +321,6 @@ function computeWarApproach(creep: Creep, includeNeutralWalls: boolean): { targe
   const first = findCombatApproach(creep, preferred, includeNeutralWalls);
   if (first.open) return { target: preferred, approach: first };
   // 最近的目标被封住时，先处理同类或其它核心可达目标，不能把全队锁在一面墙前。
-  const order: StructureConstant[] = [STRUCTURE_SPAWN, STRUCTURE_TOWER, STRUCTURE_STORAGE, STRUCTURE_TERMINAL, STRUCTURE_INVADER_CORE];
   const structures = getHostileStructures(creep.room, includeNeutralWalls, creep)
     .filter((structure) => structure.id !== preferred.id && !isBreachTarget(structure));
   // 相邻目标无需寻路，不受远处候选的轮询预算影响；仍检查覆盖它的 rampart。
@@ -301,9 +328,7 @@ function computeWarApproach(creep: Creep, includeNeutralWalls: boolean): { targe
     const approach = findCombatApproach(creep, target, includeNeutralWalls);
     if (approach.open) return { target, approach };
   }
-  const candidates = order.flatMap(type => structures.filter(s => s.structureType === type && creep.pos.getRangeTo(s.pos) > 1)
-    .sort((a, b) => creep.pos.getRangeTo(a.pos) - creep.pos.getRangeTo(b.pos)));
-  const unique = [...new Map(candidates.map(target => [target.id, target])).values()];
+  const unique = rankCoreObjectives(creep, structures.filter(s => creep.pos.getRangeTo(s.pos) > 1));
   if (unique.length) {
     const state = candidateCursors.get(creep.name) ?? { cursor: 0 };
     const selected = unique.find(target => target.id === state.targetId);
@@ -698,19 +723,6 @@ function attackAdjacentHostileOnRoute(creep: Creep): boolean {
     .some((target) => measureCreepIntent(() => creep.attack(target)) === OK);
 }
 
-function attackWeakestAdjacentBreachTarget(creep: Creep): boolean {
-  const blocker = findWeakestAdjacentBreachTarget(creep);
-  if (!blocker) return false;
-
-  measureCreepIntent(() => creep.attack(blocker));
-  return true;
-}
-
-function attackAdjacentWhileHoldingFormation(creep: Creep, includeBreach: boolean): void {
-  if (attackAdjacentHostileOnRoute(creep)) return;
-  if (includeBreach) attackWeakestAdjacentBreachTarget(creep);
-}
-
 function attackRouteBreachWhileTraveling(creep: Creep): boolean {
   if (attackAdjacentHostileOnRoute(creep)) return false;
   if (creep.room.controller?.my) {
@@ -814,7 +826,7 @@ export function followMovingWarAttacker(healer: Creep, attacker: Creep): boolean
 }
 
 function getTargetRoomMoveOptions(creep: Creep, towerDrain = false) {
-  const baseOptions = { ...TARGET_ROOM_MOVE_OPTIONS, reusePath: 3 };
+  const baseOptions = { ...TARGET_ROOM_MOVE_OPTIONS, reusePath: 3, avoidExitTiles: !towerDrain };
   return towerDrain ? { ...baseOptions, ...towerDrainMovementPolicy(creep) } : baseOptions;
 }
 
@@ -832,112 +844,12 @@ function synchronizeWarPartnerConfigName(creep: Creep, partnerConfigName?: strin
   delete creep.memory._warPartnerConfigName;
 }
 
-function isOnExitDirection(pos: RoomPosition, direction: DirectionConstant): boolean {
-  if (direction === TOP) return pos.y <= 0;
-  if (direction === RIGHT) return pos.x >= 49;
-  if (direction === BOTTOM) return pos.y >= 49;
-  if (direction === LEFT) return pos.x <= 0;
-  return false;
-}
-
-function moveOffExitIntoRoom(creep: Creep): boolean {
-  if (creep.pos.x > 0 && creep.pos.x < 49 && creep.pos.y > 0 && creep.pos.y < 49) return false;
-  moveOffExit(creep);
-  return true;
-}
-
-function moveToPartnerRoom(creep: Creep, roomName: string): void {
-  const exitDirection = creep.room.findExitTo?.(roomName);
-  if (
-    typeof exitDirection === "number" &&
-    exitDirection >= TOP &&
-    exitDirection <= LEFT &&
-    isOnExitDirection(creep.pos, exitDirection as DirectionConstant)
-  ) {
-    issueMove(creep, exitDirection as DirectionConstant);
-    return;
-  }
-
-  moveToTargetRoom(creep, roomName, undefined, TRAVEL_OPTIONS);
-}
-
-function isPoisedToCrossInto(creep: Creep, targetRoom: string): boolean {
-  if (creep.room.name === targetRoom) return false;
-
-  const exitDirection = creep.room.findExitTo?.(targetRoom);
-  if (typeof exitDirection !== "number" || exitDirection < TOP || exitDirection > LEFT) return false;
-  return isOnExitDirection(creep.pos, exitDirection as DirectionConstant);
-}
-
-function isReadyToCrossWithHealer(creep: Creep, healer: Creep, targetRoom: string): boolean {
-  const exitDirection = creep.room.findExitTo?.(targetRoom);
-  if (typeof exitDirection !== "number" || exitDirection < TOP || exitDirection > LEFT) return true;
-  if (!isOnExitDirection(creep.pos, exitDirection as DirectionConstant)) return true;
-
-  return isOnExitDirection(healer.pos, exitDirection as DirectionConstant);
-}
-
-function moveAcrossExitToTargetRoom(creep: Creep, targetRoom: string): boolean {
-  const exitDirection = creep.room.findExitTo?.(targetRoom);
-  if (typeof exitDirection !== "number" || exitDirection < TOP || exitDirection > LEFT) return false;
-  if (!isOnExitDirection(creep.pos, exitDirection as DirectionConstant)) return false;
-
-  issueMove(creep, exitDirection as DirectionConstant);
-  return true;
-}
-
-function isNextWarRouteRoom(
-  creep: Creep,
-  partnerRoom: string,
-  targetRoom: string,
-  encodedRouteRooms?: string,
-): boolean {
-  const sourceRoom = creep.memory.configName?.split(":")[0];
-  const orderedRooms = [sourceRoom, ...parseEncodedRouteRooms(encodedRouteRooms), targetRoom].filter(
-    (roomName, index, rooms): roomName is string => !!roomName && rooms.indexOf(roomName) === index,
-  );
-  const currentIndex = orderedRooms.indexOf(creep.room.name);
-  return currentIndex >= 0 && orderedRooms[currentIndex + 1] === partnerRoom;
-}
-
-function waitForWarHealerFormation(
-  creep: Creep,
-  targetRoom: string,
-  encodedRouteRooms?: string,
-): boolean {
+function waitForWarHealerFormation(creep: Creep, targetRoom: string, encodedRouteRooms?: string): boolean {
   if (!expectsWarHealer(creep)) return false;
-
   const healer = findPairedWarHealer(creep);
   if (!healer) return true;
-
-  if (creep.room.name === targetRoom) {
-    if (healer.room.name !== creep.room.name) {
-      if (isPoisedToCrossInto(healer, targetRoom)) {
-        moveOffExitIntoRoom(creep);
-        return true;
-      }
-      moveToPartnerRoom(creep, healer.room.name);
-      return true;
-    }
-
-    return !creep.pos.isNearTo(healer.pos);
-  }
-
-  if (healer.room.name !== creep.room.name) {
-    if (isNextWarRouteRoom(creep, healer.room.name, targetRoom, encodedRouteRooms)) {
-      moveToPartnerRoom(creep, healer.room.name);
-      return true;
-    }
-    if (healer.room.name === targetRoom && moveAcrossExitToTargetRoom(creep, targetRoom)) return true;
-    moveOffExitIntoRoom(creep);
-    return true;
-  }
-
-  if (!creep.pos.isNearTo(healer.pos)) {
-    moveOffExitIntoRoom(creep);
-    return true;
-  }
-  return !isReadyToCrossWithHealer(creep, healer, targetRoom);
+  if (runWarMarch(creep, healer, targetRoom, encodedRouteRooms)) return true;
+  return !creep.pos.isNearTo(healer.pos);
 }
 
 export const meleeAttackerRole: RoleFactory = (
@@ -956,7 +868,7 @@ export const meleeAttackerRole: RoleFactory = (
     synchronizeWarPartnerConfigName(creep, partnerConfigName);
     if ((tactic === "towerDrainDuo" || tactic === "t3TowerDrainDuo") && targetRoom && runTowerDrainPair(creep, targetRoom, partnerConfigName ?? "", tactic === "t3TowerDrainDuo")) return false;
     if (targetRoom && waitForWarHealerFormation(creep, targetRoom, encodedRouteRooms)) {
-      attackAdjacentWhileHoldingFormation(creep, creep.room.name === targetRoom);
+      attackAdjacentHostileOnRoute(creep);
       return false;
     }
 
@@ -971,7 +883,7 @@ export const meleeAttackerRole: RoleFactory = (
     synchronizeWarPartnerConfigName(creep, partnerConfigName);
     if ((tactic === "towerDrainDuo" || tactic === "t3TowerDrainDuo") && targetRoom && runTowerDrainPair(creep, targetRoom, partnerConfigName ?? "", tactic === "t3TowerDrainDuo")) return false;
     if (targetRoom && waitForWarHealerFormation(creep, targetRoom, encodedRouteRooms)) {
-      attackAdjacentWhileHoldingFormation(creep, creep.room.name === targetRoom);
+      attackAdjacentHostileOnRoute(creep);
       return false;
     }
 
@@ -1026,7 +938,7 @@ export const meleeAttackerRole: RoleFactory = (
           const partnerTile = healer && healer.room.name === pos.roomName && healer.pos.x === pos.x && healer.pos.y === pos.y;
           if (!partnerTile && !isWarFollowTileOpen(creep, pos)) return false;
           if (warGeometry(creep.room).blocked[pos.x * 50 + pos.y]) return false;
-          if (tactic !== "towerDrainDuo" && tactic !== "t3TowerDrainDuo") return true;
+          if (tactic !== "towerDrainDuo" && tactic !== "t3TowerDrainDuo") return pos.roomName === creep.room.name && !isExitTile(pos);
           const matrix = constrainTowerDrainBreachPath(creep, pos.roomName, new PathFinder.CostMatrix());
           return matrix.get(pos.x, pos.y) < 0xff;
         },

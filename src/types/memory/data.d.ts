@@ -1,3 +1,4 @@
+import type { WarTask } from "@/runtime/war/store";
 import type { CreepConfig } from "@/types/system";
 import type { DirectAutomationState } from "@/runtime/marketSaleDirectAutomation";
 import type {
@@ -269,68 +270,7 @@ declare global {
         updatedAt: number;
       }
     >;
-    war?: Record<
-      string,
-      {
-        members?: Record<string, { configName: string; creepNames: string[]; spawnedAt?: number }>;
-        membersVersion?: 1;
-        reserveContinuationUntil?: number;
-        nextCheckAt?: number;
-        scheduleKey?: string;
-        sharedRetiredAt?: number;
-        entryEffect?: string;
-        targetRoom: string;
-        sourceRoom: string;
-        status: "queued" | "staging" | "clearing" | "downgrading" | "patrol_waiting" | "done" | "failed";
-        reason: "npc_reservation" | "manual";
-        routeRooms?: string[];
-        routeOrigin?: "map" | "manual";
-        routePlannedAt?: number;
-        routeTrace?: { hops: number; avoided: Record<string, string>; policy: "map_combat" | "manual" };
-        npcAuto?: true;
-        lootAfterClear?: true;
-        rebuildIgnoreStructureIds?: string[];
-        sharedSquadWatchId?: string;
-        combatClearedAt?: number;
-        combatClearSince?: number;
-        squadDecision?: string;
-        squadAssessedAt?: number;
-        squad?: "standard" | "t3Duo" | "towerDrainDuo";
-        tactic?: "t3TowerDrainDuo";
-        boostTier?: "t3";
-        boostLabs?: string[];
-        boostStatus?: "preparing" | "ready" | "failed";
-        oneShot?: boolean;
-        failReason?: string;
-        attempts: number;
-        createdAt: number;
-        updatedAt: number;
-        statusSince?: number;
-        lastHostileSeenAt?: number;
-        clearSince?: number;
-        completedAt?: number;
-        assetsReleasedAt?: number;
-        controllerAttackerLastQueuedAt?: number;
-        generationCounter?: number;
-        activeGeneration?: {
-          id: number;
-          phase: "preparing" | "assembling" | "deployed";
-          createdAt: number;
-          boostTaskId: string;
-          boostGateOpenedAt?: number;
-          deployedAt?: number;
-          argsVersion?: string;
-          configNames: {
-            meleeAttacker: string;
-            healer: string;
-          };
-        };
-        patrolRooms?: string[];
-        patrolIndex?: number;
-        patrolInterval?: number;
-        patrolNextSweepAt?: number;
-      }
-    >;
+    war?: Record<string, WarTask>;
     roomPlanner?: {
       [roomName: string]: {
         layout: { [structureType: string]: { x: number; y: number }[] };

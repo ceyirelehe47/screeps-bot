@@ -526,7 +526,7 @@ describe("meleeAttackerRole 目标策略与移动请求安全边界", () => {
     expect(seen.size).toBe(5); expect(moveToTarget).not.toHaveBeenCalled();
   });
 
-  it("战争目标先选Spawn再选Tower，设施清完才选择远处敌兵", () => {
+  it("可快速拆除的带能量塔优先于远处Spawn，设施清完才选择远处敌兵", () => {
     const hostile = hostileCreep("hostile-defender", 800, { [ATTACK]: 5 });
     const spawn = hostileStructure(STRUCTURE_SPAWN, "spawn-war-objective", 20, 20, 5000);
     const tower = hostileStructure(STRUCTURE_TOWER, "tower-war-objective", 10, 10, 3000);
@@ -543,10 +543,10 @@ describe("meleeAttackerRole 目标策略与移动请求安全边界", () => {
       if (type === FIND_HOSTILE_STRUCTURES) return structures;
       return [];
     }) as Room["find"];
-    expect(findWarObjectiveTarget(attacker)).toBe(spawn);
-    Game.time += 1;
-    structures.pop();
     expect(findWarObjectiveTarget(attacker)).toBe(tower);
+    Game.time += 1;
+    structures.shift();
+    expect(findWarObjectiveTarget(attacker)).toBe(spawn);
     Game.time += 1;
     structures.pop();
     expect(findWarObjectiveTarget(attacker)).toBe(hostile);

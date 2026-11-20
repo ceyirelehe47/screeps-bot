@@ -738,6 +738,8 @@ declare global {
       healerSwap?: boolean;
     };
     _warCounterstrikeSuppressedTargetIds?: Id<Creep>[];
+    _warBlockedExit?: { room: string; x: number; y: number; until: number };
+    _warCrossing?: { from: string; to: string; x: number; y: number };
     _warMoveIntentAt?: number;
     _warPartnerConfigName?: string;
     _warDetached?: boolean;

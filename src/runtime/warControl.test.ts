@@ -1,7 +1,7 @@
 import { requestSpawn } from "@/runtime/spawnRequests";
 jest.mock("@/runtime/powerBankObserver", () => ({ ...jest.requireActual("@/runtime/powerBankObserver"), requestCombatObservation: jest.fn(() => true) }));
 
-import { configureWarRebuildWatch, requestWarRoomClear, runWarControl, startWarRoom, stopWarRoom } from "@/runtime/warControl";
+import { configureWarRebuildWatch, getWarStatus, requestWarRoomClear, runWarControl, startWarRoom, stopWarRoom } from "@/runtime/warControl";
 import * as combatBoosts from "@/runtime/powerBankBoost";
 import * as combatObserver from "@/runtime/powerBankObserver";
 import { createMockStore, MockPos } from "@mock/powerBank";
@@ -561,6 +561,59 @@ describe("towerDrainDuo 战争控制", () => {
     Game.time += 1;
     resetRuntimeServices();
   }
+
+  it("自动出征先看塔火，显式普通 T3 不切换耗塔", () => {
+    const name = "E3N57";
+    const tower = { id: "tower", owner: { username: "player" }, structureType: STRUCTURE_TOWER,
+      store: createMockStore({ [RESOURCE_ENERGY]: 100 }), pos: new MockPos(21, 21, name) } as unknown as StructureTower;
+    startWarRoom(name, "E1N57");
+    runWarControl();
+    expect(getWarStatus(name).tasks[0]).toMatchObject({ order: "observe" });
+    expect(Memory.data!.war![name].activeGeneration).toBeUndefined();
+    expect(combatObserver.requestCombatObservation).toHaveBeenCalledWith(name);
+    Game.rooms[name] = createTargetRoom([], [tower]);
+    nextTick(); runWarControl();
+    expect(getWarStatus(name).tasks[0]).toMatchObject({ tactic: "t3TowerDrainDuo", order: "engage", squadDecision: "armed_tower" });
+    startWarRoom(name, "E1N57", { squad: "t3Duo" });
+    nextTick(); runWarControl();
+    expect(getWarStatus(name).tasks[0].tactic).toBeUndefined();
+  });
+
+  it.each(["manual", "map"] as const)("%s 路线按每代战果决定补队、改道或停战", mode => {
+    const name = "E3N57", source = "E1N57", ingress = "E2N57", alternate = "E3N56";
+    const spawn = { id: "enemy-spawn", owner: { username: "enemy" }, structureType: STRUCTURE_SPAWN,
+      hits: 5000, hitsMax: 5000, pos: new MockPos(20, 20, name) } as unknown as StructureSpawn;
+    Game.rooms[name] = createTargetRoom([], [spawn]);
+    const path = [source, ingress, name];
+    Game.map = { ...Game.map, describeExits: () => ({ [LEFT]: ingress, [TOP]: alternate }),
+      findRoute: (_from: string, to: string) => (to === name ? [ingress, name] : ["E1N56", "E2N56", alternate]).map(room => ({ exit: RIGHT, room })) } as GameMap;
+    startWarRoom(name, source, { squad: "towerDrainDuo", oneShot: false, routeRooms: mode === "manual" ? path : undefined });
+    runWarControl();
+    const task = Memory.data!.war![name];
+    function loseGeneration(damage = 0): void {
+      const gen = task.activeGeneration!;
+      const red = createWarCreep("red", "meleeAttacker", gen.configNames.meleeAttacker, name);
+      const green = createWarCreep("green", "healer", gen.configNames.healer, name);
+      Game.creeps = { red, green }; Game.spawns.Spawn1.memory.spawnList = [];
+      nextTick(); runWarControl();
+      spawn.hits -= damage;
+      delete Game.creeps.green;
+      nextTick(); runWarControl();
+    }
+    loseGeneration();
+    expect(task.review).toMatchObject({ result: "no_progress", action: "replace", consecutiveLosses: 1 });
+    loseGeneration(1200);
+    expect(task.review).toMatchObject({ result: "structure_damaged", consecutiveLosses: 0 });
+    loseGeneration(); loseGeneration();
+    if (mode === "map") {
+      expect(task.review).toMatchObject({ action: "reroute", avoidedIngress: ingress });
+      expect(task.routeRooms?.slice(-2)).toEqual([alternate, name]);
+      loseGeneration();
+    } else expect(task.routeRooms).toEqual(path);
+    expect(getWarStatus(name).tasks[0]).toMatchObject({ status: "failed", failReason: "campaign_no_progress", review: { action: "stop" } });
+    expect(Game.spawns.Spawn1.memory.spawnList).toHaveLength(0);
+    expect(Object.keys(Memory.data!.creepConfigs!)).toHaveLength(0);
+  });
 
   it("未指定路线时按当前地图生成，显式路线更新不重建世代或搭档", () => {
     Game.map = { ...Game.map, findRoute: jest.fn(() => [{ exit: RIGHT, room: "E2N57" }, { exit: RIGHT, room: "E3N57" }]) } as GameMap;

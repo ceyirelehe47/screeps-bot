@@ -1,3 +1,4 @@
+import { authorizeReplacement } from "./campaign";
 import { retireCreep } from "@/runtime/retirement";
 import { cancelSpawning } from "./spawnIndex";
 import { measureSampledCpuPhase } from "@/runtime/cpuPhaseProfiler";
@@ -64,6 +65,8 @@ export function transferSharedGeneration(from: WarTask, to: WarTask): boolean {
     meleeAttacker: getGenerationConfigName(to, id, "meleeAttacker"),
     healer: getGenerationConfigName(to, id, "healer"),
   } };
+  delete generation.baseline;
+  delete generation.lastObserved;
   to.squad = from.squad;
   to.boostTier = from.boostTier;
   to.boostStatus = from.boostStatus;
@@ -180,7 +183,13 @@ export function runSharedWarSquads(store: Record<string, WarTask>): Set<WarTask>
         continue;
       }
       // 现役强化成员继续使用；只有真的需要新世代时重新评估无强化能力。
-      if (task.activeGeneration?.phase === "deployed" && !isGenerationComplete(task.activeGeneration)) retireSharedCombat(task);
+      if (task.activeGeneration?.phase === "deployed" && !isGenerationComplete(task.activeGeneration)) {
+        if (!authorizeReplacement(task, task.activeGeneration)) {
+          transitionWarTaskTerminal(task, "failed", task.oneShot ? "generation_exhausted" : "campaign_no_progress");
+          continue;
+        }
+        retireSharedCombat(task);
+      }
       if (!task.activeGeneration && room && isNpcWarTarget(room)) {
         const decision = assessUnboostedNpc(room, task.routeRooms, TOWER_DRAIN_ATTACKER_BODY, TOWER_DRAIN_HEALER_BODY, Game.rooms[task.sourceRoom]?.energyCapacityAvailable);
         if (decision.reason === "entry_not_proven") { task.failReason = "npc_entry_not_proven"; continue; }

@@ -31,7 +31,7 @@ interface SearchOptions {
 }
 interface SearchRecord { path: RoomPosition[]; origin: RoomPosition; goal: Goal; matrix: CostMatrix; incomplete: boolean }
 interface EntryGeometry { left: number; right: number; wallY: number; coreX: number; coreY: number; alternateLeft?: number; alternateRight?: number }
-interface DrainScenario { geometry: EntryGeometry; openGap?: boolean; towerEnergy?: number }
+interface DrainScenario { blockedLanding?: true; march?: true; geometry: EntryGeometry; openGap?: boolean; towerEnergy?: number }
 interface DuoFrame {
   tick: number; red: RoomPosition; green: RoomPosition;
   drain?: { phase: string; blocker?: string; pending?: true; entry?: { x: number; y: number }; healerEntry?: { x: number; y: number } };
@@ -106,14 +106,16 @@ function position(x: number, y: number, roomName = ROOM): RoomPosition {
 }
 
 /** 小型确定性 A*，每条返回路径均由 terrain + 调用者矩阵计算，无预设成功路径。 */
-function gridSearch(origin: RoomPosition, goal: Goal, options: SearchOptions = {}): PathFinderPath {
+function gridSearch(origin: RoomPosition, target: Goal | Goal[], options: SearchOptions = {}): PathFinderPath {
+  const goals = Array.isArray(target) ? target : [target];
+  const goal = goals[0];
   const supplied = options.roomCallback?.(origin.roomName);
   if (!Game.rooms[origin.roomName] || goal.pos.roomName !== origin.roomName || supplied === false) {
     return { path: [], ops: 0, cost: 0, incomplete: true };
   }
   const matrix = supplied ?? new RealCostMatrix() as unknown as CostMatrix;
   const key = (x: number, y: number): number => y * 50 + x;
-  const distance = (x: number, y: number): number => Math.max(0, Math.max(Math.abs(x - goal.pos.x), Math.abs(y - goal.pos.y)) - goal.range);
+  const distance = (x: number, y: number): number => Math.min(...goals.map(g => Math.max(0, Math.max(Math.abs(x - g.pos.x), Math.abs(y - g.pos.y)) - g.range)));
   const start = key(origin.x, origin.y);
   const costs = new Map<number, number>([[start, 0]]);
   const previous = new Map<number, number>();
@@ -170,6 +172,13 @@ class DuoWorld {
   private heals: Creep[] = [];
 
   public terrain(x: number, y: number, roomName = ROOM): number {
+    if (this.scenario?.march) {
+      const gateway = x === 21 || (this.scenario.blockedLanding && x === 24);
+      if (this.scenario.blockedLanding && roomName === ROOM && y === 1 && x >= 20 && x <= 22) return TERRAIN_MASK_WALL;
+      const open = roomName === RETREAT ? y >= 40 && (y === 49 ? gateway : x >= 18 && x <= 24)
+        : y <= 10 && (y === 0 ? gateway : x >= 18 && x <= 24);
+      return open ? 0 : TERRAIN_MASK_WALL;
+    }
     if (this.scenario) {
       const g = this.scenario.geometry;
       if (g.alternateLeft !== undefined && g.alternateRight !== undefined) {
@@ -195,7 +204,7 @@ class DuoWorld {
     nextScenarioTick += 100;
     Game.creeps = {}; Game.powerCreeps = {}; Game.spawns = {};
     Memory.cfg = {}; Memory.runtime = {}; Memory.data = {}; Memory.creeps = {};
-    const roomFor = (name: string): Room => ({ name, getTerrain: () => ({ get: (x: number, y: number) => { this.terrainReads++; return this.terrain(x, y, name); } }),
+    const roomFor = (name: string): Room => ({ name, findExitTo: () => name === ROOM ? TOP : BOTTOM, getTerrain: () => ({ get: (x: number, y: number) => { this.terrainReads++; return this.terrain(x, y, name); } }),
       lookAt: (x: number, y: number) => [
         { type: LOOK_TERRAIN, terrain: this.terrain(x, y, name) === TERRAIN_MASK_WALL ? "wall" : "plain" },
         ...this.structures.filter(value => value.pos.roomName === name && value.pos.x === x && value.pos.y === y)
@@ -213,7 +222,7 @@ class DuoWorld {
     } as unknown as Room);
     this.room = roomFor(ROOM);
     Game.rooms = { [ROOM]: this.room };
-    if (scenario?.geometry.alternateLeft !== undefined) Game.rooms[RETREAT] = roomFor(RETREAT);
+    if (scenario?.march || scenario?.geometry.alternateLeft !== undefined) Game.rooms[RETREAT] = roomFor(RETREAT);
     Game.map = { ...Game.map, getRoomTerrain: (name: string) => ({ get: (x: number, y: number) => { this.terrainReads++; return this.terrain(x, y, name); } }), getRoomStatus: () => ({ status: "normal", timestamp: null }),
       describeExits: (name: string) => scenario ? name === ROOM ? { [TOP]: RETREAT } : name === RETREAT ? { [BOTTOM]: ROOM } : null : null,
       getWorldSize: () => 200 } as GameMap;
@@ -327,9 +336,9 @@ class DuoWorld {
   }
 
   public step(): void {
-    const tactic = this.scenario ? "towerDrainDuo" : undefined;
-    const redRole = meleeAttackerRole(ROOM, "", "", "", GREEN_CONFIG, tactic);
-    const greenRole = healerRole(ROOM, "", "", "", RED_CONFIG, tactic);
+    const tactic = this.scenario && !this.scenario.march ? "towerDrainDuo" : undefined;
+    const redRole = meleeAttackerRole(ROOM, this.scenario?.march ? [RETREAT, ROOM].join("|") : "", "", "", GREEN_CONFIG, tactic);
+    const greenRole = healerRole(ROOM, this.scenario?.march ? [RETREAT, ROOM].join("|") : "", "", "", RED_CONFIG, tactic);
     if (this.order === "leader-first") { redRole.target(this.red); greenRole.target(this.green); }
     else { greenRole.target(this.green); redRole.target(this.red); }
     resolveTrafficIntents();
@@ -383,7 +392,7 @@ class DuoWorld {
     for (const [creep, next] of moves) { creep.pos = next; creep.room = Game.rooms[next.roomName]; }
     // movement.execute(含撞墙/碰撞失败)全部结算后，再独立检查edge；失败或没有intent也会迁房。
     // https://github.com/screeps/engine/blob/a90d26fc9eb943147799e65d0bf9d4d0d79a2722/src/processor/intents/creeps/tick.js#L45-L70
-    if (this.scenario?.geometry.alternateLeft !== undefined) for (const creep of Object.values(Game.creeps)) {
+    if (this.scenario?.march || this.scenario?.geometry.alternateLeft !== undefined) for (const creep of Object.values(Game.creeps)) {
       if (creep.pos.roomName === ROOM && creep.pos.y === 0) creep.pos = position(creep.pos.x, 49, RETREAT);
       else if (creep.pos.roomName === RETREAT && creep.pos.y === 49) creep.pos = position(creep.pos.x, 0);
       creep.room = Game.rooms[creep.pos.roomName];
@@ -434,6 +443,52 @@ describe("war duo 真实角色与共享移动的多 tick 集成", () => {
   beforeEach(() => {
     resetRuntimeServices(); clearCreepMovementStateForTest(); clearRoutingCachesForTest();
     clearRoomTopologyRevisionCacheForTest(); clearTrafficNaturalObstacleCacheForTest(); clearMovementAnalyticsForTest();
+  });
+
+  it.each(["leader-first", "healer-first"] as const)("%s 掉队后集结，单格跨房，穿过墙洞抵达目标", order => {
+    const w = new DuoWorld(order, { march: true, openGap: true, geometry: { left: 18, right: 24, coreX: 21, coreY: 8, wallY: 4 } });
+    w.red.pos = position(21, 46, RETREAT); w.green.pos = position(18, 42, RETREAT);
+    for (const member of [w.red, w.green]) { member.room = Game.rooms[RETREAT]; delete member.memory._warTowerDrain; }
+    w.green.fatigue = 2;
+    w.step();
+    expect(w.red.pos.isEqualTo(position(21, 46, RETREAT))).toBe(true);
+    w.green.fatigue = 0;
+    for (let i = 0; i < 35 && w.red.pos.getRangeTo(w.core.pos) > 1; i++) w.step();
+    expect(w.red.pos.getRangeTo(w.core.pos)).toBeLessThanOrEqual(1);
+    expect(w.red.pos.getRangeTo(w.green.pos)).toBeLessThanOrEqual(1);
+    expect(w.frames.filter(frame => frame.red.roomName !== frame.green.roomName)).toHaveLength(1);
+    for (const name of ["red", "green"] as const) {
+      const entered = w.frames.findIndex(frame => frame[name].roomName === ROOM);
+      expect(entered).toBeGreaterThan(0);
+      expect(w.frames[entered][name].x).toBe(21);
+      expect(w.frames.slice(entered).every(frame => frame[name].roomName === ROOM)).toBe(true);
+    }
+    expect(w.structures.filter(s => s.structureType === STRUCTURE_WALL).every(s => s.hits === 1500)).toBe(true);
+  });
+
+  it("对面落点没有内移空间时改走第二出口", () => {
+    const w = new DuoWorld("healer-first", { march: true, blockedLanding: true, openGap: true,
+      geometry: { left: 18, right: 24, coreX: 21, coreY: 8, wallY: 4 } });
+    w.red.pos = position(21, 48, RETREAT); w.green.pos = position(21, 47, RETREAT);
+    for (const actor of [w.red, w.green]) { actor.room = Game.rooms[RETREAT]; delete actor.memory._warTowerDrain; }
+    for (let i = 0; i < 35 && w.red.pos.getRangeTo(w.core.pos) > 1; i++) w.step();
+    expect(w.frames.find(frame => frame.red.roomName === ROOM)?.red.x).toBe(24);
+    expect(w.frames.find(frame => frame.green.roomName === ROOM)?.green.x).toBe(24);
+    expect(w.red.pos.getRangeTo(w.core.pos)).toBeLessThanOrEqual(1);
+  });
+
+  it.each(["leader-first", "healer-first"] as const)("%s 优先目标被天然墙隔绝时改走可达塔", order => {
+    const w = new DuoWorld(order);
+    w.structures.splice(0, w.structures.length, w.core);
+    const originalTerrain = w.terrain.bind(w);
+    w.terrain = (x, y, room) => x === 18 ? TERRAIN_MASK_WALL : originalTerrain(x, y, room);
+    const tower = { ...w.core, id: "reachable", structureType: STRUCTURE_TOWER, pos: position(11, 24),
+      hits: 1000000, store: createMockStore({}) } as unknown as StructureTower;
+    w.structures.push(tower);
+    w.core.hits = 1500;
+    for (let i = 0; i < 12 && tower.hits === 1000000; i++) { w.step(); verifyFrame(w); }
+    expect(tower.hits).toBeLessThan(1000000);
+    expect(w.core.hits).toBe(1500);
   });
 
   it.each(["leader-first", "healer-first"] as const)("%s 从弯通道抵达核心，绿持续贴随且墙血量不变", order => {

@@ -1,3 +1,4 @@
+import { parseEncodedRouteRooms } from "@/movement/common";
 import { issueMove, registerSquadMovement, getMoveIntentReceipt, cancelMoveIntent } from "@/movement/traffic";
 import { warGeometry, warTerrain, warTerrainVersion } from "@/roles/warGeometry";
 import { warPartner, warSquad } from "@/roles/warPartner";
@@ -665,7 +666,10 @@ export function runTowerDrainPair(creep: Creep, targetRoom: string, partnerConfi
     delete state.reselectRequested; delete state.entrySelectedAt;
     state.phase = "approach"; state.blocker = undefined;
   }
-  const outsideMember = [attacker, healer].find((member) => member.room.name !== targetRoom && directionToRoom(targetRoom, member.room.name));
+  const route = parseEncodedRouteRooms(attacker.memory.roleArgs?.[1]);
+  const plannedIngress = route[route.length - 1] === targetRoom ? route[route.length - 2] : undefined;
+  const outsideMember = [attacker, healer].find(member => member.room.name !== targetRoom
+    && (!plannedIngress || member.room.name === plannedIngress) && directionToRoom(targetRoom, member.room.name));
   if (!state.retreatRoom && outsideMember) {
     state.retreatRoom = outsideMember.room.name;
     state.exitDirection = directionToRoom(targetRoom, state.retreatRoom);

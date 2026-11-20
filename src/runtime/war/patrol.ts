@@ -32,6 +32,12 @@ export function advancePatrol(task: WarTask, nextIndex: number): boolean {
   if (store[previousTarget] === task) {
     delete store[previousTarget];
   }
+  delete task.review;
+  delete task.order;
+  if (task.activeGeneration) {
+    delete task.activeGeneration.baseline;
+    delete task.activeGeneration.lastObserved;
+  }
   task.targetRoom = nextTarget;
   task.patrolIndex = nextIndex;
   task.patrolNextSweepAt = undefined;

@@ -1,3 +1,5 @@
+import { isExitTile } from "@/movement/common";
+import { runWarMarch } from "./warMarch";
 import { getMoveIntentReceipt } from "@/movement/traffic";
 import { issueMove } from "@/movement/traffic";
 import { getRefillableHostileTowers } from "@/runtime/combatTowerThreat";
@@ -38,62 +40,6 @@ function synchronizeWarPartnerConfigName(creep: Creep, partnerConfigName?: strin
     return;
   }
   delete creep.memory._warPartnerConfigName;
-}
-
-function isOnExitDirection(pos: RoomPosition, direction: DirectionConstant): boolean {
-  if (direction === TOP) return pos.y <= 0;
-  if (direction === RIGHT) return pos.x >= 49;
-  if (direction === BOTTOM) return pos.y >= 49;
-  if (direction === LEFT) return pos.x <= 0;
-  return false;
-}
-
-function isOnRoomExit(pos: RoomPosition): boolean {
-  return pos.x <= 0 || pos.x >= 49 || pos.y <= 0 || pos.y >= 49;
-}
-
-function moveOffExitIntoRoom(creep: Creep): boolean {
-  if (!isOnRoomExit(creep.pos)) return false;
-  moveOffExit(creep);
-  return true;
-}
-
-function moveToPartnerRoom(creep: Creep, roomName: string): void {
-  const exitDirection = creep.room.findExitTo?.(roomName);
-  if (
-    typeof exitDirection === "number" &&
-    exitDirection >= TOP &&
-    exitDirection <= LEFT &&
-    isOnExitDirection(creep.pos, exitDirection as DirectionConstant)
-  ) {
-    issueMove(creep, exitDirection as DirectionConstant);
-    return;
-  }
-
-  moveToTargetRoom(creep, roomName, undefined, TRAVEL_OPTIONS);
-}
-
-function isPoisedToCrossInto(creep: Creep, targetRoom: string): boolean {
-  if (creep.room.name === targetRoom) return false;
-
-  const exitDirection = creep.room.findExitTo?.(targetRoom);
-  if (typeof exitDirection !== "number" || exitDirection < TOP || exitDirection > LEFT) return false;
-
-  return isOnExitDirection(creep.pos, exitDirection as DirectionConstant);
-}
-
-function getValidExitDirection(room: Room, targetRoom: string): DirectionConstant | null {
-  const exitDirection = room.findExitTo?.(targetRoom);
-  if (typeof exitDirection !== "number" || exitDirection < TOP || exitDirection > LEFT) return null;
-
-  return exitDirection as DirectionConstant;
-}
-
-function shouldHoldForAttackerAtExit(creep: Creep, attacker: Creep, targetRoom: string): boolean {
-  const exitDirection = getValidExitDirection(creep.room, targetRoom);
-  if (!exitDirection) return false;
-
-  return isOnExitDirection(creep.pos, exitDirection) && !isOnExitDirection(attacker.pos, exitDirection);
 }
 
 function healAttacker(creep: Creep, attacker: Creep): void {
@@ -153,19 +99,11 @@ function moveWithWarAttackerFormation(creep: Creep, targetRoom: string, encodedR
   if (!attacker) return true;
 
   healAttacker(creep, attacker);
+  if (runWarMarch(attacker, creep, targetRoom, encodedRouteRooms)) return true;
   if (!towerDrain && coordinateCounterstrike(creep, attacker)) return true;
   if (!towerDrain && shouldWarHealerHoldForCounterstrike(attacker, creep, targetRoom)) return true;
 
-  if (creep.room.name === targetRoom && attacker.room.name !== targetRoom) {
-    if (isPoisedToCrossInto(attacker, targetRoom)) {
-      moveOffExitIntoRoom(creep);
-      return true;
-    }
-    moveToPartnerRoom(creep, attacker.room.name);
-    return true;
-  }
-
-  if (creep.room.name === targetRoom && attacker.room.name === targetRoom && isOnRoomExit(creep.pos)) {
+  if (creep.room.name === targetRoom && attacker.room.name === targetRoom && isExitTile(creep.pos)) {
     if (towerDrain) followMovingWarAttacker(creep, attacker);
     else moveOffExit(creep, false, (_direction, pos) => {
       const next = getMoveIntentReceipt(attacker)?.to ?? attacker.pos;
@@ -174,19 +112,8 @@ function moveWithWarAttackerFormation(creep: Creep, targetRoom: string, encodedR
     return true;
   }
 
-  if (attacker.room.name !== creep.room.name) {
-    moveToPartnerRoom(creep, attacker.room.name);
-    return true;
-  }
-
   if (!creep.pos.isNearTo(attacker.pos)) {
     moveToTarget(creep, attacker, 1, { ...TARGET_ROOM_MOVE_OPTIONS, reusePath: !towerDrain && getRefillableHostileTowers(creep.room).length === 0 ? 3 : 0 });
-    return true;
-  }
-
-  if (creep.room.name !== targetRoom) {
-    if (shouldHoldForAttackerAtExit(creep, attacker, targetRoom)) return true;
-    moveToTargetRoom(creep, targetRoom, encodedRouteRooms, TRAVEL_OPTIONS);
     return true;
   }
 

@@ -95,7 +95,7 @@ export function isControllerDefeated(room: Room): boolean {
   return !!controller && (controller.my || !controller.owner || controller.level <= 0);
 }
 
-export function defaultWarMapRoute(sourceRoom: string, targetRoom: string): { rooms?: string[]; trace: NonNullable<WarTask["routeTrace"]> } {
+export function defaultWarMapRoute(sourceRoom: string, targetRoom: string, avoidedIngress?: string): { rooms?: string[]; trace: NonNullable<WarTask["routeTrace"]> } {
   const avoided: Record<string, string> = {};
   for (const room of Object.values(Game.rooms)) {
     if (room.name === sourceRoom || room.name === targetRoom || room.controller?.my || typeof room.find !== "function") continue;
@@ -104,6 +104,23 @@ export function defaultWarMapRoute(sourceRoom: string, targetRoom: string): { ro
   }
   const trace: NonNullable<WarTask["routeTrace"]> = { hops: 0, avoided, policy: "map_combat" };
   if (!/^[WE]\d+[NS]\d+$/.test(sourceRoom) || !/^[WE]\d+[NS]\d+$/.test(targetRoom) || typeof Game.map?.findRoute !== "function") return { trace };
+  if (avoidedIngress) {
+    const entries = Object.values(Game.map.describeExits?.(targetRoom) ?? {});
+    let best: string[] | undefined;
+    for (const entry of entries) {
+      if (!entry || entry === avoidedIngress || avoided[entry] || Game.map.getRoomStatus?.(entry)?.status === "closed") continue;
+      const path = entry === sourceRoom ? [] : Game.map.findRoute(sourceRoom, entry, {
+        routeCallback: name => name === targetRoom || avoided[name] ? Infinity : 1,
+      });
+      if (!Array.isArray(path) || path.some(step => step.room === targetRoom || avoided[step.room])) continue;
+      const rooms = [sourceRoom, ...path.map(step => step.room)];
+      if (rooms[rooms.length - 1] !== entry) continue;
+      rooms.push(targetRoom);
+      if (!best || rooms.length < best.length) best = rooms;
+    }
+    trace.hops = best ? best.length - 1 : 0;
+    return { rooms: best, trace };
+  }
   const route = Game.map.findRoute(sourceRoom, targetRoom, { routeCallback: name => avoided[name] ? Infinity : 1 });
   if (!Array.isArray(route)) return { trace };
   const rooms = [sourceRoom, ...route.map((step) => step.room)];
