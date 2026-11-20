@@ -358,9 +358,11 @@ export const remoteCarrierRole: RoleFactory = (targetRoom: string, targetX?: str
     return true;
   },
   source: (creep): boolean => {
+    if (salvage && salvageIntentTicks.get(creep) === Game.time) return false;
+    // 身上已有货且已离开取货房，先交付；包括热加载或边界迁房后仍在 source 的旧成员。
+    if (creep.store.getUsedCapacity() > 0 && (creep.room.name !== targetRoom || isCarryStoreFull(creep))) return true;
     if (salvage) {
       requestCombatObservation(targetRoom);
-      if (salvageIntentTicks.get(creep) === Game.time) return false;
       const room = Game.rooms[targetRoom];
       if (!room && creep.store.getUsedCapacity() > 0) return true;
       if (!salvageTaskActive(creep) || (room && !isInvaderSalvageRoomClear(room)) ||
@@ -378,10 +380,6 @@ export const remoteCarrierRole: RoleFactory = (targetRoom: string, targetX?: str
       }
       if (!room) return false;
     }
-    if (creep.store.getUsedCapacity() > 0 && isCarryStoreFull(creep)) {
-      return true;
-    }
-
     if (creep.room.name !== targetRoom) {
       const homeRoomName = getHomeRoomName(creep);
       if (creep.room.name === homeRoomName && shouldRetireBeforeDeparture(creep, targetRoom)) {

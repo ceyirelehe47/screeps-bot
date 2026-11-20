@@ -435,6 +435,17 @@ describe("remoteCarrierRole", () => {
     expect(prepared).toBe(false);
   });
 
+  it.each([false, true])("母房有部分载货时从取货阶段转交付，短寿命也不销毁货物（回收=%s）", salvage => {
+    const world = salvageFixture({});
+    world.creep.room = world.home;
+    world.creep.ticksToLive = 1;
+    world.resources.energy = 100;
+    const role = salvage ? world.role : remoteCarrierRole(world.room.name);
+    expect(role.source!(world.creep)).toBe(true);
+    expect(world.creep.suicide).not.toHaveBeenCalled();
+    expect(moveToTargetRoom).not.toHaveBeenCalled();
+  });
+
   it("does not suicide while returning with carried resources", () => {
     const creep = {
       name: "remote-carrier-1",
