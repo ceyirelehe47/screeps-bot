@@ -594,6 +594,21 @@ describe("towerDrainDuo 战争控制", () => {
     expect(release).toHaveBeenCalledWith(gen.boostTaskId, task.sourceRoom);
   });
 
+  it("进入清场确认时释放强化失败，下一 tick 重试并从成功帧开始确认", () => {
+    startWarRoom("E3N57", "E1N57", { squad: "t3Duo" });
+    Game.rooms.E3N57 = createTargetRoom();
+    const release = jest.spyOn(combatBoosts, "releaseBoostLabs")
+      .mockImplementationOnce(() => { throw new Error("release interrupted"); })
+      .mockImplementation(() => undefined);
+    expect(() => runWarControl()).toThrow("release interrupted");
+    nextTick(); runWarControl();
+    const task = Memory.data!.war!.E3N57;
+    expect(release).toHaveBeenCalledTimes(2);
+    expect(task.clearSince).toBe(Game.time);
+    nextTick(); runWarControl();
+    expect(release).toHaveBeenCalledTimes(2);
+  });
+
   it("Spawn 接受成员的同一 tick 再调度，不能判定该成员损失", () => {
     startDrain();
     runWarControl();

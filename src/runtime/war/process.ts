@@ -65,13 +65,13 @@ function muster(task: WarTask): void {
 
 function confirmClear(task: WarTask): void {
   const first = task.clearSince === undefined || task.order !== "confirm";
-  task.clearSince ??= Game.time;
-  task.order = "confirm";
-  setTaskStatus(task, "clearing");
   if (first && !isPatrolTask(task)) {
     disableTaskProduction(task);
     releaseWarBoosts(task);
   }
+  task.clearSince ??= Game.time;
+  task.order = "confirm";
+  setTaskStatus(task, "clearing");
   if (Game.time - task.clearSince + 1 >= WAR_CLEAR_DEBOUNCE_TICKS && !completePatrolTarget(task)) {
     transitionWarTaskTerminal(task, "done", null);
   }
