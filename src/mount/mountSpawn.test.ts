@@ -136,6 +136,18 @@ describe("mountSpawn", () => {
     Game.time++; spawn.memory.spawnList = [name]; prototype.work.call(spawn);
     expect(spawn.spawnCreep).not.toHaveBeenCalled();
   });
+  it("直接调用 mainSpawn 也会拒绝已暂停外矿的旧工人", () => {
+    const room = { name:"W1N1", energyAvailable:300, energyCapacityAvailable:300 } as Room;
+    const name = "W1N1:remoteMine:W2N1:worker:0";
+    Memory.data!.remoteMining = { W2N1:{ sourceRoom:"W1N1",targetRoom:"W2N1",status:"suspended",sourceIds:["s"],
+      assignedAt:Game.time,updatedAt:Game.time } };
+    Memory.data!.creepConfigs![name] = { role:"remoteWorker", roomName:room.name,args:["W2N1"],body:[WORK,CARRY,MOVE] };
+    const spawn = createSpawn("Spawn1",room,[name]);
+    Game.rooms = { W1N1:room }; Game.spawns = { Spawn1:spawn };
+    Object.setPrototypeOf(spawn,prototype);
+    expect(spawn.mainSpawn(name)).toBe(false);
+    expect(spawn.spawnCreep).not.toHaveBeenCalled();
+  });
   it("战争孵化接受后同 tick 停止任务，尚未进入 Game.creeps 的 Memory 也会解绑", () => {
     const room = { name: "E1N57", controller: { my: true, level: 8 }, energyAvailable: 300, energyCapacityAvailable: 300 } as unknown as Room;
     const name = "E1N57:war:E3N57:meleeAttacker:0";

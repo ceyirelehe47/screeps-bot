@@ -1124,7 +1124,10 @@ function cleanupRemoteConfigs(task: RemoteMiningTask, scope: "income" | "all" = 
   const prefix = `${task.sourceRoom}:remoteMine:${task.targetRoom}:`;
   const matches = (name: string): boolean => {
     if (!name.startsWith(prefix)) return false;
-    const job = name.slice(prefix.length).split(":")[0];
+    const suffix = name.slice(prefix.length);
+    const marker = suffix.indexOf(":");
+    if (marker < 0) return false;
+    const job = suffix.slice(0, marker);
     return job === "harvester" || job === "carrier" || job === "reserver" ||
       (scope === "all" && (job === "worker" || job === "defender"));
   };

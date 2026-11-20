@@ -285,7 +285,8 @@ export function mountSpawn(): void {
       return true;
     }
 
-    if (hasSpawnAcceptedIntent(this.name) || !canExecuteSpawnRequest(configName, config)) return false;
+    if (hasSpawnAcceptedIntent(this.name) || !getSpawnAdmission(configName, config, this.room.name).allowed ||
+        !canExecuteSpawnRequest(configName, config)) return false;
 
     const body = chooseBody(this, configName);
     if (body.reduce((sum, part) => sum + BODYPART_COST[part], 0) > this.room.energyCapacityAvailable) {
