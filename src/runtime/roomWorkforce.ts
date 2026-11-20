@@ -63,7 +63,8 @@ function isMineralEligibleForHarvest(mineral: Mineral): boolean {
   }
 
   const structures = mineral.pos.findInRange(FIND_STRUCTURES, 1);
-  const hasExtractor = structures.some((structure) => structure.structureType === STRUCTURE_EXTRACTOR);
+  const hasExtractor = structures.some(structure => structure.structureType === STRUCTURE_EXTRACTOR
+    && (typeof structure.isActive !== "function" || structure.isActive()));
   const hasContainer = structures.some((structure) => structure.structureType === STRUCTURE_CONTAINER);
   return hasExtractor && hasContainer;
 }

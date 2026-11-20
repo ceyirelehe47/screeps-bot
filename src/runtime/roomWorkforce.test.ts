@@ -21,6 +21,7 @@ function createMineral(
   id: string,
   options: {
     hasExtractor?: boolean;
+    extractorActive?: boolean;
     hasContainer?: boolean;
     amount?: number;
     mineralType?: MineralConstant;
@@ -28,7 +29,7 @@ function createMineral(
 ): Mineral {
   const structures: Structure[] = [];
   if (options.hasExtractor) {
-    structures.push({ structureType: STRUCTURE_EXTRACTOR } as StructureExtractor);
+    structures.push({ structureType: STRUCTURE_EXTRACTOR, isActive: () => options.extractorActive !== false } as StructureExtractor);
   }
   if (options.hasContainer) {
     structures.push({ structureType: STRUCTURE_CONTAINER } as StructureContainer);
@@ -293,6 +294,15 @@ describe("roomWorkforce", () => {
       "W1N5:carrier:0",
       "W1N5:worker:0",
     ]);
+  });
+
+  it("提取器失活期间不派矿物采集者，恢复后重新派工", () => {
+    const options = { hasExtractor: true, hasContainer: true, extractorActive: false };
+    const room = createRoom({ minerals: [createMineral("mineral-x", options)] });
+    expect(getInventoryConfigNames(room)).not.toContain("W1N1:mineralHarvester:mineral-x");
+    options.extractorActive = true;
+    Game.time++;
+    expect(getInventoryConfigNames(room)).toContain("W1N1:mineralHarvester:mineral-x");
   });
 
   it("stops scheduling a replacement harvester while storage is under capacity pressure", () => {
