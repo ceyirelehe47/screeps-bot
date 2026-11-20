@@ -158,6 +158,29 @@ describe("自动合成补料的实需与物理 staging", () => {
     expect(step?.destinationTargetAmount).toBe(560);
   });
 
+  it("在普通终端预留线先腾出非能量空间，再补齐基础能量", () => {
+    const terminal = source.terminal!.store as MutableStore;
+    const storage = source.storage!.store as MutableStore;
+    task.status = "cancelled";
+    (target.storage!.store as MutableStore).set(RESOURCE_ENERGY, 200_000);
+    storage.set(RESOURCE_ENERGY, 140_000);
+    storage.set(RESOURCE_ZYNTHIUM, 0);
+    terminal.set(RESOURCE_ENERGY, 20_979);
+    terminal.set(RESOURCE_ZYNTHIUM, 219_021);
+    Memory.runtime!.resourceControl!.rooms[source.name].capacityState = "normal";
+    runResourceControl();
+    const drafts = () => Object.values(getCarrierTasksByRoom(source.name));
+    const offload = drafts().find(t => t.type === "terminal_offload" && t.steps[0]?.resource === RESOURCE_ZYNTHIUM);
+    expect(offload?.steps[0]?.amount).toBe(4021);
+    expect(terminal.getFreeCapacity()).toBe(60_000);
+    terminal.set(RESOURCE_ZYNTHIUM, 215_000);
+    storage.set(RESOURCE_ZYNTHIUM, 4_021);
+    Game.time += 10;
+    runResourceControl();
+    const feed = drafts().find(t => t.type === "terminal_feed" && t.steps[0]?.resource === RESOURCE_ENERGY);
+    expect(feed?.steps[0]).toMatchObject({ amount: 4_021, destinationTargetAmount: 25_000 });
+  });
+
   it("在 41k 物理空位与零 ordinary headroom 中只搬真实所需 26，保留原 913 承诺", () => {
     expect(source.storage!.store.getFreeCapacity()).toBe(152_616);
     expect(source.terminal!.store.getFreeCapacity()).toBe(41_019);

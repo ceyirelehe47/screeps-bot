@@ -1952,9 +1952,16 @@ export const carrierRole: RoleFactory = () => ({
       const terminalEnergy = terminal.store.getUsedCapacity(RESOURCE_ENERGY);
       if (terminalEnergy < policy.terminalEnergyReserve &&
           (creep.room.storage?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0) > policy.energyFloor) {
-        const feed = pickupSynthesisCarrierResource(creep, task => isResourceControlTerminalPreloadTask(task) &&
-          task.steps.some(step => step.resource === RESOURCE_ENERGY && step.toId === terminal.id) &&
-          (terminalEnergy < Math.min(1000, policy.terminalEnergyReserve) || Game.time - task.createdAt >= 100), false);
+        const headroomTarget = Memory.runtime?.resourceControl?.rooms?.[assignedRoomName]?.desiredTerminalFreeCapacity;
+        const needsOffload = headroomTarget !== undefined && terminal.store.getFreeCapacity() <= headroomTarget;
+        const feed = pickupSynthesisCarrierResource(creep, task => {
+          if (task.producer !== RESOURCE_CONTROL_TERMINAL_PRELOAD_PRODUCER) return false;
+          if (needsOffload && task.type === "terminal_offload") {
+            return task.steps.some(step => step.fromId === terminal.id && step.resource !== RESOURCE_ENERGY);
+          }
+          return isResourceControlTerminalPreloadTask(task) && task.steps.some(step => step.resource === RESOURCE_ENERGY && step.toId === terminal.id) &&
+            (terminalEnergy < Math.min(1000, policy.terminalEnergyReserve) || Game.time - task.createdAt >= 100 || needsOffload);
+        }, false);
         if (feed.picked || feed.outOfRange) {
           delete deliveryState.carrierStorageOnlyMode;
           if (feed.picked) releasePickupReservation(creep);

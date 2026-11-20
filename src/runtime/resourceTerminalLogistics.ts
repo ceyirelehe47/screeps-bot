@@ -1,3 +1,4 @@
+import { countCarrierCargo } from "@/runtime/carrierCargo";
 import { HUB_TARGET_COMPOUNDS, isHubOnlyReserveCompound } from "@/config/hub";
 import { isHealthyResourceTransferTaskReservation } from "@/runtime/logistics/resourceTransferTasks";
 import { getMarketSaleTerminalExposure } from "@/runtime/marketSaleExposure";
@@ -2354,6 +2355,13 @@ export function syncTerminalFeedTasks(
       }
     }
 
+    // 在正常容量目标内给基础能量库存预留位置。只为仓库底线以上可搬入的
+    // 能量腾挪，沿用既有非能源保护与仓库空位下限；已接货能量也需要落点。
+    const energyHeadroom = recoveringTerminal ? 0 : Math.min(
+      Math.max(0, snapshot.terminalEnergyReserve - snapshot.terminalEnergy),
+      Math.max(0, snapshot.storageEnergy - snapshot.energyFloor) +
+        countCarrierCargo(snapshot.terminal.id, RESOURCE_ENERGY),
+    );
     const overflowDiagnostics = appendTerminalOverflowDrafts(
       snapshot,
       snapshots,
@@ -2361,7 +2369,7 @@ export function syncTerminalFeedTasks(
       drafts,
       offloadedResources,
       {
-        desiredUsedCapacity: desiredTerminalUsedCapacity,
+        desiredUsedCapacity: desiredTerminalUsedCapacity - energyHeadroom,
         storageOffloadCapacity,
         destinationFreeCapacityFloor: capacityConfig.storageReliefTargetFreeCapacity,
         recoveryOffloadBudget: recoveringTerminal
