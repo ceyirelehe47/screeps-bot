@@ -161,7 +161,8 @@ function readRemotePayloads(): void {
 
     const remoteRaw = InterShardMemory.getRemote(shardName);
     const remote = safeJsonParse<InterShardLocalPayload>(remoteRaw);
-    if (!remote || remote.version !== INTER_SHARD_PROTOCOL_VERSION) {
+    if (!remote || remote.version !== INTER_SHARD_PROTOCOL_VERSION || remote.shard !== shardName
+        || !Number.isSafeInteger(remote.updatedAt) || remote.updatedAt < 0) {
       continue;
     }
 

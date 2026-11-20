@@ -1,4 +1,6 @@
 import { getGlobalOwnedRoomCount } from "@/runtime/globalRoomCount";
+import { runInterShardControl } from "@/runtime/interShardControl";
+import { cadenceOffset } from "@/runtime/cadence";
 
 it("GCL 预检累计当前 shard 与全部远端；摘要去重且按本地观察时间失效", () => {
   Game.time = 20000; Game.shard = { name: "shard1" } as Game["shard"];
@@ -17,4 +19,23 @@ it("新版房间总数不受 512 条摘要上限影响，错误 shard 摘要不�
   Object.assign(global, { InterShardMemory: { getRemote: jest.fn((shard: string) => JSON.stringify({
     version: 1, shard: "shard0", updatedAt: 100, ownedRoomCount: 600, rooms: [] })) } });
   expect(getGlobalOwnedRoomCount()).toBe(600);
+});
+
+it("无效 shard 或版本时间不打断后续 shard 同步，GCL 跳过损坏的房间列表", () => {
+  Game.time = 21000 + cadenceOffset("interShard.sync", 5);
+  Game.shard = { name: "shard1" } as Game["shard"];
+  Game.rooms = {}; Memory.runtime = {}; Memory.cfg = {}; Memory.data = {};
+  Game.cpu = { shardLimits: { shard0: 0, shard1: 120, shard2: 0, shard3: 0 } } as unknown as CPU;
+  const rows = {
+    shard0: { version: 1, shard: "shard0" },
+    shard2: { version: 1, shard: "shard0", updatedAt: 501, ownedRoomCount: 90 },
+    shard3: { version: 1, shard: "shard3", updatedAt: 500, rooms: {} },
+  };
+  Object.assign(global, { InterShardMemory: { getLocal: () => "", setLocal: jest.fn(),
+    getRemote: (name: keyof typeof rows) => JSON.stringify(rows[name]) } });
+  runInterShardControl();
+  expect(Object.keys(Memory.runtime!.crossShard!.remotes!)).toEqual(["shard3"]);
+  expect(getGlobalOwnedRoomCount()).toBe(0);
+  Game.time++; Object.assign(rows.shard3, { rooms: [null, { room: "W1N1", at: 500 }] });
+  expect(getGlobalOwnedRoomCount()).toBe(1);
 });

@@ -260,11 +260,13 @@ function getRemoteState(task: CrossShardColonizationTask): RemoteTargetState {
   }
   if (!remotePayloadCache.values.has(targetShard)) remotePayloadCache.values.set(targetShard, safeJsonParse<RemotePayload>(InterShardMemory.getRemote(targetShard)));
   const payload = remotePayloadCache.values.get(targetShard);
-  if (!payload || payload.version !== INTER_SHARD_PROTOCOL_VERSION) {
+  if (!payload || payload.version !== INTER_SHARD_PROTOCOL_VERSION || payload.shard !== targetShard
+      || !Array.isArray(payload.claims) || (payload.rooms !== undefined && !Array.isArray(payload.rooms))) {
     return { hasSpawn: false };
   }
 
-  if (!Number.isSafeInteger(payload.updatedAt)) return { hasSpawn: false };
+  if (!Number.isSafeInteger(payload.updatedAt) || payload.updatedAt < 0
+      || !payload.claims.every(claim => typeof claim?.room === "string" && Number.isSafeInteger(claim.at))) return { hasSpawn: false };
   if (task.remoteObservedVersion !== undefined && payload.updatedAt < task.remoteObservedVersion) {
     task.remoteObservedVersion = payload.updatedAt; task.remoteAdvancedAt = undefined; return { hasSpawn: false };
   }
@@ -287,7 +289,7 @@ function getRemoteState(task: CrossShardColonizationTask): RemoteTargetState {
 
   let hasSpawn = false;
   for (const room of payload.rooms || []) {
-    if (room.room === targetRoom && room.hasSpawn && room.at >= payload.updatedAt - 5 && room.at <= payload.updatedAt && claimAt !== undefined) {
+    if (room?.room === targetRoom && room.hasSpawn === true && Number.isSafeInteger(room.at) && room.at >= payload.updatedAt - 5 && room.at <= payload.updatedAt && claimAt !== undefined) {
       hasSpawn = true;
       break;
     }

@@ -33,8 +33,8 @@ export function getGlobalOwnedRoomCount(extraShards: string[] = []): number {
         }
         if (Game.time - observed.seenAt <= 1000) {
           remoteCount = Number.isSafeInteger(payload.ownedRoomCount) && payload.ownedRoomCount! >= 0
-            ? payload.ownedRoomCount! : new Set((payload.rooms ?? []).filter(room =>
-              typeof room.room === "string" && room.at >= version - 5 && room.at <= version).map(room => room.room)).size;
+            ? payload.ownedRoomCount! : new Set((Array.isArray(payload.rooms) ? payload.rooms : []).filter(room =>
+              typeof room?.room === "string" && Number.isSafeInteger(room.at) && room.at >= version - 5 && room.at <= version).map(room => room.room)).size;
         }
       }
       cache.remotes.set(shard, remoteCount);
