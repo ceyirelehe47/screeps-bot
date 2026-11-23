@@ -1543,9 +1543,13 @@ function attemptRenewCreep(
 }
 
 function canRestoreCombatPair(task: PowerBankHarvestTask, index: number): boolean {
+  const configs = getConfigStore();
   return (["attacker", "healer"] as const).every(role =>
-    getCombatConfigNames(task, role, index).some(name =>
-      getConfigStore()[name]?.roomName === task.sourceRoom || !!getAssignableCreepByConfigName(name, task.id)));
+    getCombatConfigNames(task, role, index).some(name => {
+      const config = configs[name];
+      return (config?.taskId === task.id && config.roomName === task.sourceRoom) ||
+        !!getAssignableCreepByConfigName(name, task.id) || getTickContextService().getSpawningByConfigName(name).length > 0;
+    }));
 }
 
 function processRenewing(task: PowerBankHarvestTask): void {

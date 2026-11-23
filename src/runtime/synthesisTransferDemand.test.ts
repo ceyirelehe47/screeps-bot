@@ -193,6 +193,18 @@ describe("自动合成补料的实需与物理 staging", () => {
     expect(Memory.cfg?.resourceControl?.capacityBalancing).toMatchObject({ terminalReliefTargetFreeCapacity: 60_000 });
   });
 
+  it("接收房终端的原料已被市场预留时，发送端仍交付真实缺口", () => {
+    (target.terminal!.store as MutableStore).set(RESOURCE_HYDROXIDE, 500);
+    expect(inspectAutomaticSynthesisTransferDemand(task)).toMatchObject({ status: "bounded", amount: 0 });
+    Memory.data!.marketSaleAutomation = { managedOrders: { order: {
+      roomName: target.name, resourceType: RESOURCE_HYDROXIDE, remainingExposure: 500,
+    } } } as unknown as NonNullable<Memory["data"]>["marketSaleAutomation"];
+    expect(inspectAutomaticSynthesisTransferDemand(task)).toMatchObject({ status: "bounded", amount: 26 });
+    (source.terminal!.store as MutableStore).set(RESOURCE_HYDROXIDE, 913);
+    runResourceControl();
+    expect(source.terminal!.send).toHaveBeenCalledWith(RESOURCE_HYDROXIDE, 26, target.name, expect.anything());
+  });
+
   it("ordinary 即使货已备齐也只发送 26；下一轮取消 887，保留已发送量与历史", () => {
     (source.terminal!.store as MutableStore).set(RESOURCE_HYDROXIDE, 913);
     runResourceControl();

@@ -1,4 +1,5 @@
 import { getTickContextService } from "@/runtime/runtimeServices";
+import { getMarketSaleTerminalExposure } from "@/runtime/marketSaleExposure";
 import { countCarrierCargo } from "@/runtime/carrierCargo";
 /** 从 synthesisControl.ts 分离的独立职责模块；共享状态仅由此处持有。 */
 import {
@@ -184,7 +185,11 @@ export function inspectSynthesisTransferNeed(roomName: string, resource: Resourc
         !getProductReagents(product)?.includes(resource)) return {ok:false,amount:0,reason:"synthesis_plan_identity_changed"};
     const productDeficit = Math.max(0, active.targetAmount - roomSynthesisProductAmount(room, product));
     const required = Math.min(active.batchSize, roundUpReactionAmount(productDeficit));
-    let covered = roomResourceAmount(room, resource);
+    const exposure = getMarketSaleTerminalExposure(roomName, resource);
+    if (exposure.blocked) return { ok: false, amount: 0, reason: "synthesis_market_exposure_unreadable" };
+    const terminalStock = room.terminal?.store.getUsedCapacity(resource) ?? 0;
+    // 房内送往 Lab 的货物仍覆盖需求；市场占用的终端实物不能用于反应。
+    let covered = roomResourceAmount(room, resource) - Math.min(terminalStock, exposure.reservedAmount);
     for (const creep of getTickContextService().getAllCreeps()) {
       const cargo = creep.memory as unknown as {room?: string; home?: string; synthesisCarrierPendingResource?: ResourceConstant; synthesisCarrierPendingToId?: string};
       const assignment = getCreepAssignmentState(creep.name);
