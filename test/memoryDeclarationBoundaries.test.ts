@@ -45,7 +45,8 @@ const MEMORY_BRANCHES = {
     // 登记实际调度、独立 CPU 健康面包屑与有界生命周期事件；均由各自 owner 单写。
     // powerBankSourceIndex 由 powerBankSourceIndex.ts 单写（高速房来源索引的紧凑备份）。
     // 调度修复新增 source_protected 诊断枚举，根字段清单不变。
-    schemaFingerprint: "e5e538a6600dc758bdc09d468bc2172b8dc8e6e725a2d2450f025221dfe49987",
+    // factoryControl.rooms 可保留一次装料超时的配方和重试 tick。
+    schemaFingerprint: "131eea0f739546c376c11755fd3dff9195c6acd207f863961474e712cd0416d2",
     imports: [
       "@/runtime/cpuTickHealth:CpuTickCheckpoint",
       "@/runtime/cpuTickHealth:CpuTickHealthSummary",
@@ -106,7 +107,8 @@ const MEMORY_BRANCHES = {
     declaration: "src/types/memory/data.d.ts",
     interfaceName: "ScreepsMemoryData",
     // war 的持久化契约统一归属 WarTask，兼容性由下方探针验证。
-    schemaFingerprint: "25b2702920c1c6b5aadcd749b6aac46e6754f7ea29ec8df02f29cd7420f3d335",
+    // roomPlanner 的控制器 Link 交接失败时记录下次尝试 tick。
+    schemaFingerprint: "36dd818b2e451774d78e673d9c8f8bfa82fb5c983607a3387ffb69cc4f308ddd",
     imports: [
       "@/runtime/market/state:CompactMarketState",
       "@/runtime/depositHarvest:DepositHarvestTask",
