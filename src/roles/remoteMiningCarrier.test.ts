@@ -176,7 +176,24 @@ describe("外矿入口 link 卸载", () => {
   });
 });
 
-describe("partial withdrawal and maintenance", () => {
+describe("外矿取货和运输", () => {
+  it("旧 carrier 即使带 WORK 且有余粮，经过破损道路和容器工地也只运输", () => {
+    const name = "W5N5";
+    const pos = makePos(25, 25, name);
+    const road = { id: "road", structureType: STRUCTURE_ROAD, pos, hits: 100, hitsMax: 5000 };
+    const site = { id: "site", structureType: STRUCTURE_CONTAINER, pos, my: true };
+    const room = makeRoom(name, { structures: [road], constructionSites: [site] });
+    const creep = makeCreep({ room, energy: 400, pos });
+    Game.getObjectById = jest.fn(() => ({ pos })) as unknown as Game["getObjectById"];
+    Memory.data = {};
+    const role = remoteMiningCarrierRole(name, "src1");
+
+    expect(role.source!(creep)).toBe(true);
+    expect(role.target(creep)).toBe(false);
+    expect(moveToTargetRoom).toHaveBeenCalledWith(creep, "W1N1", "W5N5|W1N1", expect.anything());
+    expect(creep.build).not.toHaveBeenCalled();
+    expect(creep.repair).not.toHaveBeenCalled();
+  });
 
   it("自己的工位旁堆积掉落优先于少量箱存，邻矿工位上的掉落由邻矿回收", () => {
     const name = "W5N5", pos = makePos(10, 10, name);

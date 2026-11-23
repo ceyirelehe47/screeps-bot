@@ -12,6 +12,7 @@ import {
   getRemoteMiningConfig,
   getRemoteMiningScoutConfigName,
   getRemoteDefenderConfigName,
+  getRemoteWorkerConfigName,
   runRemoteMining,
   processRemoteConfigLifecycle,
   getActiveDefenseReason,
@@ -56,6 +57,8 @@ function createVisibleTargetRoom(
   name: string,
   options: {
     sources?: Source[];
+    structures?: Structure[];
+    sites?: ConstructionSite[];
     hostileCreeps?: Creep[];
     hostileStructures?: Structure[];
     reservationUsername?: string;
@@ -82,7 +85,11 @@ function createVisibleTargetRoom(
       if (what === FIND_HOSTILE_STRUCTURES) {
         return opts?.filter ? hostileStructures.filter(opts.filter) : hostileStructures;
       }
-      if (what === FIND_STRUCTURES) return [];
+      if (what === FIND_STRUCTURES) {
+        const structures = options.structures ?? [];
+        return opts?.filter ? structures.filter(opts.filter) : structures;
+      }
+      if (what === FIND_CONSTRUCTION_SITES) return options.sites ?? [];
       return [];
     }),
   } as unknown as Room;
@@ -147,6 +154,33 @@ describe("runRemoteMining first come assignment", () => {
     runRemoteMining(); expect(ensureRemoteMiningStore().W1N0.status).toBe("abandoned");
     Game.time = 150; runRemoteMining(); expect(ensureRemoteMiningStore().W1N0.status).toBe("scouting");
   });
+  it("仅有道路磨损或计划外己方工地时派工，任务清空后撤销出生配置", () => {
+    const home = createRclRoom("W1N1", 7);
+    const road = { structureType: STRUCTURE_ROAD, hits: 4_000, hitsMax: 5_000 };
+    const sites = [{ my: false, structureType: STRUCTURE_ROAD }];
+    const remote = createVisibleTargetRoom("W1N0", {
+      structures: [road as Structure], sites: sites as ConstructionSite[],
+    });
+    Game.rooms = { W1N1: home, W1N0: remote };
+    Game.spawns.Spawn1 = createSpawn(home);
+    Memory.data = {};
+    const store = ensureRemoteMiningStore();
+    store.W1N0 = { sourceRoom: home.name, targetRoom: remote.name, status: "active",
+      sourceIds: ["src1"], assignedAt: 1, updatedAt: 1 };
+    const name = getRemoteWorkerConfigName(home.name, remote.name);
+    const config = () => {
+      Game.time++;
+      processRemoteConfigLifecycle(store, getRemoteMiningConfig());
+      return ensureConfigStore()[name];
+    };
+
+    expect(config()).toMatchObject({ role: "remoteWorker", roomName: home.name });
+    road.hits = road.hitsMax;
+    expect(config()).toBeUndefined();
+    sites.push({ my: true, structureType: STRUCTURE_ROAD });
+    expect(config()).toMatchObject({ role: "remoteWorker", roomName: home.name });
+  });
+
   it("creates active task for visible cardinal room with exactly two sources", () => {
     const rcl7Room = createRclRoom("W1N1", 7);
     const targetRoom = createVisibleTargetRoom("W1N0", {

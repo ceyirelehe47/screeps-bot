@@ -228,6 +228,37 @@ describe("remoteWorkerRole - repairs damaged source container", () => {
 });
 
 
+it("worker 在矿点以外抢修道路、建造己方工地，再修普通容器", () => {
+  const pos = makePos(25, 25, TARGET_ROOM);
+  const road = { id: "road", structureType: STRUCTURE_ROAD, pos: makePos(12, 12, TARGET_ROOM), hits: 500, hitsMax: 5000 };
+  const container = { id: "container", structureType: STRUCTURE_CONTAINER, pos, hits: 200000, hitsMax: 250000 };
+  const site = { structureType: STRUCTURE_ROAD, pos, my: true };
+  const foreignSite = { ...site, my: false };
+  const sites = [foreignSite, site];
+  const room = makeRoom(TARGET_ROOM, { structures: [container, road], constructionSites: sites });
+  const creep = makeCreep({ room, energy: 600, pos });
+  const role = remoteWorkerRole(TARGET_ROOM);
+
+  role.target(creep);
+  expect(moveToTarget).toHaveBeenCalledWith(creep, road, 3);
+  Object.assign(creep, { pos: road.pos });
+  Game.time++;
+  role.target(creep);
+  expect(creep.repair).toHaveBeenCalledWith(road);
+
+  road.hits = road.hitsMax;
+  Object.assign(creep, { pos });
+  Game.time++;
+  role.target(creep);
+  expect(creep.build).toHaveBeenCalledWith(site);
+
+  sites.pop();
+  Game.time++;
+  role.target(creep);
+  expect(creep.repair).toHaveBeenLastCalledWith(container);
+  expect(creep.build).toHaveBeenCalledTimes(1);
+});
+
 it("目标房没有建修任务时留在房内，避免空闲跨边界往返", () => {
   const room = makeRoom(TARGET_ROOM); Game.rooms[TARGET_ROOM] = room;
   const creep = makeCreep({ room, energy: 100 });

@@ -254,26 +254,15 @@ function remoteWorkerBody(room: Room): BodyPartConstant[] {
 }
 
 function remoteMiningCarrierBody(room: Room): BodyPartConstant[] {
-  const capacity = room.energyCapacityAvailable;
-
-  // Ratio: MOVE : non-MOVE = 1 : 2
-  // non-MOVE = 1 WORK + remaining CARRY
-  // For n non-MOVE parts, MOVE count = ceil(n / 2)
-  let maxN = 2; // minimum useful: 1 WORK + 1 CARRY
-  for (let n = 2; n <= 50; n++) {
-    const moves = Math.ceil(n / 2);
-    if (n + moves > MAX_BODY_SIZE) break;
-    const cost = BODYPART_COST[WORK] + (n - 1) * BODYPART_COST[CARRY] + moves * BODYPART_COST[MOVE];
-    if (cost > capacity) break;
-    maxN = n;
+  // 满载走公路时，一个 MOVE 可带两个 CARRY。
+  const maxCarry = Math.floor(MAX_BODY_SIZE * 2 / 3);
+  for (let carry = maxCarry; carry > 0; carry--) {
+    const move = Math.ceil(carry / 2);
+    if (carry * BODYPART_COST[CARRY] + move * BODYPART_COST[MOVE] <= room.energyCapacityAvailable) {
+      return [...Array<BodyPartConstant>(carry).fill(CARRY), ...Array<BodyPartConstant>(move).fill(MOVE)];
+    }
   }
-
-  const moves = Math.ceil(maxN / 2);
-  const parts: BodyPartConstant[] = [WORK];
-  for (let i = 1; i < maxN; i++) parts.push(CARRY);
-  for (let i = 0; i < moves; i++) parts.push(MOVE);
-
-  return clampByCapacity(parts, room);
+  return [];
 }
 
 function remoteMiningReserverBody(room: Room): BodyPartConstant[] {

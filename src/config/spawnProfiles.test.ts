@@ -42,6 +42,15 @@ describe("spawnProfiles", () => {
     }
   });
 
+  it.each([
+    [99, 0, 0], [100, 1, 1], [150, 2, 1], [300, 4, 2],
+    [2_499, 32, 16], [2_500, 33, 17], [5_600, 33, 17],
+  ])("外矿 carrier 在 %i 能量时生成 %i CARRY 和 %i MOVE", (capacity, carry, move) => {
+    const body = spawnProfiles.remoteMiningCarrier(makeRoom(capacity));
+    expect(body).toEqual([...Array(carry).fill(CARRY), ...Array(move).fill(MOVE)]);
+    expect(bodyCost(body)).toBeLessThanOrEqual(capacity);
+  });
+
   it("keeps representative fixed and shared production body contracts", () => {
     const hubUpgrader = (
       spawnProfiles as unknown as Record<string, (room: Room) => BodyPartConstant[]>

@@ -1,5 +1,6 @@
 import { shelterRemoteMiningCivilian } from "@/roles/remoteMiningCivilian";
 import { clearMovementState, moveToTarget, moveToTargetRoom } from "@/roles/shared";
+import { getRemoteInfrastructureWork } from "@/runtime/remoteMining";
 import { moveOffExit } from "@/movement/traffic";
 
 import type { RoleFactory } from "@/types/system";
@@ -29,26 +30,9 @@ function clearRepairTarget(creep: Creep): void {
   delete creep.memory._remoteWorkerRepairTargetId;
 }
 
-function getTrackedRepairTarget(
-  creep: Creep,
-  containers: StructureContainer[],
-): StructureContainer | undefined {
-  const targetId = creep.memory._remoteWorkerRepairTargetId;
-  if (!targetId) return undefined;
-
-  const target = containers.find((container) =>
-    container.id === targetId && container.hits < container.hitsMax,
-  );
-  if (!target) {
-    clearRepairTarget(creep);
-  }
-  return target;
-}
-
-function repairContainer(creep: Creep, target: StructureContainer): void {
+function repairStructure(creep: Creep, target: Structure): void {
   creep.memory._remoteWorkerRepairTargetId = target.id;
-  const range = creep.pos.getRangeTo(target.pos);
-  if (range <= 3) {
+  if (creep.pos.getRangeTo(target.pos) <= 3) {
     creep.repair(target);
   } else {
     moveToTarget(creep, target, 3);
@@ -85,33 +69,6 @@ function findDroppedEnergyInRoom(room: Room, sourceIds: string[]): Resource[] {
       r.resourceType === RESOURCE_ENERGY &&
       r.amount > 0 &&
       sourcePositions.some((sp) => sp.getRangeTo(r.pos) <= 2),
-  });
-}
-
-function findSourceContainerSitesInRoom(room: Room, sourceIds: string[]): ConstructionSite[] {
-  const sourcePositions: RoomPosition[] = [];
-  for (const sid of sourceIds) {
-    const source = Game.getObjectById(sid as Id<Source>);
-    if (source) sourcePositions.push(source.pos);
-  }
-
-  return room.find(FIND_CONSTRUCTION_SITES, {
-    filter: (s): s is ConstructionSite =>
-      s.my &&
-      s.structureType === STRUCTURE_CONTAINER &&
-      sourcePositions.some((sp) => sp.getRangeTo(s.pos) <= 2),
-  });
-}
-
-function findPlannedRoadSitesInRoom(room: Room, targetRoom: string): ConstructionSite[] {
-  const plannedPositions = Memory.data?.remoteMining?.[targetRoom]?.roadPlan?.positions ?? [];
-  const plannedKeys = new Set(plannedPositions.map(pos => `${pos.roomName}:${pos.x}:${pos.y}`));
-
-  return room.find(FIND_CONSTRUCTION_SITES, {
-    filter: (site): site is ConstructionSite =>
-      site.my &&
-      site.structureType === STRUCTURE_ROAD &&
-      plannedKeys.has(`${site.pos.roomName}:${site.pos.x}:${site.pos.y}`),
   });
 }
 
@@ -193,19 +150,25 @@ export const remoteWorkerRole: RoleFactory = (targetRoom: string) => {
         return true;
       }
 
-      const sourceIds = findRemoteSourceIds(targetRoom);
-      const containers = findSourceContainersInRoom(creep.room, sourceIds);
-      const trackedRepairTarget = getTrackedRepairTarget(creep, containers);
-      if (trackedRepairTarget) {
-        repairContainer(creep, trackedRepairTarget);
+      const { sites, damaged } = getRemoteInfrastructureWork(creep.room);
+      const tracked = damaged.find(structure => structure.id === creep.memory._remoteWorkerRepairTargetId);
+      if (tracked) {
+        repairStructure(creep, tracked);
+        return false;
+      }
+      clearRepairTarget(creep);
+
+      // 容器先建，保障矿点收能。其余施工前先救急，随后补齐普通磨损。
+      const weakest = damaged.sort((a, b) => a.hits / a.hitsMax - b.hits / b.hitsMax)[0];
+      const containerSite = sites.find(site => site.structureType === STRUCTURE_CONTAINER);
+      if (!containerSite && weakest && weakest.hits < weakest.hitsMax * 0.30) {
+        repairStructure(creep, weakest);
         return false;
       }
 
-      const containerSites = findSourceContainerSitesInRoom(creep.room, sourceIds);
-      if (containerSites.length > 0) {
-        const site = containerSites[0];
-        const range = creep.pos.getRangeTo(site.pos);
-        if (range <= 3) {
+      const site = containerSite ?? sites.sort((a, b) => creep.pos.getRangeTo(a.pos) - creep.pos.getRangeTo(b.pos))[0];
+      if (site) {
+        if (creep.pos.getRangeTo(site.pos) <= 3) {
           creep.build(site);
         } else {
           moveToTarget(creep, site, 3);
@@ -213,32 +176,8 @@ export const remoteWorkerRole: RoleFactory = (targetRoom: string) => {
         return false;
       }
 
-      const criticalContainers = containers.filter((container) => container.hits / container.hitsMax < 0.30);
-      if (criticalContainers.length > 0) {
-        criticalContainers.sort((a, b) => (a.hits / a.hitsMax) - (b.hits / b.hitsMax));
-        const target = criticalContainers[0];
-        repairContainer(creep, target);
-        return false;
-      }
-
-      const roadSites = findPlannedRoadSitesInRoom(creep.room, targetRoom);
-      if (roadSites.length > 0) {
-        roadSites.sort((a, b) => creep.pos.getRangeTo(a.pos) - creep.pos.getRangeTo(b.pos));
-        const site = roadSites[0];
-        const range = creep.pos.getRangeTo(site.pos);
-        if (range <= 3) {
-          creep.build(site);
-        } else {
-          moveToTarget(creep, site, 3);
-        }
-        return false;
-      }
-
-      const damagedContainers = containers.filter((c) => c.hits < c.hitsMax);
-      if (damagedContainers.length > 0) {
-        damagedContainers.sort((a, b) => (a.hits / a.hitsMax) - (b.hits / b.hitsMax));
-        const target = damagedContainers[0];
-        repairContainer(creep, target);
+      if (weakest) {
+        repairStructure(creep, weakest);
         return false;
       }
 

@@ -1254,43 +1254,25 @@ function upsertReserverConfig(task: RemoteMiningTask, config: RemoteMiningConfig
   );
 }
 
+/** 外矿派工与 worker 使用同一份目标范围，包括人工放置的工地和道路。 */
+export function getRemoteInfrastructureWork(room: Room) {
+  const context = getTickContextService().getRoomContext(room);
+  const sites = context?.getConstructionSites() ?? room.find(FIND_CONSTRUCTION_SITES);
+  const structures = context?.getStructures() ?? room.find(FIND_STRUCTURES);
+  return {
+    sites: sites.filter(site => site.my),
+    damaged: structures.filter(structure => structure.hits < structure.hitsMax && (
+      structure.structureType === STRUCTURE_ROAD || structure.structureType === STRUCTURE_CONTAINER ||
+      ("my" in structure && structure.my === true)
+    )),
+  };
+}
+
 function remoteNeedsInfrastructureWorker(task: RemoteMiningTask): boolean {
-  if (task.status !== "active") return false;
-
-  const targetRoom = Game.rooms[task.targetRoom];
-  if (!targetRoom) return false;
-
-  for (const sourceId of task.sourceIds) {
-    const source = Game.getObjectById?.(sourceId as Id<Source>) ?? null;
-    if (!source) continue;
-
-    const containers = targetRoom.find(FIND_STRUCTURES).filter(s =>
-      s.structureType === STRUCTURE_CONTAINER &&
-      Math.abs(s.pos.x - source.pos.x) <= 2 &&
-      Math.abs(s.pos.y - source.pos.y) <= 2 &&
-      s.hits / s.hitsMax < 0.30,
-    );
-    if (containers.length > 0) return true;
-
-    const sites = targetRoom.find(FIND_CONSTRUCTION_SITES).filter(s =>
-      s.structureType === STRUCTURE_CONTAINER &&
-      (s as ConstructionSite).my &&
-      Math.abs(s.pos.x - source.pos.x) <= 2 &&
-      Math.abs(s.pos.y - source.pos.y) <= 2,
-    );
-    if (sites.length > 0) return true;
-  }
-
-  const plannedRoadKeys = new Set(
-    (task.roadPlan?.positions ?? [])
-      .filter(pos => pos.roomName === task.targetRoom)
-      .map(pos => `${pos.x}:${pos.y}`),
-  );
-  return targetRoom.find(FIND_CONSTRUCTION_SITES).some(site =>
-    site.my &&
-    site.structureType === STRUCTURE_ROAD &&
-    plannedRoadKeys.has(`${site.pos.x}:${site.pos.y}`),
-  );
+  const room = Game.rooms[task.targetRoom];
+  if (task.status !== "active" || !room) return false;
+  const { sites, damaged } = getRemoteInfrastructureWork(room);
+  return sites.length > 0 || damaged.length > 0;
 }
 
 function upsertRemoteWorkerConfig(task: RemoteMiningTask): void {

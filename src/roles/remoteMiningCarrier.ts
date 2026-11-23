@@ -10,9 +10,6 @@ import { getRemoteEntranceDeliveryLink } from "@/runtime/remoteEntranceLink";
 import type { RoomTickContext } from "@/runtime/tickContext";
 import type { RoleFactory } from "@/types/system";
 
-const MAINTENANCE_RESERVE_ENERGY = 100;
-const MAINTAINABLE_TYPES = new Set<string>([STRUCTURE_ROAD, STRUCTURE_CONTAINER]);
-
 // Per-tick safety result cache keyed by target room. Two carriers sharing one
 // visible remote room in the same tick reuse this boolean instead of re-running
 // the hostile/structure/keeper-lair scans. Resets each Game.time.
@@ -148,21 +145,6 @@ function findSourceContainer(room: Room, sourcePos: RoomPosition, workPos?: Room
   return null;
 }
 
-function findSourceContainerSite(room: Room, sourcePos: RoomPosition, workPos?: RoomPosition | null): ConstructionSite | null {
-  const ctx = getRoomContext(room);
-  const sites = ctx ? ctx.getConstructionSites() : room.find(FIND_CONSTRUCTION_SITES);
-  for (const site of sites) {
-    if (
-      site.my &&
-      site.structureType === STRUCTURE_CONTAINER &&
-      (workPos ? samePosition(site.pos, workPos) : sourcePos.getRangeTo(site.pos) <= 2)
-    ) {
-      return site;
-    }
-  }
-  return null;
-}
-
 function findDroppedEnergyNear(room: Room, pos: RoomPosition, sourceId?: string): Resource | null {
   const ctx = getRoomContext(room);
   const resources = ctx
@@ -232,74 +214,6 @@ function selectBestSourceTarget(room: Room, targetRoom: string): {
   return candidates[0];
 }
 
-/** Build the source container construction site near the assigned source.
- *  Only builds when the carrier has surplus energy (above reserve) and a WORK part.
- *  Returns true if a build intent was issued. */
-function buildSourceContainerSite(creep: Creep, sourcePos: RoomPosition, workPos?: RoomPosition | null): boolean {
-  const surplus = getCarriedEnergy(creep) - MAINTENANCE_RESERVE_ENERGY;
-  if (surplus <= 0) return false;
-
-  const workParts = creep.getActiveBodyparts(WORK);
-  if (workParts <= 0) return false;
-
-  const site = findSourceContainerSite(creep.room, sourcePos, workPos);
-  if (!site) return false;
-
-  const range = creep.pos.getRangeTo(site.pos);
-  if (range > 3) return false;
-
-  const code = measureCreepIntent(() => creep.build(site));
-  return code === OK;
-}
-
-/** One maintenance intent per tick: repair roads/containers or build road/container sites within range 3.
- *  Never spends below MAINTENANCE_RESERVE_ENERGY. Returns true if an intent was issued. */
-function runMaintenance(creep: Creep): boolean {
-  const surplus = getCarriedEnergy(creep) - MAINTENANCE_RESERVE_ENERGY;
-  if (surplus <= 0) {
-    return false;
-  }
-
-  const workParts = creep.getActiveBodyparts(WORK);
-  if (workParts <= 0) {
-    return false;
-  }
-
-  const pos = creep.pos;
-  const ctx = getRoomContext(creep.room);
-  const structures = ctx ? ctx.getStructures() : creep.room.find(FIND_STRUCTURES);
-
-  const repairTargets = structures.filter(
-    (s): s is StructureRoad | StructureContainer =>
-      MAINTAINABLE_TYPES.has(s.structureType) &&
-      s.hits < s.hitsMax &&
-      pos.getRangeTo(s.pos) <= 3,
-  );
-  if (repairTargets.length > 0) {
-    repairTargets.sort((a, b) => a.hits - b.hits);
-    const code = measureCreepIntent(() => creep.repair(repairTargets[0]));
-    if (code === OK) {
-      return true;
-    }
-  }
-
-  const sites = ctx ? ctx.getConstructionSites() : creep.room.find(FIND_CONSTRUCTION_SITES);
-  const buildTargets = sites.filter(
-    (s): s is ConstructionSite =>
-      s.my &&
-      MAINTAINABLE_TYPES.has(s.structureType) &&
-      pos.getRangeTo(s.pos) <= 3,
-  );
-  if (buildTargets.length > 0) {
-    const code = measureCreepIntent(() => creep.build(buildTargets[0]));
-    if (code === OK) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
 /** Get delivery target: storage first, then terminal. */
 function getDeliveryTarget(homeRoomName: string): AnyStoreStructure | null {
   const homeRoom = Game.rooms[homeRoomName];
@@ -341,9 +255,6 @@ export const remoteMiningCarrierRole: RoleFactory = (targetRoom: string, sourceI
 
       if (creep.room.name !== targetRoom) {
         moveToTargetRoom(creep, targetRoom, getOutboundEncodedRoute(homeRoomName, targetRoom), { plainCost: 2, swampCost: 10, profile: "travel", reusePath: 10 });
-        if (getCarriedEnergy(creep) > MAINTENANCE_RESERVE_ENERGY) {
-          runMaintenance(creep);
-        }
         return false;
       }
 
@@ -388,44 +299,22 @@ export const remoteMiningCarrierRole: RoleFactory = (targetRoom: string, sourceI
           const code = measureCreepIntent(() => creep.withdraw(container, RESOURCE_ENERGY));
           if (code === ERR_NOT_IN_RANGE) {
             moveToTarget(creep, container, 1);
-            if (getCarriedEnergy(creep) > MAINTENANCE_RESERVE_ENERGY) {
-              runMaintenance(creep);
-            }
             return false;
           }
           if (code === OK) {
-            if (getCarriedEnergy(creep) > MAINTENANCE_RESERVE_ENERGY) {
-              runMaintenance(creep);
-            }
             return false; // withdraw 意图到下一 tick 才改变 Store，再按满载判定返程。
           }
         }
-      }
-
-      const containerSite = findSourceContainerSite(creep.room, sourcePos, resolvedWorkPos);
-
-      if (buildSourceContainerSite(creep, sourcePos, resolvedWorkPos)) {
-        return true;
       }
 
       if (getCarriedEnergy(creep) > 0) {
         return true;
       }
 
-      let issuedMove = false;
-      if (containerSite && creep.pos.getRangeTo(containerSite.pos) > 3) {
-        moveToTarget(creep, containerSite.pos, 2);
-        issuedMove = true;
-      } else if (creep.pos.getRangeTo(sourcePos) > 3) {
+      if (creep.pos.getRangeTo(sourcePos) > 3) {
         moveToTarget(creep, sourcePos, 3);
-        issuedMove = true;
-      }
-      if (!issuedMove) {
+      } else {
         clearMovementState(creep);
-      }
-
-      if (getCarriedEnergy(creep) > MAINTENANCE_RESERVE_ENERGY) {
-        runMaintenance(creep);
       }
 
       return false;
@@ -457,9 +346,6 @@ export const remoteMiningCarrierRole: RoleFactory = (targetRoom: string, sourceI
 
       if (!suspended && creep.room.name !== homeRoomName) {
         moveToTargetRoom(creep, homeRoomName, getRetreatEncodedRoute(homeRoomName, targetRoom), { plainCost: 2, swampCost: 10, profile: "travel", reusePath: 10 });
-        if (getCarriedEnergy(creep) > MAINTENANCE_RESERVE_ENERGY) {
-          runMaintenance(creep);
-        }
         return false;
       }
 
