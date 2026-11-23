@@ -14,7 +14,7 @@ import { isRoomInReserveMode } from "@/runtime/roomReserve";
  * product selling is owned by the market-sale automation domain.
  */
 
-import { getTerminalAmountOutsideMarketSaleExposure } from "@/runtime/marketSaleExposure";
+import { getProductionSupplyStock, getTerminalAmountOutsideMarketSaleExposure } from "@/runtime/marketSaleExposure";
 import { normalizeBoolean, normalizeNumber } from "@/runtime/configNormalize";
 import { HUB_FACTORY_OWNER, planHubFactory } from "@/runtime/hubFactoryPlanner";
 import { getReservedProductionAmountExcludingHolder } from "@/runtime/resourceReservation";
@@ -104,6 +104,7 @@ interface RoomRuntimeState {
   lastError?: string;
   lastTransitionAt: number;
   loadingSinceTick?: number;
+  loadingRetry?: { product: ResourceConstant; at: number };
   lastProducedAt?: number;
   lastProducedResource?: ResourceConstant;
   producedAmount?: number;
@@ -374,7 +375,7 @@ function computeSurplus(
   floor: number,
   holderId: string,
 ): number {
-  const stock = getRoomStock(room, resource);
+  const stock = getProductionSupplyStock(room, resource, findFactoryInRoom(room));
   const reserved = getReservedProductionAmountExcludingHolder(room.name, resource, holderId);
   const surplus = Math.max(0, stock - floor - reserved);
   if (resource !== RESOURCE_ENERGY) return surplus;
@@ -597,7 +598,7 @@ export function needsFactoryOperatePower(room: Room, factory: StructureFactory, 
   });
   return pending.some(target => getRequiredFactoryLevel(target.resource) === level) ||
     pending.length > 0 && !!active && getRequiredFactoryLevel(active) === level &&
-    !(caps[active] !== undefined && getRoomStock(room, active) >= caps[active]!);
+    !((caps[active] ?? 0) > 0 && getRoomStock(room, active) >= caps[active]!);
 }
 
 // ---------------------------------------------------------------------------
@@ -1044,10 +1045,6 @@ function executeProductionCycle(
           state.lastError = `produce_${result}`;
           if (result === ERR_NOT_ENOUGH_RESOURCES) {
             state.stage = "loading";
-            if (state.loadingSinceTick === undefined) {
-              state.loadingSinceTick = Game.time;
-            }
-            drafts = generateFactorySupplyDrafts(room, factory, recipe, roomName);
           } else {
             state.stage = "blocked";
             state.sleepReason = `produce_error_${result}`;
@@ -1068,10 +1065,19 @@ function executeProductionCycle(
     }
   } else {
     state.stage = "loading";
-    if (!state.loadingSinceTick) {
-      state.loadingSinceTick = Game.time;
+  }
+
+  if (state.stage === "loading") {
+    state.loadingSinceTick ??= Game.time;
+    if (Game.time - state.loadingSinceTick >= 500) {
+      state.stage = "blocked";
+      state.lastError = "factory_delivery_timeout";
+      state.sleepReason = state.lastError;
+      state.loadingRetry = { product, at: Game.time + config.sleepSettings.cooldownOnError };
+      state.loadingSinceTick = undefined;
+    } else {
+      drafts = generateFactorySupplyDrafts(room, factory, recipe, roomName);
     }
-    drafts = generateFactorySupplyDrafts(room, factory, recipe, roomName);
   }
 
   if (state.stage !== previousStage) {
@@ -1432,7 +1438,8 @@ export function runFactoryControl(): void {
     let highestLevelGated: { resource: ResourceConstant; requiredLevel: number } | null = null;
 
     // Evaluate each target in queue order
-    let planned = false;
+    let plan: DecompositionResult | undefined;
+    if (state.loadingRetry && state.loadingRetry.at <= Game.time) delete state.loadingRetry;
     for (const target of targetQueue) {
       const resource = target.resource;
       const targetAmount = target.targetAmount || 0;
@@ -1480,6 +1487,7 @@ export function runFactoryControl(): void {
         holderId,
       );
 
+      if (state.loadingRetry?.product === decomposition.productionTarget) continue;
       if (!canProduceFactoryLevel(factory, decomposition.requiredLevel)) {
         if (!highestLevelGated || decomposition.requiredLevel > highestLevelGated.requiredLevel) {
           highestLevelGated = { resource, requiredLevel: decomposition.requiredLevel };
@@ -1487,22 +1495,24 @@ export function runFactoryControl(): void {
         continue;
       }
 
-      // Set active target
-      if (decomposition.productionTarget === resource) {
-        state.activeTarget = resource;
-      } else {
-        state.activeTarget = decomposition.productionTarget;
+      if (Object.keys(decomposition.missing).length === 0) {
+        plan = decomposition;
+        break;
       }
+      plan ??= decomposition;
+    }
 
-      if (state.activeTarget !== previousActiveTarget) {
+    if (plan) {
+      state.activeTarget = plan.productionTarget;
+      if (state.activeTarget !== previousActiveTarget || state.stage !== "loading") {
         state.loadingSinceTick = undefined;
       }
 
-      state.missing = Object.keys(decomposition.missing).length > 0
-        ? decomposition.missing
+      state.missing = Object.keys(plan.missing).length > 0
+        ? plan.missing
         : undefined;
 
-      if (Object.keys(decomposition.missing).length > 0) {
+      if (state.missing) {
         state.stage = "blocked";
         state.sleepReason = "missing_base_inputs";
         state.sleepUntilTick = Game.time + config.sleepSettings.cooldownOnMissing;
@@ -1512,13 +1522,11 @@ export function runFactoryControl(): void {
       }
 
       state.lastTransitionAt = Game.time;
-      planned = true;
-      break;
     }
 
-    if (unloadInventory(planned ? state.activeTarget : undefined)) return 0 as const;
+    if (unloadInventory(plan?.productionTarget)) return 0 as const;
 
-    if (!planned) {
+    if (!plan) {
       state.activeTarget = undefined;
       state.missing = undefined;
       state.lastTransitionAt = Game.time;
@@ -1527,6 +1535,10 @@ export function runFactoryControl(): void {
         state.stage = "sleeping";
         state.sleepReason = `factory_level_${highestLevelGated.requiredLevel}_required`;
         state.sleepUntilTick = Game.time + config.sleepSettings.maxSleepTicks;
+      } else if (state.loadingRetry) {
+        state.stage = "blocked";
+        state.sleepReason = "factory_delivery_timeout";
+        state.sleepUntilTick = state.loadingRetry.at;
       } else {
         state.stage = "sleeping";
         state.sleepReason = "all_targets_skipped";

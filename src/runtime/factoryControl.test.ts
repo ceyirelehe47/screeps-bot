@@ -107,6 +107,34 @@ describe("cooldown and capacity", () => {
     clearCarrierTaskBoardForTest();
   });
 
+  it("终端预留的原料不占用后续可生产配方的队首", () => {
+    const { room } = createFactoryRoom({ storageResources: { energy: 500000, O: 500 },
+      terminalResources: { energy: 25000, H: 500 }, factoryOverrides: { level: 0 } });
+    setupGameRooms({ W1N1: room });
+    Memory.data = { marketSaleAutomation: { managedOrders: {
+      sale: { roomName: room.name, resourceType: RESOURCE_HYDROGEN, remainingExposure: 500 },
+    } } } as unknown as Memory["data"];
+    setConfig({ enabled: true, targets: [{ resource: "reductant", targetAmount: 100 }, { resource: "oxidant", targetAmount: 100 }] });
+    runFactoryControl();
+    expect(Memory.runtime?.factoryControl?.rooms.W1N1.activeTarget).toBe(RESOURCE_OXIDANT);
+  });
+
+  it("普通配方装料超时后下一轮可推进后续目标", () => {
+    const { room } = createFactoryRoom({ storageResources: { energy: 500000, H: 500, O: 500 }, factoryOverrides: { level: 0 } });
+    setupGameRooms({ W1N1: room });
+    Memory.data = {}; Memory.runtime = {};
+    setConfig({ enabled: true, targets: [{ resource: "reductant", targetAmount: 100 }, { resource: "oxidant", targetAmount: 100 }] });
+    runFactoryControl();
+    const state = Memory.runtime!.factoryControl!.rooms.W1N1;
+    expect(state.stage).toBe("loading");
+    Game.time += 500;
+    runFactoryControl();
+    expect(state.lastError).toBe("factory_delivery_timeout");
+    Game.time++;
+    runFactoryControl();
+    expect(state.activeTarget).toBe(RESOURCE_OXIDANT);
+  });
+
   it("blocks when consumption still cannot free enough capacity for output", () => {
     const { room, factory } = createFactoryRoom({
       storageResources: { [RESOURCE_ENERGY]: 500000 },

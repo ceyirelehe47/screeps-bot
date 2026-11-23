@@ -1,3 +1,4 @@
+import { getResourceControlPlanningEnergyBudget } from "@/runtime/resourceControlReadModel";
 import { cadenceOffset, isDue } from "@/runtime/cadence";
 const cadenceTick = (tick: number): number => tick + cadenceOffset("resourceControl.plan", 10);
 import {
@@ -468,8 +469,10 @@ describe("runResourceControl terminal feed tasks", () => {
     };
     const producerA = `producer:a:factory:${"owner->".repeat(32)}`;
     const producerB = `producer->b:factory:${"owner:".repeat(32)}`;
+    const feeBudgetBefore = getResourceControlPlanningEnergyBudget(room);
     publishCarrierCommitment(producerA, 2_000);
     publishCarrierCommitment(producerB, 3_000);
+    expect(getResourceControlPlanningEnergyBudget(room)).toBe(feeBudgetBefore - 5_000);
     authorizeMarketTerminalEnergyReadiness(room, 2);
 
     runResourceControl();

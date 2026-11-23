@@ -6305,14 +6305,15 @@ async function fetchRuntimeInfo(config, shard) {
   }
 }
 
-async function fetchSegmentSnapshot(config, segmentId) {
+async function fetchSegmentSnapshot(config, segmentId, selectedShard) {
   const { payload, rateLimit } = await fetchApiJson(config, "/api/user/memory-segment", {
     segment: segmentId,
-    shard: config.shard,
+    shard: selectedShard === "(default)" ? undefined : selectedShard,
   });
 
   return {
     source: "segment",
+    selectedShard,
     fetchedAt: new Date().toISOString(),
     rateLimit,
     snapshot: parseSegmentSnapshot(segmentId, payload),
@@ -6726,7 +6727,7 @@ async function fetchWithShardFallback(config) {
         tick,
       });
       if (
-        hubTime > bestHubTime ||
+        !bestResult || hubTime > bestHubTime ||
         (hubTime === bestHubTime && runtimeInfo.deployTime > bestDeployTime) ||
         (hubTime === bestHubTime && runtimeInfo.deployTime === bestDeployTime && tick > bestTick)
       ) {
@@ -6784,7 +6785,8 @@ async function fetchSelectedMemorySnapshot(config) {
 
 async function runOnce(config) {
   const memory = await fetchSelectedMemorySnapshot(config);
-  const segment = config.segmentId === null ? null : await fetchSegmentSnapshot(config, config.segmentId);
+  if (!memory) throw new Error("No shard candidate returned a memory snapshot");
+  const segment = config.segmentId === null ? null : await fetchSegmentSnapshot(config, config.segmentId, memory.selectedShard ?? config.shard ?? "(default)");
   const payload = {
     capturedAt: new Date().toISOString(),
     memory,
@@ -6811,7 +6813,8 @@ async function runService(config) {
         throw new Error("No shard candidate returned a memory snapshot");
       }
       state.latest.memory = snapshot;
-      state.selectedShard = snapshot.selectedShard ?? config.shard ?? null;
+      state.selectedShard = snapshot.selectedShard ?? config.shard ?? "(default)";
+      if (state.latest.segment?.selectedShard !== state.selectedShard) state.latest.segment = null;
       pushHistory(
         state,
         {
@@ -6839,12 +6842,14 @@ async function runService(config) {
   };
 
   const pollSegment = async () => {
-    if (config.segmentId === null || segmentBusy) {
+    if (config.segmentId === null || segmentBusy || !state.latest.memory) {
       return;
     }
     segmentBusy = true;
     try {
-      const snapshot = await fetchSegmentSnapshot(config, config.segmentId);
+      const shard = state.selectedShard;
+      const snapshot = await fetchSegmentSnapshot(config, config.segmentId, shard);
+      if (state.selectedShard !== shard) return;
       state.latest.segment = snapshot;
       pushHistory(
         state,
@@ -6874,7 +6879,7 @@ async function runService(config) {
   if (!config.noHttp) {
     server = createHttpServer(state);
     await new Promise((resolvePromise) => {
-      server.listen(config.port, () => resolvePromise());
+      server.listen(config.port, "127.0.0.1", () => resolvePromise());
     });
     console.log(`[monitor] HTTP server listening on http://127.0.0.1:${config.port}`);
   }

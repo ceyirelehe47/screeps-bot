@@ -51,6 +51,26 @@ function readFixtureProjection(fixtureName: string): Record<string, any> {
   ).payload;
 }
 
+it.each([true, false])("自动选 shard 后 segment 沿用同一端点，存在带时间戳的 shard=%s", dated => {
+  const preload = `globalThis.fetch = async url => {
+    const shard = url.searchParams.get("shard");
+    let data = {};
+    if (url.pathname.endsWith("/memory-segment")) data = { shard };
+    if (url.searchParams.get("path") === "runtime" && shard === "shard1" && ${dated}) {
+      data = { lastDeployTag: "build@2026-01-01T00:00:00Z" };
+    }
+    return Response.json({ ok: 1, data });
+  };`;
+  const output = execFileSync(process.execPath, [
+    "--import", "data:text/javascript," + encodeURIComponent(preload), MONITOR_SCRIPT, "--once",
+    "--shards", "shard1", "--segment-id", "8", "--token", "fixture", "--output", "off",
+  ], { cwd: REPO_ROOT, encoding: "utf8", env: { ...process.env, SCREEPS_MONITOR_SHARD: "", SCREEPS_MONITOR_MEMORY_FIXTURE: "" } });
+  const payload = JSON.parse(output.slice(output.indexOf("\n{") + 1));
+  expect(payload.memory.selectedShard).toBe(dated ? "shard1" : "(default)");
+  expect(payload.segment.selectedShard).toBe(payload.memory.selectedShard);
+  expect(payload.segment.snapshot.parsed.shard).toBe(dated ? "shard1" : null);
+});
+
 describe("monitor-service ResourceControl terminal headroom projection", () => {
   test("投影容量策略、receiver 统计和逐房 headroom 诊断", () => {
     const payload = readFixtureProjection("resource-control-headroom-monitor.json");

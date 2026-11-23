@@ -276,6 +276,7 @@ declare global {
         layout: { [structureType: string]: { x: number; y: number }[] };
         timestamp: string;
         savedAt: number;
+        controllerLinkRetryAt?: number;
       };
     };
     rescue?: Record<

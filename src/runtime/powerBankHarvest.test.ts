@@ -1107,6 +1107,21 @@ describe("powerBankHarvest", () => {
     }
   });
 
+  it("Bank 仍在但主队已阵亡一员时结束任务并回收幸存者", () => {
+    setupSourceRoom();
+    const id = "pb-combat-loss";
+    const { attacker, healer } = setupOwnedCombatPair({ taskId: id });
+    const bank = createMockPowerBank({ id: "bank-loss", hits: 500_000, ticksToDecay: 5000 });
+    delete Game.creeps[attacker.name];
+    mockObjects(healer, bank);
+    const task = makeTask({ id, sourceRoom: SOURCE_ROOM, status: POWER_BANK_STATUS.ATTACKING,
+      tier: 8, attackerId: attacker.id, healerId: healer.id, bankId: bank.id, bankExpiresAt: Game.time + 5000 });
+    addTask(task);
+    runPowerBankHarvest();
+    expect(task).toMatchObject({ status: "failed", failReason: "active_combat_pair_lost" });
+    expect(healer.memory._recycleToRoom).toBe(SOURCE_ROOM);
+  });
+
   it("主队可在当前寿命内打完时，增援准备时间不能触发第二队", () => {
     Game.time = 400;
     setupSourceRoom();

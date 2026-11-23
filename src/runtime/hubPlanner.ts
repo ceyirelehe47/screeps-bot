@@ -322,7 +322,7 @@ export function planHubChains(
     const have = available[t3] || 0;
     const reserve = isHubOnlyReserveCompound(t3) ? hubOnlyTargetReserve : targetReserve;
     // OH 也是后续反应的原料：将库存目标与下游消耗相加后统一扣减库存。
-    if (isHubOnlyReserveCompound(t3) || have < reserve) {
+    if (isHubOnlyReserveCompound(t3) || have < reserve || (additionalDemands[t3] ?? 0) > 0) {
       needed[t3] = reserve;
     }
   }
@@ -902,11 +902,11 @@ export function clearHubSynthesisReactions(hubRoomName: string): void {
   clearOwnedSynthesisReaction(hubRoomName, hubRoomName);
 }
 
-function computeTotalSatelliteDeficit(
+function computeSatelliteDeficits(
   cfg: NonNullable<NonNullable<Memory["cfg"]>["hub"]>,
   targetCompounds: ResourceConstant[],
   transferAmounts: ResourceTransferTaskAmountIndex,
-): number {
+): Partial<Record<ResourceConstant, number>> {
   const reservePerRoom = cfg.reservePerRoom ?? HUB_RESERVE_PER_ROOM;
   const myRooms = getTickContextService().getMyRooms();
   const satellites = myRooms.filter(
@@ -917,7 +917,7 @@ function computeTotalSatelliteDeficit(
       room.terminal,
   );
 
-  let totalDeficit = 0;
+  const deficits: Partial<Record<ResourceConstant, number>> = {};
   for (const satellite of satellites) {
     for (const t3 of targetCompounds) {
       if (isHubOnlyReserveCompound(t3)) continue;
@@ -935,10 +935,10 @@ function computeTotalSatelliteDeficit(
 
       const effectiveTotal = current + pendingIncoming;
       const deficit = Math.max(0, reservePerRoom - effectiveTotal);
-      totalDeficit += deficit;
+      if (deficit > 0) deficits[t3] = (deficits[t3] ?? 0) + deficit;
     }
   }
-  return totalDeficit;
+  return deficits;
 }
 
 /**
@@ -1048,13 +1048,6 @@ export function planDistributedSynthesis(
   hubReservePerCompound: number,
   reservePerRoom: number,
   hubInventory: Record<string, number>,
-  /**
-   * Effective T3 production target to plan toward. Defaults to
-   * `hubReservePerCompound` for backward compatibility. When the hub planner
-   * computes `chainTarget = hubReservePerCompound + satelliteDeficit`, that
-   * value must be passed here so distributed synthesis covers satellite export
-   * demand instead of stopping at the bare hub reserve.
-   */
   effectiveTargetReserve?: number,
   transferAmounts: ResourceTransferTaskAmountIndex = createResourceTransferTaskAmountIndex(),
   additionalDemands: Partial<Record<ResourceConstant, number>> = {},
@@ -1268,17 +1261,19 @@ export function planDistributedSynthesis(
   // 6. Preserve targets with feasible-but-unassigned work (for example when
   // chain steps outnumber rooms), plus targets whose global base inputs remain
   // short. One successful assignment must not make the rest look covered.
+  const reserveForTarget = (target: ResourceConstant) =>
+    (isHubOnlyReserveCompound(target) ? hubOnlyTargetReserve : targetReserve) + (additionalDemands[target] ?? 0);
   const blockedTargetSet = new Set<ResourceConstant>();
   for (let i = 0; i < taggedSteps.length; i++) {
     if (assignedIndices.has(i)) continue;
     for (const target of taggedSteps[i].possibleTargets) {
-      if ((hubInventory[target] || 0) < (isHubOnlyReserveCompound(target) ? hubOnlyTargetReserve : targetReserve)) {
+      if ((hubInventory[target] || 0) < reserveForTarget(target)) {
         blockedTargetSet.add(target);
       }
     }
   }
   for (const target of targetCompounds) {
-    if ((hubInventory[target] || 0) >= (isHubOnlyReserveCompound(target) ? hubOnlyTargetReserve : targetReserve)) continue;
+    if ((hubInventory[target] || 0) >= reserveForTarget(target)) continue;
     if (
       chainResult.missingResources.length === 0
         ? chainResult.blocked
@@ -2711,15 +2706,14 @@ function runHubPlanningAttempt(
   const hubReservePerCompound = cfg.hubReservePerCompound ?? HUB_RESERVE_PER_COMPOUND;
   const hubOnlyTargetReserve = getHubOnlyReserve(cfg);
   const targetCompounds = cfg.targetCompounds?.length ? cfg.targetCompounds : HUB_TARGET_COMPOUNDS;
-  const satelliteDeficit = computeTotalSatelliteDeficit(cfg, targetCompounds, transferAmountsBeforeImports);
-  const chainTarget = hubReservePerCompound + satelliteDeficit;
+  const additionalProductionDemands = computeSatelliteDeficits(cfg, targetCompounds, transferAmountsBeforeImports);
   const nukerGhodiumDemand = getNukerGhodiumProductionDemand();
   const hubSupplySnapshot = collectResourceControlSnapshots([RESOURCE_GHODIUM], [room])[0];
   const hubGhodiumFloor = hubSupplySnapshot ? getResourceControlResourceFloor(hubSupplySnapshot, RESOURCE_GHODIUM) : 0;
-  const additionalProductionDemands: Partial<Record<ResourceConstant, number>> =
-    nukerGhodiumDemand > 0
-      ? { [RESOURCE_GHODIUM]: nukerGhodiumDemand + hubGhodiumFloor }
-      : {};
+  if (nukerGhodiumDemand > 0) {
+    additionalProductionDemands[RESOURCE_GHODIUM] = (additionalProductionDemands[RESOURCE_GHODIUM] ?? 0) +
+      nukerGhodiumDemand + hubGhodiumFloor;
+  }
 
   planHubImports(cfg, transferAmountsBeforeImports, hubInventory);
   const transferAmountsAfterImports = createResourceTransferTaskAmountIndex();
@@ -2731,7 +2725,7 @@ function runHubPlanningAttempt(
   const result = planHubChains(
     hubInventory,
     incomingResources,
-    chainTarget,
+    hubReservePerCompound,
     targetCompounds,
     additionalProductionDemands,
     hubOnlyTargetReserve,
@@ -2744,7 +2738,7 @@ function runHubPlanningAttempt(
         hubReservePerCompound,
         cfg.reservePerRoom ?? HUB_RESERVE_PER_ROOM,
         hubInventory,
-        chainTarget,
+        hubReservePerCompound,
         transferAmountsAfterImports,
         additionalProductionDemands,
         hubOnlyTargetReserve,
@@ -2802,7 +2796,7 @@ function runHubPlanningAttempt(
       hubInventory,
       result.steps,
       cfg.distributedStorage,
-      chainTarget,
+      hubReservePerCompound,
       transferAmountsAfterImports,
       additionalProductionDemands,
       distributedPreview ?? undefined,

@@ -1,5 +1,5 @@
 import { resetRuntimeIsolationForTest } from "@/runtime/runtimeIsolation";
-import { runTowerControl } from "@/runtime/towerControl";
+import { canTowersHandleHostiles, runTowerControl } from "@/runtime/towerControl";
 
 type RuntimeGlobal = typeof global & {
   __runtimeServices?: unknown;
@@ -219,6 +219,21 @@ describe("runTowerControl", () => {
     expect(towerB.attack).toHaveBeenCalledWith(focusTarget);
     expect(towerA.attack).not.toHaveBeenCalledWith(otherTarget);
     expect(towerB.attack).not.toHaveBeenCalledWith(otherTarget);
+  });
+
+  it("不足一次攻击的近塔不贡献伤害，恰有十点能量时可以参战", () => {
+    const name = "W1N2";
+    const enemy = createHostile(name, "healer", 30, 30, { body: createBody(HEAL, 20) });
+    const far = createTower(name, "far", 10, 10);
+    const near = createTower(name, "near", 30, 29, TOWER_ENERGY_COST - 1);
+    const room = createRoom(name, { towers: [far, near], hostiles: [enemy] });
+    Game.rooms = { [name]: room };
+    expect(canTowersHandleHostiles(room, [enemy])).toBe(false);
+    runTowerControl();
+    expect(far.attack).not.toHaveBeenCalled();
+    expect(near.attack).not.toHaveBeenCalled();
+    jest.mocked(near.store.getUsedCapacity).mockReturnValue(TOWER_ENERGY_COST);
+    expect(canTowersHandleHostiles(room, [enemy])).toBe(true);
   });
 
   it("does not waste tower energy when every hostile is immune to tower damage", () => {

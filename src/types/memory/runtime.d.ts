@@ -508,6 +508,7 @@ declare global {
           lastError?: string;
           lastTransitionAt: number;
           loadingSinceTick?: number;
+          loadingRetry?: { product: ResourceConstant; at: number };
           lastProducedAt?: number;
           lastProducedResource?: ResourceConstant;
           producedAmount?: number;

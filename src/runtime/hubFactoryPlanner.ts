@@ -1,3 +1,4 @@
+import { getProductionSupplyStock } from "@/runtime/marketSaleExposure";
 import { normalizeNumber } from "@/runtime/configNormalize";
 import { getReservedProductionAmountExcludingHolder } from "@/runtime/resourceReservation";
 import { resolveRoomConfig } from "@/runtime/resourceControlRoomConfig";
@@ -81,7 +82,7 @@ export function planHubFactory(): void {
   const index = createResourceTransferTaskAmountIndex();
   const donors = Object.values(Game.rooms).filter(candidate => candidate.name !== hubName && candidate.controller?.my && candidate.storage && candidate.terminal);
   const available = (candidate: Room, resource: ResourceConstant, holder = ""): number => Math.max(0,
-    stock(candidate, resource, candidate.name === hubName ? factory : undefined) -
+    getProductionSupplyStock(candidate, resource, candidate.name === hubName ? factory : undefined) -
     Math.max(
       MINERALS.has(resource) ? floors[resource] ?? 0 : resource === RESOURCE_ENERGY ? floors[RESOURCE_ENERGY] ?? 0 : config.resourceFloors?.[resource] ?? 0,
       candidate.name === hubName ? 0 : config.rooms?.[candidate.name]?.resourceFloors?.[resource] ?? 0,

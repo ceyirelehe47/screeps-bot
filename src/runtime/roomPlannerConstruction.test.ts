@@ -249,7 +249,7 @@ describe("getSourceContainerPositionsForRoom", () => {
     Memory.data = {} as Memory["data"];
   });
 
-  it("控制器容器保留至控制器 link 实际获得建设名额", () => {
+  it.each([OK, ERR_FULL])("控制器 link 有名额才拆容器，建站返回 %s 后保留补给路径", linkResult => {
     const room = createRoom({ level: 4 });
     Game.rooms[room.name] = room;
     Game.constructionSites = {};
@@ -266,6 +266,14 @@ describe("getSourceContainerPositionsForRoom", () => {
     room.storage = storage;
     room.__structures.push(structure(STRUCTURE_SPAWN, 11, 10), storage as unknown as MockStructure, container as unknown as MockStructure);
     setRoomPlannerLayout(room.name, { link: [{ x: 25, y: 24 }] });
+    const place = room.createConstructionSite.bind(room);
+    room.createConstructionSite = ((x: number, y: number, type: BuildableStructureConstant) => {
+      if (type === STRUCTURE_LINK && linkResult !== OK) {
+        room.__siteAttempts.push({ x, y, structureType: type });
+        return linkResult;
+      }
+      return place(x, y, type);
+    }) as Room["createConstructionSite"];
     try {
       runRoomPlannerConstruction();
       expect(container.destroy).not.toHaveBeenCalled();
@@ -274,6 +282,10 @@ describe("getSourceContainerPositionsForRoom", () => {
       runRoomPlannerConstruction();
       expect(container.destroy).toHaveBeenCalledTimes(1);
       expect(room.__siteAttempts).toContainEqual({ x: 25, y: 24, structureType: STRUCTURE_LINK });
+      if (linkResult !== OK) {
+        expect(room.__sites.some(site => site.structureType === STRUCTURE_CONTAINER)).toBe(true);
+        expect(Memory.data?.roomPlanner?.[room.name].controllerLinkRetryAt).toBeGreaterThan(Game.time);
+      }
     } finally { Object.assign(global, { RoomPosition: original }); }
   });
 

@@ -1,4 +1,5 @@
 import { createTaskLifecycle } from "@/runtime/taskLifecycle";
+import { retireCreep } from "@/runtime/retirement";
 import { isDue } from "@/runtime/cadence";
 import { ensureConfigStore, getBodyCost, getLiveCreepsByConfig, isConfigSpawning as hasSpawningConfig, removeQueuedSpawnConfig } from "@/runtime/spawnHelpers";
 import { spawnProfiles } from "@/config/spawnProfiles";
@@ -122,7 +123,7 @@ function ensureRescueWorker(task: RescueTask, index: number): void {
   });
 }
 
-function cleanupRescueConfigs(task: RescueTask): boolean {
+function cleanupRescueConfigs(task: RescueTask, recall = false): boolean {
   const configNames = getTaskConfigNames(task);
   const store = ensureConfigStore();
   let removedAll = true;
@@ -135,6 +136,11 @@ function cleanupRescueConfigs(task: RescueTask): boolean {
       getCreepConfigService().detachSpawn(configName);
     }
 
+    if (recall) {
+      for (const creep of [...getLiveCreepsByConfig(configName)]) {
+        retireCreep(creep, { owner: "colonization", mode: "recycle", roomName: task.sourceRoom });
+      }
+    }
     if (isConfigSpawning(configName)) {
       removedAll = false;
       continue;
@@ -284,9 +290,10 @@ export function runRescueByFlag(): void {
   const store = ensureRescueStore();
   for (const task of Object.values(store)) {
     if (!Game.flags[task.flagName]) {
-      cleanupRescueConfigs(task);
-      delete store[task.targetRoom];
-      console.log(`[rescue] cancelled: ${task.targetRoom} flag removed by player`);
+      if (cleanupRescueConfigs(task, true)) {
+        delete store[task.targetRoom];
+        console.log(`[rescue] cancelled: ${task.targetRoom} flag removed by player`);
+      }
       continue;
     }
 

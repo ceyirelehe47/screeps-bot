@@ -730,6 +730,12 @@ export function getTerminalAmountOutsideMarketSaleExposure(
   return inspection?.availableAmount || 0;
 }
 
+/** 工业配料可支配的实物库存，产品达标与封顶仍按物理总量计算。 */
+export function getProductionSupplyStock(room: Room, resource: ResourceConstant, factory?: StructureFactory | null): number {
+  const terminal = room.terminal ? getTerminalAmountOutsideMarketSaleExposure(room.terminal, resource, room.name) : 0;
+  return terminal + (room.storage?.store.getUsedCapacity(resource) ?? 0) + (factory?.store.getUsedCapacity(resource) ?? 0);
+}
+
 /**
  * 为 carrier 原子领取当前 tick 可安全 withdraw 的数量。
  *

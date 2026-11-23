@@ -74,6 +74,16 @@ describe("runCrossShardColonizationByFlag", () => {
     });
   });
 
+  it("已占领房间的远端停止推进时，到期结束而不重派 bootstrap", () => {
+    Object.assign(global, { InterShardMemory: { getRemote: () => "" } });
+    const task = { targetShard: "shard1", targetRoom: "W9N9", sourceRoom: "W1N1", portalRoom: "W1N2",
+      status: "bootstrapping" as const, flagName: "CLX_shard1_W9N9", createdAt: Game.time - 3000,
+      updatedAt: Game.time - 1, remoteAdvancedAt: Game.time - 2001, bootstrapDispatchedAt: Game.time - 2001 };
+    Memory.data = { crossShardColonization: { job: task } };
+    runCrossShardColonizationByFlag();
+    expect(task).toMatchObject({ status: "failed", reason: "bootstrap_remote_stale", completedAt: Game.time });
+  });
+
   it("旧占领信号必须等到对端继续推进且重新确认当前所有权", () => {
     let stamp = 500;
     let claimAt = 500;

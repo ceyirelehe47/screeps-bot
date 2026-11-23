@@ -1542,6 +1542,12 @@ function attemptRenewCreep(
   return "fatal";
 }
 
+function canRestoreCombatPair(task: PowerBankHarvestTask, index: number): boolean {
+  return (["attacker", "healer"] as const).every(role =>
+    getCombatConfigNames(task, role, index).some(name =>
+      getConfigStore()[name]?.roomName === task.sourceRoom || !!getAssignableCreepByConfigName(name, task.id)));
+}
+
 function processRenewing(task: PowerBankHarvestTask): void {
   if (isDefenseMode(task.sourceRoom)) {
     transitionToTerminal(task, "aborted", "defense_mode");
@@ -1559,6 +1565,10 @@ function processRenewing(task: PowerBankHarvestTask): void {
   const healer = getCombatCreep(task, "healer", activeIndex);
 
   if (!attacker || !healer) {
+    if (!canRestoreCombatPair(task, activeIndex)) {
+      transitionToTerminal(task, "failed", "active_combat_pair_lost");
+      return;
+    }
     task.combatReady = false;
     task.attackerReady = !!attacker;
     task.healerReady = !!healer;
@@ -1764,6 +1774,7 @@ function shouldProactivelyHandoff(
 }
 
 function resetChangedActivePair(task: PowerBankHarvestTask): void {
+  // 已有同代替补时，重新核对成员、寿命和强化。
   task.attackerId = undefined;
   task.healerId = undefined;
   task.attackerReady = false;
@@ -1823,6 +1834,10 @@ function processAttacking(task: PowerBankHarvestTask): void {
   if (!pair) {
     if (task.reinforcement) {
       setPowerBankBlocker(task, "active_pair_missing_waiting_reinforcement", 1);
+      return;
+    }
+    if (!canRestoreCombatPair(task, getActiveCombatIndex(task))) {
+      transitionToTerminal(task, "failed", "active_combat_pair_lost");
       return;
     }
     resetChangedActivePair(task);

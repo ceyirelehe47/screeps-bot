@@ -591,7 +591,10 @@ function runProtoControllerLinkContainerManagement(room: Room, layout: PlannedLa
 
   const linkOrder = getSortedLinkPlannedPositions(room, layout);
   const linkIndex = linkOrder.findIndex(link => link.x === pos.x && link.y === pos.y);
-  if (canBuildAtControllerLevel(STRUCTURE_LINK, controllerLevel) && linkIndex >= 0 && linkIndex < getAllowedCount(STRUCTURE_LINK, controllerLevel)) return;
+  const linkQuota = getAllowedCount(STRUCTURE_LINK, controllerLevel);
+  const retryAt = Memory.data?.roomPlanner?.[room.name]?.controllerLinkRetryAt ?? 0;
+  if (Game.time >= retryAt && linkIndex >= 0 && linkIndex < linkQuota &&
+      countExisting(room, STRUCTURE_LINK) + countSites(room, STRUCTURE_LINK) < linkQuota) return;
 
   // Don't place if container already exists or is under construction
   if (hasStructureOrSiteAt(room, pos.x, pos.y, STRUCTURE_CONTAINER)) return;
@@ -828,15 +831,23 @@ export function runRoomPlannerConstruction(): void {
         }
 
         // 只有控制器 link 已获得本轮配额且即将落工地时才交接，保留早期升级补给。
-        if (structureType === STRUCTURE_LINK) {
-          const controllerLink = getControllerLinkPosFromLayout(room, layout);
-          if (controllerLink?.x === pos.x && controllerLink.y === pos.y &&
-              !hasExactStructureOrSiteAt(room, pos.x, pos.y, STRUCTURE_LINK)) {
-            destroyContainerAt(room, pos);
-          }
+        const controllerLink = structureType === STRUCTURE_LINK ? getControllerLinkPosFromLayout(room, layout) : null;
+        const isControllerLink = controllerLink?.x === pos.x && controllerLink.y === pos.y;
+        if (isControllerLink) {
+          if ((roomPlan.controllerLinkRetryAt ?? 0) > Game.time) continue;
+          const tile = new RoomPosition(pos.x, pos.y, room.name);
+          if (tile.lookFor(LOOK_CONSTRUCTION_SITES).some(site => site.structureType !== STRUCTURE_CONTAINER)) continue;
+          if (!hasExactStructureOrSiteAt(room, pos.x, pos.y, STRUCTURE_LINK)) destroyContainerAt(room, pos);
         }
         if (!hasStructureOrSiteAt(room, pos.x, pos.y, structureType)) {
           const code = tryPlaceSite(room, structureType, pos.x, pos.y);
+          if (isControllerLink) {
+            if (code === OK) delete roomPlan.controllerLinkRetryAt;
+            else {
+              roomPlan.controllerLinkRetryAt = Game.time + 500;
+              runProtoControllerLinkContainerManagement(room, layout, controllerLevel);
+            }
+          }
           if (code === OK) {
             newSites += 1;
             globalRemaining -= 1;

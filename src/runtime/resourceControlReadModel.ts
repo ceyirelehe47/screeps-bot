@@ -2085,10 +2085,17 @@ function inspectTreasuryResourceTransferAvailability(task: ResourceTransferTask,
 export function getResourceControlPlanningEnergyBudget(room: Room): number {
   if (!room.terminal) return 0;
   const terminalEnergy = room.terminal.store.getUsedCapacity(RESOURCE_ENERGY);
+  let productionEnergy = getReservedProductionAmount(room.name, RESOURCE_ENERGY);
+  for (const task of listCarrierTasksByRoom(room.name)) {
+    if (task.type !== "lab_supply" && task.type !== "factory_supply") continue;
+    for (const step of task.steps) {
+      if (step.resource === RESOURCE_ENERGY && (step.fromKind === "storage" || step.fromKind === "terminal")) productionEnergy += step.amount;
+    }
+  }
   return getTerminalActionEnergyOwnershipBudget({
     totalEnergy: terminalEnergy + (room.storage?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0),
     ordinaryTerminalEnergyReserve: resolveRoomConfig(room.name).terminalEnergyReserve,
-    productionEnergyCommitment: getReservedProductionAmount(room.name, RESOURCE_ENERGY),
+    productionEnergyCommitment: productionEnergy,
     otherOutgoingEnergyCommitment: 0, otherOutgoingFeeCommitment: 0,
     otherExplicitEnergyOwnership: Math.max(0, terminalEnergy - getTerminalAmountOutsideMarketSaleExposure(room.terminal, RESOURCE_ENERGY, room.name)),
   });

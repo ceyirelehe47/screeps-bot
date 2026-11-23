@@ -46,6 +46,19 @@ describe("OH 仅 HUB 储备", () => {
       .toEqual([RESOURCE_CATALYZED_GHODIUM_ACID]);
   });
 
+  it("单一卫星资源缺货只驱动对应 T3 的反应链", () => {
+    const first = RESOURCE_CATALYZED_UTRIUM_ACID;
+    const second = RESOURCE_CATALYZED_KEANIUM_ACID;
+    Memory.cfg!.hub!.targetCompounds = [first, second];
+    Game.rooms = {
+      [HUB]: room(HUB, { [first]: 20000, [second]: 20000, UH2O: 5000, KH2O: 5000, X: 10000 }),
+      [SAT]: room(SAT, { [second]: 5000 }),
+    };
+    runHubPlanner();
+    expect(Memory.runtime!.hub!.lastPlanActions).toContain(first);
+    expect(Memory.runtime!.hub!.lastPlanActions).not.toContain(second);
+  });
+
   it("OH 目标不叠加卫星 T3 缺口", () => {
     const result = planHubChains({ H: 100000, O: 100000 }, {}, 100000, [RESOURCE_HYDROXIDE], {}, 20000);
     expect(result.steps.find(s => s.product === RESOURCE_HYDROXIDE)?.targetAmount).toBe(20000);

@@ -70,7 +70,7 @@ function cleanupDeadCreepMemory(spawningCreepNames: ReadonlySet<string>): number
 
   for (const creepName of Object.keys(Memory.creeps)) {
     if (!Game.creeps[creepName] && !spawningCreepNames.has(creepName)) {
-      appendRuntimeEvent({ owner: "creep", id: creepName, kind: "death", from: Memory.creeps[creepName].role });
+      appendRuntimeEvent({ owner: "creep", id: creepName, kind: "death", from: Memory.creeps[creepName]?.role });
       delete Memory.creeps[creepName];
       removed += 1;
     }

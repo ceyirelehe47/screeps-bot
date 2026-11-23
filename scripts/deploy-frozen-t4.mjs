@@ -85,7 +85,7 @@ async function run() {
   const toolHash=sha(await readFile(fileURLToPath(import.meta.url)));
   if (!validateFrozenMetadata(manifest,bundle,sourceTree,toolHash)||git('status','--porcelain')!=='' ||
       git('merge-base','--is-ancestor',manifest.sourceCommit,'HEAD')!=='' ||
-      git('diff','--name-only',manifest.sourceCommit,'HEAD','--','.',':!docs',':!scripts/deploy-frozen-t2.mjs')!=='' ||
+      git('diff','--name-only',manifest.sourceCommit,'HEAD','--','.',':!docs',':!scripts/deploy-frozen-t4.mjs')!=='' ||
       git('remote','get-url','origin')!=='https://github.com/ceyirelehe47/screeps-bot.git' ||
       git('remote','get-url','--push','--all','origin')!=='https://github.com/ceyirelehe47/screeps-bot.git') throw Error('frozen input, source, tool, remote or size gate failed');
   const secret=JSON.parse(await readFile(process.env.SCREEPS_SECRET_FILE||'.secret.json','utf8'));

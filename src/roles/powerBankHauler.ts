@@ -182,29 +182,10 @@ function waitAwayFromBank(creep: Creep, bankPos: { x: number; y: number }): void
     dir = TOP_LEFT as DirectionConstant;
   }
 
-  const targetPos = getPositionAtDirection(creep.pos, dir);
-  if (!targetPos) {
-    return;
-  }
-
-  if (!isPowerBankHaulerAt(targetPos, creep.name)) {
-    // Tactical directional move — not destination pathfinding
-    issueMove(creep, dir!);
-    return;
-  }
-
-  const [sideA, sideB] = getSideDirections(dir!);
-  const sideAPos = getPositionAtDirection(creep.pos, sideA);
-  if (sideAPos && isWalkableTile(sideAPos) && !isPowerBankHaulerAt(sideAPos, creep.name)) {
-    // Tactical directional move — not destination pathfinding
-    issueMove(creep, sideA);
-    return;
-  }
-
-  const sideBPos = getPositionAtDirection(creep.pos, sideB);
-  if (sideBPos && isWalkableTile(sideBPos) && !isPowerBankHaulerAt(sideBPos, creep.name)) {
-    // Tactical directional move — not destination pathfinding
-    issueMove(creep, sideB);
+  for (const direction of [dir, ...getSideDirections(dir)]) {
+    const next = getPositionAtDirection(creep.pos, direction);
+    if (!next || isExitCoordinate(next.x, next.y) || !isWalkableTile(next) || isPowerBankHaulerAt(next, creep.name)) continue;
+    issueMove(creep, direction);
     return;
   }
 }

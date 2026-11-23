@@ -549,6 +549,18 @@ function processTask(task: CrossShardColonizationTask): void {
       return;
     }
 
+    if (!remoteState.fresh) {
+      const lastEvidence = task.remoteAdvancedAt ?? task.bootstrapDispatchedAt ?? task.lastReadyAt ?? task.createdAt;
+      if (Game.time - lastEvidence > BOOTSTRAP_RETRY_TTL) {
+        cleanupTaskConfigs(task);
+        taskLifecycle.transition(task, "failed");
+        task.reason = "bootstrap_remote_stale";
+        task.completedAt = Game.time;
+      } else {
+        task.reason = "waiting for fresh remote claim";
+      }
+      return;
+    }
     ensureBootstrapSquad(task);
     task.lastReadyAt = Game.time;
     return;

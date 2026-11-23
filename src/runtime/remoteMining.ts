@@ -1,5 +1,6 @@
 import { runIsolatedRoomOperation } from "@/runtime/runtimeIsolation";
 import { createOutboundLifecycle, orderOutboundWork } from "@/runtime/outboundMissionLifecycle";
+import { retireCreep } from "@/runtime/retirement";
 import { isDue } from "@/runtime/cadence";
 import { searchPlanningPath } from "@/movement/pathSearch";
 import { replaceSpawnQueue } from "@/runtime/spawnRequests";
@@ -40,6 +41,7 @@ export interface RemoteMiningTask {
   assignedAt: number;
   updatedAt: number;
   lastVerifiedAt?: number;
+  workerIdleSince?: number;
   suspendReason?: RemoteSuspendReason | string;
   suspendedAt?: number;
   lastThreatAt?: number;
@@ -1383,6 +1385,7 @@ export function processRemoteConfigLifecycle(
 ): void {
   for (const task of Object.values(store)) {
     runIsolatedRoomOperation("processRemoteConfigLifecycle", `${task.sourceRoom}:${task.targetRoom}`, () => {
+    if (task.status !== "active" || !Game.rooms[task.targetRoom]) delete task.workerIdleSince;
     if (task.status === "scouting") {
       return 0 as const;
     }
@@ -1539,13 +1542,6 @@ export function processRemoteConfigLifecycle(
 
         const defenseReason = getActiveDefenseReason(visibleTarget, task);
         if (defenseReason !== null) {
-          if (task.defendingSince !== undefined && Game.time - task.defendingSince > 750) {
-            suspendRemoteTask(task, "defense_timeout");
-            cleanupRemoteConfigs(task, "all");
-            removeScoutConfigAndSpawnQueues(task.sourceRoom, task.targetRoom);
-            return 0 as const;
-          }
-
           if (defenseReason === "npc_invader_core") {
             if (!hasInvaderCoreClearanceCapacity(task)) {
               suspendInvaderCoreForInsufficientCapacity(task);
@@ -1556,6 +1552,13 @@ export function processRemoteConfigLifecycle(
                 maintainInvaderCoreClearance(task, supportedCore);
               }
             }
+            return 0 as const;
+          }
+
+          if (task.defendingSince !== undefined && Game.time - task.defendingSince > 750) {
+            suspendRemoteTask(task, "defense_timeout");
+            cleanupRemoteConfigs(task, "all");
+            removeScoutConfigAndSpawnQueues(task.sourceRoom, task.targetRoom);
             return 0 as const;
           }
 
@@ -1642,8 +1645,19 @@ export function processRemoteConfigLifecycle(
     upsertReserverConfig(task, config);
 
     if (remoteNeedsInfrastructureWorker(task)) {
+      delete task.workerIdleSince;
       upsertRemoteWorkerConfig(task);
     } else {
+      const workers = getTickContextService().getCreepsByConfigName(getRemoteWorkerConfigName(task.sourceRoom, task.targetRoom));
+      if (workers.length && Game.rooms[task.targetRoom]) {
+        task.workerIdleSince ??= Game.time;
+        // 至少等一轮道路规划，短暂修满时仍可接下一份工作。
+        if (Game.time - task.workerIdleSince >= config.roadInterval) {
+          for (const worker of [...workers]) retireCreep(worker, { owner: "remoteMining", mode: "recycle", roomName: task.sourceRoom });
+        }
+      } else {
+        delete task.workerIdleSince;
+      }
       removeRemoteWorkerConfig(task.sourceRoom, task.targetRoom);
     }
   

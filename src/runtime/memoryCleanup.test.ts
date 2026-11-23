@@ -136,6 +136,12 @@ describe("runMemoryCleanup", () => {
     Memory.data = undefined;
   });
 
+  it("损坏的死亡 creep 条目不阻断后续清理", () => {
+    Object.assign(Memory.creeps, { damaged: null, expired: { role: "worker" } });
+    runMemoryCleanup();
+    expect(Memory.creeps).toEqual({});
+  });
+
   it("清理旧 moduleCpu 和非自有房防御投影，保留当前 CPU 健康与自有房快照", () => {
     Memory.analytics = { moduleCpu: { old: true }, cpuMonitor: { health: { lastCompletedAt: 16 } } } as unknown as ScreepsMemoryAnalytics;
     const owned = { updatedAt: 16, structureHits: {} } as unknown as NonNullable<RoomMemory["coreDefenseSnapshot"]>;

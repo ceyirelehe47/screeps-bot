@@ -317,6 +317,7 @@ export function applyMarketOps(
     .filter((snapshot) => snapshot.terminal.cooldown === 0)
     .sort((left, right) => left.storageEnergy - right.storageEnergy);
 
+  const claimedDonorSupply = new Map<string, number>();
   for (const room of mineralBuyRooms) {
     if (dealsDone >= marketCfg.maxDealsPerRun) {
       break;
@@ -354,8 +355,17 @@ export function applyMarketOps(
 
       if (context.marketSellingResources?.has(resource)) continue;
       const capacityConfig = resolveCapacityConfig();
-      const internalSupply = snapshots.filter(donor => donor.roomName !== room.roomName && donor.capacityState !== "emergency")
-        .reduce((sum, donor) => sum + getTotalMovableResourceAmount(donor, resource, capacityConfig, context), 0);
+      let internalSupply = 0;
+      for (const donor of snapshots) {
+        if (donor.roomName === room.roomName || donor.capacityState === "emergency") continue;
+        const key = roomResourceKey(donor.roomName, resource);
+        const claimed = claimedDonorSupply.get(key) ?? 0;
+        const available = Math.max(0, getTotalMovableResourceAmount(donor, resource, capacityConfig, context) - claimed);
+        const used = Math.min(available, deficit - internalSupply);
+        if (used > 0) claimedDonorSupply.set(key, claimed + used);
+        internalSupply += used;
+        if (internalSupply >= deficit) break;
+      }
       if (internalSupply >= deficit) continue;
 
       const maxBuyPrice = marketCfg.maxBuyPrice[resource];

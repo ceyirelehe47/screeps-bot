@@ -179,6 +179,15 @@ describe("runRemoteMining first come assignment", () => {
     expect(config()).toBeUndefined();
     sites.push({ my: true, structureType: STRUCTURE_ROAD });
     expect(config()).toMatchObject({ role: "remoteWorker", roomName: home.name });
+    const worker = { name: "maintenance", room: remote, memory: { role: "remoteWorker", configName: name } } as Creep;
+    Game.creeps[worker.name] = worker;
+    sites.pop();
+    config();
+    expect(worker.memory._recycleToRoom).toBeUndefined();
+    Game.time += getRemoteMiningConfig().roadInterval;
+    config();
+    expect(worker.memory._recycleToRoom).toBe(home.name);
+    expect(worker.memory.configName).toBeUndefined();
   });
 
   it("creates active task for visible cardinal room with exactly two sources", () => {

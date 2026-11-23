@@ -324,7 +324,7 @@ export function canTowersHandleHostiles(room: Room, hostiles: Creep[]): boolean 
   }
 
   const towers = (getTickContextService().getRoomContext(room)?.getTowers() || []).filter(
-    (tower) => runIsolatedTowerOperation(room.name, tower.id, () => tower.store.getUsedCapacity(RESOURCE_ENERGY) > 0),
+    (tower) => runIsolatedTowerOperation(room.name, tower.id, () => tower.store.getUsedCapacity(RESOURCE_ENERGY) >= TOWER_ENERGY_COST),
   );
   if (towers.length === 0) {
     return false;
@@ -405,6 +405,7 @@ function runTowerCombat(room: Room, towers: StructureTower[], hostiles: Creep[],
   let healed = false;
   for (const tower of towers) {
     const needsAttack = runIsolatedTowerOperation(room.name, tower.id, () => {
+      if (tower.store.getUsedCapacity(RESOURCE_ENERGY) < TOWER_ENERGY_COST) return false;
       if (!healed && woundedCreeps.length > 0) {
         const target = tower.pos.findClosestByRange(woundedCreeps);
         if (target) {

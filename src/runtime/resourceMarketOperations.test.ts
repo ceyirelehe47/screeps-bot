@@ -93,6 +93,17 @@ it("自有房间可动矿足够时等待内部调拨，避免在缺口房重新�
   applyMarketOps([receiver, donor], w.config, new Set(), w.context);
   expect(w.market.deal).not.toHaveBeenCalled();
 });
+it("两个缺口房只抵扣一次同一供体的可调拨量", () => {
+  const w = setup();
+  const first = w.snapshot("W1N1");
+  const second = w.snapshot("W2N2");
+  const donor = w.snapshot("W3N3", { energy: 20000, H: 1200 });
+  w.config.buyResources = [RESOURCE_HYDROGEN];
+  applyMarketOps([first, second, donor], w.config, new Set(), w.context);
+  expect(w.market.deal).toHaveBeenCalledTimes(1);
+  expect(w.market.deal).toHaveBeenCalledWith("sell-H", 800, second.roomName);
+});
+
 it("当前授权 V3 在卖的资源禁止旧买入路径再次采购", () => {
   const w = setup(), receiver = w.snapshot();
   w.config.buyResources = [RESOURCE_HYDROGEN];

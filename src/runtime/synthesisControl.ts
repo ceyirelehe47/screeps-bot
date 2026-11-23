@@ -2,7 +2,7 @@ import { collectResourceControlSnapshots, getResourceControlDonorAvailable } fro
 import { runIsolatedRoutineRoomOperation } from "@/runtime/runtimeIsolation";
 import { isDue } from "@/runtime/cadence";
 import { countCarrierCargo } from "@/runtime/carrierCargo";
-import { getTerminalAmountOutsideMarketSaleExposure } from "@/runtime/marketSaleExposure";
+import { getProductionSupplyStock, getTerminalAmountOutsideMarketSaleExposure } from "@/runtime/marketSaleExposure";
 import {
   countsResourceTransferTaskTowardDemand,
   createAutomaticResourceTransferTask,
@@ -1118,7 +1118,7 @@ function maybeGenerateSupplyTasks(
 
       return sum + (lab.store.getUsedCapacity(reagent) ?? 0);
     }, 0);
-    const current = roomTransferableAmount(room, reagent) + bufferedInLabs +
+    const current = getProductionSupplyStock(room, reagent) + bufferedInLabs +
       topology.reagentLabs.reduce((sum, lab) => sum + countCarrierCargo(lab.id, reagent), 0);
     const incoming = transferTasks.getIncomingAmount(room.name, reagent);
     const deficit = Math.max(0, needAmount - current - incoming);
