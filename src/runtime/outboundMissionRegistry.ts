@@ -5,6 +5,7 @@ import type { RoomMissionMode } from "@/runtime/outboundMissionPolicy";
 export interface OutboundRequest {
   intent: SpawnIntent;
   committed: boolean;
+  guardedSiegeReinforcement?: true;
   family?: "remoteMining" | "deposit" | "powerBank" | "colonizationSupport" | "war";
   taskId?: string;
   blockedReason?: "mission_paused";

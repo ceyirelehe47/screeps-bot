@@ -2,7 +2,7 @@ import { getBoostPartType, countBoostableParts } from "@/runtime/boostParts";
 import { prepareBoosts } from "@/runtime/powerBankBoost";
 import { selectLeastLoadedSpawn } from "@/runtime/spawnHelpers";
 import { canStartOutboundMission } from "@/runtime/outboundMissionPolicy";
-import { canContinueWarMission } from "./outbound";
+import { canContinueWarMission, canReinforceGuardedSiege } from "./outbound";
 import {
   enqueueConfig,
   getSpawnsForRoom,
@@ -64,7 +64,7 @@ export function runSiegeCampaign(task: WarTask): void {
   );
   if (Object.values(task.siegeWings ?? {}).some(Boolean)) task.siegeLaunched = true;
   setTaskStatus(task, task.siegeLaunched ? "clearing" : "staging");
-  if (!canStartOutboundMission(task.sourceRoom) && !canContinueWarMission(task)) return;
+  if (!canStartOutboundMission(task.sourceRoom) && !canContinueWarMission(task) && !canReinforceGuardedSiege(task)) return;
   const spawns = getSpawnsForRoom(task.sourceRoom);
   if (!spawns.length) return;
   const store = ensureConfigStore();

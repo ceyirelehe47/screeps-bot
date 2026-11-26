@@ -51,12 +51,30 @@ export function canContinueWarMission(task: WarTask): boolean {
   return pending ? committed() : false;
 }
 
+/** 边缘敌兵不能无限封锁已经出征的编组。核心受近身威胁、兵营不足或缺守军时优先本地。 */
+export function canReinforceGuardedSiege(task: WarTask): boolean {
+  if (task.squad !== "siege" || task.oneShot !== false || (task.status !== "clearing" && task.status !== "staging")) return false;
+  const room = Game.rooms[task.sourceRoom];
+  if (!room?.controller?.my || (room.storage?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0) < 150000 || isRoomInReserveMode(room.name)) return false;
+  const context = getTickContextService();
+  const spawns = context.getSpawnsByRoom(room.name);
+  if (spawns.length < 2 || spawns.filter(s=>s.spawning && Memory.creeps[s.spawning.name]?.role==="siegeUnit").length >= spawns.length-1) return false;
+  const locals = context.getCreepsByRoom(room.name);
+  if (!locals.some(c=>!c.spawning && c.memory.role==="homeDefender") || !locals.some(c=>!c.spawning && c.memory.role==="carrier")) return false;
+  const towers = context.getRoomContext(room)?.getTowers() ?? [];
+  if (towers.filter(t=>t.store.getUsedCapacity(RESOURCE_ENERGY)>=400).length < 3) return false;
+  if (room.find(FIND_HOSTILE_CREEPS).some(enemy=>spawns.some(s=>s.pos.inRangeTo(enemy,5)))) return false;
+  return task.siegeLaunched === true || SIEGE_SLOTS.some((_,i) => context.getCreepsByConfigName(siegeConfigName(task,i)).some(c=>c.room.name!==room.name));
+}
+
 export const warMissionOwner: OutboundMissionOwner = {
   id: "war",
   matches: name => name.includes(":war:"),
   evaluate(name, config, mode) {
     const task = Memory.data?.war?.[config.args[0]];
     if (!mode.reserve && task && task.sourceRoom === config.roomName) delete task.reserveContinuationUntil;
+    if (mode.defense && !mode.reserve && task && config.role === "siegeUnit" && ownsWarConfig(task,name,config) && canReinforceGuardedSiege(task))
+      return { family:"war", intent:"expedition", committed:true, guardedSiegeReinforcement:true };
     if (!mode.reserve || mode.defense) return { family: "war", intent: "expedition", committed: false };
     if (name === `${config.roomName}:war:${config.args[0]}:controllerAttacker:0` && config.role === "claimer" && config.args[2] === "attack") {
       const active = task && task.sourceRoom === config.roomName && ["staging", "clearing", "downgrading", "patrol_waiting"].includes(task.status);

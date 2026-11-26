@@ -13,7 +13,7 @@ export type OutboundBlocker = "defense" | "reserve" | "source_busy" | "mission_p
 export type SpawnAdmission = { allowed: true } | { allowed: false; reason: OutboundBlocker };
 
 export function evaluateOutboundAdmission(mode: RoomMissionMode, request: OutboundRequest): SpawnAdmission {
-  if (mode.defense && request.intent !== "local") return { allowed: false, reason: "defense" };
+  if (mode.defense && request.intent !== "local" && !(request.family === "war" && request.guardedSiegeReinforcement && !mode.reserve)) return { allowed: false, reason: "defense" };
   if (mode.reserve && request.intent === "expedition" && !request.committed) return { allowed: false, reason: "reserve" };
   if (request.blockedReason) return { allowed: false, reason: request.blockedReason };
   if (request.family === "deposit" && mode.sourceRoom &&
