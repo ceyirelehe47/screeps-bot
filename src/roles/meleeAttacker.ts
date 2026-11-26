@@ -1,5 +1,5 @@
 import { runWarMarch } from "./warMarch";
-import { effectivePower } from "@/runtime/powerBankCapability";
+import { damageAfterTough, effectivePower } from "@/runtime/powerBankCapability";
 import { blockRoomExits } from "@/movement/matrixLayers";
 import { getRoomStaticMatrix } from "@/movement/pathing";
 import { searchMovementPath } from "@/movement/pathSearch";
@@ -697,7 +697,7 @@ function runCounterstrikeApproach(creep: Creep): boolean {
   return true;
 }
 
-function attackAdjacentHostileOnRoute(creep: Creep): boolean {
+function attackAdjacentHostileOnRoute(creep: Creep, avoidLethalHitBack = false): boolean {
   const nearby = findAdjacentHostiles(creep);
   if (nearby.length === 0) return false;
   const protectedPositions = new Set(
@@ -712,7 +712,8 @@ function attackAdjacentHostileOnRoute(creep: Creep): boolean {
     (hostile) =>
       hostile.owner?.username &&
       hostile.owner.username !== "Source Keeper" &&
-      !protectedPositions.has(`${hostile.pos.x}:${hostile.pos.y}`),
+      !protectedPositions.has(`${hostile.pos.x}:${hostile.pos.y}`) &&
+      (!avoidLethalHitBack || damageAfterTough(creep.body, effectivePower(hostile.body, ATTACK)) < creep.hits),
   );
   if (adjacent.length === 0) return false;
 
@@ -860,7 +861,7 @@ function runAttackerDrainManeuver(creep: Creep, targetRoom?: string, partnerConf
   if (!targetRoom || (tactic !== "towerDrainDuo" && tactic !== "t3TowerDrainDuo")) return false;
   if (!runTowerDrainPair(creep, targetRoom, partnerConfigName ?? "", tactic === "t3TowerDrainDuo")) return false;
   // 撤退、恢复与进场占用移动指令，同一 tick 仍可打击相邻的敌兵。
-  attackAdjacentHostileOnRoute(creep);
+  attackAdjacentHostileOnRoute(creep, true);
   return true;
 }
 

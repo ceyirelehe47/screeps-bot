@@ -95,6 +95,7 @@ describe("meleeAttackerRole 目标策略与移动请求安全边界", () => {
   it.each(["source", "target"] as const)("耗塔机动接管 %s 时仍反击暴露的贴身敌兵", phase => {
     const attacker = createMockPowerBankCreep("meleeAttacker", { roomName: TARGET_ROOM, x: 25, y: 25 });
     const enemy = hostileCreep("exposed", 1500, { [ATTACK]: 10 });
+    enemy.body = [{ type: ATTACK, hits: 100 }];
     const covered = hostileCreep("covered", 100, { [ATTACK]: 10 });
     covered.pos = new MockPos(24, 25, TARGET_ROOM) as unknown as RoomPosition;
     const rampart = hostileStructure(STRUCTURE_RAMPART, "cover", 24, 25, 100000);
@@ -108,6 +109,22 @@ describe("meleeAttackerRole 目标策略与移动请求安全边界", () => {
       expect(attacker.attack).toHaveBeenCalledWith(enemy);
       expect(moveToTarget).not.toHaveBeenCalled();
       expect(moveToTargetRoom).not.toHaveBeenCalled();
+    } finally {
+      gate.mockRestore();
+    }
+  });
+
+  it("撤退中的额外攻击会触发致死反伤时，保留移动并跳过打击", () => {
+    const attacker = createMockPowerBankCreep("meleeAttacker", { roomName: TARGET_ROOM, x: 25, y: 25, hits: 100 });
+    const enemy = hostileCreep("boosted-melee", 100, { [ATTACK]: 1 });
+    enemy.body = [{ type: ATTACK, hits: 100, boost: RESOURCE_CATALYZED_UTRIUM_ACID }];
+    attacker.pos.findInRange = jest.fn((kind: FindConstant) => kind === FIND_HOSTILE_CREEPS ? [enemy] : []) as unknown as RoomPosition["findInRange"];
+    attacker.attack = jest.fn(() => OK);
+    const gate = jest.spyOn(towerDrainPair, "runTowerDrainPair").mockReturnValue(true);
+    try {
+      meleeAttackerRole(TARGET_ROOM, "", "", "", HEALER_CONFIG, "t3TowerDrainDuo").target(attacker);
+      expect(attacker.attack).not.toHaveBeenCalled();
+      expect(moveToTarget).not.toHaveBeenCalled();
     } finally {
       gate.mockRestore();
     }
