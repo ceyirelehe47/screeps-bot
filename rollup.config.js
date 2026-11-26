@@ -190,7 +190,7 @@ export default {
     {
       name: "screeps-global-lodash",
       resolveId(id) { if (id === "lodash") return "\0screeps-global-lodash"; },
-      load(id) { if (id === "\0screeps-global-lodash") return "export default _;"; },
+      load(id) { if (id === "\0screeps-global-lodash") return "export const { max, min, map } = _; export default _;"; },
     },
     resolve(),
     typescript({ tsconfig: "./tsconfig.build.json" }),
