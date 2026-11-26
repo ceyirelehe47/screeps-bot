@@ -156,6 +156,7 @@ describe("powerBankBoost", () => {
   describe("prepareBoosts", () => {
 
     it("持续攻城接手已装目标矿的实验室，不把同一种矿反复搬到空实验室",()=>{
+      setActiveSynthesisPlan(SOURCE_ROOM);
       const r=RESOURCE_CATALYZED_UTRIUM_ACID;
       const empty=createLabWithCompound("empty",SOURCE_ROOM,null,0,2000);
       const filled=createLabWithCompound("full",SOURCE_ROOM,r,750,2000);
