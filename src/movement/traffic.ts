@@ -104,7 +104,7 @@ function stalledDefender(creep: AnyCreep): boolean {
 /** 窄道中交换两个已占的格子；守军当前位置必须也是挡路单位能安全站立的位置。 */
 function yieldToDefender(defender: AnyCreep, blocker: AnyCreep): boolean {
   if (!isStandardCreep(blocker) || blocker.spawning || blocker.fatigue ||
-      !["carrier", "worker", "hubCarrier", "siegeUnit"].includes(blocker.memory.role) ||
+      !["carrier", "worker", "hubCarrier", "siegeUnit"].includes(blocker.memory.role ?? "") ||
       isExitTile(defender.pos) || !isYieldTileWalkable(defender.pos, blocker) ||
       !isPositionAllowedForCreep(blocker, defender.pos) || hasMoveDestinationConflict(defender.pos, [defender, blocker])) return false;
   const previous = getMoveIntentReceipt(blocker);
@@ -116,7 +116,7 @@ function yieldToDefender(defender: AnyCreep, blocker: AnyCreep): boolean {
   const state = ensureCreepMovementState(blocker);
   delete state.movePathState;
   state.movementPushedAt = Game.time;
-  recordMovementMetric("yieldPushes", defender.room.name);
+  recordMovementMetric("yieldPushes", defender.pos.roomName);
   return true;
 }
 
