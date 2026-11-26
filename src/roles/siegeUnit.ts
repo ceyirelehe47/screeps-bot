@@ -54,13 +54,16 @@ function runSiegeUnit(creep: Creep, target: string, route: string): boolean {
     .filter((c) => c.owner.username !== "Source Keeper")
     .sort((a, b) => a.hits - b.hits)[0];
   if (enemy) creep.rangedAttack(enemy);
-  if (!launched && creep.room.name === staging) moveToTarget(creep, siegeMusterPosition(creep.room, target), 1, travel);
+  const rooms = task.routeRooms?.length ? task.routeRooms : route.split("|");
+  const waypoint = rooms.indexOf(staging);
+  const next = waypoint >= 0 ? rooms[waypoint + 1] ?? target : target;
+  if (!launched && creep.room.name === staging) moveToTarget(creep, siegeMusterPosition(creep.room, next), 1, travel);
   else {
-    const rooms = route.split("|");
-    const waypoint = rooms.indexOf(staging);
     const flank = launched && wing === 2 && task.routeOrigin !== "manual" ? task.siegeFlankRoute : undefined;
-    const itinerary = flank?.length ? flank.join("|") : !launched && waypoint >= 0 ? rooms.slice(0, waypoint + 1).join("|") : route;
-    moveToTargetRoom(creep, launched ? target : staging, itinerary, travel);
+    const itinerary = flank?.length ? flank.join("|") : !launched && waypoint >= 0 ? rooms.slice(0, waypoint + 1).join("|") : rooms.join("|");
+    const preassembled = launched && staging !== rooms[rooms.length - 2];
+    const avoided = Object.keys(task.siegeAvoidUntil ?? {}).filter(name => !preassembled || !rooms.includes(name));
+    moveToTargetRoom(creep, launched ? target : staging, itinerary, avoided.length ? {...travel, avoidRooms: avoided} : travel);
   }
   return false;
 }

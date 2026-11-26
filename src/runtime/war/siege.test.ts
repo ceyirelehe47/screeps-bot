@@ -1,4 +1,5 @@
-import { shouldUseSiege, limitReinforcementBoosts, needsSiegeSuccessor } from "./siege";
+import * as observation from "./observation";
+import { shouldUseSiege, limitReinforcementBoosts, needsSiegeSuccessor, refreshSiegeApproach } from "./siege";
 import type { WarTask } from "./store";
 import { getBoostPartType } from "../boostParts";
 import { reinforcementBody, assembleSiegeWings, SIEGE_BODIES, SIEGE_BOOSTS, SIEGE_SLOTS } from "./siegeRoster";
@@ -161,4 +162,23 @@ it("寿命将尽时提前送医疗兵到目标房，老兵离场后才把战斗�
   assembleSiegeWings(task,[reserve],staging);
   expect(reserve.memory._siegeSlot).toBe(1);
   expect(reserve.memory._siegeReliefSlot).toBeUndefined();
+});
+
+it("集结房出现两名重装远程兵时自动换线，手填路线保持约定", () => {
+  const staging="E2N2", flank="E3N3";
+  const guard={owner:{username:"opponent"}, getActiveBodyparts:(p:BodyPartConstant) => p===RANGED_ATTACK ? 18 : 0} as Creep;
+  const old = Game.rooms[staging];
+  Game.rooms[staging] = {name:staging, find:()=>[guard,guard]} as unknown as Room;
+  const bypass=[order.sourceRoom,"E1N3","E2N3",flank,order.targetRoom];
+  const map=jest.spyOn(observation,"defaultWarMapRoute").mockReturnValue({rooms:bypass,trace:{hops:4,avoided:{[staging]:"contested_transit"},policy:"map_combat"}});
+  try {
+    const task:WarTask={...order,squad:"siege",routeOrigin:"manual",routeRooms:[order.sourceRoom,staging,order.targetRoom],siegeStagingRoom:staging};
+    refreshSiegeApproach(task);
+    expect(map).not.toHaveBeenCalled();
+    task.routeOrigin="map";
+    refreshSiegeApproach(task);
+    expect(task.routeRooms).toEqual(bypass);
+    expect(task.siegeStagingRoom).toBe(flank);
+    expect(task.siegeAvoidUntil?.[staging]).toBeGreaterThan(Game.time);
+  } finally { map.mockRestore(); if (old) Game.rooms[staging]=old; else delete Game.rooms[staging]; }
 });

@@ -85,7 +85,47 @@ export function needsSiegeSuccessor(task: WarTask, units: Creep[], spawnTime: nu
   return veteran.ticksToLive <= 3 * spawnTime + travel + 80;
 }
 
+/** 查看实际补兵通道，只在自动路线被成群敌兵控制时换线；保留尚无视野的近期危险。 */
+export function refreshSiegeApproach(task: WarTask): void {
+  if (task.routeOrigin !== "map" || !task.routeRooms || task.routeRooms.length < 3) return;
+  const avoid = task.siegeAvoidUntil ?? {};
+  for (const [name, until] of Object.entries(avoid)) if (until <= Game.time) delete avoid[name];
+  const transit = task.routeRooms.slice(1,-1);
+  const staging = task.siegeStagingRoom ?? transit[transit.length-1];
+  if (!Game.rooms[staging]) requestCombatObservation(staging);
+  for (const name of transit) {
+    const room = Game.rooms[name];
+    if (!room) continue;
+    const armed = room.find(FIND_HOSTILE_CREEPS).filter(h => h.owner.username !== "Source Keeper" &&
+      h.owner.username !== "Invader" && (h.getActiveBodyparts(RANGED_ATTACK) >= 5 || h.getActiveBodyparts(ATTACK) >= 5));
+    if (armed.length >= 2) avoid[name] = Game.time + 350;
+  }
+  if (Object.keys(avoid).length) task.siegeAvoidUntil = avoid;
+  else delete task.siegeAvoidUntil;
+  const blocked = transit.find(name => avoid[name] !== undefined);
+  if (!blocked) {
+    if (task.siegeStagingRoom && task.siegeStagingRoom !== transit[transit.length-1]) {
+      task.siegeStagingRoom = transit[transit.length-1];
+      delete task.siegeFlankRoute;
+    }
+    return;
+  }
+  const plan = defaultWarMapRoute(task.sourceRoom, task.targetRoom,
+    avoid[staging] ? staging : undefined, undefined, Object.keys(avoid));
+  if (plan.rooms && plan.rooms.length <= task.routeRooms.length + 5) {
+    task.routeRooms = plan.rooms;
+    task.siegeStagingRoom = plan.rooms[plan.rooms.length - 2];
+    task.routeTrace = plan.trace;
+    task.routePlannedAt = Game.time;
+  } else {
+    // 单一通道被守住时，先在危险房的前一房集结，让完整队伍迎敌。
+    task.siegeStagingRoom = task.routeRooms[task.routeRooms.indexOf(blocked) - 1] ?? task.sourceRoom;
+  }
+  delete task.siegeFlankRoute;
+}
+
 export function runSiegeCampaign(task: WarTask): void {
+  if (isDue("siege-route:" + task.targetRoom, 7)) refreshSiegeApproach(task);
   const target = Game.rooms[task.targetRoom];
   if (!target || isDue("siege-observe:"+task.targetRoom, 10)) requestCombatObservation(task.targetRoom);
   if (target && !target.find(FIND_HOSTILE_SPAWNS).length) {
@@ -131,7 +171,7 @@ export function runSiegeCampaign(task: WarTask): void {
     staging,
   );
   if (task.siegeWings?.[2] && task.routeOrigin !== "manual" && !task.siegeFlankRoute) {
-    const bypass = defaultWarMapRoute(staging, task.targetRoom, staging).rooms;
+    const bypass = defaultWarMapRoute(staging, task.targetRoom, staging, undefined, Object.keys(task.siegeAvoidUntil ?? {})).rooms;
     // 长途迂回会消耗寿命；没有短支路时保留原进场路线。
     task.siegeFlankRoute = bypass && bypass.length <= 5 ? bypass : [staging, task.targetRoom];
   }

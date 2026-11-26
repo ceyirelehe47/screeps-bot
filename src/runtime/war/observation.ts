@@ -109,8 +109,9 @@ function preferredT3Entrances(targetRoom: string, previous?: string): Set<string
   return safe.size && safe.size < entries.length ? safe : undefined;
 }
 
-export function defaultWarMapRoute(sourceRoom: string, targetRoom: string, avoidedIngress?: string, t3?: { previousIngress?: string }): { rooms?: string[]; trace: NonNullable<WarTask["routeTrace"]> } {
+export function defaultWarMapRoute(sourceRoom: string, targetRoom: string, avoidedIngress?: string, t3?: { previousIngress?: string }, excluded: readonly string[] = []): { rooms?: string[]; trace: NonNullable<WarTask["routeTrace"]> } {
   const avoided: Record<string, string> = {};
+  for (const name of excluded) if (name !== sourceRoom && name !== targetRoom) avoided[name] = "contested_transit";
   for (const room of Object.values(Game.rooms)) {
     if (room.name === sourceRoom || room.name === targetRoom || room.controller?.my || typeof room.find !== "function") continue;
     if (getRefillableHostileTowers(room).length > 0) avoided[room.name] = "current_tower_threat";
