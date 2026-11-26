@@ -7,6 +7,7 @@ import {
   getHostileTowerThreats as towerThreats,
   getRefillableHostileTowers as refillableTowers,
   towerAttackPowerAt as towerPowerAt,
+  TOWER_DRAIN_DAMAGE_RESERVE as DAMAGE_RESERVE,
   type TowerThreat,
 } from "@/runtime/combatTowerThreat";
 import { clearMovementState, moveToTarget } from "@/roles/shared";
@@ -38,8 +39,6 @@ export interface TowerDrainPairState {
 const MOVE_OPTIONS = { profile: "formation", plainCost: 2, swampCost: 8, reusePath: 3, maxRooms: 1, ignoreCreeps: false, avoidExitTiles: false } as const;
 const RETREAT_RATIO = 0.75;
 const plainSwamps = new WeakMap<Uint8Array, number[]>();
-// 退路预算至少保留1000HP，并按可能受损后的真实MOVE/HEAL重算。
-const DAMAGE_RESERVE = 1000;
 
 type DrainMemory = CreepMemory & { _warTowerDrain?: TowerDrainPairState };
 
@@ -662,13 +661,15 @@ export function runTowerDrainPair(creep: Creep, targetRoom: string, partnerConfi
   const room = Game.rooms[targetRoom];
   if (room?.controller?.my) { state.blocker = "target_owned"; publish(state, attacker, healer); return true; }
   if (creep === healer) healPair(healer, attacker);
-  if (state.retreatRoom && directionToRoom(targetRoom, state.retreatRoom) === undefined) {
+  const route = parseEncodedRouteRooms(attacker.memory.roleArgs?.[1]);
+  const plannedIngress = route[route.length - 1] === targetRoom ? route[route.length - 2] : undefined;
+  const newApproach = plannedIngress && plannedIngress !== state.retreatRoom && state.enteredAt === undefined
+    && attacker.room.name !== targetRoom && healer.room.name !== targetRoom;
+  if (state.retreatRoom && (newApproach || directionToRoom(targetRoom, state.retreatRoom) === undefined)) {
     delete state.retreatRoom; delete state.exitDirection; delete state.attackerEntry; delete state.healerEntry;
     delete state.reselectRequested; delete state.entrySelectedAt;
     state.phase = "approach"; state.blocker = undefined;
   }
-  const route = parseEncodedRouteRooms(attacker.memory.roleArgs?.[1]);
-  const plannedIngress = route[route.length - 1] === targetRoom ? route[route.length - 2] : undefined;
   const outsideMember = [attacker, healer].find(member => member.room.name !== targetRoom
     && (!plannedIngress || member.room.name === plannedIngress) && directionToRoom(targetRoom, member.room.name));
   if (!state.retreatRoom && outsideMember) {

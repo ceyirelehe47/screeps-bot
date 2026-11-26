@@ -31,7 +31,7 @@ export function requestWarRoomClear(
   const npcAuto = options?.squad !== undefined || options?.boostTier !== undefined ? undefined
     : options?.npcAuto ?? existing?.npcAuto ?? ((!existing || restarting) && (options?.reason === "npc_reservation" || Game.rooms[targetRoom] && isNpcWarTarget(Game.rooms[targetRoom])) ? true : undefined);
   const inheritedRoute = existing?.sourceRoom === sourceRoom ? existing.routeRooms : undefined;
-  const plan = options?.routeRooms || inheritedRoute ? undefined : defaultWarMapRoute(sourceRoom, targetRoom);
+  const plan = options?.routeRooms || inheritedRoute ? undefined : defaultWarMapRoute(sourceRoom, targetRoom, undefined, options?.squad === "t3Duo" ? {} : undefined);
   const routeRooms = options?.routeRooms ?? inheritedRoute ?? plan?.rooms;
   const room = Game.rooms[targetRoom];
   const identityChanged = npcAuto && room && classifyNpcWarTarget(room) === "other";

@@ -1,6 +1,5 @@
-import { getRefillableHostileTowers, towerAttackPowerAt } from "@/runtime/combatTowerThreat";
+import { getRefillableHostileTowers, minimumEntryTowerDamage } from "@/runtime/combatTowerThreat";
 import { effectivePower } from "@/runtime/powerBankCapability";
-import { isWalkableStructure } from "@/movement/common";
 
 const NPC_USERS = new Set(["Invader", "TooAngel"]);
 
@@ -28,17 +27,6 @@ export function assessUnboostedNpc(room: Room, route: string[] | undefined, atta
   const previous = route?.[route.length - 2];
   const direction = Object.entries(Game.map.describeExits(room.name) ?? {}).find(([, name]) => name === previous)?.[0];
   if (!direction) return { sufficient: false, reason: "entry_not_proven" };
-  const terrain = Game.map.getRoomTerrain(room.name);
-  const blocked = new Set(room.find(FIND_STRUCTURES).filter(structure => !isWalkableStructure(structure)).map(structure => `${structure.pos.x}:${structure.pos.y}`));
-  const tile = (coordinate: number) => Number(direction) === TOP ? { x: coordinate, y: 0 } : Number(direction) === BOTTOM ? { x: coordinate, y: 49 }
-    : Number(direction) === LEFT ? { x: 0, y: coordinate } : { x: 49, y: coordinate };
-  const open = (position: { x: number; y: number }) => terrain.get(position.x, position.y) !== TERRAIN_MASK_WALL && !blocked.has(`${position.x}:${position.y}`);
-  let minimum = Infinity;
-  for (let coordinate = 1; coordinate < 48; coordinate++) {
-    const red = tile(coordinate), green = tile(coordinate + 1);
-    if (!open(red) || !open(green)) continue;
-    const damage = Math.max(...[red, green].map(position => towers.reduce((sum, tower) => sum + towerAttackPowerAt(tower, position), 0)));
-    minimum = Math.min(minimum, damage);
-  }
+  const minimum = minimumEntryTowerDamage(room, Number(direction), towers);
   return { sufficient: minimum < heal, reason: minimum < heal ? "entry_damage_below_heal" : "entry_damage_exceeds_heal" };
 }

@@ -13,7 +13,8 @@ import { chooseWarOrder, selectAutomaticTactic } from "./campaign";
 function refreshRoute(task: WarTask): void {
   if (!task.routeTrace && task.routeRooms) task.routeTrace = { hops: Math.max(0, task.routeRooms.length - 1), avoided: {}, policy: task.routeOrigin === "map" ? "map_combat" : "manual" };
   if (task.routeOrigin === "map" && warPeriodicDue(task.routePlannedAt, task.targetRoom)) {
-    const plan = defaultWarMapRoute(task.sourceRoom, task.targetRoom, task.review?.avoidedIngress);
+    const t3 = task.squad === "t3Duo" ? { previousIngress: task.routeRooms?.[task.routeRooms.length - 2] } : undefined;
+    const plan = defaultWarMapRoute(task.sourceRoom, task.targetRoom, task.review?.avoidedIngress, t3);
     const route = plan.rooms;
     task.routeTrace = plan.trace;
     task.routePlannedAt = Game.time;

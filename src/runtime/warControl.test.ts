@@ -822,6 +822,24 @@ describe("towerDrainDuo 战争控制", () => {
     expect(Memory.data!.war![room.name].activeGeneration).toBeUndefined();
   });
 
+  it("T3 自动路线从能承受两轮塔伤的入口接敌，手动路线照常执行", () => {
+    const target = "E3N57", source = "E1N57", west = "E2N57", north = "E3N58";
+    const towers = Array.from({ length: 6 }, (_, i) => ({
+      structureType: STRUCTURE_TOWER, pos: new MockPos(2 + i, 25, target), store: createMockStore({ energy: 1000 }),
+    } as unknown as StructureTower));
+    Game.rooms[target] = createTargetRoom([], towers);
+    Game.map.describeExits = jest.fn(() => ({ [LEFT]: west, [TOP]: north }));
+    Game.map.getRoomTerrain = jest.fn(() => ({ get: (x: number, y: number) =>
+      x === 0 && (y < 22 || y > 27) ? TERRAIN_MASK_WALL : 0 })) as unknown as GameMap["getRoomTerrain"];
+    Game.map.findRoute = jest.fn((_from, to) => (to === north ? ["E1N58", "E2N58", north] : [west, target])
+      .map(room => ({ exit: RIGHT, room }))) as GameMap["findRoute"];
+    startWarRoom(target, source, { squad: "t3Duo" });
+    expect(Memory.data!.war![target].routeRooms).toEqual([source, "E1N58", "E2N58", north, target]);
+    const direct = [source, west, target];
+    startWarRoom(target, source, { squad: "t3Duo", routeRooms: direct });
+    expect(Memory.data!.war![target].routeRooms).toEqual(direct);
+  });
+
   it("地图路线记录跳数和当前敌情，经济危险名单不造成长绕行，显式路线不被刷新", () => {
     const threatened = createTargetRoom([], [{ structureType: STRUCTURE_TOWER, pos: new MockPos(25, 25, "E2N57"), store: createMockStore({ [RESOURCE_ENERGY]: 1000 }) } as unknown as StructureTower], [], "E2N57");
     Game.rooms.E2N57 = threatened;

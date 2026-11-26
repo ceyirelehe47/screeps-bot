@@ -1,9 +1,9 @@
 import { getTickContextService } from "@/runtime/runtimeServices";
 import { getSquadPolicy } from "./squadPolicy/index";
-import { getRefillableHostileTowers } from "@/runtime/combatTowerThreat";
+import { getRefillableHostileTowers, minimumEntryTowerDamage, TOWER_DRAIN_DAMAGE_RESERVE } from "@/runtime/combatTowerThreat";
 import { isRebuildStructureRelevant } from "@/runtime/warRebuildScope";
 import type { HostilePresenceSnapshot, WarTask } from "./store";
-import { WAR_CONTROLLER_CORE_STRUCTURES } from "./constants";
+import { T3_ATTACKER_BODY, T3_HEALER_BODY, WAR_CONTROLLER_CORE_STRUCTURES } from "./constants";
 import { isTowerDrainDuoTask } from "./squadPolicy/index";
 
 export let warMemo: { game: Game; tick: number; hostiles: Map<string, { room: Room; value: HostilePresenceSnapshot }> } | undefined;
@@ -95,7 +95,21 @@ export function isControllerDefeated(room: Room): boolean {
   return !!controller && (controller.my || !controller.owner || controller.level <= 0);
 }
 
-export function defaultWarMapRoute(sourceRoom: string, targetRoom: string, avoidedIngress?: string): { rooms?: string[]; trace: NonNullable<WarTask["routeTrace"]> } {
+function preferredT3Entrances(targetRoom: string, previous?: string): Set<string> | undefined {
+  const room = Game.rooms[targetRoom];
+  if (!room) return previous ? new Set([previous]) : undefined;
+  const towers = getRefillableHostileTowers(room);
+  if (!towers.length) return undefined;
+  const hits = Math.min(T3_ATTACKER_BODY.length, T3_HEALER_BODY.length) * 100;
+  const entries = Object.entries(Game.map.describeExits?.(targetRoom) ?? {});
+  const safe = new Set<string>();
+  for (const [direction, name] of entries) {
+    if (name && minimumEntryTowerDamage(room, Number(direction), towers) * 2 + TOWER_DRAIN_DAMAGE_RESERVE < hits) safe.add(name);
+  }
+  return safe.size && safe.size < entries.length ? safe : undefined;
+}
+
+export function defaultWarMapRoute(sourceRoom: string, targetRoom: string, avoidedIngress?: string, t3?: { previousIngress?: string }): { rooms?: string[]; trace: NonNullable<WarTask["routeTrace"]> } {
   const avoided: Record<string, string> = {};
   for (const room of Object.values(Game.rooms)) {
     if (room.name === sourceRoom || room.name === targetRoom || room.controller?.my || typeof room.find !== "function") continue;
@@ -104,11 +118,12 @@ export function defaultWarMapRoute(sourceRoom: string, targetRoom: string, avoid
   }
   const trace: NonNullable<WarTask["routeTrace"]> = { hops: 0, avoided, policy: "map_combat" };
   if (!/^[WE]\d+[NS]\d+$/.test(sourceRoom) || !/^[WE]\d+[NS]\d+$/.test(targetRoom) || typeof Game.map?.findRoute !== "function") return { trace };
-  if (avoidedIngress) {
+  const preferred = t3 ? preferredT3Entrances(targetRoom, t3.previousIngress) : undefined;
+  if (avoidedIngress || preferred) {
     const entries = Object.values(Game.map.describeExits?.(targetRoom) ?? {});
     let best: string[] | undefined;
     for (const entry of entries) {
-      if (!entry || entry === avoidedIngress || avoided[entry] || Game.map.getRoomStatus?.(entry)?.status === "closed") continue;
+      if (!entry || (preferred && !preferred.has(entry)) || entry === avoidedIngress || avoided[entry] || Game.map.getRoomStatus?.(entry)?.status === "closed") continue;
       const path = entry === sourceRoom ? [] : Game.map.findRoute(sourceRoom, entry, {
         routeCallback: name => name === targetRoom || avoided[name] ? Infinity : 1,
       });
@@ -118,8 +133,10 @@ export function defaultWarMapRoute(sourceRoom: string, targetRoom: string, avoid
       rooms.push(targetRoom);
       if (!best || rooms.length < best.length) best = rooms;
     }
-    trace.hops = best ? best.length - 1 : 0;
-    return { rooms: best, trace };
+    if (best || avoidedIngress) {
+      trace.hops = best ? best.length - 1 : 0;
+      return { rooms: best, trace };
+    }
   }
   const route = Game.map.findRoute(sourceRoom, targetRoom, { routeCallback: name => avoided[name] ? Infinity : 1 });
   if (!Array.isArray(route)) return { trace };

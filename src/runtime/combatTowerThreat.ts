@@ -1,3 +1,7 @@
+import { isWalkableStructure } from "@/movement/common";
+
+export const TOWER_DRAIN_DAMAGE_RESERVE = 1000;
+
 /** 清剿配置评估与执行门共用当前塔伤；只将已发生的补能视为威胁。 */
 export function towerAttackPowerAt(tower: StructureTower, tile: { x: number; y: number }): number {
   const distance = Math.max(Math.abs(tower.pos.x - tile.x), Math.abs(tower.pos.y - tile.y));
@@ -30,4 +34,21 @@ export function getHostileTowerThreats(room: Room): TowerThreat[] {
 
 export function getRefillableHostileTowers(room: Room): StructureTower[] {
   return getHostileTowerThreats(room).filter(threat => Number.isFinite(threat.refillAt)).map(threat => threat.tower);
+}
+
+/** 候选房边两个相邻可通行格的最低塔伤。到场时仍需核实两侧路径、敌军和队形。 */
+export function minimumEntryTowerDamage(room: Room, direction: number, towers: StructureTower[]): number {
+  const terrain = Game.map.getRoomTerrain(room.name);
+  const blocked = new Set(room.find(FIND_STRUCTURES).filter(structure => !isWalkableStructure(structure)).map(structure => `${structure.pos.x}:${structure.pos.y}`));
+  const tile = (coordinate: number) => direction === TOP ? { x: coordinate, y: 0 } : direction === BOTTOM ? { x: coordinate, y: 49 }
+    : direction === LEFT ? { x: 0, y: coordinate } : { x: 49, y: coordinate };
+  const open = (position: { x: number; y: number }) => terrain.get(position.x, position.y) !== TERRAIN_MASK_WALL && !blocked.has(`${position.x}:${position.y}`);
+  let minimum = Infinity;
+  for (let coordinate = 1; coordinate < 48; coordinate++) {
+    const red = tile(coordinate), green = tile(coordinate + 1);
+    if (!open(red) || !open(green)) continue;
+    const damage = Math.max(...[red, green].map(position => towers.reduce((sum, tower) => sum + towerAttackPowerAt(tower, position), 0)));
+    minimum = Math.min(minimum, damage);
+  }
+  return minimum;
 }
