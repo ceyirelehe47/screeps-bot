@@ -1,3 +1,4 @@
+import { damageAfterTough } from "./powerBankCapability";
 import { isDue } from "@/runtime/cadence";
 import { forEachIsolatedRoom, runIsolatedTowerOperation } from "@/runtime/runtimeIsolation";
 import { setTowerBurstTarget } from "@/runtime/defenseCoordination";
@@ -17,6 +18,9 @@ const TOWER_FOCUS_STALL_TICKS = 2;
 const TOWER_SPREAD_PROBE_DURATION = 3;
 
 interface TowerCombatRoomState {
+  armorTarget?: string;
+  armorUntil?: number;
+  nextArmorProbe?: number;
   focusTargetId?: string;
   lastFocusHits?: number;
   stalledTicks?: number;
@@ -396,6 +400,51 @@ function chooseCoordinatedBurstTarget(
   return combinedBurst > incomingHeal ? preferredTarget : null;
 }
 
+/** 先按上一帧真正收到的治疗估计首轮，随后按全部可用治疗保守估算。 */
+export function volleysToBreakArmor(target: Creep, raw: number, recentHealing: number, maxHealing: number): number {
+  if (raw <= maxHealing || !target.body.some(p => p.type === TOUGH && p.hits > 0 && p.boost)) return Infinity;
+  const body = target.body.map(part => ({ ...part }));
+  let hits = target.hits;
+  for (let volley = 1; volley <= 8; volley++) {
+    const loss = damageAfterTough(body, raw);
+    const next = Math.min(target.hitsMax, hits - loss + (volley === 1 ? recentHealing : maxHealing));
+    if (next <= 0) return volley;
+    if (next >= hits) return Infinity;
+    hits = next;
+    let remaining = hits;
+    for (let i = body.length - 1; i >= 0; i--) {
+      body[i].hits = Math.min(100, remaining);
+      remaining -= body[i].hits;
+    }
+  }
+  return Infinity;
+}
+
+function findArmorBurst(room: Room, hostiles: Creep[], analysis: TowerCombatAnalysis, state: TowerCombatRoomState): Creep | undefined {
+  if (state.armorTarget && (state.armorUntil ?? 0) >= Game.time) {
+    const current = hostiles.find(h => h.id === state.armorTarget);
+    if (current) return current;
+  }
+  if ((state.nextArmorProbe ?? 0) > Game.time || !room.getEventLog || !hostiles.some(h => h.body.some(p => p.type === TOUGH && p.boost))) return;
+  const healed = new Map<string, number>();
+  for (const event of room.getEventLog()) if (event.event === EVENT_HEAL)
+    healed.set(event.data.targetId, (healed.get(event.data.targetId) ?? 0) + event.data.amount);
+  let best: Creep | undefined;
+  let limit = Infinity;
+  for (const hostile of hostiles) {
+    const raw = [...analysis.towerAttackByTowerId.values()].reduce((sum,tower) => sum + (tower.get(hostile.id) ?? 0), 0);
+    const volleys = volleysToBreakArmor(hostile, raw, healed.get(hostile.id) ?? 0, analysis.incomingHealByHostileId.get(hostile.id) ?? 0);
+    if (volleys < limit) { best = hostile; limit = volleys; }
+  }
+  state.nextArmorProbe = Game.time + 5;
+  if (best) {
+    state.armorTarget = best.id;
+    state.armorUntil = Game.time + limit;
+    state.nextArmorProbe = state.armorUntil + 10;
+  }
+  return best;
+}
+
 function runTowerCombat(room: Room, towers: StructureTower[], hostiles: Creep[], woundedCreeps: Creep[], emergencyRamparts: StructureRampart[]): boolean {
   if (hostiles.length <= 0 || towers.length <= 0) {
     return false;
@@ -438,7 +487,7 @@ function runTowerCombat(room: Room, towers: StructureTower[], hostiles: Creep[],
   const state = ensureTowerCombatRoomState(room.name);
   const analysis = createTowerCombatAnalysis(room.name, attackTowers, hostiles);
   const readyTowers = attackTowers.filter(tower => analysis.towerAttackByTowerId.has(tower.id));
-  const coordinatedBurstTarget = chooseCoordinatedBurstTarget(room, combatHostiles, analysis);
+  const coordinatedBurstTarget = chooseCoordinatedBurstTarget(room, combatHostiles, analysis) ?? findArmorBurst(room, combatHostiles, analysis, state);
 
   if (!coordinatedBurstTarget && isAllHostilesImmune(analysis, combatHostiles)) {
     for (const tower of readyTowers) runIsolatedTowerOperation(room.name, tower.id, () => runTowerPeaceFlow(tower, emergencyRamparts, [], []));
