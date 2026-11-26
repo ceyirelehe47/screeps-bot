@@ -698,6 +698,8 @@ function runCounterstrikeApproach(creep: Creep): boolean {
 }
 
 function attackAdjacentHostileOnRoute(creep: Creep): boolean {
+  const nearby = findAdjacentHostiles(creep);
+  if (nearby.length === 0) return false;
   const protectedPositions = new Set(
     findAdjacentStructures(creep)
       .filter(
@@ -706,7 +708,7 @@ function attackAdjacentHostileOnRoute(creep: Creep): boolean {
       )
       .map((rampart) => `${rampart.pos.x}:${rampart.pos.y}`),
   );
-  const adjacent = findAdjacentHostiles(creep).filter(
+  const adjacent = nearby.filter(
     (hostile) =>
       hostile.owner?.username &&
       hostile.owner.username !== "Source Keeper" &&
@@ -854,6 +856,14 @@ function waitForWarHealerFormation(creep: Creep, targetRoom: string, encodedRout
   return !creep.pos.isNearTo(healer.pos);
 }
 
+function runAttackerDrainManeuver(creep: Creep, targetRoom?: string, partnerConfigName?: string, tactic?: string): boolean {
+  if (!targetRoom || (tactic !== "towerDrainDuo" && tactic !== "t3TowerDrainDuo")) return false;
+  if (!runTowerDrainPair(creep, targetRoom, partnerConfigName ?? "", tactic === "t3TowerDrainDuo")) return false;
+  // 撤退、恢复与进场占用移动指令，同一 tick 仍可打击相邻的敌兵。
+  attackAdjacentHostileOnRoute(creep);
+  return true;
+}
+
 export const meleeAttackerRole: RoleFactory = (
   targetRoom?: string,
   encodedRouteRooms?: string,
@@ -868,7 +878,7 @@ export const meleeAttackerRole: RoleFactory = (
   },
   source: (creep): boolean => {
     synchronizeWarPartnerConfigName(creep, partnerConfigName);
-    if ((tactic === "towerDrainDuo" || tactic === "t3TowerDrainDuo") && targetRoom && runTowerDrainPair(creep, targetRoom, partnerConfigName ?? "", tactic === "t3TowerDrainDuo")) return false;
+    if (runAttackerDrainManeuver(creep, targetRoom, partnerConfigName, tactic)) return false;
     if (targetRoom && waitForWarHealerFormation(creep, targetRoom, encodedRouteRooms)) {
       attackAdjacentHostileOnRoute(creep);
       return false;
@@ -883,7 +893,7 @@ export const meleeAttackerRole: RoleFactory = (
   },
   target: (creep): boolean => {
     synchronizeWarPartnerConfigName(creep, partnerConfigName);
-    if ((tactic === "towerDrainDuo" || tactic === "t3TowerDrainDuo") && targetRoom && runTowerDrainPair(creep, targetRoom, partnerConfigName ?? "", tactic === "t3TowerDrainDuo")) return false;
+    if (runAttackerDrainManeuver(creep, targetRoom, partnerConfigName, tactic)) return false;
     if (targetRoom && waitForWarHealerFormation(creep, targetRoom, encodedRouteRooms)) {
       attackAdjacentHostileOnRoute(creep);
       return false;

@@ -92,6 +92,27 @@ describe("meleeAttackerRole 目标策略与移动请求安全边界", () => {
     });
   });
 
+  it.each(["source", "target"] as const)("耗塔机动接管 %s 时仍反击暴露的贴身敌兵", phase => {
+    const attacker = createMockPowerBankCreep("meleeAttacker", { roomName: TARGET_ROOM, x: 25, y: 25 });
+    const enemy = hostileCreep("exposed", 1500, { [ATTACK]: 10 });
+    const covered = hostileCreep("covered", 100, { [ATTACK]: 10 });
+    covered.pos = new MockPos(24, 25, TARGET_ROOM) as unknown as RoomPosition;
+    const rampart = hostileStructure(STRUCTURE_RAMPART, "cover", 24, 25, 100000);
+    attacker.pos.findInRange = jest.fn(kind => kind === FIND_HOSTILE_CREEPS ? [covered, enemy] : [rampart]) as RoomPosition["findInRange"];
+    attacker.attack = jest.fn(() => OK);
+    const gate = jest.spyOn(towerDrainPair, "runTowerDrainPair").mockReturnValue(true);
+    try {
+      meleeAttackerRole(TARGET_ROOM, "", "", "", HEALER_CONFIG, "t3TowerDrainDuo")[phase](attacker);
+      expect(gate).toHaveBeenCalledWith(attacker, TARGET_ROOM, HEALER_CONFIG, true);
+      expect(attacker.attack).toHaveBeenCalledTimes(1);
+      expect(attacker.attack).toHaveBeenCalledWith(enemy);
+      expect(moveToTarget).not.toHaveBeenCalled();
+      expect(moveToTargetRoom).not.toHaveBeenCalled();
+    } finally {
+      gate.mockRestore();
+    }
+  });
+
   it("补剿的旧被动建筑不再选为目标，新建筑和生产设施仍是目标", () => {
     const old = hostileStructure(STRUCTURE_EXTRACTOR, "old-extractor", 25, 25);
     const attacker = createMockPowerBankCreep("meleeAttacker", { roomName: TARGET_ROOM, memory: { configName: ATTACKER_CONFIG } });
