@@ -108,6 +108,34 @@ function pickTarget(creep: Creep, eligible: Creep[]): Creep | null {
   return best;
 }
 
+function hasSplashCollateral(creep: Creep, hostiles: Creep[], eligible: Creep[]): boolean {
+  if (hostiles.length !== eligible.length && hostiles.some(other =>
+    creep.pos.inRangeTo(other.pos, 3) && !eligible.includes(other))) return true;
+  if (creep.room.find(FIND_HOSTILE_POWER_CREEPS).some(other => creep.pos.inRangeTo(other.pos, 3))) return true;
+  return creep.room.find(FIND_STRUCTURES).some(structure =>
+    structure.hits > 0 && creep.pos.inRangeTo(structure.pos, 3)
+    && (structure.structureType === STRUCTURE_POWER_BANK || ("owner" in structure && !!structure.owner && !structure.my)));
+}
+
+function fireAtHostiles(
+  creep: Creep, target: Creep, eligible: Creep[], hostiles: Creep[], reason: RemoteDefenseReason | null,
+): void {
+  const inRange = eligible.filter(hostile => creep.pos.inRangeTo(hostile.pos, 3));
+  const shot = inRange.includes(target) ? target : pickTarget(creep, inRange);
+  if (!shot) return;
+
+  // 按距离估算每部件的群攻伤害，打平时保留集火。
+  if (reason !== "npc_invader_core" && inRange.length > 1) {
+    const damageByRange = [10, 10, 4, 1];
+    const splashPower = inRange.reduce((sum, hostile) => sum + damageByRange[creep.pos.getRangeTo(hostile.pos)], 0);
+    if (splashPower > RANGED_ATTACK_POWER && !hasSplashCollateral(creep, hostiles, eligible)) {
+      creep.rangedMassAttack();
+      return;
+    }
+  }
+  creep.rangedAttack(shot);
+}
+
 function pickInvaderCoreTarget(
   creep: Creep,
   defenseReason: RemoteDefenseReason | null,
@@ -307,18 +335,8 @@ export const remoteDefenderRole: RoleFactory = (...args: string[]) => {
         return false;
       }
 
-      if (targetRange <= 3) {
-        const eligibleInRange3 = eligible.filter((h) => creep.pos.getRangeTo(h.pos) <= 3);
-        if (defenseReason === "npc_invader_core") {
-          // Core clearance is always single-target, even while clearing an
-          // Invader escort. Mass attack could damage unrelated player structures.
-          creep.rangedAttack(target);
-        } else if (eligibleInRange3.length >= 3) {
-          creep.rangedMassAttack();
-        } else {
-          creep.rangedAttack(target);
-        }
-      } else {
+      fireAtHostiles(creep, target, eligible, hostiles, defenseReason);
+      if (targetRange > 3) {
         moveToTarget(creep, target, 3, { reusePath: 5, avoidExitTiles: true });
       }
 

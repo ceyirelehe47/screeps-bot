@@ -8,6 +8,7 @@ jest.mock("@/runtime/cpuPhaseProfiler", () => ({
   measureCreepIntent: (fn: () => any) => fn(),
 }));
 
+import { moveToTarget } from "@/roles/shared";
 import { remoteDefenderRole } from "@/roles/remoteDefender";
 import { createMockPowerBankCreep, MockPos } from "@mock/powerBank";
 import type { RemoteMiningTask, RemoteDefenseReason } from "@/runtime/remoteMining";
@@ -143,6 +144,52 @@ describe("remoteDefenderRole", () => {
 
       expect(creep.rangedAttack).toHaveBeenCalledWith(hostile);
       expect(creep.rangedMassAttack).not.toHaveBeenCalled();
+    });
+
+    function engage(hostiles: Creep[], structures: Structure[] = []) {
+      const creep = makeCreep();
+      creep.room.find = jest.fn((type: number) => {
+        if (type === FIND_HOSTILE_CREEPS) return hostiles;
+        if (type === FIND_STRUCTURES) return structures;
+        return [];
+      }) as Room["find"];
+      remoteDefenderRole(TARGET_ROOM).target(creep);
+      return creep;
+    }
+
+    it("focuses one of three enemies at range three", () => {
+      const hostiles = [22, 25, 28].map(y => makeHostile({ x: 28, y }));
+      const creep = engage(hostiles);
+      expect(creep.rangedAttack).toHaveBeenCalledWith(hostiles[0]);
+      expect(creep.rangedMassAttack).not.toHaveBeenCalled();
+    });
+
+    it("uses mass attack against two adjacent enemies", () => {
+      const creep = engage([makeHostile({ x: 26 }), makeHostile({ y: 26 })]);
+      expect(creep.rangedMassAttack).toHaveBeenCalledTimes(1);
+    });
+
+    it("fires at a reachable enemy while advancing toward a distant healer", () => {
+      const healer = makeHostile({ x: 32, body: [{ type: HEAL, hits: 100 }] });
+      const nearby = makeHostile({ x: 28 });
+      const creep = engage([healer, nearby]);
+      expect(creep.rangedAttack).toHaveBeenCalledWith(nearby);
+      expect(moveToTarget).toHaveBeenCalledWith(creep, healer, 3, expect.any(Object));
+    });
+
+    it("keeps single fire when mass attack would hit an uninvolved unit or structure", () => {
+      const invaders = [makeHostile({ x: 26 }), makeHostile({ y: 26 })];
+      const neutral = makeHostile({ y: 28, username: "OtherPlayer" });
+      expect(engage([...invaders, neutral]).rangedMassAttack).not.toHaveBeenCalled();
+      const tower = makeHostileStructure({ type: STRUCTURE_TOWER, x: 26, y: 25 });
+      expect(engage(invaders, [tower]).rangedMassAttack).not.toHaveBeenCalled();
+    });
+
+    it("keeps escort fire single-target during Invader Core clearance", () => {
+      setupMemory(setupTask("npc_invader_core"));
+      const creep = engage([makeHostile({ x: 26 }), makeHostile({ y: 26 }), makeHostile({ x: 24 })]);
+      expect(creep.rangedMassAttack).not.toHaveBeenCalled();
+      expect(creep.rangedAttack).toHaveBeenCalledTimes(1);
     });
 
     it("uses single-target ranged attack on the Invader Core and ignores player structures", () => {
