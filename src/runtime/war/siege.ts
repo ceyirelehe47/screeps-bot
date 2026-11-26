@@ -168,7 +168,7 @@ export function runSiegeCampaign(task: WarTask): void {
       const available=labs.filter(l=>!reserved.has(l.id) && l.id!==Memory.cfg?.homeDefense?.rooms?.[home.name]?.boostLabId);
       task.siegeExhausted = limitReinforcementBoosts(amounts, (r) => {
         const assigned=getAssignedPowerBankBoostLabId(taskId,r);
-        const loaded=available.filter(l=>l.mineralType===r).sort((a,b)=>b.store.getUsedCapacity(r)-a.store.getUsedCapacity(r))[0];
+        const loaded=available.filter(l=>l.mineralType===r).sort((a,b)=>(b.store.getUsedCapacity(r)??0)-(a.store.getUsedCapacity(r)??0))[0];
         const lab=loaded??available.find(l=>l.id===assigned);
         return (home.storage?.store.getUsedCapacity(r) ?? 0) + (home.terminal?.store.getUsedCapacity(r) ?? 0) +
           (lab?.store.getUsedCapacity(r) ?? 0) + (lab?countCarrierCargo(lab.id,r):0);

@@ -208,8 +208,8 @@ function selectAvailableLabs(
     };
     // 已装入正确矿的实验室优先，避免把守军的同一种强化依次搬进所有空实验室。
     for(const r of compounds){
-      const candidates=available.filter(l=>l.mineralType===r && l.store.getUsedCapacity(r)>0);
-      take(r,candidates.sort((a,b)=>b.store.getUsedCapacity(r)-a.store.getUsedCapacity(r))[0]);
+      const candidates=available.filter(l=>l.mineralType===r && (l.store.getUsedCapacity(r)??0)>0);
+      take(r,candidates.sort((a,b)=>(b.store.getUsedCapacity(r)??0)-(a.store.getUsedCapacity(r)??0))[0]);
     }
     for(const r of compounds.filter(c=>!chosen.has(c))){
       const previous=Object.values(existingPrep?.labs??{}).find(a=>a.compound===r);
