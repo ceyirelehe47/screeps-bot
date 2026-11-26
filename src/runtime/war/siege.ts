@@ -1,3 +1,4 @@
+import { isDue } from "@/runtime/cadence";
 import { getBoostPartType, countBoostableParts } from "@/runtime/boostParts";
 import { findBestDonorRoom, prepareBoosts } from "@/runtime/powerBankBoost";
 import { selectLeastLoadedSpawn } from "@/runtime/spawnHelpers";
@@ -82,7 +83,7 @@ export function needsSiegeSuccessor(task: WarTask, units: Creep[], spawnTime: nu
 
 export function runSiegeCampaign(task: WarTask): void {
   const target = Game.rooms[task.targetRoom];
-  if (!target || Game.time % 10 === 0) requestCombatObservation(task.targetRoom);
+  if (!target || isDue("siege-observe:"+task.targetRoom, 10)) requestCombatObservation(task.targetRoom);
   if (target && !target.find(FIND_HOSTILE_SPAWNS).length) {
     task.clearSince ??= Game.time;
     if (target.controller?.my || Game.time - task.clearSince >= 100) transitionWarTaskTerminal(task, "done", null);

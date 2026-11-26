@@ -18,6 +18,15 @@ function runSiegeUnit(creep: Creep, target: string, route: string): boolean {
     return false;
   if (creep.room.name === target) {
     runSiegeFormation(creep, task);
+    // 被拆的 Spawn 会重开工。碰到可踩掉的工地时只借一步，最后一座消失后持续清场。
+    const sites = creep.room.find(FIND_HOSTILE_CONSTRUCTION_SITES).filter(s => s.structureType === STRUCTURE_SPAWN &&
+      !creep.room.lookForAt(LOOK_STRUCTURES, s.pos).some(p => p.structureType === STRUCTURE_RAMPART));
+    if (sites.length && !creep.fatigue) {
+      const site = creep.pos.findClosestByRange(sites);
+      if (site && creep.pos.isNearTo(site)) creep.move(creep.pos.getDirectionTo(site));
+      else if (site && !creep.room.find(FIND_HOSTILE_SPAWNS).length && creep.getActiveBodyparts(WORK))
+        moveToTarget(creep, site, 0, { ...travel, maxRooms: 1 });
+    }
     return false;
   }
   const wing = Math.floor(siegeSlot(creep) / 4);

@@ -1,3 +1,5 @@
+import { searchMovementPath } from "@/movement/pathSearch";
+import { isDue } from "@/runtime/cadence";
 import { towerAttackPowerAt } from "@/runtime/combatTowerThreat";
 import { isWalkableStructure } from "@/movement/common";
 import { damageAfterTough, effectivePower } from "@/runtime/powerBankCapability";
@@ -126,8 +128,15 @@ function fire(
   approach: Structure[],
   core?: Structure,
 ): void {
-  const enemy = nearby.filter((h) => creep.pos.inRangeTo(h, 3)).sort((a, b) => a.hits - b.hits)[0];
-  if (core && weaponRange(creep) === 3 && creep.pos.inRangeTo(core, 3)) creep.rangedAttack(core);
+  const enemies = nearby.filter((h) => creep.pos.inRangeTo(h, 3)).sort((a, b) => a.hits - b.hits);
+  const enemy = enemies[0];
+  const mass = enemies.reduce((n, h) => {
+    const distance = creep.pos.getRangeTo(h);
+    return n + (distance <= 1 ? 1 : distance === 2 ? 0.4 : 0.1);
+  }, 0);
+  const focus = core ?? target;
+  if (mass >= (core ? 3 : 1.5) && (!core || core.hits > 5000)) creep.rangedMassAttack();
+  else if (focus && weaponRange(creep) === 3 && creep.pos.inRangeTo(focus, 3)) creep.rangedAttack(focus);
   else if (enemy) creep.rangedAttack(enemy);
   else if (target && creep.pos.inRangeTo(target, 3)) creep.rangedAttack(target);
   if (!creep.getActiveBodyparts(WORK)) return;
@@ -389,7 +398,7 @@ export function runSiegeFormation(creep: Creep, task: WarTask): void {
   if (existingStrike && !strikeSpawn) delete strikes[wing];
   if (
     original &&
-    (group.length < 4 || Game.time % 4 === wing) &&
+    (group.length < 4 || isDue("siege-position:"+room.name, 4, Game.time, wing)) &&
     group.some((member) => member.getActiveBodyparts(WORK) && !member.pos.inRangeTo(original, weaponRange(member)))
   ) {
     const positions = findSpawnAssaultTiles(room, group, original);
@@ -470,7 +479,7 @@ export function runSiegeFormation(creep: Creep, task: WarTask): void {
       if (x >= 1 && x <= 47 && y >= 1 && y <= 47 && (x !== anchor.x || y !== anchor.y)) lanes.set(x, y, 255);
     }
   }
-  const path = PathFinder.search(origin, goals, { maxRooms: 1, maxOps: 7000, roomCallback: () => lanes });
+  const path = searchMovementPath(origin, goals, { maxRooms: 1, maxOps: 7000, roomCallback: () => lanes });
   const next = path.path[0];
   if (!path.incomplete && next) {
     const obstacles = offsets.flatMap((d) => {
