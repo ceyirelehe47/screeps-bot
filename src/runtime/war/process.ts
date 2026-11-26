@@ -78,7 +78,7 @@ function confirmClear(task: WarTask): void {
 export function processTask(task: WarTask): void {
   task.statusSince ??= task.createdAt;
   if (task.squad === "siege") {
-    refreshRoute(task);
+    if (!task.siegeStagingRoom) refreshRoute(task);
     runSiegeCampaign(task);
     return;
   }

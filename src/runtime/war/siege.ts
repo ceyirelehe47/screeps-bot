@@ -21,21 +21,23 @@ export function runSiegeCampaign(task: WarTask): void {
   delete task.clearSince;
   const members = SIEGE_SLOTS.map((job, index) => {
     const name = siegeConfigName(task, index);
-    return { job, name, unit: getLiveCreepsByConfig(name)[0] };
+    return { job, name, index, unit: getLiveCreepsByConfig(name)[0] };
   });
-  const staging = task.routeRooms?.[task.routeRooms.length - 2] ?? task.sourceRoom;
-  const assembled = members.filter(s => s.unit?.memory.ready && s.unit.room.name === staging);
-  if (task.siegeLaunched || assembled.length >= 5 && assembled.some(s => s.job === "breacher")) {
-    task.siegeLaunched = true;
-    setTaskStatus(task, "clearing");
-  } else setTaskStatus(task, "staging");
+  const staging = task.siegeStagingRoom ??= task.routeRooms?.[task.routeRooms.length - 2] ?? task.sourceRoom;
+  const wings = task.siegeWings ??= {};
+  for (const start of [0, 4]) {
+    const team = members.slice(start, start + 4);
+    if (team.every(s => s.unit?.memory.ready && s.unit.room.name === staging)) wings[start / 4] = true;
+  }
+  if (Object.values(wings).some(Boolean)) task.siegeLaunched = true;
+  setTaskStatus(task, task.siegeLaunched ? "clearing" : "staging");
   if (!canStartOutboundMission(task.sourceRoom) && !canContinueWarMission(task)) return;
   const spawns = getSpawnsForRoom(task.sourceRoom);
   if (!spawns.length) return;
   const store = ensureConfigStore();
   const taskId = getLegacyWarBoostTaskId(task);
   const amounts = new Map<ResourceConstant, number>();
-  const slots = members.map(({ job, name, unit }) => {
+  const slots = members.map(({ job, name, unit, index }) => {
     const spent = !!task.oneShot && store[name]?.spawnOnce?.queuedAt !== undefined;
     const body = SIEGE_BODIES[job];
     for (const compound of SIEGE_BOOSTS[job]) {
@@ -44,7 +46,7 @@ export function runSiegeCampaign(task: WarTask): void {
         : body.filter(part => part === getBoostPartType(compound)).length;
       if (count) amounts.set(compound, (amounts.get(compound) ?? 0) + count * LAB_BOOST_MINERAL);
     }
-    return { name, unit, spent, job, body };
+    return { name, unit, spent, job, body, index };
   });
   const prep = prepareBoosts(taskId, task.sourceRoom, 0, amounts, { requireLabEnergy: true });
   task.boostStatus = prep.status;
@@ -55,9 +57,10 @@ export function runSiegeCampaign(task: WarTask): void {
     return;
   }
   const route = task.routeRooms?.join("|") ?? "";
-  for (const { name, unit, spent, job, body } of slots) {
+  for (const { name, unit, spent, job, body, index } of slots) {
+    if (index >= 4 && !task.siegeLaunched && members.slice(0, 4).some(s => !s.unit)) continue;
     if (!store[name]) upsertWarConfig(name, { role: "siegeUnit", roomName: task.sourceRoom, body: [...body],
-      args: [task.targetRoom, route, taskId, SIEGE_BOOSTS[job].join("|"), job],
+      args: [task.targetRoom, route, taskId, SIEGE_BOOSTS[job].join("|"), job, String(index)],
       spawnOnce: task.oneShot ? {} : undefined });
     if (!unit && !spent && !isConfigQueuedInSpawns(spawns, name) && !isConfigSpawning(name)) {
       const spawn = selectLeastLoadedSpawn(spawns);

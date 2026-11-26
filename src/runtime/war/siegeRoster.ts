@@ -1,6 +1,6 @@
 import type { WarTask } from "./store";
 
-export const SIEGE_SLOTS = ["breacher", "escort", "escort", "breacher", "escort", "escort"] as const;
+export const SIEGE_SLOTS = ["breacher", "escort", "escort", "escort", "breacher", "escort", "escort", "escort"] as const;
 export type SiegeJob = typeof SIEGE_SLOTS[number];
 
 const armor = RESOURCE_CATALYZED_GHODIUM_ALKALIDE;
