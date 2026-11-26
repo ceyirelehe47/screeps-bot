@@ -98,7 +98,7 @@ describe("meleeAttackerRole 目标策略与移动请求安全边界", () => {
     const covered = hostileCreep("covered", 100, { [ATTACK]: 10 });
     covered.pos = new MockPos(24, 25, TARGET_ROOM) as unknown as RoomPosition;
     const rampart = hostileStructure(STRUCTURE_RAMPART, "cover", 24, 25, 100000);
-    attacker.pos.findInRange = jest.fn(kind => kind === FIND_HOSTILE_CREEPS ? [covered, enemy] : [rampart]) as RoomPosition["findInRange"];
+    attacker.pos.findInRange = jest.fn((kind: FindConstant) => kind === FIND_HOSTILE_CREEPS ? [covered, enemy] : [rampart]) as unknown as RoomPosition["findInRange"];
     attacker.attack = jest.fn(() => OK);
     const gate = jest.spyOn(towerDrainPair, "runTowerDrainPair").mockReturnValue(true);
     try {
