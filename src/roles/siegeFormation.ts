@@ -170,6 +170,31 @@ function fire(
   }
 }
 
+interface SiegeTargets {
+  tick: number;
+  exposed: Structure[];
+  openings: Structure[];
+  approach: Structure[];
+}
+const roomTargets = new WeakMap<Room, SiegeTargets>();
+
+function targetsInRoom(room: Room, spawns: StructureSpawn[]): SiegeTargets {
+  const cached = roomTargets.get(room);
+  if (cached?.tick === Game.time) return cached;
+  const structures = room.find(FIND_HOSTILE_STRUCTURES).filter(s => s.hits > 0);
+  const shields = new Map<number, Structure>();
+  for (const s of structures) if (s.structureType === STRUCTURE_RAMPART) shields.set(tileKey(s.pos.x, s.pos.y), s);
+  const exposed = structures.filter(s => s.structureType === STRUCTURE_RAMPART || !shields.has(tileKey(s.pos.x, s.pos.y)));
+  const approach = exposed.filter(s => !isWalkableStructure(s) && spawns.some(spawn => spawn.pos.inRangeTo(s, 3)));
+  const distance = (s: Structure) => Math.min(...spawns.map(spawn => spawn.pos.getRangeTo(s)));
+  approach.sort((a,b) => distance(a) - distance(b) || a.hits - b.hits);
+  const openings = approach.filter(s => s.hits <= 5000 && s.structureType !== STRUCTURE_RAMPART &&
+    s.structureType !== STRUCTURE_SPAWN && distance(s) <= 2);
+  const result = {tick: Game.time, exposed, approach, openings};
+  roomTargets.set(room, result);
+  return result;
+}
+
 const siegeHealing = new WeakMap<Room, { tick: number; assigned: Map<string, number> }>();
 function healAndShoot(group: Creep[], room: Room, target?: Structure): void {
   const incoming = new Map<string, number>();
@@ -190,26 +215,7 @@ function healAndShoot(group: Creep[], room: Room, target?: Structure): void {
   for (const e of room.getEventLog())
     if (e.event === EVENT_ATTACK) incoming.set(e.data.targetId, (incoming.get(e.data.targetId) ?? 0) + e.data.damage);
   const spawns = room.find(FIND_HOSTILE_SPAWNS);
-  const openings = room
-    .find(FIND_HOSTILE_STRUCTURES)
-    .filter(
-      (s) =>
-        s.hits > 0 &&
-        s.hits <= 5000 &&
-        s.structureType !== STRUCTURE_RAMPART &&
-        s.structureType !== STRUCTURE_SPAWN &&
-        !isWalkableStructure(s) &&
-        spawns.some((spawn) => spawn.pos.inRangeTo(s, 2)) &&
-        !room.lookForAt(LOOK_STRUCTURES, s.pos).some((tile) => tile.structureType === STRUCTURE_RAMPART),
-    );
-  const approach = target && spawns.length
-    ? room.find(FIND_HOSTILE_STRUCTURES)
-        .filter((s) => s.hits > 0 && !isWalkableStructure(s) && spawns.some((spawn) => spawn.pos.inRangeTo(s, 3)))
-        .map((s) => cover(room, s))
-        .sort((a, b) => Math.min(...spawns.map((s) => s.pos.getRangeTo(a))) - Math.min(...spawns.map((s) => s.pos.getRangeTo(b))) || a.hits - b.hits)
-    : [];
-  const exposed = room.find(FIND_HOSTILE_STRUCTURES).filter(s => s.hits > 0 &&
-    (s.structureType === STRUCTURE_RAMPART || cover(room, s).id === s.id));
+  const {openings, approach, exposed} = targetsInRoom(room, spawns);
   const cleared = new Set<string>();
   const underFire = allies.some((member) => (incoming.get(member.id) ?? 0) > 0);
   const towers = room

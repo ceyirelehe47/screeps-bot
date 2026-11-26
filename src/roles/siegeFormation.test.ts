@@ -63,7 +63,7 @@ it("前排阵亡时，余下拆墙兵和两名治疗能朝空出的近身位置�
   }) as unknown as Creep;
   const group = [unit("breacher", 0, 39, 37), unit("escort", 1, 38, 38), unit("escort", 3, 38, 37)];
   const spawn = { pos: new MockPos(36, 36, target) } as unknown as StructureSpawn;
-  const originals = { map: Game.map, path: global.PathFinder, pos: global.RoomPosition, room: global.Room };
+  const originals = { map: Game.map, path: global.PathFinder, pos: global.RoomPosition, room: Reflect.get(global, "Room") };
   try {
     setDefaultMapMocks();
     setupPathFinderGlobal();

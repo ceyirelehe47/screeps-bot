@@ -145,8 +145,8 @@ describe("runTowerControl", () => {
   it("六塔面对近身治疗的装甲敌人能从满血发起连续齐射", () => {
     const name = "W3N3";
     const towers = Array.from({length: 6}, (_, i) => createTower(name, "tower" + i, 20+i, 20));
-    const armor = createBody(TOUGH, 10).map(p => ({...p, boost: RESOURCE_CATALYZED_GHODIUM_ALKALIDE}));
-    const heal = createBody(HEAL, 30).map(p => ({...p, boost: RESOURCE_CATALYZED_LEMERGIUM_ALKALIDE}));
+    const armor = Array.from({length: 10}, (): BodyPartDefinition => ({type: TOUGH, hits: 100, boost: RESOURCE_CATALYZED_GHODIUM_ALKALIDE}));
+    const heal = Array.from({length: 30}, (): BodyPartDefinition => ({type: HEAL, hits: 100, boost: RESOURCE_CATALYZED_LEMERGIUM_ALKALIDE}));
     const target = createHostile(name, "armored", 22, 21, {body: [...armor, ...heal, ...createBody(MOVE,10)]});
     const room = createRoom(name, {towers, hostiles: [target]});
     room.getEventLog = jest.fn(() => []);
