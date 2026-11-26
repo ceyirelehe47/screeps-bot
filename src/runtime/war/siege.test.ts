@@ -2,6 +2,7 @@ import { shouldUseSiege, limitReinforcementBoosts, needsSiegeSuccessor } from ".
 import type { WarTask } from "./store";
 import { getBoostPartType } from "../boostParts";
 import { reinforcementBody, assembleSiegeWings, SIEGE_BODIES, SIEGE_BOOSTS, SIEGE_SLOTS } from "./siegeRoster";
+import { siegeUnitRole } from "@/roles/siegeUnit";
 import { createMockStore, MockPos } from "@mock/powerBank";
 
 const order: WarTask = {
@@ -131,4 +132,33 @@ it("无装甲矿的后续部队仍有五十节，远射和医疗部件增加且�
     expect(next).toHaveLength(50);expect(next).not.toContain(TOUGH);
     expect(reinforcementBody(job,3000,12900)).toBe(SIEGE_BODIES[job]);
   }
+});
+
+it("孵化中的 50 节增援即使超过 100 tick 没有实验室也不进入战争回收", () => {
+  const creep = {spawning:true, name:"guard-relief", room:{name:order.sourceRoom}, memory:{
+    configName: order.sourceRoom + ":war:" + order.targetRoom + ":siegeUnit:0",
+  }} as unknown as Creep;
+  const actor = siegeUnitRole(order.targetRoom,"", "siege", RESOURCE_CATALYZED_GHODIUM_ALKALIDE);
+  for (const t of [500, 601, 649]) {
+    Game.time=t;
+    expect(actor.prepare!(creep)).toBe(false);
+  }
+  expect(creep.memory.configName).toBeDefined();
+  expect(creep.memory._warDetached).toBeUndefined();
+});
+
+it("寿命将尽时提前送医疗兵到目标房，老兵离场后才把战斗槽交给接班兵", () => {
+  const staging = "E2N2";
+  const task: WarTask = {...order,squad:"siege",siegeLaunched:true,siegeWings:{0:true}};
+  const vet = {room:{name:task.targetRoom}, ticksToLive:120, memory:{_siegeSlot:1,ready:true},
+    getActiveBodyparts:()=>0} as unknown as Creep;
+  const reserve = {room:{name:staging},pos:new MockPos(45,25,staging),ticksToLive:1200,
+    memory:{ready:true},getActiveBodyparts:()=>0} as unknown as Creep;
+  assembleSiegeWings(task,[vet,reserve],staging);
+  expect(reserve.memory._siegeReliefSlot).toBe(1);
+  expect(reserve.memory._siegeSlot).toBeUndefined();
+  Object.assign(reserve,{room:{name:task.targetRoom}});
+  assembleSiegeWings(task,[reserve],staging);
+  expect(reserve.memory._siegeSlot).toBe(1);
+  expect(reserve.memory._siegeReliefSlot).toBeUndefined();
 });

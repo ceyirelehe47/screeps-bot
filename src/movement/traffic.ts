@@ -87,9 +87,12 @@ export function pushBlockingCreep(pusher: AnyCreep, blocker: AnyCreep): boolean 
   return false;
 }
 
-/** 路径目标可随敌军移动而变化；只有连续在同一格实际尝试出发的守军才申请让路。 */
-function stalledDefender(creep: AnyCreep): boolean {
-  if (!isStandardCreep(creep) || creep.memory.role !== "homeDefender" || creep.fatigue || !isDefenseMode(creep.room.name)) return false;
+/** 路径目标可随敌军移动而变化；驻军和本房领取强化的士兵只有连续原地尝试出发才申请让路。 */
+function stalledMilitaryCreep(creep: AnyCreep): boolean {
+  if (!isStandardCreep(creep) || creep.fatigue || creep.spawning) return false;
+  const guard = creep.memory.role === "homeDefender" && isDefenseMode(creep.room.name);
+  const preparing = creep.memory.role === "siegeUnit" && !creep.memory.ready && creep.room.controller?.my;
+  if (!guard && !preparing) return false;
   const state = ensureCreepMovementState(creep);
   const {x, y, roomName} = creep.pos;
   const last = state.defenseStep;
@@ -102,21 +105,23 @@ function stalledDefender(creep: AnyCreep): boolean {
 }
 
 /** 窄道中交换两个已占的格子；守军当前位置必须也是挡路单位能安全站立的位置。 */
-function yieldToDefender(defender: AnyCreep, blocker: AnyCreep): boolean {
+function yieldToMilitaryCreep(mover: Creep, blocker: AnyCreep): boolean {
   if (!isStandardCreep(blocker) || blocker.spawning || blocker.fatigue ||
       !["carrier", "worker", "siegeUnit"].includes(blocker.memory.role ?? "") ||
-      isExitTile(defender.pos) || !isYieldTileWalkable(defender.pos, blocker) ||
-      !isPositionAllowedForCreep(blocker, defender.pos) || hasMoveDestinationConflict(defender.pos, [defender, blocker])) return false;
+      isExitTile(mover.pos) || !isYieldTileWalkable(mover.pos, blocker) ||
+      !isPositionAllowedForCreep(blocker, mover.pos)) return false;
+  if (mover.memory.role === "siegeUnit" && blocker.memory.role === "siegeUnit" &&
+      (blocker.ticksToLive ?? Infinity) <= (mover.ticksToLive ?? 0)) return false;
   const previous = getMoveIntentReceipt(blocker);
   if (previous?.kind === "defenseYield") return false;
   // 对方已有无阻塞的去路，守军可以正常跟步，无需改写它的动作。
   if (previous?.attempted && !findMyOwnedUnitAt(new RoomPosition(previous.attempted.x, previous.attempted.y, previous.attempted.roomName), blocker)) return false;
-  const code = issueMove(blocker, blocker.pos.getDirectionTo(defender.pos), previous, "defenseYield");
+  const code = issueMove(blocker, blocker.pos.getDirectionTo(mover.pos), previous, "defenseYield");
   if (code !== OK) return false;
   const state = ensureCreepMovementState(blocker);
   delete state.movePathState;
   state.movementPushedAt = Game.time;
-  recordMovementMetric("yieldPushes", defender.pos.roomName);
+  recordMovementMetric("yieldPushes", mover.pos.roomName);
   return true;
 }
 
@@ -129,14 +134,14 @@ export function moveToAdjacentPosition(creep: AnyCreep, nextPos: RoomPosition): 
   const attempted = getMoveIntentAttemptedPosition(creep.pos, direction);
   if (!attempted || attempted.roomName !== nextPos.roomName || attempted.x !== nextPos.x || attempted.y !== nextPos.y) return ERR_NO_PATH;
   const destination = getMoveIntentDestination(creep.pos, direction);
-  if (destination && hasMoveDestinationConflict(destination, [creep])) return ERR_BUSY;
-  const blockedGuard = stalledDefender(creep);
+  const stalled = stalledMilitaryCreep(creep);
+  if (!stalled && destination && hasMoveDestinationConflict(destination, [creep])) return ERR_BUSY;
   const blockingCreep = findMyOwnedUnitAt(nextPos, creep);
   if (!blockingCreep) {
     return issueMove(creep, direction);
   }
 
-  if (blockedGuard && !getMoveIntentReceipt(creep) && yieldToDefender(creep, blockingCreep)) {
+  if (stalled && isStandardCreep(creep) && !getMoveIntentReceipt(creep) && yieldToMilitaryCreep(creep, blockingCreep)) {
     const code = issueMove(creep, direction);
     if (code !== OK) cancelMoveIntent(blockingCreep, getMoveIntentReceipt(blockingCreep)!);
     return code;
@@ -329,7 +334,12 @@ export function resolveTrafficIntents(): { checked: number; canceled: number; un
     rows.push(actor); occupants.set(key, rows);
   }
   const priority = (actor: AnyCreep): number => {
-    if (isStandardCreep(actor)) return actor.memory.role === "homeDefender" ? 3 : 1;
+    if (isStandardCreep(actor)) {
+      if (actor.memory.role === "homeDefender") return 4;
+      if (receipts.get(actor)?.kind === "defenseYield") return 3;
+      if (actor.memory.role === "siegeUnit" && !actor.memory.ready && actor.room.controller?.my) return 2;
+      return 1;
+    }
     return actor.memory.tasks?.some(task => task.type === "renew") ? 2 : 1;
   };
   const attemptedActors = new Map<string, Set<AnyCreep>>();

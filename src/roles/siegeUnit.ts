@@ -1,7 +1,7 @@
 import { moveToTarget, moveToTargetRoom } from "./shared";
 import { prepareWarCombatBoost } from "@/runtime/war/boostPreparation";
 import type { RoleFactory } from "@/types/system";
-import { runSiegeFormation, siegeRally, siegeSlot } from "./siegeFormation";
+import { runSiegeFormation, runSiegeRelief, siegeRally, siegeSlot } from "./siegeFormation";
 
 const travel = { profile: "combat", routePurpose: "combat", reusePath: 4, ignoreCreeps: false } as const;
 
@@ -17,6 +17,10 @@ function runSiegeUnit(creep: Creep, target: string, route: string): boolean {
   )
     return false;
   if (creep.room.name === target) {
+    if (creep.memory._siegeReliefSlot !== undefined) {
+      runSiegeRelief(creep, task, creep.memory._siegeReliefSlot);
+      return false;
+    }
     runSiegeFormation(creep, task);
     // 被拆的 Spawn 会重开工。碰到可踩掉的工地时只借一步，最后一座消失后持续清场。
     const sites = creep.room.find(FIND_HOSTILE_CONSTRUCTION_SITES).filter(s => s.structureType === STRUCTURE_SPAWN &&
@@ -29,9 +33,9 @@ function runSiegeUnit(creep: Creep, target: string, route: string): boolean {
     }
     return false;
   }
-  const wing = Math.floor(siegeSlot(creep) / 4);
+  const wing = Math.floor((creep.memory._siegeReliefSlot ?? siegeSlot(creep)) / 4);
   const staging = task.siegeStagingRoom ?? task.routeRooms?.[task.routeRooms.length - 2] ?? task.sourceRoom;
-  const launched = creep.memory._siegeSlot !== undefined && task.siegeWings?.[wing];
+  const launched = (creep.memory._siegeSlot !== undefined || creep.memory._siegeReliefSlot !== undefined) && task.siegeWings?.[wing];
   if (creep.getActiveBodyparts(HEAL)) {
     const injured = creep.pos
       .findInRange(FIND_MY_CREEPS, 1)
@@ -57,6 +61,8 @@ function runSiegeUnit(creep: Creep, target: string, route: string): boolean {
 
 export const siegeUnitRole: RoleFactory = (target, route, boostTask, compounds) => ({
   prepare: (creep) => {
+    // 强化等待从出舱开始。50 节身体孵化需要 150 tick，不能用这段时间触发回收。
+    if (creep.spawning) return false;
     const exhausted = Memory.data?.war?.[target]?.siegeExhausted;
     const available = exhausted?.length
       ? compounds?.split("|").filter((r) => !exhausted.includes(r as ResourceConstant)).join("|")

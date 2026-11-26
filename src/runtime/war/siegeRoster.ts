@@ -50,27 +50,37 @@ export function siegeConfigName(task: Pick<WarTask, "sourceRoom" | "targetRoom">
 export function assembleSiegeWings(task: WarTask, units: Creep[], staging: string): void {
   const wings = (task.siegeWings ??= {});
   for (const unit of units) {
-    if (unit.room.name === task.targetRoom && unit.memory._siegeSlot === undefined) {
+    if (unit.room.name === task.targetRoom && unit.memory._siegeSlot === undefined && unit.memory._siegeReliefSlot === undefined) {
       const prior = Number(unit.memory.roleArgs?.[5]);
       if (Number.isInteger(prior) && wings[Math.floor(prior / 4)]) unit.memory._siegeSlot = prior;
     }
   }
   const waiting = units
-    .filter((c) => !c.spawning && c.memory.ready && c.memory._siegeSlot === undefined && c.room.name === staging)
+    .filter((c) => !c.spawning && c.memory.ready && c.memory._siegeSlot === undefined && c.memory._siegeReliefSlot === undefined && c.room.name === staging)
     .sort((a, b) => (b.ticksToLive ?? 0) - (a.ticksToLive ?? 0));
   const drill = (c: Creep) => c.getActiveBodyparts(WORK) > 0;
   const assign = (unit: Creep, index: number) => {
     unit.memory._siegeSlot = index;
-    waiting.splice(waiting.indexOf(unit), 1);
+    delete unit.memory._siegeReliefSlot;
+    const i = waiting.indexOf(unit);
+    if (i >= 0) waiting.splice(i, 1);
   };
   for (let wing = 0; wing < (task.siegeWingCount ?? 2); wing++) {
     const start = wing * 4;
     const live = units.filter((c) => c.memory._siegeSlot !== undefined && Math.floor(c.memory._siegeSlot / 4) === wing);
-    if (wings[wing] && live.length) {
+    const relief = units.filter(c => c.memory._siegeReliefSlot !== undefined && Math.floor(c.memory._siegeReliefSlot / 4) === wing);
+    if (wings[wing] && (live.length || relief.length)) {
       for (let i = start; i < start + 4; i++) {
-        if (live.some((c) => c.memory._siegeSlot === i)) continue;
-        const replacement = waiting.find((c) => drill(c) === (SIEGE_SLOTS[i] !== "escort"));
-        if (replacement) assign(replacement, i);
+        const veteran = live.find(c => c.memory._siegeSlot === i);
+        const reserve = relief.find(c => c.memory._siegeReliefSlot === i);
+        if (veteran && (reserve || veteran.room.name !== task.targetRoom || (veteran.ticksToLive ?? Infinity) > 180)) continue;
+        const replacement = reserve ?? waiting.find(c => drill(c) === (SIEGE_SLOTS[i] !== "escort"));
+        if (!replacement) continue;
+        if (!veteran) assign(replacement, i);
+        else {
+          replacement.memory._siegeReliefSlot = i;
+          waiting.splice(waiting.indexOf(replacement), 1);
+        }
       }
       continue;
     }

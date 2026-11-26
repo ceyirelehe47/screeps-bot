@@ -396,6 +396,19 @@ export function selectSiegeCore(spawns: StructureSpawn[], origin: Tile): Structu
   return [...spawns].sort((a,b)=>coverage(b)-coverage(a) || range(origin,a.pos)-range(origin,b.pos))[0];
 }
 
+/** 接班兵先赶到老兵身边提供火力或治疗，战斗槽的接管由战役调度统一完成。 */
+export function runSiegeRelief(creep: Creep, task: WarTask, index: number): void {
+  const wing = Math.floor(index / 4);
+  const front = creep.room.find(FIND_MY_CREEPS).filter(c => c !== creep && c.memory.role === "siegeUnit" &&
+    c.memory.roleArgs?.[2] === creep.memory.roleArgs?.[2] && c.memory._siegeSlot !== undefined &&
+    Math.floor(c.memory._siegeSlot / 4) === wing && !c.memory._warDetached);
+  const veteran = front.find(c => c.memory._siegeSlot === index) ?? creep.pos.findClosestByRange(front);
+  const spawns = creep.room.find(FIND_HOSTILE_SPAWNS);
+  const objective = spawns.find(s => s.id === task.siegeCore) ?? selectSiegeCore(spawns, creep.pos);
+  healAndShoot([creep], creep.room, objective && cover(creep.room, objective));
+  if (veteran && !creep.fatigue && !creep.pos.isNearTo(veteran)) creep.moveTo(veteran.pos, {...walk, range: 1});
+}
+
 const frames = new WeakMap<Room, Set<string>>();
 const turns = new WeakMap<Room, number>();
 export function runSiegeFormation(creep: Creep, task: WarTask): void {
@@ -416,7 +429,7 @@ export function runSiegeFormation(creep: Creep, task: WarTask): void {
         c.memory.role === "siegeUnit" &&
         c.memory.roleArgs?.[0] === task.targetRoom &&
         c.memory.roleArgs?.[2] === creep.memory.roleArgs?.[2] &&
-        groupId(c) === wing &&
+        c.memory._siegeReliefSlot === undefined && groupId(c) === wing &&
         !c.memory._warDetached,
     );
   const anchors = (task.siegeAnchors ??= {});

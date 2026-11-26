@@ -81,7 +81,8 @@ export function needsSiegeSuccessor(task: WarTask, units: Creep[], spawnTime: nu
   const veteran = units[0];
   if (veteran.spawning || veteran.room.name !== task.targetRoom || veteran.ticksToLive === undefined) return false;
   const travel = Math.max(1, (task.routeRooms?.length ?? 2) - 1) * 50;
-  return veteran.ticksToLive <= spawnTime + travel + 60;
+  // 同一波的多名老兵会陆续退役，要为队列、强化、集结和行军都留出时间。
+  return veteran.ticksToLive <= 3 * spawnTime + travel + 80;
 }
 
 export function runSiegeCampaign(task: WarTask): void {
@@ -147,12 +148,12 @@ export function runSiegeCampaign(task: WarTask): void {
   const armorStock=(room?.storage?.store.getUsedCapacity(armor)??0)+(room?.terminal?.store.getUsedCapacity(armor)??0)+
     labs.reduce((total,l)=>total+(l.store.getUsedCapacity(armor)??0),0);
   const amounts = new Map<ResourceConstant, number>();
-  const slots = members.map(({ job, name, unit, index, successor }) => {
+  const slots = members.map(({ job, name, unit, units, index, successor }) => {
     const spent = !!task.oneShot && store[name]?.spawnOnce?.queuedAt !== undefined;
     const body = task.oneShot===false && task.siegeLaunched && room ? reinforcementBody(job,armorStock,room.energyCapacityAvailable) : SIEGE_BODIES[job];
     for (const compound of SIEGE_BOOSTS[job]) {
       const count = unit && !successor
-        ? countBoostableParts(unit.body, compound)
+        ? units.reduce((n,c) => n + countBoostableParts(c.body, compound), 0)
         : spent && !isConfigQueuedInSpawns(spawns, name) && !isConfigSpawning(name)
           ? 0
           : body.filter((part) => part === getBoostPartType(compound)).length;
