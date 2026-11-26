@@ -8,7 +8,10 @@ export function chooseWarOrder(task: WarTask, room: Room | undefined): WarOrder 
   if (!room) return "observe";
   if (getSquadPolicy(task).allowsControllerAttack && task.reason === "manual" && !isPatrolTask(task)
       && !hasControllerAttackBlockers(room)) {
-    if (isControllerDefeated(room)) return "confirm";
+    if (isControllerDefeated(room)) {
+      // 无主控制器也可能是敌军集结点。己方房间继续按控制权结束进攻。
+      return !room.controller?.my && getHostilePresence(room, task).hostileCreeps > 0 ? "engage" : "confirm";
+    }
     if (room.controller?.owner && room.controller.level > 0) return "suppress";
   }
   return getHostilePresence(room, task).present ? "engage" : "confirm";

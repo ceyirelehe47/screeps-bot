@@ -822,6 +822,23 @@ describe("towerDrainDuo 战争控制", () => {
     expect(Memory.data!.war![room.name].activeGeneration).toBeUndefined();
   });
 
+  it("无主中场有敌兵时持续清剿，敌兵撤走后才开始清场确认", () => {
+    const target = "E3N57";
+    const enemies = [{ owner: { username: "Opponent" }, body: [{ type: RANGED_ATTACK, hits: 100 }] }] as Creep[];
+    Game.rooms[target] = createTargetRoom(enemies);
+    startWarRoom(target, "E1N57", { squad: "t3Duo", tactic: "t3TowerDrainDuo", routeRooms: ["E1N57", "E2N57", target] });
+    const task = Memory.data!.war![target];
+    runWarControl();
+    expect(task.order).toBe("engage");
+    expect(task.clearSince).toBeUndefined();
+    enemies.length = 0;
+    Game.time += 30;
+    resetRuntimeServices();
+    runWarControl();
+    expect(task.order).toBe("confirm");
+    expect(task.clearSince).toBe(Game.time);
+  });
+
   it("T3 自动路线从能承受两轮塔伤的入口接敌，手动路线照常执行", () => {
     const target = "E3N57", source = "E1N57", west = "E2N57", north = "E3N58";
     const towers = Array.from({ length: 6 }, (_, i) => ({
