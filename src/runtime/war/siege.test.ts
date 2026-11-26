@@ -2,7 +2,7 @@ import { shouldUseSiege, limitReinforcementBoosts, needsSiegeSuccessor } from ".
 import type { WarTask } from "./store";
 import { getBoostPartType } from "../boostParts";
 import { reinforcementBody, assembleSiegeWings, SIEGE_BODIES, SIEGE_BOOSTS, SIEGE_SLOTS } from "./siegeRoster";
-import { createMockStore } from "@mock/powerBank";
+import { createMockStore, MockPos } from "@mock/powerBank";
 
 const order: WarTask = {
   targetRoom: "E3N2",
@@ -79,10 +79,17 @@ it("出生序号不齐时，按中场实到兵力组队；阵亡的拆墙兵由�
     ({
       name: job + index,
       room: { name: staging },
+      pos: new MockPos(45, 25, staging),
       memory: { ready: true, roleArgs: ["", "", "", "", "", String(index)] },
       getActiveBodyparts: (part: BodyPartConstant) => (job === "breacher" && part === WORK ? 17 : 0),
     }) as unknown as Creep;
   const soldiers = [soldier("breacher", 4), soldier("escort", 1), soldier("breacher", 2), soldier("escort", 7)];
+  const trailing = soldiers[2];
+  Object.assign(trailing, {pos: new MockPos(2, 25, staging)});
+  assembleSiegeWings(task, soldiers, staging);
+  expect(task.siegeWings?.[0]).toBeUndefined();
+  expect(soldiers.every(c => c.memory._siegeSlot === undefined)).toBe(true);
+  Object.assign(trailing, {pos: new MockPos(44, 25, staging)});
   assembleSiegeWings(task, soldiers, staging);
   expect(task.siegeWings?.[0]).toBe(true);
   expect(soldiers.map((c) => c.memory._siegeSlot)).toEqual([0, 1, 2, 3]);

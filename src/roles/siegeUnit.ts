@@ -44,7 +44,7 @@ function runSiegeUnit(creep: Creep, target: string, route: string): boolean {
     .filter((c) => c.owner.username !== "Source Keeper")
     .sort((a, b) => a.hits - b.hits)[0];
   if (enemy) creep.rangedAttack(enemy);
-  if (!launched && creep.room.name === staging) moveToTarget(creep, siegeRally(creep.room, target, wing), 2, travel);
+  if (!launched && creep.room.name === staging) moveToTarget(creep, siegeRally(creep.room, target, 0), 2, travel);
   else {
     const rooms = route.split("|");
     const waypoint = rooms.indexOf(staging);

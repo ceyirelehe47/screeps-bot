@@ -83,23 +83,31 @@ export function assembleSiegeWings(task: WarTask, units: Creep[], staging: strin
       if (task.siegeStrike) delete task.siegeStrike[wing];
       if (task.siegeFront) delete task.siegeFront[wing];
     }
-    const drills = waiting.filter(drill),
-      medics = waiting.filter((c) => !drill(c));
-    if (waiting.length < 4 || !drills.length || medics.length < 2) continue;
-    // 持续战争按两拆两医投入，避免先派三医导致另一翼只有一名治疗。
-    if (task.oneShot === false && drills.length < 2) continue;
     const shortSince = (task.siegeShortSince ??= {});
-    const drillEnRoute = units.some((c) => drill(c) && c.memory._siegeSlot === undefined && c.room.name !== staging);
-    if (drills.length === 1 && drillEnRoute) {
-      shortSince[wing] ??= Game.time;
-      if (Game.time - shortSince[wing] < 100) continue;
-    }
-    delete shortSince[wing];
-    const first = drills[0];
+    const drillEnRoute = units.some(c => drill(c) && c.memory._siegeSlot === undefined && c.room.name !== staging);
     const isRanger = (c: Creep) => c.getActiveBodyparts(RANGED_ATTACK) > c.getActiveBodyparts(WORK);
-    const complement = wing === 0 ? drills.slice(1).find(c => isRanger(c) !== isRanger(first)) : undefined;
-    const squad = [first, medics[0], complement ?? drills[1] ?? medics[2], medics[1]];
-    if (!squad[2]) continue;
+    let squad: Creep[] | undefined;
+    for (const first of waiting.filter(drill)) {
+      // 仅同房可能相隔整整 49 格。两个攻击手必须共享两名能跟上的治疗，才可开拔。
+      const near = waiting.filter(c => first.pos.getRangeTo(c.pos) <= 2);
+      const drills = near.filter(c => c !== first && drill(c));
+      const second = (wing === 0 && drills.find(c => isRanger(c) !== isRanger(first))) || drills[0];
+      const medics = near.filter(c => !drill(c) && (!second || second.pos.getRangeTo(c.pos) <= 2));
+      if (medics.length < 2) continue;
+      if (second) {
+        squad = [first, medics[0], second, medics[1]];
+        break;
+      }
+      if (task.oneShot === false || medics.length < 3) continue;
+      if (drillEnRoute) {
+        shortSince[wing] ??= Game.time;
+        if (Game.time - shortSince[wing] < 100) continue;
+      }
+      squad = [first, medics[0], medics[2], medics[1]];
+      break;
+    }
+    if (!squad) continue;
+    delete shortSince[wing];
     squad.forEach((unit, i) => assign(unit, start + i));
     wings[wing] = true;
   }
