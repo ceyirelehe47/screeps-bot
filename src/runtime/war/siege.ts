@@ -19,15 +19,23 @@ export function runSiegeCampaign(task: WarTask): void {
     return;
   }
   delete task.clearSince;
+  const members = SIEGE_SLOTS.map((job, index) => {
+    const name = siegeConfigName(task, index);
+    return { job, name, unit: getLiveCreepsByConfig(name)[0] };
+  });
+  const staging = task.routeRooms?.[task.routeRooms.length - 2] ?? task.sourceRoom;
+  const assembled = members.filter(s => s.unit?.memory.ready && s.unit.room.name === staging);
+  if (task.siegeLaunched || assembled.length >= 5 && assembled.some(s => s.job === "breacher")) {
+    task.siegeLaunched = true;
+    setTaskStatus(task, "clearing");
+  } else setTaskStatus(task, "staging");
   if (!canStartOutboundMission(task.sourceRoom) && !canContinueWarMission(task)) return;
   const spawns = getSpawnsForRoom(task.sourceRoom);
   if (!spawns.length) return;
   const store = ensureConfigStore();
   const taskId = getLegacyWarBoostTaskId(task);
   const amounts = new Map<ResourceConstant, number>();
-  const slots = SIEGE_SLOTS.map((job, index) => {
-    const name = siegeConfigName(task, index);
-    const unit = getLiveCreepsByConfig(name)[0];
+  const slots = members.map(({ job, name, unit }) => {
     const spent = !!task.oneShot && store[name]?.spawnOnce?.queuedAt !== undefined;
     const body = SIEGE_BODIES[job];
     for (const compound of SIEGE_BOOSTS[job]) {
@@ -46,12 +54,6 @@ export function runSiegeCampaign(task: WarTask): void {
     transitionWarTaskTerminal(task, "failed", prep.reason);
     return;
   }
-  const staging = task.routeRooms?.[task.routeRooms.length - 2] ?? task.sourceRoom;
-  const assembled = slots.filter(s => s.unit?.memory.ready && s.unit.room.name === staging);
-  if (task.siegeLaunched || assembled.length >= 5 && assembled.some(s => s.job === "breacher")) {
-    task.siegeLaunched = true;
-    setTaskStatus(task, "clearing");
-  } else setTaskStatus(task, "staging");
   const route = task.routeRooms?.join("|") ?? "";
   for (const { name, unit, spent, job, body } of slots) {
     if (!store[name]) upsertWarConfig(name, { role: "siegeUnit", roomName: task.sourceRoom, body: [...body],
