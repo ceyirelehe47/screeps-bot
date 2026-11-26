@@ -1,7 +1,7 @@
 import { shouldUseSiege, limitReinforcementBoosts, needsSiegeSuccessor } from "./siege";
 import type { WarTask } from "./store";
 import { getBoostPartType } from "../boostParts";
-import { assembleSiegeWings, SIEGE_BODIES, SIEGE_BOOSTS, SIEGE_SLOTS } from "./siegeRoster";
+import { reinforcementBody, assembleSiegeWings, SIEGE_BODIES, SIEGE_BOOSTS, SIEGE_SLOTS } from "./siegeRoster";
 import { createMockStore } from "@mock/powerBank";
 
 const order: WarTask = {
@@ -114,4 +114,12 @@ it("留出孵化、强化和四房行军时间，同一远征槽最多只提前�
   expect(needsSiegeSuccessor(task, [veteran, next], 150, 200000)).toBe(false);
   expect(needsSiegeSuccessor(task, [veteran], 150, 140000)).toBe(false);
   expect(needsSiegeSuccessor({ ...task, oneShot: true }, [veteran], 150, 200000)).toBe(false);
+});
+
+it("无装甲矿的后续部队仍有五十节，远射和医疗部件增加且能正常孵化",()=>{
+  for(const job of ["ranger","escort","breacher"] as const){
+    const next=reinforcementBody(job,0,12900);
+    expect(next).toHaveLength(50);expect(next).not.toContain(TOUGH);
+    expect(reinforcementBody(job,3000,12900)).toBe(SIEGE_BODIES[job]);
+  }
 });

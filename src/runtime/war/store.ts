@@ -63,6 +63,8 @@ export interface WarTask {
   siegeWingCount?: 2 | 3;
   siegeExhausted?: ResourceConstant[];
   siegeStagingRoom?: string;
+  siegeCore?: Id<StructureSpawn>;
+  siegeGates?: Record<number,Id<Structure>>;
   siegeFlankRoute?: string[];
   siegeShortSince?: Record<number, number>;
   siegeFront?: Record<number, number>;

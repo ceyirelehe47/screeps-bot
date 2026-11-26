@@ -1,4 +1,4 @@
-import { runSiegeFormation, findSpawnAssaultTiles } from "./siegeFormation";
+import { runSiegeFormation, findSpawnAssaultTiles, selectSiegeCore } from "./siegeFormation";
 import { SIEGE_BODIES, SIEGE_SLOTS } from "@/runtime/war/siegeRoster";
 import type { WarTask } from "@/runtime/war/store";
 import { createMockPowerBankCreep, MockPos } from "@mock/powerBank";
@@ -73,4 +73,11 @@ it("前排阵亡时，余下拆墙兵和两名治疗能朝空出的近身位置�
     if (originalMap) Object.defineProperty(Game, "map", originalMap);
     else Reflect.deleteProperty(Game, "map");
   }
+});
+
+it("三个紧邻的 Spawn 先选能覆盖两侧的中央目标",()=>{
+  const spawn=(x:number,y:number)=>({pos:new MockPos(x,y,"E3N2")}) as unknown as StructureSpawn;
+  const left=spawn(20,20),central=spawn(22,23),right=spawn(25,24);
+  expect(selectSiegeCore([left,central,right],{x:5,y:20})).toBe(central);
+  expect(selectSiegeCore([left,right],{x:5,y:20})).toBe(left);
 });

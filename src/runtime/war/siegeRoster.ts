@@ -26,6 +26,20 @@ export const SIEGE_BODIES = {
   escort: [...parts(TOUGH, 18), ...parts(RANGED_ATTACK, 1), ...parts(HEAL, 21), ...parts(MOVE, 10)],
 };
 
+const UNARMORED_BODIES = {
+  ranger: [...parts(WORK,8),...parts(RANGED_ATTACK,32),...parts(MOVE,10)],
+  breacher: [...parts(WORK,30),...parts(RANGED_ATTACK,10),...parts(MOVE,10)],
+  escort: [...parts(RANGED_ATTACK,9),...parts(HEAL,31),...parts(MOVE,10)],
+};
+
+/** 没有强化矿的 TOUGH 与普通部件承受相同伤害；将续兵的这些位置用于输出和治疗。 */
+export function reinforcementBody(job:SiegeJob, armorStock:number, capacity:number): BodyPartConstant[] {
+  const standard=SIEGE_BODIES[job], alternative=UNARMORED_BODIES[job];
+  if(armorStock >= LAB_BOOST_MINERAL * standard.filter(p=>p===TOUGH).length ||
+    alternative.reduce((sum,p)=>sum+BODYPART_COST[p],0)>capacity)return standard;
+  return alternative;
+}
+
 export function siegeConfigName(task: Pick<WarTask, "sourceRoom" | "targetRoom">, index: number): string {
   return `${task.sourceRoom}:war:${task.targetRoom}:siegeUnit:${index}`;
 }
@@ -61,6 +75,7 @@ export function assembleSiegeWings(task: WarTask, units: Creep[], staging: strin
     if (wings[wing]) {
       delete wings[wing];
       if (task.siegeAnchors) delete task.siegeAnchors[wing];
+      if (task.siegeGates) delete task.siegeGates[wing];
       if (task.siegeFormationOrder) delete task.siegeFormationOrder[wing];
       if (task.siegeBreach) delete task.siegeBreach[wing];
       if (task.siegeStrike) delete task.siegeStrike[wing];

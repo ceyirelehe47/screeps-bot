@@ -15,6 +15,7 @@ import {
 import { ensureConfigStore, getLegacyWarBoostTaskId, getLiveCreepsByConfig, type WarTask } from "./store";
 import {
   assembleSiegeWings,
+  reinforcementBody,
   SIEGE_BODIES,
   SIEGE_BOOSTS,
   SIEGE_SLOTS,
@@ -139,10 +140,14 @@ export function runSiegeCampaign(task: WarTask): void {
   if (!spawns.length) return;
   const store = ensureConfigStore();
   const taskId = getLegacyWarBoostTaskId(task);
+  const armor=RESOURCE_CATALYZED_GHODIUM_ALKALIDE;
+  const labs=room?.find(FIND_MY_STRUCTURES).filter((s): s is StructureLab=>s.structureType===STRUCTURE_LAB) ?? [];
+  const armorStock=(room?.storage?.store.getUsedCapacity(armor)??0)+(room?.terminal?.store.getUsedCapacity(armor)??0)+
+    labs.reduce((total,l)=>total+(l.store.getUsedCapacity(armor)??0),0);
   const amounts = new Map<ResourceConstant, number>();
   const slots = members.map(({ job, name, unit, index, successor }) => {
     const spent = !!task.oneShot && store[name]?.spawnOnce?.queuedAt !== undefined;
-    const body = SIEGE_BODIES[job];
+    const body = task.oneShot===false && task.siegeLaunched && room ? reinforcementBody(job,armorStock,room.energyCapacityAvailable) : SIEGE_BODIES[job];
     for (const compound of SIEGE_BOOSTS[job]) {
       const count = unit && !successor
         ? countBoostableParts(unit.body, compound)
@@ -176,7 +181,7 @@ export function runSiegeCampaign(task: WarTask): void {
   const route = task.routeRooms?.join("|") ?? "";
   for (const { name, spent, job, body, index, successor } of slots) {
     if (index >= 4 && !task.siegeLaunched && members.slice(0, 4).some((s) => !s.unit)) continue;
-    if (!store[name])
+    if (!store[name] || (successor && !isConfigSpawning(name) && store[name].body?.some((part,i)=>part!==body[i])))
       upsertWarConfig(name, {
         role: "siegeUnit",
         roomName: task.sourceRoom,

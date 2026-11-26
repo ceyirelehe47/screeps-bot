@@ -30,6 +30,7 @@ function footprint(anchor: Tile, offset: Tile): Tile {
 
 interface Geometry {
   matrix: CostMatrix;
+  single: CostMatrix;
   blockers: Map<number, Id<Structure>>;
 }
 const terrainCache = new Map<string, { at: number; geometry: Geometry }>();
@@ -63,8 +64,10 @@ function geometry(room: Room): Geometry {
     if (!blockers.has(k) || s.structureType === STRUCTURE_RAMPART) blockers.set(k, s.id);
   }
   const matrix = new PathFinder.CostMatrix();
+  const single = new PathFinder.CostMatrix();
   for (let y = 0; y < 50; y++)
     for (let x = 0; x < 50; x++) {
+      single.set(x, y, x < 1 || y < 1 || x > 48 || y > 48 ? 255 : tileCosts[tileKey(x,y)]);
       if (x < 1 || y < 1 || x > 47 || y > 47) {
         matrix.set(x, y, 255);
         continue;
@@ -78,7 +81,7 @@ function geometry(room: Room): Geometry {
           : Math.min(250, Math.floor(Math.max(...cells) + cells.reduce((n, v) => n + (v > 3 ? v : 0), 0) / 4)),
       );
     }
-  const result = { matrix, blockers };
+  const result = { matrix, blockers, single };
   terrainCache.set(room.name, { at: Game.time, geometry: result });
   return result;
 }
@@ -134,7 +137,9 @@ function fire(
     const distance = creep.pos.getRangeTo(h);
     return n + (distance <= 1 ? 1 : distance === 2 ? 0.4 : 0.1);
   }, 0);
-  const focus = core ?? target;
+  // 无掩体的 Spawn 可立刻收割；否则远射先协助打通本翼实际的射击通道。
+  const focus = core?.structureType === STRUCTURE_SPAWN ? core :
+    target && creep.pos.inRangeTo(target,3) ? target : core;
   if (mass >= (core ? 3 : 1.5) && (!core || core.hits > 5000)) creep.rangedMassAttack();
   else if (focus && weaponRange(creep) === 3 && creep.pos.inRangeTo(focus, 3)) creep.rangedAttack(focus);
   else if (enemy) creep.rangedAttack(enemy);
@@ -246,10 +251,10 @@ function healAndShoot(group: Creep[], room: Room, target?: Structure): void {
 }
 
 /** 只需打通拆墙位及治疗位就能攻击 Spawn，避免为完整方阵额外拆除第四格屏障。 */
-export function findSpawnAssaultTiles(room: Room, group: Creep[], spawn: StructureSpawn): Tile[] | undefined {
+export function findSpawnAssaultTiles(room: Room, group: Creep[], spawn: Structure, guide?: {actor:Creep; tile:Tile}): Tile[] | undefined {
   const drills = group.filter((c) => c.getActiveBodyparts(WORK));
   const medics = group.filter((c) => c.getActiveBodyparts(HEAL));
-  if (!drills.some((c) => c.pos.inRangeTo(spawn, weaponRange(c) + 2)) || !medics.length || group.some((c) => c.fatigue)) return;
+  if (!drills.some((c) => c.pos.inRangeTo(spawn, weaponRange(c) + 3)) || !medics.length || group.some((c) => c.fatigue)) return;
   const actors = [...drills, ...medics];
   if (actors.length !== group.length || actors.length > 4) return;
   const free = new Map<number, boolean>();
@@ -281,6 +286,7 @@ export function findSpawnAssaultTiles(room: Room, group: Creep[], spawn: Structu
     return tiles.sort((a, b) => range(a, c.pos) - range(b, c.pos));
   });
   const chosen: Tile[] = [];
+  const flexible = medics.length > 1 && group.every(c=>c.hits >= c.hitsMax * 0.8);
   const ranges = drills.map(weaponRange);
   const originalDistance = drills.reduce((sum, c, i) => sum + Math.max(0, range(c.pos, spawn.pos) - ranges[i]), 0);
   let best: Tile[] | undefined,
@@ -288,8 +294,11 @@ export function findSpawnAssaultTiles(room: Room, group: Creep[], spawn: Structu
   function search(i: number, adjacent: number, steps: number): void {
     if (i === actors.length) {
       const distance = chosen.slice(0, drills.length).reduce((sum, p, j) => sum + Math.max(0, range(p, spawn.pos) - ranges[j]), 0);
-      if (!adjacent && distance >= originalDistance) return;
-      const score = adjacent * 100 - distance * 8 - steps;
+      const coverage=chosen.slice(0,drills.length).map(d=>chosen.slice(drills.length).filter(h=>range(d,h)<=1).length);
+      if(coverage.some(n=>!n))return;
+      const follows=guide && range(chosen[actors.indexOf(guide.actor)],guide.tile)===0;
+      if (!adjacent && distance >= originalDistance && !follows) return;
+      const score = adjacent * 100 + Number(!!follows)*14 - distance * 8 - steps + coverage.reduce((a,b)=>a+b,0);
       if (score > bestScore) {
         bestScore = score;
         best = [];
@@ -305,7 +314,7 @@ export function findSpawnAssaultTiles(room: Room, group: Creep[], spawn: Structu
       const nextAdjacent = adjacent + Number(isDrill && range(at, spawn.pos) <= ranges[i]);
 
       // 两名护卫均能贴身治疗所有拆墙兵，也互相覆盖。
-      if (!isDrill && chosen.some((p) => range(p, at) > 1)) continue;
+      if (!isDrill && chosen.some((p) => range(p, at) > (flexible ? 2 : 1))) continue;
       chosen.push(at);
       search(i + 1, nextAdjacent, steps + Number(range(actors[i].pos, at) > 0));
       chosen.pop();
@@ -313,6 +322,12 @@ export function findSpawnAssaultTiles(room: Room, group: Creep[], spawn: Structu
   }
   search(0, 0, 0);
   return best;
+}
+
+/** 优先突破能同时控制多个 Spawn 的核心，防止各翼在外围反复拆掉又重建的兵营。 */
+export function selectSiegeCore(spawns: StructureSpawn[], origin: Tile): StructureSpawn | undefined {
+  const coverage=(s:StructureSpawn)=>spawns.filter(other=>range(s.pos,other.pos)<=3).length;
+  return [...spawns].sort((a,b)=>coverage(b)-coverage(a) || range(origin,a.pos)-range(origin,b.pos))[0];
 }
 
 const frames = new WeakMap<Room, Set<string>>();
@@ -344,7 +359,8 @@ export function runSiegeFormation(creep: Creep, task: WarTask): void {
   const anchor = (anchors[wing] ??= entryAnchor(room, ingress, wing));
   const leader = group.find((c) => slot(c) === 0);
   const spawns = room.find(FIND_HOSTILE_SPAWNS);
-  const original = spawns.sort((a, b) => range(anchor, a.pos) - range(anchor, b.pos))[0];
+  const original = spawns.find(s=>s.id===task.siegeCore) ?? selectSiegeCore(spawns,anchor);
+  if(original)task.siegeCore=original.id;
   let objective = original ? cover(room, original) : undefined;
   const previousFront = task.siegeFront?.[wing] ?? 0;
   const formations = (task.siegeFormationOrder ??= {});
@@ -392,6 +408,35 @@ export function runSiegeFormation(creep: Creep, task: WarTask): void {
   const pinned = breaches[wing] && Game.getObjectById(breaches[wing]);
   if (pinned) objective = pinned;
   else delete breaches[wing];
+  // 四格方阵常需拆多层墙。抵达堡垒后，以单个火力点为目标，只拆第一座实际挡路的建筑。
+  const gatePlans = (task.siegeGates ??= {});
+  const point = fighters.filter(c=>original && c.pos.inRangeTo(original,8))
+    .sort((a,b)=>a.pos.getRangeTo(original!) - b.pos.getRangeTo(original!))[0];
+  let guide: {actor:Creep;tile:Tile} | undefined;
+  if (original && point && isDue("siege-gate:"+room.name, 4, Game.time, wing)
+    && !fighters.some(c=>c.pos.inRangeTo(original,weaponRange(c)))) {
+    const terrain = geometry(room);
+    const lane=searchMovementPath(point.pos,{pos:original.pos,range:weaponRange(point)},
+      {maxRooms:1,maxOps:3500,roomCallback:()=>terrain.single});
+    if(!lane.incomplete) {
+      const gate=lane.path.map(p=>terrain.blockers.get(tileKey(p.x,p.y))).find(id=>id && Game.getObjectById(id));
+      if(gate)gatePlans[wing]=gate;else {
+        delete gatePlans[wing];
+        if(lane.path.length)guide={actor:point,tile:lane.path[0]};
+      }
+    }
+  }
+  const gate=gatePlans[wing] && Game.getObjectById(gatePlans[wing]);
+  if(gate && original && !fighters.some(c=>c.pos.inRangeTo(original,weaponRange(c))) &&
+    fighters.some(c=>c.pos.inRangeTo(gate,weaponRange(c)))) {
+    const positions=findSpawnAssaultTiles(room,group,gate);
+    if(positions)for(const c of group){
+      const tile=positions[slot(c)];
+      if(tile && range(tile,c.pos)===1)c.move(c.pos.getDirectionTo(tile.x,tile.y));
+    }
+    healAndShoot(group,room,gate);
+    return;
+  }
   const strikes = (task.siegeStrike ??= {});
   const existingStrike = strikes[wing];
   let strikeSpawn = existingStrike && spawns.find((s) => s.id === existingStrike.spawn);
@@ -401,7 +446,7 @@ export function runSiegeFormation(creep: Creep, task: WarTask): void {
     (group.length < 4 || isDue("siege-position:"+room.name, 4, Game.time, wing)) &&
     group.some((member) => member.getActiveBodyparts(WORK) && !member.pos.inRangeTo(original, weaponRange(member)))
   ) {
-    const positions = findSpawnAssaultTiles(room, group, original);
+    const positions = findSpawnAssaultTiles(room, group, original, guide);
     if (positions) {
       strikes[wing] = { spawn: original.id, tiles: positions };
       strikeSpawn = original;
@@ -449,7 +494,7 @@ export function runSiegeFormation(creep: Creep, task: WarTask): void {
     healAndShoot(group, room, objective);
     return;
   }
-  const exposedSpawn = spawns.find((spawn) => group.some((member) => member.pos.inRangeTo(spawn, reach)));
+  const exposedSpawn = original && group.some(member=>member.pos.inRangeTo(original,reach)) ? original : undefined;
   if (exposedSpawn) {
     const protectedTarget = cover(room, exposedSpawn);
     face(protectedTarget, reach);
@@ -463,7 +508,7 @@ export function runSiegeFormation(creep: Creep, task: WarTask): void {
   }
   const { matrix, blockers } = geometry(room);
   // 任一队员能贴到 Spawn，就能在方阵内换位；无需拆出额外一列道路。
-  const goals = spawns.flatMap((spawn) =>
+  const goals = (original ? [original] : spawns).flatMap((spawn) =>
     offsets.map((offset) => ({
       pos: new RoomPosition(spawn.pos.x - offset.x, spawn.pos.y - offset.y, room.name),
       range: reach,
