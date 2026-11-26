@@ -128,21 +128,27 @@ function fire(
   openings: Structure[],
   cleared: Set<string>,
   approach: Structure[],
+  exposed: Structure[],
   core?: Structure,
 ): void {
   const enemies = nearby.filter((h) => creep.pos.inRangeTo(h, 3)).sort((a, b) => a.hits - b.hits);
   const enemy = enemies[0];
-  const mass = enemies.reduce((n, h) => {
-    const distance = creep.pos.getRangeTo(h);
-    return n + (distance <= 1 ? 1 : distance === 2 ? 0.4 : 0.1);
-  }, 0);
-  // 无掩体的 Spawn 可立刻收割；否则远射先协助打通本翼实际的射击通道。
   const focus = core ?? (target && creep.pos.inRangeTo(target, 3) ? target : undefined);
-  if (focus && creep.pos.isNearTo(focus) && (mass > 0 || openings.some(s => s.id !== focus.id && creep.pos.inRangeTo(s, 3)))) creep.rangedMassAttack();
-  else if (!focus && mass >= 1.5) creep.rangedMassAttack();
-  else if (focus && weaponRange(creep) === 3 && creep.pos.inRangeTo(focus, 3)) creep.rangedAttack(focus);
-  else if (enemy) creep.rangedAttack(enemy);
-  else if (target && creep.pos.inRangeTo(target, 3)) creep.rangedAttack(target);
+  if (creep.getActiveBodyparts(RANGED_ATTACK)) {
+    const structures = exposed.filter(s => creep.pos.inRangeTo(s, 3));
+    const spread = [...enemies, ...structures].reduce((sum, obj) => {
+      const distance = creep.pos.getRangeTo(obj);
+      return sum + (distance <= 1 ? 1 : distance === 2 ? 0.4 : 0.1);
+    }, 0);
+    // 贴身群攻对主目标保持全额伤害，并同时消耗相邻的 rampart、维修工和补塔物流。
+    if (focus && creep.pos.isNearTo(focus) && spread > 1) creep.rangedMassAttack();
+    else if (focus && weaponRange(creep) === 3) creep.rangedAttack(focus);
+    else if (spread > 1 && !focus) creep.rangedMassAttack();
+    else {
+      const shot = enemy ?? focus ?? structures[0];
+      if (shot) creep.rangedAttack(shot);
+    }
+  }
   if (!creep.getActiveBodyparts(WORK)) return;
   const power = creep.body.reduce((sum, part) => {
     if (part.type !== WORK || part.hits <= 0) return sum;
@@ -202,6 +208,8 @@ function healAndShoot(group: Creep[], room: Room, target?: Structure): void {
         .map((s) => cover(room, s))
         .sort((a, b) => Math.min(...spawns.map((s) => s.pos.getRangeTo(a))) - Math.min(...spawns.map((s) => s.pos.getRangeTo(b))) || a.hits - b.hits)
     : [];
+  const exposed = room.find(FIND_HOSTILE_STRUCTURES).filter(s => s.hits > 0 &&
+    (s.structureType === STRUCTURE_RAMPART || cover(room, s).id === s.id));
   const cleared = new Set<string>();
   const underFire = allies.some((member) => (incoming.get(member.id) ?? 0) > 0);
   const towers = room
@@ -245,7 +253,7 @@ function healAndShoot(group: Creep[], room: Room, target?: Structure): void {
       .filter((spawn) => c.pos.inRangeTo(spawn, 3))
       .map((spawn) => cover(room, spawn))
       .sort((a, b) => Number(b.id === target?.id) - Number(a.id === target?.id) || a.hits - b.hits)[0];
-    fire(c, target, nearby, openings, cleared, approach, core || undefined);
+    fire(c, target, nearby, openings, cleared, approach, exposed, core || undefined);
   }
 }
 
