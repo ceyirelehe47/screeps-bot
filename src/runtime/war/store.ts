@@ -64,6 +64,7 @@ export interface WarTask {
   siegeFront?: Record<number, number>;
   siegeFormationOrder?: Record<number, number[]>;
   siegeBreach?: Record<number, Id<Structure>>;
+  siegeStrike?: Record<number, {spawn: Id<StructureSpawn>; tiles: {x:number; y:number}[]}>;
   siegeWings?: Record<number, boolean>;
   siegeAnchors?: Record<number, {x:number; y:number}>;
   autoTactic?: true;

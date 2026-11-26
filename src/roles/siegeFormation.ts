@@ -170,6 +170,73 @@ function healAndShoot(group: Creep[], room: Room, target?: Structure): void {
   }
 }
 
+/** 只需打通拆墙位及治疗位就能攻击 Spawn，避免为完整方阵额外拆除第四格屏障。 */
+function findSpawnAssaultTiles(room: Room, group: Creep[], spawn: StructureSpawn): Tile[] | undefined {
+  const drills = group.filter((c) => c.getActiveBodyparts(WORK));
+  const medics = group.filter((c) => c.getActiveBodyparts(HEAL));
+  if (!drills.some((c) => c.pos.inRangeTo(spawn, 2)) || medics.length < 2 || group.some((c) => c.fatigue)) return;
+  const actors = [...drills, ...medics];
+  if (actors.length !== 4) return;
+  const free = new Map<number, boolean>();
+  const terrain = Game.map.getRoomTerrain(room.name);
+  const options = actors.map((c) => {
+    const tiles: Tile[] = [];
+    for (let y = c.pos.y - 1; y <= c.pos.y + 1; y++)
+      for (let x = c.pos.x - 1; x <= c.pos.x + 1; x++) {
+        if (x < 1 || y < 1 || x > 48 || y > 48) continue;
+        const k = tileKey(x, y);
+        if (!free.has(k))
+          free.set(
+            k,
+            !(terrain.get(x, y) & TERRAIN_MASK_WALL) &&
+              !room
+                .lookAt(x, y)
+                .some(
+                  (o) =>
+                    o.source ||
+                    o.mineral ||
+                    o.deposit ||
+                    o.powerCreep ||
+                    (o.structure && !isWalkableStructure(o.structure)) ||
+                    (o.creep && !group.includes(o.creep)),
+                ),
+          );
+        if (free.get(k)) tiles.push({ x, y });
+      }
+    return tiles.sort((a, b) => range(a, c.pos) - range(b, c.pos));
+  });
+  const chosen: Tile[] = [];
+  let best: Tile[] | undefined,
+    bestScore = -Infinity;
+  function search(i: number, adjacent: number, steps: number): void {
+    if (i === actors.length) {
+      if (!adjacent) return;
+      const score = adjacent * 10 - steps;
+      if (score > bestScore) {
+        bestScore = score;
+        best = [];
+        actors.forEach((c, index) => {
+          best![slot(c)] = chosen[index];
+        });
+      }
+      return;
+    }
+    for (const at of options[i]) {
+      if (chosen.some((p) => p.x === at.x && p.y === at.y)) continue;
+      const isDrill = i < drills.length;
+      const nextAdjacent = adjacent + Number(isDrill && range(at, spawn.pos) <= 1);
+      if (i === drills.length - 1 && !nextAdjacent) continue;
+      // 两名护卫均能贴身治疗所有拆墙兵，也互相覆盖。
+      if (!isDrill && chosen.some((p) => range(p, at) > 1)) continue;
+      chosen.push(at);
+      search(i + 1, nextAdjacent, steps + Number(range(actors[i].pos, at) > 0));
+      chosen.pop();
+    }
+  }
+  search(0, 0, 0);
+  return best;
+}
+
 const frames = new WeakMap<Room, Set<string>>();
 const turns = new WeakMap<Room, number>();
 export function runSiegeFormation(creep: Creep, task: WarTask): void {
@@ -243,6 +310,28 @@ export function runSiegeFormation(creep: Creep, task: WarTask): void {
   const pinned = breaches[wing] && Game.getObjectById(breaches[wing]);
   if (pinned) objective = pinned;
   else delete breaches[wing];
+  const strikes = (task.siegeStrike ??= {});
+  const existingStrike = strikes[wing];
+  let strikeSpawn = existingStrike && spawns.find((s) => s.id === existingStrike.spawn);
+  if (existingStrike && !strikeSpawn) delete strikes[wing];
+  if (!strikeSpawn && original && group.length === 4 && Game.time % 4 === wing) {
+    const positions = findSpawnAssaultTiles(room, group, original);
+    if (positions) {
+      strikes[wing] = { spawn: original.id, tiles: positions };
+      strikeSpawn = original;
+    }
+  }
+  if (strikeSpawn) {
+    for (const member of group) {
+      const at = strikes[wing].tiles[slot(member)];
+      if (!at || (member.pos.x === at.x && member.pos.y === at.y)) continue;
+      const goal = new RoomPosition(at.x, at.y, room.name);
+      if (member.pos.isNearTo(goal)) member.move(member.pos.getDirectionTo(goal));
+      else member.moveTo(goal, walk);
+    }
+    healAndShoot(group, room, cover(room, strikeSpawn));
+    return;
+  }
   const assembled =
     group.length === 4 &&
     group.every((c) => {

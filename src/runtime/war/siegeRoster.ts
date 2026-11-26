@@ -65,6 +65,7 @@ export function assembleSiegeWings(task: WarTask, units: Creep[], staging: strin
       if (task.siegeAnchors) delete task.siegeAnchors[wing];
       if (task.siegeFormationOrder) delete task.siegeFormationOrder[wing];
       if (task.siegeBreach) delete task.siegeBreach[wing];
+      if (task.siegeStrike) delete task.siegeStrike[wing];
       if (task.siegeFront) delete task.siegeFront[wing];
     }
     const drills = waiting.filter(drill),
