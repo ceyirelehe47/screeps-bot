@@ -1,7 +1,7 @@
 import { shouldUseSiege } from "./siege";
 import type { WarTask } from "./store";
 import { getBoostPartType } from "../boostParts";
-import { SIEGE_BODIES, SIEGE_BOOSTS, SIEGE_SLOTS } from "./siegeRoster";
+import { assembleSiegeWings, SIEGE_BODIES, SIEGE_BOOSTS, SIEGE_SLOTS } from "./siegeRoster";
 import { createMockStore } from "@mock/powerBank";
 
 const order: WarTask = {
@@ -66,4 +66,23 @@ it("首次齐射尚未获得治疗时，两轮六塔近距伤害仍能由前排�
   }
   const healing = 2 * SIEGE_BODIES.escort.filter((p) => p === HEAL).length * HEAL_POWER * BOOSTS.heal.XLHO2.heal;
   expect(healing).toBeGreaterThanOrEqual(volley * BOOSTS.tough.XGHO2.damage);
+});
+
+it("出生序号不齐时，按中场实到兵力组队；阵亡的拆墙兵由到场同类增援替补", () => {
+  const staging = "E2N2";
+  const task: WarTask = { ...order, squad: "siege" };
+  const soldier = (job: "breacher" | "escort", index: number) =>
+    ({
+      name: job + index,
+      room: { name: staging },
+      memory: { ready: true, roleArgs: ["", "", "", "", "", String(index)] },
+      getActiveBodyparts: (part: BodyPartConstant) => (job === "breacher" && part === WORK ? 17 : 0),
+    }) as unknown as Creep;
+  const soldiers = [soldier("breacher", 4), soldier("escort", 1), soldier("breacher", 2), soldier("escort", 7)];
+  assembleSiegeWings(task, soldiers, staging);
+  expect(task.siegeWings?.[0]).toBe(true);
+  expect(soldiers.map((c) => c.memory._siegeSlot)).toEqual([0, 1, 2, 3]);
+  const replacement = soldier("breacher", 6);
+  assembleSiegeWings(task, [...soldiers.slice(1), replacement], staging);
+  expect(replacement.memory._siegeSlot).toBe(0);
 });
