@@ -828,6 +828,7 @@ describe("towerDrainDuo 战争控制", () => {
       structureType: STRUCTURE_TOWER, pos: new MockPos(2 + i, 25, target), store: createMockStore({ energy: 1000 }),
     } as unknown as StructureTower));
     Game.rooms[target] = createTargetRoom([], towers);
+    Game.map = { ...Game.map } as GameMap;
     Game.map.describeExits = jest.fn(() => ({ [LEFT]: west, [TOP]: north }));
     Game.map.getRoomTerrain = jest.fn(() => ({ get: (x: number, y: number) =>
       x === 0 && (y < 22 || y > 27) ? TERRAIN_MASK_WALL : 0 })) as unknown as GameMap["getRoomTerrain"];
