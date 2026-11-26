@@ -69,6 +69,16 @@ export function limitReinforcementBoosts(
   return exhausted;
 }
 
+/** 已进入目标房的老兵能在补员孵化与行军期间继续作战。 */
+export function needsSiegeSuccessor(task: WarTask, units: Creep[], spawnTime: number, homeEnergy: number): boolean {
+  if (!units.length) return true;
+  if (units.length !== 1 || !task.siegeLaunched || task.oneShot !== false || homeEnergy < 150000) return false;
+  const veteran = units[0];
+  if (veteran.spawning || veteran.room.name !== task.targetRoom || veteran.ticksToLive === undefined) return false;
+  const travel = Math.max(1, (task.routeRooms?.length ?? 2) - 1) * 50;
+  return veteran.ticksToLive <= spawnTime + travel + 60;
+}
+
 export function runSiegeCampaign(task: WarTask): void {
   const target = Game.rooms[task.targetRoom];
   if (!target || Game.time % 10 === 0) requestCombatObservation(task.targetRoom);
@@ -97,14 +107,21 @@ export function runSiegeCampaign(task: WarTask): void {
         ? 3
         : 2;
   }
+  const room = Game.rooms[task.sourceRoom];
+  const homeEnergy = (room?.storage?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0) +
+    (room?.terminal?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0);
   const members = siegeSlots(task).map((job, index) => {
     const name = siegeConfigName(task, index);
-    return { job, name, index, unit: getLiveCreepsByConfig(name)[0] };
+    const units = getLiveCreepsByConfig(name);
+    const successor = needsSiegeSuccessor(task, units, SIEGE_BODIES[job].length * CREEP_SPAWN_TIME, homeEnergy);
+    const unit = units.reduce<Creep | undefined>((newest, c) =>
+      !newest || (c.ticksToLive ?? Infinity) > (newest.ticksToLive ?? Infinity) ? c : newest, undefined);
+    return { job, name, index, unit, units, successor };
   });
   const staging = (task.siegeStagingRoom ??= task.routeRooms?.[task.routeRooms.length - 2] ?? task.sourceRoom);
   assembleSiegeWings(
     task,
-    members.flatMap((member) => (member.unit ? [member.unit] : [])),
+    members.flatMap((member) => member.units),
     staging,
   );
   if (Object.values(task.siegeWings ?? {}).some(Boolean)) task.siegeLaunched = true;
@@ -116,18 +133,18 @@ export function runSiegeCampaign(task: WarTask): void {
   const store = ensureConfigStore();
   const taskId = getLegacyWarBoostTaskId(task);
   const amounts = new Map<ResourceConstant, number>();
-  const slots = members.map(({ job, name, unit, index }) => {
+  const slots = members.map(({ job, name, unit, index, successor }) => {
     const spent = !!task.oneShot && store[name]?.spawnOnce?.queuedAt !== undefined;
     const body = SIEGE_BODIES[job];
     for (const compound of SIEGE_BOOSTS[job]) {
-      const count = unit
+      const count = unit && !successor
         ? countBoostableParts(unit.body, compound)
         : spent && !isConfigQueuedInSpawns(spawns, name) && !isConfigSpawning(name)
           ? 0
           : body.filter((part) => part === getBoostPartType(compound)).length;
       if (count) amounts.set(compound, (amounts.get(compound) ?? 0) + count * LAB_BOOST_MINERAL);
     }
-    return { name, unit, spent, job, body, index };
+    return { name, unit, spent, job, body, index, successor };
   });
   if (task.siegeLaunched && task.oneShot === false) {
     const home = Game.rooms[task.sourceRoom];
@@ -150,7 +167,7 @@ export function runSiegeCampaign(task: WarTask): void {
     return;
   }
   const route = task.routeRooms?.join("|") ?? "";
-  for (const { name, unit, spent, job, body, index } of slots) {
+  for (const { name, spent, job, body, index, successor } of slots) {
     if (index >= 4 && !task.siegeLaunched && members.slice(0, 4).some((s) => !s.unit)) continue;
     if (!store[name])
       upsertWarConfig(name, {
@@ -160,7 +177,7 @@ export function runSiegeCampaign(task: WarTask): void {
         args: [task.targetRoom, route, taskId, SIEGE_BOOSTS[job].join("|"), job, String(index)],
         spawnOnce: task.oneShot ? {} : undefined,
       });
-    if (!unit && !spent && !isConfigQueuedInSpawns(spawns, name) && !isConfigSpawning(name)) {
+    if (successor && !spent && !isConfigQueuedInSpawns(spawns, name) && !isConfigSpawning(name)) {
       const spawn = selectLeastLoadedSpawn(spawns);
       if (spawn) enqueueConfig(spawn, name, true);
     }

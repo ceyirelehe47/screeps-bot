@@ -1,4 +1,4 @@
-import { shouldUseSiege, limitReinforcementBoosts } from "./siege";
+import { shouldUseSiege, limitReinforcementBoosts, needsSiegeSuccessor } from "./siege";
 import type { WarTask } from "./store";
 import { getBoostPartType } from "../boostParts";
 import { assembleSiegeWings, SIEGE_BODIES, SIEGE_BOOSTS, SIEGE_SLOTS } from "./siegeRoster";
@@ -104,4 +104,14 @@ it("远射翼在三格外两兵合计每 tick 可打掉 1680 点，拆墙翼保�
   const shots = SIEGE_BODIES.ranger.filter(p => p === RANGED_ATTACK).length;
   expect(2 * shots * RANGED_ATTACK_POWER * BOOSTS.ranged_attack.XKHO2.rangedAttack).toBe(1680);
   expect(SIEGE_BODIES.breacher.filter(p => p === WORK).length).toBeGreaterThan(shots / 2);
+});
+
+it("留出孵化、强化和四房行军时间，同一远征槽最多只提前补一人", () => {
+  const task: WarTask = { ...order, siegeLaunched: true, routeRooms: ["E1N2","E2N2","E3N2","E4N2","E5N2"], targetRoom: "E5N2" };
+  const veteran = { room: { name: task.targetRoom }, ticksToLive: 400 } as Creep;
+  const next = { room: { name: task.sourceRoom }, spawning: true } as Creep;
+  expect(needsSiegeSuccessor(task, [veteran], 150, 200000)).toBe(true);
+  expect(needsSiegeSuccessor(task, [veteran, next], 150, 200000)).toBe(false);
+  expect(needsSiegeSuccessor(task, [veteran], 150, 140000)).toBe(false);
+  expect(needsSiegeSuccessor({ ...task, oneShot: true }, [veteran], 150, 200000)).toBe(false);
 });
