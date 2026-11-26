@@ -3,11 +3,11 @@ import type { WarTask } from "./store";
 export const SIEGE_SLOTS = [
   "breacher",
   "escort",
-  "escort",
+  "breacher",
   "escort",
   "breacher",
   "escort",
-  "escort",
+  "breacher",
   "escort",
 ] as const;
 export type SiegeJob = (typeof SIEGE_SLOTS)[number];

@@ -62,6 +62,7 @@ export interface WarTask {
   siegeLaunched?: boolean;
   siegeStagingRoom?: string;
   siegeFront?: Record<number, number>;
+  siegeFormationOrder?: Record<number, number[]>;
   siegeBreach?: Record<number, Id<Structure>>;
   siegeWings?: Record<number, boolean>;
   siegeAnchors?: Record<number, {x:number; y:number}>;

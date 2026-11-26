@@ -127,6 +127,7 @@ function healAndShoot(group: Creep[], room: Room, target?: Structure): void {
     assigned = new Map<string, number>();
   for (const e of room.getEventLog())
     if (e.event === EVENT_ATTACK) incoming.set(e.data.targetId, (incoming.get(e.data.targetId) ?? 0) + e.data.damage);
+  const underFire = group.some((member) => (incoming.get(member.id) ?? 0) > 0);
   const towers = room
     .find(FIND_HOSTILE_STRUCTURES)
     .filter(
@@ -150,7 +151,7 @@ function healAndShoot(group: Creep[], room: Room, target?: Structure): void {
         // 首次齐射之前预治疗没有 HEAL 的拆墙兵，之后按上一帧各成员实际承伤分配。
         const towerVolley =
           p.getActiveBodyparts(WORK) > 0 ? towers.reduce((n, tower) => n + towerAttackPowerAt(tower, p.pos), 0) : 0;
-        const risk = damageAfterTough(p.body, Math.max(towerVolley, incoming.get(p.id) ?? 0));
+        const risk = damageAfterTough(p.body, Math.max(towerVolley * (underFire ? 0.15 : 1), incoming.get(p.id) ?? 0));
         const missing = p.hitsMax - p.hits;
         const score = (missing + risk - (assigned.get(p.id) ?? 0)) * (c.pos.isNearTo(p) ? 1 : 1 / 3);
         if (score > bestScore || (score === bestScore && p === c)) {
@@ -197,9 +198,21 @@ export function runSiegeFormation(creep: Creep, task: WarTask): void {
   const spawns = room.find(FIND_HOSTILE_SPAWNS);
   const original = spawns.sort((a, b) => range(anchor, a.pos) - range(anchor, b.pos))[0];
   let objective = original ? cover(room, original) : undefined;
-  const fronts = (task.siegeFront ??= {});
-  const front = fronts[wing] ?? 0;
-  const cell = (c: Creep) => (slot(c) === 0 ? front : slot(c) === front ? 0 : slot(c));
+  const previousFront = task.siegeFront?.[wing] ?? 0;
+  const formations = (task.siegeFormationOrder ??= {});
+  const order = (formations[wing] ??= offsets.map((_, i) => (i === 0 ? previousFront : i === previousFront ? 0 : i)));
+  const cell = (member: Creep) => order[slot(member)];
+  const face = (obstacle: Structure) => {
+    // 已能拆除的队员原地工作，其余拆墙兵与相邻障碍的护卫交换位置。
+    const frontMedics = group.filter((member) => !member.getActiveBodyparts(WORK) && member.pos.isNearTo(obstacle));
+    for (const drill of group.filter((member) => member.getActiveBodyparts(WORK) && !member.pos.isNearTo(obstacle))) {
+      const partner = frontMedics.shift();
+      if (!partner) break;
+      const a = slot(drill),
+        b = slot(partner);
+      [order[a], order[b]] = [order[b], order[a]];
+    }
+  };
   const breaches = (task.siegeBreach ??= {});
   const pinned = breaches[wing] && Game.getObjectById(breaches[wing]);
   if (pinned) objective = pinned;
@@ -228,13 +241,12 @@ export function runSiegeFormation(creep: Creep, task: WarTask): void {
   const exposedSpawn = spawns.find((spawn) => group.some((member) => member.pos.isNearTo(spawn)));
   if (exposedSpawn) {
     const protectedTarget = cover(room, exposedSpawn);
-    const adjacentMember = group.find((member) => member.pos.isNearTo(protectedTarget))!;
-    if (!leader.pos.isNearTo(protectedTarget)) fronts[wing] = cell(adjacentMember);
+    face(protectedTarget);
     healAndShoot(group, room, protectedTarget);
     return;
   }
   if (pinned && group.some((c) => c.pos.isNearTo(pinned))) {
-    if (!leader.pos.isNearTo(pinned)) fronts[wing] = cell(group.find((c) => c.pos.isNearTo(pinned))!);
+    face(pinned);
     healAndShoot(group, room, pinned);
     return;
   }
@@ -259,8 +271,7 @@ export function runSiegeFormation(creep: Creep, task: WarTask): void {
     if (barrier) {
       objective = barrier;
       breaches[wing] = barrier.id;
-      const near = group.find((c) => c.pos.isNearTo(barrier));
-      if (near && !leader.pos.isNearTo(barrier)) fronts[wing] = cell(near);
+      face(barrier);
     } else if (group.every((c) => !c.fatigue)) {
       const direction = origin.getDirectionTo(next);
       for (const c of group) c.move(direction);

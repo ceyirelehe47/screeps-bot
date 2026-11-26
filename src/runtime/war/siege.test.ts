@@ -46,9 +46,9 @@ it("只为持续进攻有塔且 Spawn 有掩体的玩家房自动选择攻坚编
   expect(shouldUseSiege(order, undefined)).toBe(false);
 });
 
-it("每个四人单元有拆墙兵与三名护卫，所有 50 个部件均有对应 T3", () => {
+it("每个四人单元有两名拆墙兵与两名护卫，所有 50 个部件均有对应 T3", () => {
   for (const wing of [SIEGE_SLOTS.slice(0, 4), SIEGE_SLOTS.slice(4)]) {
-    expect(wing).toEqual(["breacher", "escort", "escort", "escort"]);
+    expect(wing).toEqual(["breacher", "escort", "breacher", "escort"]);
     for (const job of wing) {
       const body = SIEGE_BODIES[job];
       expect(body).toHaveLength(50);
@@ -64,6 +64,6 @@ it("首次齐射尚未获得治疗时，两轮六塔近距伤害仍能由前排�
     const armor = body.filter((p) => p === TOUGH).length * 100;
     expect(armor).toBeGreaterThanOrEqual(2 * volley * BOOSTS.tough.XGHO2.damage);
   }
-  const healing = 3 * SIEGE_BODIES.escort.filter((p) => p === HEAL).length * HEAL_POWER * BOOSTS.heal.XLHO2.heal;
-  expect(healing).toBeGreaterThanOrEqual(2 * volley * BOOSTS.tough.XGHO2.damage);
+  const healing = 2 * SIEGE_BODIES.escort.filter((p) => p === HEAL).length * HEAL_POWER * BOOSTS.heal.XLHO2.heal;
+  expect(healing).toBeGreaterThanOrEqual(volley * BOOSTS.tough.XGHO2.damage);
 });
