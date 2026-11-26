@@ -1,3 +1,4 @@
+import { siegeUnitRole } from "./siegeUnit";
 import { carrierRole } from "@/roles/carrier";
 import { claimerRole } from "@/roles/claimer";
 import { flagScoutRole } from "@/roles/flagScout";
@@ -45,6 +46,7 @@ export const roleRegistry: Record<RoleName, RoleFactory> = {
   crossShardColonizerWorker: crossShardColonizerWorkerRole,
   homeDefender: homeDefenderRole,
   meleeAttacker: meleeAttackerRole,
+  siegeUnit: siegeUnitRole,
   healer: healerRole,
   crossShardClaimer: crossShardClaimerRole,
   flagScout: flagScoutRole,

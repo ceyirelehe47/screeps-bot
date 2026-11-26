@@ -1,3 +1,4 @@
+import { SIEGE_SLOTS, siegeConfigName } from "./siegeRoster";
 import { getCreepConfigService, getTickContextService } from "@/runtime/runtimeServices";
 import { isDefenseMode } from "@/runtime/defenseMode";
 import { isRoomInReserveMode } from "@/runtime/roomReserve";
@@ -10,6 +11,7 @@ import { hasAcceptedSpawn } from "@/runtime/spawnRequests";
 function ownsWarConfig(task: WarTask, name: string, config: CreepConfig): boolean {
   if (config.roomName !== task.sourceRoom || config.args[0] !== task.targetRoom) return false;
   const prefix = `${task.sourceRoom}:war:${task.targetRoom}:`;
+  if (config.role === "siegeUnit") return task.squad === "siege" && SIEGE_SLOTS.some((_, index) => siegeConfigName(task, index) === name);
   if (config.role === "claimer") return false;
   if (config.role !== "meleeAttacker" && config.role !== "healer") return false;
   if (task.activeGeneration) return name === task.activeGeneration.configNames[config.role];

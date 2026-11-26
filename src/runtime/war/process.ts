@@ -1,3 +1,4 @@
+import { runSiegeCampaign } from "./siege";
 import { OBSERVATION_REQUEST_TTL, requestCombatObservation } from "@/runtime/powerBankObserver";
 import { getSquadPolicy } from "./squadPolicy";
 import { assessUnboostedNpc, classifyNpcWarTarget } from "@/runtime/warNpcPolicy";
@@ -76,6 +77,11 @@ function confirmClear(task: WarTask): void {
 
 export function processTask(task: WarTask): void {
   task.statusSince ??= task.createdAt;
+  if (task.squad === "siege") {
+    refreshRoute(task);
+    runSiegeCampaign(task);
+    return;
+  }
   if (task.status === "patrol_waiting") {
     task.order = "patrol";
     if (Game.time < (task.patrolNextSweepAt ?? Game.time)) {

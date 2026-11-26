@@ -2,7 +2,9 @@ import { standard } from "./standard";
 import { t3Duo } from "./t3Duo";
 import { towerDrainDuo } from "./towerDrainDuo";
 import type { SquadPolicy } from "./types";
+const siege: SquadPolicy = { id: "siege", duo: false, parallel: false, needsBoost: true, countsNeutralWalls: false, allowsControllerAttack: false, meleeCount: 0, healerCount: 0, bodies: {} };
 export function getSquadPolicy(task: WarTask): SquadPolicy {
+  if (task.squad === "siege") return siege;
   return task.squad === "towerDrainDuo" ? towerDrainDuo : task.squad === "t3Duo" || task.boostTier === "t3" ? t3Duo : standard;
 }
 import { DUO_HEALER_COUNT, DUO_MELEE_COUNT, HEALER_COUNT, MELEE_COUNT, T3_ATTACKER_BODY, T3_ATTACKER_BOOSTS, T3_HEALER_BODY, T3_HEALER_BOOSTS, TOWER_DRAIN_ATTACKER_BODY, TOWER_DRAIN_HEALER_BODY } from "../constants";

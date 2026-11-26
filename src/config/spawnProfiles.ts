@@ -1,3 +1,4 @@
+import { SIEGE_BODIES } from "@/runtime/war/siegeRoster";
 import type { RoleName } from "@/types/system";
 import { COLONIZATION_UPGRADER_BODY } from "@/config/colonizationSupport";
 import {
@@ -289,6 +290,7 @@ export const spawnProfiles: Record<RoleName, SpawnBodyGenerator> = {
   colonizerWorker: oneOneOneBody,
   colonizerUpgrader: () => [...COLONIZATION_UPGRADER_BODY],
   meleeAttacker: meleeAttackBody,
+  siegeUnit: () => [...SIEGE_BODIES.escort],
   healer: healerBody,
   homeDefender: homeDefenderBody,
   crossShardClaimer: () => [CLAIM, MOVE],

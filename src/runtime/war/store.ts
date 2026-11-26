@@ -1,3 +1,4 @@
+import { SIEGE_SLOTS, siegeConfigName } from "./siegeRoster";
 import { isDue } from "@/runtime/cadence";
 import { queuedConfigNames, queuedSpawns, spawningForConfig } from "./spawnIndex";
 import { getSquadPolicy, getHealerCount, getMeleeCount } from "./squadPolicy/index";
@@ -7,7 +8,7 @@ import { DEFAULT_PATROL_INTERVAL_TICKS, MIN_PATROL_INTERVAL_TICKS, WAR_CONTROLLE
 
 export type WarStatus = "queued" | "staging" | "clearing" | "downgrading" | "patrol_waiting" | "done" | "failed";
 
-export type WarSquad = "standard" | "t3Duo" | "towerDrainDuo";
+export type WarSquad = "siege" | "standard" | "t3Duo" | "towerDrainDuo";
 
 export type WarBoostTier = "t3";
 
@@ -58,6 +59,7 @@ export function registerWarSpawn(configName: string, creepName: string): void {
 }
 
 export interface WarTask {
+  siegeLaunched?: boolean;
   autoTactic?: true;
   order?: WarOrder;
   review?: WarReview;
@@ -293,6 +295,7 @@ export function getPatrolInterval(task: WarTask): number {
 }
 
 export function getExpectedTaskConfigNames(task: WarTask): string[] {
+  if (task.squad === "siege") return SIEGE_SLOTS.map((_, i) => siegeConfigName(task, i));
   if (getSquadPolicy(task).duo && task.activeGeneration) {
     return Object.values(task.activeGeneration.configNames);
   }

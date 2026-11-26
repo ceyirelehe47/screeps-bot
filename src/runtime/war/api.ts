@@ -65,6 +65,7 @@ export function requestWarRoomClear(
     squadDecision: npcAuto ? decision?.reason ?? (identityChanged ? "npc_identity_changed" : "awaiting_vision") : "explicit_or_player_default",
     squadAssessedAt: npcAuto && decision && decision.reason !== "entry_not_proven" ? now : undefined,
     squad,
+    siegeLaunched: restarting || changedSquad ? undefined : existing?.siegeLaunched,
     tactic: squad === "t3Duo" ? options?.tactic ?? (options?.autoTactic === false && existing?.autoTactic ? undefined : existing?.tactic) : undefined,
     boostTier: squad === "towerDrainDuo" ? undefined : options?.boostTier
       ?? (npcAuto && squad === "t3Duo" ? "t3" : changedSquad ? undefined : existing?.boostTier),

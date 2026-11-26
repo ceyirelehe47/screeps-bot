@@ -59,7 +59,7 @@ function getSpawnRolePriority(role: CreepConfig["role"] | undefined): number {
     return 1;
   }
 
-  if (role === "meleeAttacker" || role === "healer") {
+  if (role === "meleeAttacker" || role === "healer" || role === "siegeUnit") {
     return 2;
   }
 
