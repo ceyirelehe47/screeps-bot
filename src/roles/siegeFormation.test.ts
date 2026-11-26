@@ -17,7 +17,7 @@ it("四次角色调度只提交一轮攻击；两名拆墙兵先打 Spawn 的掩
     updatedAt: 1,
     siegeLaunched: true,
   };
-  const group = SIEGE_SLOTS.slice(0, 4).map((job, i) => {
+  const group = SIEGE_SLOTS.slice(4, 8).map((job, i) => {
     const creep = createMockPowerBankCreep("siegeUnit", {
       name: "unit" + i,
       roomName: target,

@@ -1,7 +1,8 @@
 import type { WarTask } from "./store";
 
 const WING = ["breacher", "escort", "breacher", "escort"] as const;
-export const SIEGE_SLOTS = [...WING, ...WING, ...WING] as const;
+const BATTERY = ["ranger", "escort", "ranger", "escort"] as const;
+export const SIEGE_SLOTS = [...BATTERY, ...WING, ...BATTERY] as const;
 export function siegeSlots(task: WarTask) {
   return SIEGE_SLOTS.slice(0, (task.siegeWingCount ?? 2) * WING.length);
 }
@@ -13,12 +14,14 @@ const ranged = RESOURCE_CATALYZED_KEANIUM_ALKALIDE;
 const demolition = RESOURCE_CATALYZED_ZYNTHIUM_ACID;
 const medicine = RESOURCE_CATALYZED_LEMERGIUM_ALKALIDE;
 export const SIEGE_BOOSTS = {
+  ranger: [mobility, armor, ranged, demolition],
   breacher: [mobility, armor, ranged, demolition],
   escort: [mobility, armor, ranged, medicine],
 };
 
 const parts = (type: BodyPartConstant, count: number) => Array<BodyPartConstant>(count).fill(type);
 export const SIEGE_BODIES = {
+  ranger: [...parts(TOUGH, 18), WORK, ...parts(RANGED_ATTACK, 21), ...parts(MOVE, 10)],
   breacher: [...parts(TOUGH, 22), ...parts(WORK, 17), ...parts(RANGED_ATTACK, 1), ...parts(MOVE, 10)],
   escort: [...parts(TOUGH, 18), ...parts(RANGED_ATTACK, 1), ...parts(HEAL, 21), ...parts(MOVE, 10)],
 };
@@ -50,7 +53,7 @@ export function assembleSiegeWings(task: WarTask, units: Creep[], staging: strin
     if (wings[wing] && live.length) {
       for (let i = start; i < start + 4; i++) {
         if (live.some((c) => c.memory._siegeSlot === i)) continue;
-        const replacement = waiting.find((c) => drill(c) === (SIEGE_SLOTS[i] === "breacher"));
+        const replacement = waiting.find((c) => drill(c) === (SIEGE_SLOTS[i] !== "escort"));
         if (replacement) assign(replacement, i);
       }
       continue;

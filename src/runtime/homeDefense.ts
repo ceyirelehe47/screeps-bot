@@ -142,12 +142,19 @@ export function runHomeDefense(): void {
 
     const playerHostiles = getPlayerHostiles(room);
     const fronts = buildDefenseFronts(playerHostiles);
+    // 远征占用孵化槽达 150 tick。在有库存的持续攻城期间预备一名本地守军。
+    const mobilized = (room.storage?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0) >= 150000 &&
+      Object.values(Memory.data?.war ?? {}).some(w => w.sourceRoom === room.name && w.squad === "siege" &&
+        w.oneShot === false && w.status !== "failed" && w.status !== "done");
     if (playerHostiles.length > 0) {
-      const desiredCount = calcDesiredDefenderCount(room, playerHostiles, fronts.length);
+      const armoredPair = mobilized && playerHostiles.some(h => h.body.some(p => p.type === TOUGH && p.boost && p.hits > 0)) &&
+        playerHostiles.some(h => h.getActiveBodyparts(HEAL) > 0);
+      const desiredCount = Math.max(calcDesiredDefenderCount(room, playerHostiles, fronts.length),
+        mobilized ? Math.min(getMaxDefenders(), armoredPair ? 2 : 1) : 0);
       const designatedLab = Memory.cfg?.homeDefense?.rooms?.[room.name]?.boostLabId;
       const hasLocalStock = (room.storage?.store.getUsedCapacity(RESOURCE_CATALYZED_UTRIUM_ACID) ?? 0) +
         (room.terminal?.store.getUsedCapacity(RESOURCE_CATALYZED_UTRIUM_ACID) ?? 0) >= LAB_BOOST_MINERAL;
-      const needsBoost = desiredCount > 0 && (!!designatedLab || hasLocalStock) && shouldBoostDefender(room, playerHostiles);
+      const needsBoost = desiredCount > 0 && (!!designatedLab || hasLocalStock) && (mobilized || shouldBoostDefender(room, playerHostiles));
       prepareLocalDefenseBoost(room, needsBoost && !designatedLab ? desiredCount : 0);
       // 先完成可能失败的只读计划，再提交协调/配置；下一 tick 重算可收敛半写状态。
       writeDefenseFronts(room.name, fronts);
@@ -165,8 +172,10 @@ export function runHomeDefense(): void {
         } else clearBoostLabTasks(room.name);
       }
     } else {
-      prepareLocalDefenseBoost(room, 0);
-      removeDefendersAbove(room.name, 0);
+      const garrison = mobilized ? 1 : 0;
+      prepareLocalDefenseBoost(room, garrison);
+      if (garrison) ensureDefenders(room, garrison);
+      removeDefendersAbove(room.name, garrison);
       clearDefenseCoordination(room.name);
       clearBoostLabTasks(room.name);
     }

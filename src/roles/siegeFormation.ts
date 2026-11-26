@@ -17,6 +17,7 @@ const tileKey = (x: number, y: number) => y * 50 + x;
 const range = (a: Tile, b: Tile) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
 export const siegeSlot = (c: Creep) =>
   c.memory._siegeSlot ?? Number(c.memory.roleArgs?.[5] ?? c.memory.configName?.split(":").pop() ?? 0);
+const weaponRange = (c: Creep) => c.getActiveBodyparts(RANGED_ATTACK) > c.getActiveBodyparts(WORK) && c.getActiveBodyparts(WORK) > 0 ? 3 : 1;
 const groupId = (c: Creep) => Math.floor(siegeSlot(c) / 4);
 const slot = (c: Creep) => siegeSlot(c) % 4;
 const walk = { maxRooms: 1, ignoreCreeps: false, reusePath: 3 } as const;
@@ -123,9 +124,11 @@ function fire(
   openings: Structure[],
   cleared: Set<string>,
   approach: Structure[],
+  core?: Structure,
 ): void {
   const enemy = nearby.filter((h) => creep.pos.inRangeTo(h, 3)).sort((a, b) => a.hits - b.hits)[0];
-  if (enemy) creep.rangedAttack(enemy);
+  if (core && weaponRange(creep) === 3 && creep.pos.inRangeTo(core, 3)) creep.rangedAttack(core);
+  else if (enemy) creep.rangedAttack(enemy);
   else if (target && creep.pos.inRangeTo(target, 3)) creep.rangedAttack(target);
   if (!creep.getActiveBodyparts(WORK)) return;
   const power = creep.body.reduce((sum, part) => {
@@ -225,7 +228,11 @@ function healAndShoot(group: Creep[], room: Room, target?: Structure): void {
       const power = effectivePower(c.body, HEAL);
       assigned.set(best.id, (assigned.get(best.id) ?? 0) + power * (close ? 1 : 1 / 3));
     }
-    fire(c, target, nearby, openings, cleared, approach);
+    const core = weaponRange(c) === 3 && spawns
+      .filter((spawn) => c.pos.inRangeTo(spawn, 3))
+      .map((spawn) => cover(room, spawn))
+      .sort((a, b) => a.hits - b.hits)[0];
+    fire(c, target, nearby, openings, cleared, approach, core || undefined);
   }
 }
 
@@ -233,7 +240,7 @@ function healAndShoot(group: Creep[], room: Room, target?: Structure): void {
 export function findSpawnAssaultTiles(room: Room, group: Creep[], spawn: StructureSpawn): Tile[] | undefined {
   const drills = group.filter((c) => c.getActiveBodyparts(WORK));
   const medics = group.filter((c) => c.getActiveBodyparts(HEAL));
-  if (!drills.some((c) => c.pos.inRangeTo(spawn, 3)) || !medics.length || group.some((c) => c.fatigue)) return;
+  if (!drills.some((c) => c.pos.inRangeTo(spawn, weaponRange(c) + 2)) || !medics.length || group.some((c) => c.fatigue)) return;
   const actors = [...drills, ...medics];
   if (actors.length !== group.length || actors.length > 4) return;
   const free = new Map<number, boolean>();
@@ -265,12 +272,12 @@ export function findSpawnAssaultTiles(room: Room, group: Creep[], spawn: Structu
     return tiles.sort((a, b) => range(a, c.pos) - range(b, c.pos));
   });
   const chosen: Tile[] = [];
-  const originalDistance = drills.reduce((sum, c) => sum + range(c.pos, spawn.pos), 0);
+  const originalDistance = drills.reduce((sum, c) => sum + Math.max(0, range(c.pos, spawn.pos) - weaponRange(c)), 0);
   let best: Tile[] | undefined,
     bestScore = -Infinity;
   function search(i: number, adjacent: number, steps: number): void {
     if (i === actors.length) {
-      const distance = chosen.slice(0, drills.length).reduce((sum, p) => sum + range(p, spawn.pos), 0);
+      const distance = chosen.slice(0, drills.length).reduce((sum, p, j) => sum + Math.max(0, range(p, spawn.pos) - weaponRange(drills[j])), 0);
       if (!adjacent && distance >= originalDistance) return;
       const score = adjacent * 100 - distance * 8 - steps;
       if (score > bestScore) {
@@ -285,7 +292,7 @@ export function findSpawnAssaultTiles(room: Room, group: Creep[], spawn: Structu
     for (const at of options[i]) {
       if (chosen.some((p) => p.x === at.x && p.y === at.y)) continue;
       const isDrill = i < drills.length;
-      const nextAdjacent = adjacent + Number(isDrill && range(at, spawn.pos) <= 1);
+      const nextAdjacent = adjacent + Number(isDrill && range(at, spawn.pos) <= weaponRange(actors[i]));
 
       // 两名护卫均能贴身治疗所有拆墙兵，也互相覆盖。
       if (!isDrill && chosen.some((p) => range(p, at) > 1)) continue;
@@ -331,10 +338,12 @@ export function runSiegeFormation(creep: Creep, task: WarTask): void {
   const formations = (task.siegeFormationOrder ??= {});
   const order = (formations[wing] ??= offsets.map((_, i) => (i === 0 ? previousFront : i === previousFront ? 0 : i)));
   const cell = (member: Creep) => order[slot(member)];
-  const face = (obstacle: Structure) => {
+  const fighters = group.filter((member) => member.getActiveBodyparts(WORK));
+  const reach = fighters.length && fighters.every((member) => weaponRange(member) === 3) ? 3 : 1;
+  const face = (obstacle: Structure, distance = 1) => {
     // 已能拆除的队员原地工作，其余拆墙兵与相邻障碍的护卫交换位置。
     const drills = group.filter((member) => member.getActiveBodyparts(WORK) > 0);
-    const contact = group.filter((member) => member.pos.isNearTo(obstacle)).length;
+    const contact = group.filter((member) => member.pos.inRangeTo(obstacle, distance)).length;
     if (contact < drills.length && group.every((member) => !member.fatigue)) {
       const terrain = geometry(room);
       const origin = new RoomPosition(anchor.x, anchor.y, room.name);
@@ -343,7 +352,7 @@ export function runSiegeFormation(creep: Creep, task: WarTask): void {
           const at = { x: anchor.x + dx, y: anchor.y + dy };
           if (at.x < 1 || at.y < 1 || at.x > 47 || at.y > 47 || terrain.matrix.get(at.x, at.y) > 2) continue;
           const cells = offsets.map((d) => footprint(at, d));
-          if (cells.filter((p) => range(p, obstacle.pos) <= 1).length <= contact) continue;
+          if (cells.filter((p) => range(p, obstacle.pos) <= distance).length <= contact) continue;
           if (
             cells.some(
               (p) =>
@@ -358,8 +367,8 @@ export function runSiegeFormation(creep: Creep, task: WarTask): void {
           return;
         }
     }
-    const frontMedics = group.filter((member) => !member.getActiveBodyparts(WORK) && member.pos.isNearTo(obstacle));
-    for (const drill of group.filter((member) => member.getActiveBodyparts(WORK) && !member.pos.isNearTo(obstacle))) {
+    const frontMedics = group.filter((member) => !member.getActiveBodyparts(WORK) && member.pos.inRangeTo(obstacle, distance));
+    for (const drill of group.filter((member) => member.getActiveBodyparts(WORK) && !member.pos.inRangeTo(obstacle, distance))) {
       const partner = frontMedics.shift();
       if (!partner) break;
       const a = slot(drill),
@@ -378,7 +387,7 @@ export function runSiegeFormation(creep: Creep, task: WarTask): void {
   if (
     original &&
     (group.length < 4 || Game.time % 4 === wing) &&
-    group.some((member) => member.getActiveBodyparts(WORK) && !member.pos.isNearTo(original))
+    group.some((member) => member.getActiveBodyparts(WORK) && !member.pos.inRangeTo(original, weaponRange(member)))
   ) {
     const positions = findSpawnAssaultTiles(room, group, original);
     if (positions) {
@@ -388,7 +397,7 @@ export function runSiegeFormation(creep: Creep, task: WarTask): void {
   }
   if (strikeSpawn && !group.some((c) => {
     const tile = strikes[wing].tiles[slot(c)];
-    return c.getActiveBodyparts(WORK) && tile && range(tile, strikeSpawn!.pos) <= 1;
+    return c.getActiveBodyparts(WORK) && tile && range(tile, strikeSpawn!.pos) <= weaponRange(c);
   }) && !group.some((c) => {
     const tile = strikes[wing].tiles[slot(c)];
     return c.getActiveBodyparts(WORK) && tile && range(tile, strikeSpawn!.pos) < range(c.pos, strikeSpawn!.pos);
@@ -428,10 +437,10 @@ export function runSiegeFormation(creep: Creep, task: WarTask): void {
     healAndShoot(group, room, objective);
     return;
   }
-  const exposedSpawn = spawns.find((spawn) => group.some((member) => member.pos.isNearTo(spawn)));
+  const exposedSpawn = spawns.find((spawn) => group.some((member) => member.pos.inRangeTo(spawn, reach)));
   if (exposedSpawn) {
     const protectedTarget = cover(room, exposedSpawn);
-    face(protectedTarget);
+    face(protectedTarget, reach);
     healAndShoot(group, room, protectedTarget);
     return;
   }
@@ -445,7 +454,7 @@ export function runSiegeFormation(creep: Creep, task: WarTask): void {
   const goals = spawns.flatMap((spawn) =>
     offsets.map((offset) => ({
       pos: new RoomPosition(spawn.pos.x - offset.x, spawn.pos.y - offset.y, room.name),
-      range: 1,
+      range: reach,
     })),
   );
   const origin = new RoomPosition(anchor.x, anchor.y, room.name);

@@ -48,7 +48,8 @@ it("只为持续进攻有塔且 Spawn 有掩体的玩家房自动选择攻坚编
 
 it("每个四人单元有两名拆墙兵与两名护卫，所有 50 个部件均有对应 T3", () => {
   for (const wing of [SIEGE_SLOTS.slice(0, 4), SIEGE_SLOTS.slice(4, 8), SIEGE_SLOTS.slice(8)]) {
-    expect(wing).toEqual(["breacher", "escort", "breacher", "escort"]);
+    expect(wing).toEqual([wing[0], "escort", wing[0], "escort"]);
+    expect(["breacher", "ranger"]).toContain(wing[0]);
     for (const job of wing) {
       const body = SIEGE_BODIES[job];
       expect(body).toHaveLength(50);
@@ -97,4 +98,10 @@ it("剩矿只能供应一部分补兵时，保留可用装甲与能调入的治�
   const unavailable = limitReinforcementBoosts(amounts, r => r === armor ? 2461 : 0, r => r === heal);
   expect(unavailable).toEqual([work]);
   expect([...amounts]).toEqual([[armor, 2460], [heal, 1800]]);
+});
+
+it("远射翼在三格外两兵合计每 tick 可打掉 1680 点，拆墙翼保留近身输出", () => {
+  const shots = SIEGE_BODIES.ranger.filter(p => p === RANGED_ATTACK).length;
+  expect(2 * shots * RANGED_ATTACK_POWER * BOOSTS.ranged_attack.XKHO2.rangedAttack).toBe(1680);
+  expect(SIEGE_BODIES.breacher.filter(p => p === WORK).length).toBeGreaterThan(shots / 2);
 });
