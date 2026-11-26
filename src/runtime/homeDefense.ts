@@ -1,3 +1,4 @@
+import { prepareLocalDefenseBoost } from "./homeDefenseBoost";
 import { replaceSpawnQueue } from "@/runtime/spawnRequests";
 import { forEachIsolatedRoom } from "@/runtime/runtimeIsolation";
 import { isConfigQueuedInSpawns, selectLeastLoadedSpawn } from "@/runtime/spawnHelpers";
@@ -132,6 +133,7 @@ export function runHomeDefense(): void {
   forEachIsolatedRoom("homeDefense", tickContext.getMyRooms(), room => {
     const safeZone = getSafeZone(room.name);
     if (safeZone.size === 0) {
+      prepareLocalDefenseBoost(room, 0);
       removeDefendersAbove(room.name, 0);
       clearBoostLabTasks(room.name);
       clearDefenseCoordination(room.name);
@@ -142,7 +144,11 @@ export function runHomeDefense(): void {
     const fronts = buildDefenseFronts(playerHostiles);
     if (playerHostiles.length > 0) {
       const desiredCount = calcDesiredDefenderCount(room, playerHostiles, fronts.length);
-      const needsBoost = desiredCount > 0 && !!Memory.cfg?.homeDefense?.rooms?.[room.name]?.boostLabId && shouldBoostDefender(room, playerHostiles);
+      const designatedLab = Memory.cfg?.homeDefense?.rooms?.[room.name]?.boostLabId;
+      const hasLocalStock = (room.storage?.store.getUsedCapacity(RESOURCE_CATALYZED_UTRIUM_ACID) ?? 0) +
+        (room.terminal?.store.getUsedCapacity(RESOURCE_CATALYZED_UTRIUM_ACID) ?? 0) >= LAB_BOOST_MINERAL;
+      const needsBoost = desiredCount > 0 && (!!designatedLab || hasLocalStock) && shouldBoostDefender(room, playerHostiles);
+      prepareLocalDefenseBoost(room, needsBoost && !designatedLab ? desiredCount : 0);
       // 先完成可能失败的只读计划，再提交协调/配置；下一 tick 重算可收敛半写状态。
       writeDefenseFronts(room.name, fronts);
       syncDefenderAssignments(room.name, desiredCount, fronts.length);
@@ -153,12 +159,13 @@ export function runHomeDefense(): void {
       } else {
         ensureDefenders(room, desiredCount);
         stopQueuedDefenderSpawning(room.name, desiredCount);
-        if (needsBoost) {
+        if (needsBoost && designatedLab) {
           syncBoostLabTask(room);
           boostSupplyRooms.add(room.name);
         } else clearBoostLabTasks(room.name);
       }
     } else {
+      prepareLocalDefenseBoost(room, 0);
       removeDefendersAbove(room.name, 0);
       clearDefenseCoordination(room.name);
       clearBoostLabTasks(room.name);

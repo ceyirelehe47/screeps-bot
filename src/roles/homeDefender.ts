@@ -1,3 +1,4 @@
+import { homeDefenseBoostLab } from "@/runtime/homeDefenseBoost";
 import { getTowerBurstTarget } from "@/runtime/defenseCoordination";
 import { DEFENSE_BOOST_COMPOUND } from "@/runtime/boostControl";
 import { getSafeZone } from "@/runtime/safeZone";
@@ -77,9 +78,9 @@ export const homeDefenderRole: RoleFactory = (roomName: string, slot?: string) =
       measureCreepIntent(() => creep.attack(focus));
       return false;
     }
-    const boostLabId = Memory.cfg?.homeDefense?.rooms?.[roomName]?.boostLabId;
+    const boostLabId = homeDefenseBoostLab(roomName);
     const lab = boostLabId ? Game.getObjectById(boostLabId as Id<StructureLab>) : null;
-    if (lab?.my && lab.room.name === roomName && boostIntentTicks.get(lab) !== Game.time && !allHostiles.some(h => safeZone.has(h.pos.x * 50 + h.pos.y))) {
+    if (lab?.my && lab.room.name === roomName && boostIntentTicks.get(lab) !== Game.time && (creep.pos.isNearTo(lab) || !allHostiles.some(h => safeZone.has(h.pos.x * 50 + h.pos.y)))) {
       const unboosted = creep.body.filter(part => part.type === ATTACK && !part.boost && part.hits > 0).length;
       const count = Math.min(unboosted, Math.floor(lab.store.getUsedCapacity(DEFENSE_BOOST_COMPOUND) / LAB_BOOST_MINERAL),
         Math.floor(lab.store.getUsedCapacity(RESOURCE_ENERGY) / LAB_BOOST_ENERGY));
