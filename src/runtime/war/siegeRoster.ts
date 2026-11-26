@@ -71,6 +71,8 @@ export function assembleSiegeWings(task: WarTask, units: Creep[], staging: strin
     const drills = waiting.filter(drill),
       medics = waiting.filter((c) => !drill(c));
     if (waiting.length < 4 || !drills.length || medics.length < 2) continue;
+    // 持续战争按两拆两医投入，避免先派三医导致另一翼只有一名治疗。
+    if (task.oneShot === false && drills.length < 2) continue;
     const shortSince = (task.siegeShortSince ??= {});
     const drillEnRoute = units.some((c) => drill(c) && c.memory._siegeSlot === undefined && c.room.name !== staging);
     if (drills.length === 1 && drillEnRoute) {

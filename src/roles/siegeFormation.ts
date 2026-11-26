@@ -314,8 +314,13 @@ export function runSiegeFormation(creep: Creep, task: WarTask): void {
   const existingStrike = strikes[wing];
   let strikeSpawn = existingStrike && spawns.find((s) => s.id === existingStrike.spawn);
   if (existingStrike && !strikeSpawn) delete strikes[wing];
-  if (!strikeSpawn && original && group.length === 4 && Game.time % 4 === wing
-      && group.some(member => member.getActiveBodyparts(WORK) && !member.pos.isNearTo(original))) {
+  if (
+    !strikeSpawn &&
+    original &&
+    group.length === 4 &&
+    Game.time % 4 === wing &&
+    group.some((member) => member.getActiveBodyparts(WORK) && !member.pos.isNearTo(original))
+  ) {
     const positions = findSpawnAssaultTiles(room, group, original);
     if (positions) {
       strikes[wing] = { spawn: original.id, tiles: positions };
@@ -375,7 +380,16 @@ export function runSiegeFormation(creep: Creep, task: WarTask): void {
     })),
   );
   const origin = new RoomPosition(anchor.x, anchor.y, room.name);
-  const path = PathFinder.search(origin, goals, { maxRooms: 1, maxOps: 7000, roomCallback: () => matrix });
+  const otherWing = room.find(FIND_MY_CREEPS).filter((c) => c.memory.role === "siegeUnit" && !group.includes(c));
+  const lanes = otherWing.length ? matrix.clone() : matrix;
+  for (const ally of otherWing) {
+    for (const offset of offsets) {
+      const x = ally.pos.x - offset.x,
+        y = ally.pos.y - offset.y;
+      if (x >= 1 && x <= 47 && y >= 1 && y <= 47 && (x !== anchor.x || y !== anchor.y)) lanes.set(x, y, 255);
+    }
+  }
+  const path = PathFinder.search(origin, goals, { maxRooms: 1, maxOps: 7000, roomCallback: () => lanes });
   const next = path.path[0];
   if (!path.incomplete && next) {
     const obstacles = offsets.flatMap((d) => {
