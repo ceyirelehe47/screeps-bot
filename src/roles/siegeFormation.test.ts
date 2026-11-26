@@ -1,5 +1,5 @@
 import { setDefaultMapMocks, setupPathFinderGlobal, setupRoomPositionGlobal } from "@mock/movement";
-import { runSiegeFormation, advanceInBreach, selectSiegeCore, siegeWeaponRange } from "./siegeFormation";
+import { runSiegeFormation, advanceInBreach, selectSiegeCore, siegeWeaponRange, planBreachSteps } from "./siegeFormation";
 import { SIEGE_BODIES, SIEGE_SLOTS } from "@/runtime/war/siegeRoster";
 import type { WarTask } from "@/runtime/war/store";
 import { createMockPowerBankCreep, MockPos } from "@mock/powerBank";
@@ -95,4 +95,16 @@ it("远射手失去唯一的 WORK 后依然保持三格射程，医疗护卫仍�
   }) as Creep;
   expect(siegeWeaponRange(creep("ranger"))).toBe(3);
   expect(siegeWeaponRange(creep("escort"))).toBe(1);
+});
+
+it("窄道中两名医疗兵同时保持近身互保，攻击手等待下一步也不会拆散医疗队", () => {
+  const at = (x: number,y: number) => new MockPos(x,y,"E3N2") as unknown as RoomPosition;
+  const unit = (x: number,y: number) => ({pos:at(x,y), hits:5000, hitsMax:5000, fatigue:0}) as Creep;
+  const soldiers = [unit(25,40),unit(25,41)], medics = [unit(24,40),unit(24,41)];
+  const proposed = new Map([[soldiers[0],at(26,39)], [soldiers[1],at(26,42)]]);
+  const steps = planBreachSteps(soldiers,medics,proposed,() => true)!;
+  const pos = (c:Creep) => at(steps.get(c)!.x,steps.get(c)!.y);
+  expect(pos(medics[0]).isNearTo(pos(medics[1]))).toBe(true);
+  for (const c of soldiers) expect(medics.some(h => pos(h).isNearTo(pos(c)))).toBe(true);
+  expect(new Set([...steps.values()].map(p => p.x*50+p.y)).size).toBe(4);
 });

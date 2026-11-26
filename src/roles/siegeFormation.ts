@@ -279,6 +279,58 @@ function healAndShoot(group: Creep[], room: Room, target?: Structure, gates?: Re
   }
 }
 
+/** 攻击手只比较通道下一步与原地，两名治疗最多比较 9×9 个落点。 */
+export function planBreachSteps(
+  fighters: Creep[], medics: Creep[], desired: ReadonlyMap<Creep, RoomPosition>,
+  walkable: (x: number, y: number) => boolean,
+): Map<Creep, Tile> | undefined {
+  const actors = [...fighters, ...medics];
+  if (!fighters.length || !medics.length || actors.length > 4) return;
+  const options: Tile[][] = actors.map(c => {
+    const origin = c.pos;
+    if (c.fatigue) return [origin];
+    if (desired.has(c)) {
+      const next = desired.get(c)!;
+      return range(origin, next) && walkable(next.x, next.y) ? [next, origin] : [origin];
+    }
+    const tiles: Tile[] = [origin];
+    for (let x = origin.x - 1; x <= origin.x + 1; x++)
+      for (let y = origin.y - 1; y <= origin.y + 1; y++)
+        if ((x !== origin.x || y !== origin.y) && walkable(x, y)) tiles.push({x, y});
+    return tiles;
+  });
+  const chosen: Tile[] = [];
+  let best: Map<Creep, Tile> | undefined, bestScore = -Infinity;
+  const visit = (index: number, progress: number, moves: number): void => {
+    if (index === actors.length) {
+      const healers = chosen.slice(fighters.length);
+      if (healers.length > 1 && healers.some(a => !healers.some(b => b !== a && range(a,b) <= 1))) return;
+      let coverage = 0;
+      for (let i = 0; i < fighters.length; i++) {
+        const close = healers.filter(h => range(chosen[i],h) <= 1).length;
+        if (!close || (fighters[i].hits < fighters[i].hitsMax * 0.85 && close < Math.min(2, healers.length))) return;
+        coverage += close;
+      }
+      const score = 12 * progress + 2 * coverage - moves;
+      if (score > bestScore) {
+        bestScore = score;
+        best = new Map(actors.map((c,i) => [c, chosen[i]]));
+      }
+      return;
+    }
+    const actor = actors[index];
+    for (const at of options[index]) {
+      if (chosen.some(p => p.x === at.x && p.y === at.y)) continue;
+      const moved = Number(range(actor.pos, at) !== 0);
+      chosen.push(at);
+      visit(index + 1, progress + (index < fighters.length ? moved : 0), moves + moved);
+      chosen.pop();
+    }
+  };
+  visit(0,0,0);
+  return best;
+}
+
 /** 将敌方建筑的拆除时间作为通行代价；实际移动始终止于第一个仍然存在的障碍。 */
 export function advanceInBreach(room: Room, group: Creep[], spawn: StructureSpawn, orders?: Map<Creep, Structure>): Structure {
   const core = cover(room, spawn);
@@ -287,7 +339,8 @@ export function advanceInBreach(room: Room, group: Creep[], spawn: StructureSpaw
   const medics = group.filter(c => c.getActiveBodyparts(HEAL));
   // 已经就位的部队保持火力与队形，避免无意义的寻路和医疗位互换。
   if (fighters.every(c => c.pos.inRangeTo(spawn, siegeWeaponRange(c))) &&
-      fighters.every(c => medics.some(h => h.pos.isNearTo(c)))) return core;
+      fighters.every(c => medics.some(h => h.pos.isNearTo(c))) &&
+      (medics.length < 2 || medics.every(h => medics.some(other => other !== h && h.pos.isNearTo(other))))) return core;
   const { single, blockers } = geometry(room);
   const lanes = single.clone();
   for (const c of room.find(FIND_CREEPS)) {
@@ -314,45 +367,24 @@ export function advanceInBreach(room: Room, group: Creep[], spawn: StructureSpaw
         }
         else if (medics.some(h => h.pos.inRangeTo(next, 2)) && !medics.some(h => h.fatigue && h.pos.isEqualTo(next))) {
           destination = next;
-          c.move(c.pos.getDirectionTo(next));
         }
       }
     }
     destinations.set(c, destination);
     reserved.add(tileKey(destination.x, destination.y));
   }
-  // 每位治疗优先贴住一个队友；移动评分同时照顾另一名伤员与已占的位置。
-  const covered = new Set<Creep>();
-  for (const medic of medics) {
-    const otherMedics = medics.filter(other => other !== medic);
-    const patients = [...fighters].sort((a,b) => Number(covered.has(a)) - Number(covered.has(b)) ||
-      medic.pos.getRangeTo(a) - medic.pos.getRangeTo(b) || a.hits - b.hits);
-    const patient = patients[0];
-    if (!patient) continue;
-    covered.add(patient);
-    if (medic.fatigue) continue;
-    const to = destinations.get(patient)!;
-    if (medic.pos.getRangeTo(to) > 2) {
-      medic.moveTo(to, {...walk, range: 1});
-      continue;
+  const walkable = (x: number, y: number) => x >= 1 && x <= 48 && y >= 1 && y <= 48 &&
+    lanes.get(x,y) < 255 && !blockers.has(tileKey(x,y));
+  const steps = planBreachSteps(fighters, medics, destinations, walkable);
+  if (steps) {
+    for (const [c,at] of steps) {
+      if (range(c.pos,at)) c.move(c.pos.getDirectionTo(new RoomPosition(at.x, at.y, room.name)));
     }
-    let best: RoomPosition | undefined, bestScore = -Infinity;
-    for (let y = medic.pos.y - 1; y <= medic.pos.y + 1; y++)
-      for (let x = medic.pos.x - 1; x <= medic.pos.x + 1; x++) {
-        const k = tileKey(x,y);
-        if (x < 1 || x > 48 || y < 1 || y > 48 || lanes.get(x,y) === 255 || reserved.has(k) ||
-            blockers.has(k) || otherMedics.some(h => h.pos.x === x && h.pos.y === y)) continue;
-        const d = range({x,y}, to);
-        const support = [...destinations.values()].filter(at => range({x,y},at) <= 1).length;
-        const score = -d * 12 + support * 4 + Number(x === medic.pos.x && y === medic.pos.y);
-        if (score > bestScore) {
-          bestScore = score;
-          best = new RoomPosition(x,y,room.name);
-        }
-      }
-    if (best) {
-      reserved.add(tileKey(best.x,best.y));
-      if (!medic.pos.isEqualTo(best)) medic.move(medic.pos.getDirectionTo(best));
+  } else {
+    // 遭遇拥堵、增援分离或部件受损时，先向同一攻击手重新集中。全组仍可就地集火与治疗。
+    const leader = fighters[0];
+    for (const c of group) if (c !== leader && !c.fatigue && !c.pos.isNearTo(leader)) {
+      c.moveTo(leader.pos, {...walk, range: 1});
     }
   }
   return gates.sort((a,b) => a.hits - b.hits)[0] ?? core;
