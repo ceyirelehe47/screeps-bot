@@ -5,6 +5,7 @@ export interface CreepMovementState {
   movePathState?: MovePathState;
   travelState?: TravelState;
   movementPushedAt?: number;
+  defenseStep?: { x: number; y: number; room: string; since: number; at: number };
   pathingRequestedAt?: number;
   lastPathFailure?: { at: number; reason: "staticBlocked" | "dynamicBlocked" | "policyDenied" | "budgetExhausted" | "invalidPath" };
   /** 业务下一步许可暂未满足；观察等待不等同于几何卡死。 */

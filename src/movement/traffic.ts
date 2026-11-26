@@ -87,6 +87,39 @@ export function pushBlockingCreep(pusher: AnyCreep, blocker: AnyCreep): boolean 
   return false;
 }
 
+/** 路径目标可随敌军移动而变化；只有连续在同一格实际尝试出发的守军才申请让路。 */
+function stalledDefender(creep: AnyCreep): boolean {
+  if (!isStandardCreep(creep) || creep.memory.role !== "homeDefender" || creep.fatigue || !isDefenseMode(creep.room.name)) return false;
+  const state = ensureCreepMovementState(creep);
+  const {x, y, roomName} = creep.pos;
+  const last = state.defenseStep;
+  if (!last || last.room !== roomName || last.x !== x || last.y !== y || last.at < Game.time - 1 || last.at > Game.time) {
+    state.defenseStep = {x, y, room: roomName, since: Game.time, at: Game.time};
+    return false;
+  }
+  last.at = Game.time;
+  return Game.time - last.since >= 2;
+}
+
+/** 窄道中交换两个已占的格子；守军当前位置必须也是挡路单位能安全站立的位置。 */
+function yieldToDefender(defender: AnyCreep, blocker: AnyCreep): boolean {
+  if (!isStandardCreep(blocker) || blocker.spawning || blocker.fatigue ||
+      !["carrier", "worker", "hubCarrier", "siegeUnit"].includes(blocker.memory.role) ||
+      isExitTile(defender.pos) || !isYieldTileWalkable(defender.pos, blocker) ||
+      !isPositionAllowedForCreep(blocker, defender.pos) || hasMoveDestinationConflict(defender.pos, [defender, blocker])) return false;
+  const previous = getMoveIntentReceipt(blocker);
+  if (previous?.kind === "defenseYield") return false;
+  // 对方已有无阻塞的去路，守军可以正常跟步，无需改写它的动作。
+  if (previous?.attempted && !findMyOwnedUnitAt(new RoomPosition(previous.attempted.x, previous.attempted.y, previous.attempted.roomName), blocker)) return false;
+  const code = issueMove(blocker, blocker.pos.getDirectionTo(defender.pos), previous, "defenseYield");
+  if (code !== OK) return false;
+  const state = ensureCreepMovementState(blocker);
+  delete state.movePathState;
+  state.movementPushedAt = Game.time;
+  recordMovementMetric("yieldPushes", defender.room.name);
+  return true;
+}
+
 export function moveToAdjacentPosition(creep: AnyCreep, nextPos: RoomPosition): ScreepsReturnCode {
   if (creep.pos.getRangeTo(nextPos) > 1) {
     return ERR_NO_PATH;
@@ -97,11 +130,17 @@ export function moveToAdjacentPosition(creep: AnyCreep, nextPos: RoomPosition): 
   if (!attempted || attempted.roomName !== nextPos.roomName || attempted.x !== nextPos.x || attempted.y !== nextPos.y) return ERR_NO_PATH;
   const destination = getMoveIntentDestination(creep.pos, direction);
   if (destination && hasMoveDestinationConflict(destination, [creep])) return ERR_BUSY;
+  const blockedGuard = stalledDefender(creep);
   const blockingCreep = findMyOwnedUnitAt(nextPos, creep);
   if (!blockingCreep) {
     return issueMove(creep, direction);
   }
 
+  if (blockedGuard && !getMoveIntentReceipt(creep) && yieldToDefender(creep, blockingCreep)) {
+    const code = issueMove(creep, direction);
+    if (code !== OK) cancelMoveIntent(blockingCreep, getMoveIntentReceipt(blockingCreep)!);
+    return code;
+  }
   if (isHeadOnWarDuoSwap(creep, blockingCreep)) {
     if (pushBlockingCreep(creep, blockingCreep)) {
       return issueMove(creep, direction);
@@ -124,7 +163,7 @@ export interface MoveIntentReceipt {
   readonly tick: number;
   readonly actorId: string;
   readonly direction: DirectionConstant;
-  readonly kind: "role" | "yield";
+  readonly kind: "role" | "yield" | "defenseYield";
   readonly from: Readonly<{ x: number; y: number; roomName: string }>;
   /** 引擎原房坐标估计；任一轴越界时整步忽略，保留原坐标。 */
   readonly attempted: Readonly<{ x: number; y: number; roomName: string }> | null;
@@ -223,7 +262,7 @@ export function getMoveIntentReceipt(creep: AnyCreep): MoveIntentReceipt | undef
 }
 
 /** 与原 native 调用、Profiler、返回值一致；失败尝试不覆盖先前成功意图。 */
-export function issueMove(creep: AnyCreep, direction: DirectionConstant, replace?: MoveIntentReceipt, kind: "role" | "yield" = "role"): CreepMoveReturnCode {
+export function issueMove(creep: AnyCreep, direction: DirectionConstant, replace?: MoveIntentReceipt, kind: MoveIntentReceipt["kind"] = "role"): CreepMoveReturnCode {
   const receipts = currentMoveReceipts();
   const previous = receipts.get(creep);
   if (previous && previous.direction === direction && replace !== previous) {

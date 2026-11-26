@@ -1,3 +1,4 @@
+import * as defenseMode from "@/runtime/defenseMode";
 import { clearCreepMovementStateForTest, ensureCreepMovementState } from "@/movement/creepState";
 import { cancelMoveIntent, isBlockerActivelyMoving, getMoveIntentReceipt, issueMove, moveToAdjacentPosition } from "@/movement/traffic";
 
@@ -106,6 +107,25 @@ describe("moveToAdjacentPosition", () => {
 
     expect(result).toBe(ERR_BUSY);
     expect(blocker.move).toHaveBeenCalled();
+  });
+
+  it("受袭时驻军连续两 tick 卡在窄道后换位，挡路运输兵本帧不能覆盖该动作", () => {
+    const defender = makeCreep("guard", 10, 10), carrier = makeCreep("carrier", 11, 10);
+    defender.memory.role = "homeDefender"; carrier.memory.role = "carrier";
+    setupRoomContext([defender, carrier]);
+    const alarm = jest.spyOn(defenseMode, "isDefenseMode").mockReturnValue(true);
+    const zone = jest.spyOn(require("@/runtime/safeZoneHelpers"), "isPositionAllowedForCreep").mockReturnValue(true);
+    try {
+      for (let i = 0; i < 3; i++) {
+        Game.time++;
+        ensureCreepMovementState(carrier).pathingRequestedAt = Game.time;
+        expect(moveToAdjacentPosition(defender, carrier.pos)).toBe(OK);
+      }
+      expect(getMoveIntentReceipt(carrier)?.kind).toBe("defenseYield");
+      expect(carrier.move).toHaveBeenCalledWith(LEFT);
+      expect(issueMove(carrier, TOP)).toBe(ERR_BUSY);
+      expect(getMoveIntentReceipt(defender)?.direction).toBe(RIGHT);
+    } finally { alarm.mockRestore(); zone.mockRestore(); }
   });
 
   it("实际下一格空闲时不会推动身后或其它邻格的 creep", () => {
