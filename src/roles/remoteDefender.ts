@@ -108,6 +108,14 @@ function pickTarget(creep: Creep, eligible: Creep[]): Creep | null {
   return best;
 }
 
+function rangedPower(creep: Creep): number {
+  const boosts: Partial<Record<string, { rangedAttack: number }>> = BOOSTS[RANGED_ATTACK];
+  return creep.body.reduce((power, part) => {
+    if (part.type !== RANGED_ATTACK || part.hits <= 0) return power;
+    return power + RANGED_ATTACK_POWER * (part.boost ? boosts[part.boost]?.rangedAttack ?? 1 : 1);
+  }, 0);
+}
+
 function hasSplashCollateral(creep: Creep, hostiles: Creep[], eligible: Creep[]): boolean {
   if (hostiles.length !== eligible.length && hostiles.some(other =>
     creep.pos.inRangeTo(other.pos, 3) && !eligible.includes(other))) return true;
@@ -336,8 +344,13 @@ export const remoteDefenderRole: RoleFactory = (...args: string[]) => {
       }
 
       fireAtHostiles(creep, target, eligible, hostiles, defenseReason);
-      if (targetRange > 3) {
-        moveToTarget(creep, target, 3, { reusePath: 5, avoidExitTiles: true });
+      const meleeNearby = eligible.some(other => creep.pos.inRangeTo(other.pos, 4) && hasBodyPart(other, ATTACK));
+      // 同速射手后撤时，留一格射程余量才能持续命中；火力相当时保留原站距。
+      const canPress = !meleeNearby && !hasBodyPart(target, ATTACK)
+        && rangedPower(creep) > rangedPower(target);
+      const pursuitRange = canPress ? 2 : 3;
+      if (targetRange > pursuitRange) {
+        moveToTarget(creep, target, pursuitRange, { reusePath: 5, avoidExitTiles: true });
       }
 
       const shouldFleeMelee = hasBodyPart(target, ATTACK) && targetRange < 3;

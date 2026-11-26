@@ -177,6 +177,22 @@ describe("remoteDefenderRole", () => {
       expect(moveToTarget).toHaveBeenCalledWith(creep, healer, 3, expect.any(Object));
     });
 
+    it("closes to range two against a weaker ranged enemy", () => {
+      const enemy = makeHostile({ x: 28, body: [{ type: RANGED_ATTACK, hits: 100 }] });
+      const creep = engage([enemy]);
+      expect(moveToTarget).toHaveBeenCalledWith(creep, enemy, 2, expect.any(Object));
+      expect(creep.rangedAttack).toHaveBeenCalledWith(enemy);
+    });
+
+    it("holds range three against equal firepower or a nearby melee escort", () => {
+      const peer = makeHostile({ x: 28, body: Array.from({ length: 5 }, () => ({ type: RANGED_ATTACK, hits: 100 })) });
+      engage([peer]);
+      expect(moveToTarget).not.toHaveBeenCalled();
+      const shooter = makeHostile({ x: 28, body: [{ type: RANGED_ATTACK, hits: 100 }] });
+      engage([shooter, makeHostile({ x: 29 })]);
+      expect(moveToTarget).not.toHaveBeenCalled();
+    });
+
     it("keeps single fire when mass attack would hit an uninvolved unit or structure", () => {
       const invaders = [makeHostile({ x: 26 }), makeHostile({ y: 26 })];
       const neutral = makeHostile({ y: 28, username: "OtherPlayer" });
