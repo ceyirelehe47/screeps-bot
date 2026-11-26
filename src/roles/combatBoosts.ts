@@ -27,7 +27,7 @@ export function prepareCombatBoost(
     const labs = compounds.filter(c => countBoostableParts(creep.body, c) > 0).flatMap(compound => {
       const id = getAssignedPowerBankBoostLabId(boostTaskId, compound);
       const lab = id && Game.getObjectById(id as Id<StructureLab>);
-      return lab && lab.store.getUsedCapacity(compound) >= LAB_BOOST_MINERAL && lab.store.getUsedCapacity(RESOURCE_ENERGY) >= LAB_BOOST_ENERGY ? [lab] : [];
+      return lab && (lab.store.getUsedCapacity(compound) ?? 0) >= LAB_BOOST_MINERAL && lab.store.getUsedCapacity(RESOURCE_ENERGY) >= LAB_BOOST_ENERGY ? [lab] : [];
     }).sort((a,b) => creep.pos.getRangeTo(a)-creep.pos.getRangeTo(b));
     if (labs.length) {
       missingPrepSince.delete(creep.name);

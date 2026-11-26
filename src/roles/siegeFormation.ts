@@ -123,13 +123,20 @@ export function runSiegeFormation(creep:Creep, task:WarTask):void {
   const spawns=room.find(FIND_HOSTILE_SPAWNS);
   const original=spawns.sort((a,b)=>range(anchor,a.pos)-range(anchor,b.pos))[0];
   let objective=original ? cover(room,original) : undefined;
+  const fronts=task.siegeFront??={};
+  const front=fronts[wing]??0;
+  const cell=(c:Creep) => slot(c)===0 ? front : slot(c)===front ? 0 : slot(c);
+  const breaches=task.siegeBreach??={};
+  const pinned=breaches[wing] && Game.getObjectById(breaches[wing]);
+  if(pinned) objective=pinned;
+  else delete breaches[wing];
   const assembled=group.length===4 && group.every(c=> {
-    const at=footprint(anchor,offsets[slot(c)]);
+    const at=footprint(anchor,offsets[cell(c)]);
     return c.pos.x===at.x && c.pos.y===at.y;
   });
   if(!assembled){
     for(const c of group){
-      const at=footprint(anchor,offsets[slot(c)]), goal=new RoomPosition(at.x,at.y,room.name);
+      const at=footprint(anchor,offsets[cell(c)]), goal=new RoomPosition(at.x,at.y,room.name);
       if(c.pos.isEqualTo(goal))continue;
       if(c.pos.isNearTo(goal))c.move(c.pos.getDirectionTo(goal));
       else c.moveTo(goal,walk);
@@ -137,15 +144,25 @@ export function runSiegeFormation(creep:Creep, task:WarTask):void {
     healAndShoot(group,room,objective); return;
   }
   if(!leader || !spawns.length){healAndShoot(group,room,objective);return;}
+  if(pinned && group.some(c=>c.pos.isNearTo(pinned))){
+    if(!leader.pos.isNearTo(pinned)) fronts[wing]=cell(group.find(c=>c.pos.isNearTo(pinned))!);
+    healAndShoot(group,room,pinned);
+    return;
+  }
   const {matrix,blockers}=geometry(room);
-  const goals=spawns.map(s=>({pos:new RoomPosition(s.pos.x-offsets[0].x,s.pos.y-offsets[0].y,room.name),range:1}));
+  const goals=spawns.map(s=>({pos:new RoomPosition(s.pos.x-offsets[front].x,s.pos.y-offsets[front].y,room.name),range:1}));
   const origin=new RoomPosition(anchor.x,anchor.y,room.name);
   const path=PathFinder.search(origin,goals,{maxRooms:1,maxOps:7000,roomCallback:()=>matrix});
   const next=path.path[0];
   if(!path.incomplete && next){
     const obstacles=offsets.map(d=>blockers.get(tileKey(next.x+d.x,next.y+d.y))).filter((s):s is Structure=>!!s);
     const barrier=obstacles.sort((a,b)=>leader.pos.getRangeTo(a)-leader.pos.getRangeTo(b) || a.hits-b.hits)[0];
-    if(barrier)objective=barrier;
+    if(barrier){
+      objective=barrier;
+      breaches[wing]=barrier.id;
+      const near=group.find(c=>c.pos.isNearTo(barrier));
+      if(near && !leader.pos.isNearTo(barrier))fronts[wing]=cell(near);
+    }
     else if(group.every(c=>!c.fatigue)){
       const direction=origin.getDirectionTo(next);
       for(const c of group)c.move(direction);
