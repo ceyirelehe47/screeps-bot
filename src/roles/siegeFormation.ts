@@ -205,6 +205,31 @@ export function runSiegeFormation(creep: Creep, task: WarTask): void {
   const cell = (member: Creep) => order[slot(member)];
   const face = (obstacle: Structure) => {
     // 已能拆除的队员原地工作，其余拆墙兵与相邻障碍的护卫交换位置。
+    const drills = group.filter((member) => member.getActiveBodyparts(WORK) > 0);
+    const contact = group.filter((member) => member.pos.isNearTo(obstacle)).length;
+    if (contact < drills.length && group.every((member) => !member.fatigue)) {
+      const terrain = geometry(room);
+      const origin = new RoomPosition(anchor.x, anchor.y, room.name);
+      for (const dx of [-1, 0, 1])
+        for (const dy of [-1, 0, 1]) {
+          const at = { x: anchor.x + dx, y: anchor.y + dy };
+          if (at.x < 1 || at.y < 1 || at.x > 47 || at.y > 47 || terrain.matrix.get(at.x, at.y) > 2) continue;
+          const cells = offsets.map((d) => footprint(at, d));
+          if (cells.filter((p) => range(p, obstacle.pos) <= 1).length <= contact) continue;
+          if (
+            cells.some(
+              (p) =>
+                terrain.blockers.has(tileKey(p.x, p.y)) ||
+                room.lookForAt(LOOK_CREEPS, p.x, p.y).some((c) => !group.includes(c)),
+            )
+          )
+            continue;
+          const direction = origin.getDirectionTo(at.x, at.y);
+          for (const member of group) member.move(direction);
+          anchors[wing] = at;
+          return;
+        }
+    }
     const frontMedics = group.filter((member) => !member.getActiveBodyparts(WORK) && member.pos.isNearTo(obstacle));
     for (const drill of group.filter((member) => member.getActiveBodyparts(WORK) && !member.pos.isNearTo(obstacle))) {
       const partner = frontMedics.shift();
