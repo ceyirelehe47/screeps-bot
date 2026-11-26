@@ -1,3 +1,5 @@
+import { countCarrierCargo } from "@/runtime/carrierCargo";
+import { getActivePowerBankBoostLabIds, getAssignedPowerBankBoostLabId } from "@/runtime/powerBankBoostMemory";
 import { isDue } from "@/runtime/cadence";
 import { getBoostPartType, countBoostableParts } from "@/runtime/boostParts";
 import { findBestDonorRoom, prepareBoosts } from "@/runtime/powerBankBoost";
@@ -162,15 +164,18 @@ export function runSiegeCampaign(task: WarTask): void {
     const home = Game.rooms[task.sourceRoom];
     if (home) {
       const labs = home.find(FIND_MY_STRUCTURES).filter((s): s is StructureLab => s.structureType === STRUCTURE_LAB);
-      const carriers = home.find(FIND_MY_CREEPS).filter((c) => c.getActiveBodyparts(CARRY));
-      task.siegeExhausted = limitReinforcementBoosts(amounts, (r) =>
-        (home.storage?.store.getUsedCapacity(r) ?? 0) + (home.terminal?.store.getUsedCapacity(r) ?? 0) +
-        labs.reduce((n, lab) => n + (lab.store.getUsedCapacity(r) ?? 0), 0) +
-        carriers.reduce((n, carrier) => n + (carrier.store.getUsedCapacity(r) ?? 0), 0),
-        (r, shortage) => !!home.terminal && !!findBestDonorRoom(r, shortage, [home.name]));
+      const reserved=getActivePowerBankBoostLabIds(home.name,taskId);
+      const available=labs.filter(l=>!reserved.has(l.id) && l.id!==Memory.cfg?.homeDefense?.rooms?.[home.name]?.boostLabId);
+      task.siegeExhausted = limitReinforcementBoosts(amounts, (r) => {
+        const assigned=getAssignedPowerBankBoostLabId(taskId,r);
+        const loaded=available.filter(l=>l.mineralType===r).sort((a,b)=>b.store.getUsedCapacity(r)-a.store.getUsedCapacity(r))[0];
+        const lab=loaded??available.find(l=>l.id===assigned);
+        return (home.storage?.store.getUsedCapacity(r) ?? 0) + (home.terminal?.store.getUsedCapacity(r) ?? 0) +
+          (lab?.store.getUsedCapacity(r) ?? 0) + (lab?countCarrierCargo(lab.id,r):0);
+      }, (r,shortage)=>!!home.terminal && !!findBestDonorRoom(r,shortage,[home.name]));
     }
   }
-  const prep = prepareBoosts(taskId, task.sourceRoom, 0, amounts, { requireLabEnergy: true });
+  const prep = prepareBoosts(taskId, task.sourceRoom, 0, amounts, { requireLabEnergy: true, preferLoadedLabs: true });
   task.boostStatus = prep.status;
   task.boostLabs = prep.labs;
   task.failReason = prep.reason;

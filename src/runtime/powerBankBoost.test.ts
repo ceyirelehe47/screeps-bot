@@ -155,6 +155,16 @@ describe("powerBankBoost", () => {
 
   describe("prepareBoosts", () => {
 
+    it("持续攻城接手已装目标矿的实验室，不把同一种矿反复搬到空实验室",()=>{
+      const r=RESOURCE_CATALYZED_UTRIUM_ACID;
+      const empty=createLabWithCompound("empty",SOURCE_ROOM,null,0,2000);
+      const filled=createLabWithCompound("full",SOURCE_ROOM,r,750,2000);
+      Game.rooms[SOURCE_ROOM]=createRoomWithInfrastructure({name:SOURCE_ROOM,labs:[empty,filled]});
+      const result=prepareBoosts("home-defense",SOURCE_ROOM,0,new Map([[r,750]]),{requireLabEnergy:true,preferLoadedLabs:true});
+      expect(result.status).toBe("ready");
+      expect(result.labs).toEqual([filled.id]);
+    });
+
     it("HUB低于20k不制造虚假供货，改选具有真实可动库存的房间", () => {
       const resource = RESOURCE_CATALYZED_GHODIUM_ALKALIDE;
       const hub = createRoomWithInfrastructure({ name: "W5N5", terminalResources: { [resource]: 12_000 } });

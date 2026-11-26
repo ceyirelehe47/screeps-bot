@@ -45,6 +45,7 @@ export interface BoostPrepResult {
 
 export interface BoostPrepOptions {
   requireLabEnergy?: boolean;
+  preferLoadedLabs?: boolean;
 }
 
 interface BoostTransferRequest {
@@ -191,11 +192,32 @@ function selectAvailableLabs(
   sourceRoomName: string,
   compounds: ResourceConstant[],
   taskId: string,
+  preferLoadedLabs = false,
 ): StructureLab[] {
   const labs = room.find(FIND_MY_STRUCTURES, {
     filter: (s): s is StructureLab => s.structureType === STRUCTURE_LAB,
   }).filter(lab => lab.id !== Memory.cfg?.homeDefense?.rooms?.[sourceRoomName]?.boostLabId);
   const existingPrep = getPowerBankBoostPrep(taskId);
+  if (preferLoadedLabs) {
+    const reserved=getActivePowerBankBoostLabIds(sourceRoomName,taskId);
+    const available=labs.filter(l=>!reserved.has(l.id));
+    const chosen=new Map<ResourceConstant,StructureLab>();
+    const take=(r:ResourceConstant,l:StructureLab|undefined)=>{
+      if(!l)return;
+      chosen.set(r,l);available.splice(available.indexOf(l),1);
+    };
+    // 已装入正确矿的实验室优先，避免把守军的同一种强化依次搬进所有空实验室。
+    for(const r of compounds){
+      const candidates=available.filter(l=>l.mineralType===r && l.store.getUsedCapacity(r)>0);
+      take(r,candidates.sort((a,b)=>b.store.getUsedCapacity(r)-a.store.getUsedCapacity(r))[0]);
+    }
+    for(const r of compounds.filter(c=>!chosen.has(c))){
+      const previous=Object.values(existingPrep?.labs??{}).find(a=>a.compound===r);
+      take(r,available.find(l=>l.id===previous?.labId));
+    }
+    for(const r of compounds.filter(c=>!chosen.has(c)))take(r,available.find(l=>!l.mineralType)??available[0]);
+    return compounds.flatMap(r=>chosen.get(r)??[]);
+  }
   if (existingPrep?.sourceRoomName === sourceRoomName) {
     const labsById = new Map<string, StructureLab>(labs.map((lab) => [lab.id, lab]));
     const assignedLabs = compounds.map((compound) => {
@@ -255,7 +277,7 @@ export function prepareBoosts(
     return failBoostPreparation(taskId, sourceRoomName, "room_not_visible");
   }
 
-  const labs = selectAvailableLabs(room, sourceRoomName, compounds, taskId);
+  const labs = selectAvailableLabs(room, sourceRoomName, compounds, taskId, options.preferLoadedLabs);
   if (labs.length < compounds.length) {
     return failBoostPreparation(taskId, sourceRoomName, "insufficient_labs", labs);
   }

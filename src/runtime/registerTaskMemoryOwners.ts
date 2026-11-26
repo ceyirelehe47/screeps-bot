@@ -1,3 +1,4 @@
+import { homeDefenseBoostTaskId } from "@/runtime/homeDefenseBoost";
 import { cleanupRoomPlannerMemory, cleanupRoomPlannerBuildRuntimeMemory } from "@/runtime/roomPlannerConstruction";
 import { cleanupResourceControlMemory } from "@/runtime/resourceControl";
 import { cleanupSynthesisControlMemory } from "@/runtime/synthesisControl";
@@ -16,6 +17,7 @@ import { getCreepConfigService } from "@/runtime/runtimeServices";
 function activeBoostOwnerReferences(): ReadonlySet<string> {
   const refs = new Set([...getPowerBankBoostOwnerReferences(), ...getWarBoostOwnerReferences()]);
   for (const [, config] of getCreepConfigService().getReadIndex().entries) {
+    if (config.role === "homeDefender" && config.roomName) refs.add(homeDefenseBoostTaskId(config.roomName));
     for (const arg of config.args) refs.add(arg);
   }
   return refs;
