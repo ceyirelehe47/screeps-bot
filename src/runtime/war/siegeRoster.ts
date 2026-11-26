@@ -71,6 +71,13 @@ export function assembleSiegeWings(task: WarTask, units: Creep[], staging: strin
     const drills = waiting.filter(drill),
       medics = waiting.filter((c) => !drill(c));
     if (waiting.length < 4 || !drills.length || medics.length < 2) continue;
+    const shortSince = (task.siegeShortSince ??= {});
+    const drillEnRoute = units.some((c) => drill(c) && c.memory._siegeSlot === undefined && c.room.name !== staging);
+    if (drills.length === 1 && drillEnRoute) {
+      shortSince[wing] ??= Game.time;
+      if (Game.time - shortSince[wing] < 100) continue;
+    }
+    delete shortSince[wing];
     const squad = [drills[0], medics[0], drills[1] ?? medics[2], medics[1]];
     if (!squad[2]) continue;
     squad.forEach((unit, i) => assign(unit, start + i));

@@ -61,6 +61,7 @@ export function registerWarSpawn(configName: string, creepName: string): void {
 export interface WarTask {
   siegeLaunched?: boolean;
   siegeStagingRoom?: string;
+  siegeShortSince?: Record<number, number>;
   siegeFront?: Record<number, number>;
   siegeFormationOrder?: Record<number, number[]>;
   siegeBreach?: Record<number, Id<Structure>>;
