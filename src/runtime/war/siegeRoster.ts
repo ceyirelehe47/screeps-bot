@@ -2,7 +2,9 @@ import type { WarTask } from "./store";
 
 const WING = ["breacher", "escort", "breacher", "escort"] as const;
 const BATTERY = ["ranger", "escort", "ranger", "escort"] as const;
-export const SIEGE_SLOTS = [...BATTERY, ...WING, ...BATTERY] as const;
+// 首翼一拆一射：拆墙兵在窄口开路，远射兵可以隔着下一排建筑压制 Spawn。
+const VANGUARD = ["ranger", "escort", "breacher", "escort"] as const;
+export const SIEGE_SLOTS = [...VANGUARD, ...WING, ...BATTERY] as const;
 export function siegeSlots(task: WarTask) {
   return SIEGE_SLOTS.slice(0, (task.siegeWingCount ?? 2) * WING.length);
 }
@@ -93,7 +95,10 @@ export function assembleSiegeWings(task: WarTask, units: Creep[], staging: strin
       if (Game.time - shortSince[wing] < 100) continue;
     }
     delete shortSince[wing];
-    const squad = [drills[0], medics[0], drills[1] ?? medics[2], medics[1]];
+    const first = drills[0];
+    const isRanger = (c: Creep) => c.getActiveBodyparts(RANGED_ATTACK) > c.getActiveBodyparts(WORK);
+    const complement = wing === 0 ? drills.slice(1).find(c => isRanger(c) !== isRanger(first)) : undefined;
+    const squad = [first, medics[0], complement ?? drills[1] ?? medics[2], medics[1]];
     if (!squad[2]) continue;
     squad.forEach((unit, i) => assign(unit, start + i));
     wings[wing] = true;
