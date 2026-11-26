@@ -1,4 +1,5 @@
-import { runSiegeFormation, findSpawnAssaultTiles, selectSiegeCore } from "./siegeFormation";
+import { setDefaultMapMocks, setupPathFinderGlobal, setupRoomPositionGlobal } from "@mock/movement";
+import { runSiegeFormation, advanceInBreach, selectSiegeCore } from "./siegeFormation";
 import { SIEGE_BODIES, SIEGE_SLOTS } from "@/runtime/war/siegeRoster";
 import type { WarTask } from "@/runtime/war/store";
 import { createMockPowerBankCreep, MockPos } from "@mock/powerBank";
@@ -54,24 +55,28 @@ it("四次角色调度只提交一轮攻击；两名拆墙兵先打 Spawn 的掩
 
 it("前排阵亡时，余下拆墙兵和两名治疗能朝空出的近身位置一起前进一步", () => {
   const target = "E3N2";
-  const room = { name: target, lookAt: () => [] } as unknown as Room;
-  const originalMap = Object.getOwnPropertyDescriptor(Game, "map");
-  Object.defineProperty(Game, "map", { configurable: true, value: { getRoomTerrain: () => ({ get: () => 0 }) } });
+  const room = { name: target, lookForAt: () => [], find: () => [] } as unknown as Room;
   const unit = (job: "breacher" | "escort", i: number, x: number, y: number) => ({
     pos: new MockPos(x, y, target),
-    memory: { _siegeSlot: i },
-    fatigue: 0,
+    memory: { _siegeSlot: i }, fatigue: 0, move: jest.fn(),
     getActiveBodyparts: (p: BodyPartConstant) => p === (job === "breacher" ? WORK : HEAL) ? 10 : 0,
   }) as unknown as Creep;
   const group = [unit("breacher", 0, 39, 37), unit("escort", 1, 38, 38), unit("escort", 3, 38, 37)];
   const spawn = { pos: new MockPos(36, 36, target) } as unknown as StructureSpawn;
+  const originals = { map: Game.map, path: global.PathFinder, pos: global.RoomPosition, room: global.Room };
   try {
-    const result = findSpawnAssaultTiles(room, group, spawn);
-    expect(result?.[0].x).toBe(38);
-    for (const i of [1, 3]) expect(Math.max(Math.abs(result![i].x - result![0].x), Math.abs(result![i].y - result![0].y))).toBeLessThanOrEqual(1);
+    setDefaultMapMocks();
+    setupPathFinderGlobal();
+    setupRoomPositionGlobal();
+    (PathFinder.search as jest.Mock).mockReturnValue({
+      path: [new RoomPosition(38, 37, target)], incomplete: false, cost: 1, ops: 3,
+    });
+    expect(advanceInBreach(room, group, spawn)).toBe(spawn);
+    expect(group[0].move).toHaveBeenCalledWith(LEFT);
+    expect(group[2].move).toHaveBeenCalledTimes(1);
   } finally {
-    if (originalMap) Object.defineProperty(Game, "map", originalMap);
-    else Reflect.deleteProperty(Game, "map");
+    Object.assign(global, {PathFinder: originals.path, RoomPosition: originals.pos, Room: originals.room});
+    Game.map = originals.map;
   }
 });
 

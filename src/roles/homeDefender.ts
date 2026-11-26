@@ -103,6 +103,8 @@ export const homeDefenderRole: RoleFactory = (roomName: string, slot?: string) =
       : allHostiles;
     if (hostiles.length === 0) return false;
 
+    // 先兑现已经在近战范围内的攻击，移动和攻击属于不同的引擎动作。
+    const inReach = chooseAdjacentAttackTarget(creep, allHostiles);
     const safeZoneCostCallback = createSafeZoneCostCallback(safeZone);
 
     const insideHostiles = measureCreepDecision(() =>
@@ -118,6 +120,7 @@ export const homeDefenderRole: RoleFactory = (roomName: string, slot?: string) =
       if (creep.pos.getRangeTo(target) <= 1) {
         measureCreepIntent(() => creep.attack(target));
       } else {
+        if (inReach) measureCreepIntent(() => creep.attack(inReach));
         moveToTarget(creep, target, 1, {
           costCallback: safeZoneCostCallback,
           cacheKey: `safezone:${roomName}`,
@@ -130,7 +133,16 @@ export const homeDefenderRole: RoleFactory = (roomName: string, slot?: string) =
 
     // Hostiles are outside the perimeter — position at the boundary rampart closest to them
     const ramparts = measureCreepDecision(() => getBoundaryRamparts(creep.room, safeZone));
-    if (ramparts.length === 0) return false;
+    if (ramparts.length === 0) {
+      if (inReach) measureCreepIntent(() => creep.attack(inReach));
+      return false;
+    }
+    // 当敌军已在拆墙，守军以实际受击位置为拦截点，避免追逐远处的治疗兵。
+    const pressure = new Map<string, number>();
+    for (const e of creep.room.getEventLog?.() ?? []) {
+      if (e.event === EVENT_ATTACK && hostiles.some(h => h.id === e.objectId))
+        pressure.set(e.data.targetId, (pressure.get(e.data.targetId) ?? 0) + e.data.damage);
+    }
 
     const occupiedRampartIds = measureCreepDecision(() => {
       const occupied = new Set<Id<StructureRampart>>();
@@ -153,6 +165,16 @@ export const homeDefenderRole: RoleFactory = (roomName: string, slot?: string) =
       ? measureCreepDecision(() => findEngagedHostileIdByOtherDefenders(creep, hostiles))
       : null;
     const targetHostiles = engagedHostileId ? hostiles.filter((hostile) => hostile.id !== engagedHostileId) : hostiles;
+    const breached = ramparts.filter(r => pressure.has(r.id) && !occupiedRampartIds.has(r.id))
+      .sort((a,b) => a.hits / pressure.get(a.id)! - b.hits / pressure.get(b.id)!)[0];
+    if (breached) {
+      if (inReach) measureCreepIntent(() => creep.attack(inReach));
+      if (!creep.pos.isEqualTo(breached.pos)) moveToTarget(creep, breached.pos, 0, {
+        profile: "combat", maxRooms: 1, reusePath: 3, costCallback: safeZoneCostCallback,
+        cacheKey: `safezone:${roomName}`,
+      });
+      return false;
+    }
     const engagement = measureCreepDecision(() =>
       chooseBoundaryBurstEngagement(targetHostiles.length > 0 ? targetHostiles : hostiles, ramparts, occupiedRampartIds),
     );

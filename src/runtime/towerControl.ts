@@ -1,4 +1,4 @@
-import { damageAfterTough } from "./powerBankCapability";
+import { damageAfterTough, effectivePower } from "./powerBankCapability";
 import { isDue } from "@/runtime/cadence";
 import { forEachIsolatedRoom, runIsolatedTowerOperation } from "@/runtime/runtimeIsolation";
 import { setTowerBurstTarget } from "@/runtime/defenseCoordination";
@@ -28,6 +28,7 @@ interface TowerCombatRoomState {
 }
 
 interface TowerCombatAnalysis {
+  rawTowerAttackByHostileId: Map<Id<Creep>, number>;
   totalTowerAttackByHostileId: Map<Id<Creep>, number>;
   incomingHealByHostileId: Map<Id<Creep>, number>;
   towerAttackByTowerId: Map<Id<StructureTower>, Map<Id<Creep>, number>>;
@@ -142,6 +143,7 @@ function createTowerCombatAnalysis(roomName: string, towers: StructureTower[], h
     towerAttackByTowerId.set(tower.id, damageByHostileId);
   }
 
+  const rawTowerAttackByHostileId = new Map(totalTowerAttackByHostileId);
   for (const hostile of hostiles) {
     const rawTotal = totalTowerAttackByHostileId.get(hostile.id) || 0;
     const effectiveTotal = calcEffectiveDamage(hostile, rawTotal);
@@ -166,6 +168,7 @@ function createTowerCombatAnalysis(roomName: string, towers: StructureTower[], h
   }
 
   return {
+    rawTowerAttackByHostileId,
     totalTowerAttackByHostileId,
     incomingHealByHostileId,
     towerAttackByTowerId,
@@ -367,7 +370,7 @@ function getParticipatingDefenderBurstDamage(room: Room, target: Creep): number 
   return getHomeDefenders(room)
     .filter((creep) => creep.pos.getRangeTo(target.pos) <= 1 && creep.room.find(FIND_MY_STRUCTURES,
       { filter: structure => structure.structureType === STRUCTURE_RAMPART }).some(rampart => creep.pos.isEqualTo(rampart.pos)))
-    .reduce((sum, creep) => sum + creep.getActiveBodyparts(ATTACK) * ATTACK_POWER, 0);
+    .reduce((sum, creep) => sum + effectivePower(creep.body, ATTACK), 0);
 }
 
 function chooseCoordinatedBurstTarget(
@@ -393,9 +396,9 @@ function chooseCoordinatedBurstTarget(
     return null;
   }
 
-  const totalTowerDamage = analysis.totalTowerAttackByHostileId.get(preferredTarget.id) || 0;
+  const rawTowerDamage = analysis.rawTowerAttackByHostileId.get(preferredTarget.id) ?? 0;
   const incomingHeal = analysis.incomingHealByHostileId.get(preferredTarget.id) || 0;
-  const combinedBurst = totalTowerDamage + getParticipatingDefenderBurstDamage(room, preferredTarget);
+  const combinedBurst = calcEffectiveDamage(preferredTarget, rawTowerDamage + getParticipatingDefenderBurstDamage(room, preferredTarget));
 
   return combinedBurst > incomingHeal ? preferredTarget : null;
 }
@@ -432,7 +435,7 @@ function findArmorBurst(room: Room, hostiles: Creep[], analysis: TowerCombatAnal
   let best: Creep | undefined;
   let limit = Infinity;
   for (const hostile of hostiles) {
-    const raw = [...analysis.towerAttackByTowerId.values()].reduce((sum,tower) => sum + (tower.get(hostile.id) ?? 0), 0);
+    const raw = analysis.rawTowerAttackByHostileId.get(hostile.id) ?? 0;
     const volleys = volleysToBreakArmor(hostile, raw, healed.get(hostile.id) ?? 0, analysis.incomingHealByHostileId.get(hostile.id) ?? 0);
     if (volleys < limit) { best = hostile; limit = volleys; }
   }
@@ -443,6 +446,18 @@ function findArmorBurst(room: Room, hostiles: Creep[], analysis: TowerCombatAnal
     state.nextArmorProbe = state.armorUntil + 10;
   }
   return best;
+}
+
+/** 按上一 tick 实际墙伤留出守军换位时间，能击穿敌人时塔仍优先齐射。 */
+function threatenedRamparts(room: Room): StructureRampart[] {
+  if (!room.getEventLog) return [];
+  const damage = new Map<string, number>();
+  for (const e of room.getEventLog()) {
+    if (e.event === EVENT_ATTACK) damage.set(e.data.targetId, (damage.get(e.data.targetId) ?? 0) + e.data.damage);
+  }
+  const ramparts = getTickContextService().getRoomContext(room)?.getRamparts() ?? [];
+  return ramparts.filter(r => r.my && r.hits < (damage.get(r.id) ?? 0) * 30)
+    .sort((a,b) => a.hits / damage.get(a.id)! - b.hits / damage.get(b.id)!);
 }
 
 function runTowerCombat(room: Room, towers: StructureTower[], hostiles: Creep[], woundedCreeps: Creep[], emergencyRamparts: StructureRampart[]): boolean {
@@ -490,7 +505,12 @@ function runTowerCombat(room: Room, towers: StructureTower[], hostiles: Creep[],
   const coordinatedBurstTarget = chooseCoordinatedBurstTarget(room, combatHostiles, analysis) ?? findArmorBurst(room, combatHostiles, analysis, state);
 
   if (!coordinatedBurstTarget && isAllHostilesImmune(analysis, combatHostiles)) {
-    for (const tower of readyTowers) runIsolatedTowerOperation(room.name, tower.id, () => runTowerPeaceFlow(tower, emergencyRamparts, [], []));
+    const attacked = threatenedRamparts(room)[0];
+    for (const tower of readyTowers) runIsolatedTowerOperation(room.name, tower.id, () => {
+      if (attacked && tower.store.getUsedCapacity(RESOURCE_ENERGY) >= TOWER_MIN_EMERGENCY_REPAIR_ENERGY) {
+        if (tower.repair(attacked) === OK) recordFixedCpuAction("towerControl");
+      } else runTowerPeaceFlow(tower, emergencyRamparts, [], []);
+    });
     delete state.focusTargetId;
     delete state.lastFocusHits;
     delete state.stalledTicks;

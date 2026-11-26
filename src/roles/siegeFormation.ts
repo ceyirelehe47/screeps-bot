@@ -1,5 +1,4 @@
 import { searchMovementPath } from "@/movement/pathSearch";
-import { isDue } from "@/runtime/cadence";
 import { towerAttackPowerAt } from "@/runtime/combatTowerThreat";
 import { isWalkableStructure } from "@/movement/common";
 import { damageAfterTough, effectivePower } from "@/runtime/powerBankCapability";
@@ -138,9 +137,9 @@ function fire(
     return n + (distance <= 1 ? 1 : distance === 2 ? 0.4 : 0.1);
   }, 0);
   // 无掩体的 Spawn 可立刻收割；否则远射先协助打通本翼实际的射击通道。
-  const focus = core?.structureType === STRUCTURE_SPAWN ? core :
-    target && creep.pos.inRangeTo(target,3) ? target : core;
-  if (mass >= (core ? 3 : 1.5) && (!core || core.hits > 5000)) creep.rangedMassAttack();
+  const focus = core ?? (target && creep.pos.inRangeTo(target, 3) ? target : undefined);
+  if (focus && creep.pos.isNearTo(focus) && (mass > 0 || openings.some(s => s.id !== focus.id && creep.pos.inRangeTo(s, 3)))) creep.rangedMassAttack();
+  else if (!focus && mass >= 1.5) creep.rangedMassAttack();
   else if (focus && weaponRange(creep) === 3 && creep.pos.inRangeTo(focus, 3)) creep.rangedAttack(focus);
   else if (enemy) creep.rangedAttack(enemy);
   else if (target && creep.pos.inRangeTo(target, 3)) creep.rangedAttack(target);
@@ -245,83 +244,85 @@ function healAndShoot(group: Creep[], room: Room, target?: Structure): void {
     const core = weaponRange(c) === 3 && spawns
       .filter((spawn) => c.pos.inRangeTo(spawn, 3))
       .map((spawn) => cover(room, spawn))
-      .sort((a, b) => a.hits - b.hits)[0];
+      .sort((a, b) => Number(b.id === target?.id) - Number(a.id === target?.id) || a.hits - b.hits)[0];
     fire(c, target, nearby, openings, cleared, approach, core || undefined);
   }
 }
 
-/** 只需打通拆墙位及治疗位就能攻击 Spawn，避免为完整方阵额外拆除第四格屏障。 */
-export function findSpawnAssaultTiles(room: Room, group: Creep[], spawn: Structure, guide?: {actor:Creep; tile:Tile}): Tile[] | undefined {
-  const drills = group.filter((c) => c.getActiveBodyparts(WORK));
-  const medics = group.filter((c) => c.getActiveBodyparts(HEAL));
-  if (!drills.some((c) => c.pos.inRangeTo(spawn, weaponRange(c) + 3)) || !medics.length || group.some((c) => c.fatigue)) return;
-  const actors = [...drills, ...medics];
-  if (actors.length !== group.length || actors.length > 4) return;
-  const free = new Map<number, boolean>();
-  const terrain = Game.map.getRoomTerrain(room.name);
-  const options = actors.map((c) => {
-    const tiles: Tile[] = [];
-    for (let y = c.pos.y - 1; y <= c.pos.y + 1; y++)
-      for (let x = c.pos.x - 1; x <= c.pos.x + 1; x++) {
-        if (x < 1 || y < 1 || x > 48 || y > 48) continue;
-        const k = tileKey(x, y);
-        if (!free.has(k))
-          free.set(
-            k,
-            !(terrain.get(x, y) & TERRAIN_MASK_WALL) &&
-              !room
-                .lookAt(x, y)
-                .some(
-                  (o) =>
-                    o.source ||
-                    o.mineral ||
-                    o.deposit ||
-                    o.powerCreep ||
-                    (o.structure && !isWalkableStructure(o.structure)) ||
-                    (o.creep && !group.includes(o.creep)),
-                ),
-          );
-        if (free.get(k)) tiles.push({ x, y });
+/** 将敌方建筑的拆除时间作为通行代价；实际移动始终止于第一个仍然存在的障碍。 */
+export function advanceInBreach(room: Room, group: Creep[], spawn: StructureSpawn): Structure {
+  const core = cover(room, spawn);
+  const fighters = group.filter(c => c.getActiveBodyparts(WORK))
+    .sort((a,b) => a.pos.getRangeTo(spawn) - b.pos.getRangeTo(spawn) || slot(a) - slot(b));
+  const medics = group.filter(c => c.getActiveBodyparts(HEAL));
+  // 已经就位的部队保持火力与队形，避免无意义的寻路和医疗位互换。
+  if (fighters.every(c => c.pos.inRangeTo(spawn, weaponRange(c))) &&
+      fighters.every(c => medics.some(h => h.pos.isNearTo(c)))) return core;
+  const { single, blockers } = geometry(room);
+  const lanes = single.clone();
+  for (const c of room.find(FIND_CREEPS)) {
+    if (!group.includes(c)) lanes.set(c.pos.x, c.pos.y, 255);
+  }
+  const reserved = new Set<number>();
+  const destinations = new Map<Creep, RoomPosition>();
+  const gates: Structure[] = [];
+  for (const c of fighters) {
+    let destination = c.pos;
+    if (!c.fatigue && !c.pos.inRangeTo(spawn, weaponRange(c))) {
+      const matrix = lanes.clone();
+      for (const other of fighters) if (other !== c) matrix.set(other.pos.x, other.pos.y, 255);
+      for (const k of reserved) matrix.set(k % 50, Math.floor(k / 50), 255);
+      const lane = searchMovementPath(c.pos, {pos: spawn.pos, range: weaponRange(c)},
+        {maxRooms: 1, maxOps: 2400, roomCallback: () => matrix});
+      const next = lane.path[0];
+      if (!lane.incomplete && next) {
+        const id = blockers.get(tileKey(next.x, next.y));
+        const gate = id && Game.getObjectById(id);
+        if (gate) gates.push(gate);
+        else if (medics.some(h => h.pos.inRangeTo(next, 2)) && !medics.some(h => h.fatigue && h.pos.isEqualTo(next))) {
+          destination = next;
+          c.move(c.pos.getDirectionTo(next));
+        }
       }
-    return tiles.sort((a, b) => range(a, c.pos) - range(b, c.pos));
-  });
-  const chosen: Tile[] = [];
-  const flexible = medics.length > 1 && group.every(c=>c.hits >= c.hitsMax * 0.8);
-  const ranges = drills.map(weaponRange);
-  const originalDistance = drills.reduce((sum, c, i) => sum + Math.max(0, range(c.pos, spawn.pos) - ranges[i]), 0);
-  let best: Tile[] | undefined,
-    bestScore = -Infinity;
-  function search(i: number, adjacent: number, steps: number): void {
-    if (i === actors.length) {
-      const distance = chosen.slice(0, drills.length).reduce((sum, p, j) => sum + Math.max(0, range(p, spawn.pos) - ranges[j]), 0);
-      const coverage=chosen.slice(0,drills.length).map(d=>chosen.slice(drills.length).filter(h=>range(d,h)<=1).length);
-      if(coverage.some(n=>!n))return;
-      const follows=guide && range(chosen[actors.indexOf(guide.actor)],guide.tile)===0;
-      if (!adjacent && distance >= originalDistance && !follows) return;
-      const score = adjacent * 100 + Number(!!follows)*14 - distance * 8 - steps + coverage.reduce((a,b)=>a+b,0);
-      if (score > bestScore) {
-        bestScore = score;
-        best = [];
-        actors.forEach((c, index) => {
-          best![slot(c)] = chosen[index];
-        });
-      }
-      return;
     }
-    for (const at of options[i]) {
-      if (chosen.some((p) => p.x === at.x && p.y === at.y)) continue;
-      const isDrill = i < drills.length;
-      const nextAdjacent = adjacent + Number(isDrill && range(at, spawn.pos) <= ranges[i]);
-
-      // 两名护卫均能贴身治疗所有拆墙兵，也互相覆盖。
-      if (!isDrill && chosen.some((p) => range(p, at) > (flexible ? 2 : 1))) continue;
-      chosen.push(at);
-      search(i + 1, nextAdjacent, steps + Number(range(actors[i].pos, at) > 0));
-      chosen.pop();
+    destinations.set(c, destination);
+    reserved.add(tileKey(destination.x, destination.y));
+  }
+  // 每位治疗优先贴住一个队友；移动评分同时照顾另一名伤员与已占的位置。
+  const covered = new Set<Creep>();
+  for (const medic of medics) {
+    const otherMedics = medics.filter(other => other !== medic);
+    const patients = [...fighters].sort((a,b) => Number(covered.has(a)) - Number(covered.has(b)) ||
+      medic.pos.getRangeTo(a) - medic.pos.getRangeTo(b) || a.hits - b.hits);
+    const patient = patients[0];
+    if (!patient) continue;
+    covered.add(patient);
+    if (medic.fatigue) continue;
+    const to = destinations.get(patient)!;
+    if (medic.pos.getRangeTo(to) > 2) {
+      medic.moveTo(to, {...walk, range: 1});
+      continue;
+    }
+    let best: RoomPosition | undefined, bestScore = -Infinity;
+    for (let y = medic.pos.y - 1; y <= medic.pos.y + 1; y++)
+      for (let x = medic.pos.x - 1; x <= medic.pos.x + 1; x++) {
+        const k = tileKey(x,y);
+        if (x < 1 || x > 48 || y < 1 || y > 48 || lanes.get(x,y) === 255 || reserved.has(k) ||
+            blockers.has(k) || otherMedics.some(h => h.pos.x === x && h.pos.y === y)) continue;
+        const d = range({x,y}, to);
+        const support = [...destinations.values()].filter(at => range({x,y},at) <= 1).length;
+        const score = -d * 12 + support * 4 + Number(x === medic.pos.x && y === medic.pos.y);
+        if (score > bestScore) {
+          bestScore = score;
+          best = new RoomPosition(x,y,room.name);
+        }
+      }
+    if (best) {
+      reserved.add(tileKey(best.x,best.y));
+      if (!medic.pos.isEqualTo(best)) medic.move(medic.pos.getDirectionTo(best));
     }
   }
-  search(0, 0, 0);
-  return best;
+  return gates.sort((a,b) => a.hits - b.hits)[0] ?? core;
 }
 
 /** 优先突破能同时控制多个 Spawn 的核心，防止各翼在外围反复拆掉又重建的兵营。 */
@@ -408,69 +409,10 @@ export function runSiegeFormation(creep: Creep, task: WarTask): void {
   const pinned = breaches[wing] && Game.getObjectById(breaches[wing]);
   if (pinned) objective = pinned;
   else delete breaches[wing];
-  // 四格方阵常需拆多层墙。抵达堡垒后，以单个火力点为目标，只拆第一座实际挡路的建筑。
-  const gatePlans = (task.siegeGates ??= {});
-  const point = fighters.filter(c=>original && c.pos.inRangeTo(original,8))
-    .sort((a,b)=>a.pos.getRangeTo(original!) - b.pos.getRangeTo(original!))[0];
-  let guide: {actor:Creep;tile:Tile} | undefined;
-  if (original && point && isDue("siege-gate:"+room.name, 4, Game.time, wing)
-    && !fighters.some(c=>c.pos.inRangeTo(original,weaponRange(c)))) {
-    const terrain = geometry(room);
-    const lane=searchMovementPath(point.pos,{pos:original.pos,range:weaponRange(point)},
-      {maxRooms:1,maxOps:3500,roomCallback:()=>terrain.single});
-    if(!lane.incomplete) {
-      const gate=lane.path.map(p=>terrain.blockers.get(tileKey(p.x,p.y))).find(id=>id && Game.getObjectById(id));
-      if(gate)gatePlans[wing]=gate;else {
-        delete gatePlans[wing];
-        if(lane.path.length)guide={actor:point,tile:lane.path[0]};
-      }
-    }
-  }
-  const gate=gatePlans[wing] && Game.getObjectById(gatePlans[wing]);
-  if(gate && original && !fighters.some(c=>c.pos.inRangeTo(original,weaponRange(c))) &&
-    fighters.some(c=>c.pos.inRangeTo(gate,weaponRange(c)))) {
-    const positions=findSpawnAssaultTiles(room,group,gate);
-    if(positions)for(const c of group){
-      const tile=positions[slot(c)];
-      if(tile && range(tile,c.pos)===1)c.move(c.pos.getDirectionTo(tile.x,tile.y));
-    }
-    healAndShoot(group,room,gate);
-    return;
-  }
-  const strikes = (task.siegeStrike ??= {});
-  const existingStrike = strikes[wing];
-  let strikeSpawn = existingStrike && spawns.find((s) => s.id === existingStrike.spawn);
-  if (existingStrike && !strikeSpawn) delete strikes[wing];
-  if (
-    original &&
-    (group.length < 4 || isDue("siege-position:"+room.name, 4, Game.time, wing)) &&
-    group.some((member) => member.getActiveBodyparts(WORK) && !member.pos.inRangeTo(original, weaponRange(member)))
-  ) {
-    const positions = findSpawnAssaultTiles(room, group, original, guide);
-    if (positions) {
-      strikes[wing] = { spawn: original.id, tiles: positions };
-      strikeSpawn = original;
-    }
-  }
-  if (strikeSpawn && !group.some((c) => {
-    const tile = strikes[wing].tiles[slot(c)];
-    return c.getActiveBodyparts(WORK) && tile && range(tile, strikeSpawn!.pos) <= weaponRange(c);
-  }) && !group.some((c) => {
-    const tile = strikes[wing].tiles[slot(c)];
-    return c.getActiveBodyparts(WORK) && tile && range(tile, strikeSpawn!.pos) < range(c.pos, strikeSpawn!.pos);
-  })) {
-    delete strikes[wing];
-    strikeSpawn = undefined;
-  }
-  if (strikeSpawn) {
-    for (const member of group) {
-      const at = strikes[wing].tiles[slot(member)];
-      if (!at || (member.pos.x === at.x && member.pos.y === at.y)) continue;
-      const goal = new RoomPosition(at.x, at.y, room.name);
-      if (member.pos.isNearTo(goal)) member.move(member.pos.getDirectionTo(goal));
-      else member.moveTo(goal, walk);
-    }
-    healAndShoot(group, room, cover(room, strikeSpawn));
+  // 堡垒内按各攻击手的真实射程寻找单兵通道，医疗兵跟进；增援可从入口直接接回队友。
+  if (original && fighters.some(c => c.pos.inRangeTo(original, 8)) && group.some(c => c.getActiveBodyparts(HEAL))) {
+    const target = advanceInBreach(room, group, original);
+    healAndShoot(group, room, target);
     return;
   }
   const assembled =

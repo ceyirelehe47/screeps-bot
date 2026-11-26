@@ -142,6 +142,19 @@ describe("runTowerControl", () => {
     Memory.cfg = { cpuProfiler: { enabled: false } };
   });
 
+  it("六塔面对近身治疗的装甲敌人能从满血发起连续齐射", () => {
+    const name = "W3N3";
+    const towers = Array.from({length: 6}, (_, i) => createTower(name, "tower" + i, 20+i, 20));
+    const armor = createBody(TOUGH, 10).map(p => ({...p, boost: RESOURCE_CATALYZED_GHODIUM_ALKALIDE}));
+    const heal = createBody(HEAL, 30).map(p => ({...p, boost: RESOURCE_CATALYZED_LEMERGIUM_ALKALIDE}));
+    const target = createHostile(name, "armored", 22, 21, {body: [...armor, ...heal, ...createBody(MOVE,10)]});
+    const room = createRoom(name, {towers, hostiles: [target]});
+    room.getEventLog = jest.fn(() => []);
+    Game.rooms = {[name]: room};
+    runTowerControl();
+    for (const tower of towers) expect(tower.attack).toHaveBeenCalledWith(target);
+  });
+
   it.each(["attack", "heal", "repair", "range"] as const)("同房首塔 %s 抛错后其余塔继续，并独立于 profiler 记录摘要", (fault) => {
     const roomName = "W3N3";
     const broken = createTower(roomName, "broken", 25, 25), healthy = createTower(roomName, "healthy", 26, 25);
