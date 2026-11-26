@@ -160,6 +160,7 @@ describe("powerBankBoost", () => {
       const empty=createLabWithCompound("empty",SOURCE_ROOM,null,0,2000);
       const filled=createLabWithCompound("full",SOURCE_ROOM,r,750,2000);
       Game.rooms[SOURCE_ROOM]=createRoomWithInfrastructure({name:SOURCE_ROOM,labs:[empty,filled]});
+      (Game.getObjectById as jest.Mock).mockImplementation((id:string)=>[empty,filled].find(l=>l.id===id)??null);
       const result=prepareBoosts("home-defense",SOURCE_ROOM,0,new Map([[r,750]]),{requireLabEnergy:true,preferLoadedLabs:true});
       expect(result.status).toBe("ready");
       expect(result.labs).toEqual([filled.id]);
