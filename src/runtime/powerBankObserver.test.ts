@@ -87,6 +87,17 @@ describe("PowerBank Observer 动态扫描", () => {
     registerRuntimeServices();
   });
 
+  it("在偏离原点的私服地图上发布战争观察，并拒绝关闭房间", () => {
+    Game.map.getWorldSize = () => 19;
+    Game.map.getRoomLinearDistance = nativeCoordinateDistance;
+    Game.map.getRoomStatus = name => ({ status: name === "E17N12" ? "normal" : "closed", timestamp: null });
+    const observer = addObserver(createRoom("E13N12"));
+    expect(requestCombatObservation("E17N12")).toBe(true);
+    expect(requestCombatObservation("E17N13")).toBe(false);
+    runPowerBankObserver();
+    expect(observer.observeRoom).toHaveBeenCalledWith("E17N12");
+  });
+
   it("四类请求共享同帧活跃结构与可达查询，保留独立队列及单次意图", () => {
     const observer = addObserver(createRoom("E3N59"));
     const active = jest.spyOn(observer, "isActive");

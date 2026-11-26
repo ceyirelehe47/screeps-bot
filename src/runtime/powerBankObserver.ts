@@ -65,14 +65,15 @@ let observerSnapshot: {
 const observerDistances = new Map<string, number>();
 const OBSERVER_DISTANCE_CACHE_LIMIT = 1024;
 
+function coordinates(name: string): [number, number] | undefined {
+  const match = /^([EW])(0|[1-9]\d*)([NS])(0|[1-9]\d*)$/.exec(name);
+  if (!match) return undefined;
+  const x = Number(match[2]), y = Number(match[4]);
+  if (!Number.isSafeInteger(x) || !Number.isSafeInteger(y)) return undefined;
+  return [match[1] === "E" ? x : -x - 1, match[3] === "S" ? y : -y - 1];
+}
+
 function coordinateDistance(from: string, to: string): number | undefined {
-  const coordinates = (name: string): [number, number] | undefined => {
-    const match = /^([EW])(0|[1-9]\d*)([NS])(0|[1-9]\d*)$/.exec(name);
-    if (!match) return undefined;
-    const x = Number(match[2]), y = Number(match[4]);
-    if (!Number.isSafeInteger(x) || !Number.isSafeInteger(y)) return undefined;
-    return [match[1] === "E" ? x : -x - 1, match[3] === "S" ? y : -y - 1];
-  };
   const a = coordinates(from), b = coordinates(to);
   return a && b ? Math.max(Math.abs(a[0] - b[0]), Math.abs(a[1] - b[1])) : undefined;
 }
@@ -143,17 +144,20 @@ function worldSizeLimit(): number | undefined {
 }
 
 function validRoomName(roomName: string, worldSize: number | undefined): boolean {
-  const match = /^([EW])(0|[1-9]\d*)([NS])(0|[1-9]\d*)$/.exec(roomName);
-  if (!match) return false;
-  const horizontal = Number(match[2]), vertical = Number(match[4]);
-  if (!Number.isSafeInteger(horizontal) || !Number.isSafeInteger(vertical)) return false;
-  if (worldSize !== undefined) {
-    const minimum = -Math.floor(worldSize / 2);
-    const x = match[1] === "E" ? horizontal : -horizontal - 1;
-    const y = match[3] === "S" ? vertical : -vertical - 1;
-    if (x < minimum || y < minimum || x >= minimum + worldSize || y >= minimum + worldSize) return false;
-  }
-  return true;
+  const target = coordinates(roomName);
+  if (!target) return false;
+  if (worldSize === undefined) return true;
+  const minimum = -Math.floor(worldSize / 2);
+  const inside = ([x, y]: [number, number]): boolean =>
+    x >= minimum && y >= minimum && x < minimum + worldSize && y < minimum + worldSize;
+  if (inside(target)) return true;
+
+  // 私服可能只启用远离原点的一片房间。由真实 Observer 所在房证明偏移，
+  // 再用地图状态确认所请求的房间开放。常规居中世界沿用几何边界。
+  return getActiveObservers().some(observer => {
+    const origin = coordinates(observer.room.name);
+    return origin !== undefined && !inside(origin);
+  }) && typeof Game.map.getRoomStatus === "function" && isOpenRoom(roomName);
 }
 
 function validRequestRoom(kind: RequestKind, roomName: string, worldSize: number | undefined): boolean {
