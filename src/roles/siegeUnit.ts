@@ -22,7 +22,7 @@ function runSiegeUnit(creep: Creep, target: string, route: string): boolean {
   }
   const wing = Math.floor(siegeSlot(creep) / 4);
   const staging = task.siegeStagingRoom ?? task.routeRooms?.[task.routeRooms.length - 2] ?? task.sourceRoom;
-  const launched = task.siegeWings?.[wing];
+  const launched = creep.memory._siegeSlot !== undefined && task.siegeWings?.[wing];
   if (creep.getActiveBodyparts(HEAL)) {
     const injured = creep.pos
       .findInRange(FIND_MY_CREEPS, 1)

@@ -743,6 +743,7 @@ declare global {
     _warMoveIntentAt?: number;
     _warPartnerConfigName?: string;
     _warDetached?: boolean;
+    _siegeSlot?: number;
     _optionalBoostSkipped?: string;
     _warQueued?: boolean;
     /** 已退出共享清剿的多余成员撤回此源房回收。 */

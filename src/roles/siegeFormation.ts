@@ -15,7 +15,8 @@ const offsets: readonly Tile[] = [
 ];
 const tileKey = (x: number, y: number) => y * 50 + x;
 const range = (a: Tile, b: Tile) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
-export const siegeSlot = (c: Creep) => Number(c.memory.roleArgs?.[5] ?? c.memory.configName?.split(":").pop() ?? 0);
+export const siegeSlot = (c: Creep) =>
+  c.memory._siegeSlot ?? Number(c.memory.roleArgs?.[5] ?? c.memory.configName?.split(":").pop() ?? 0);
 const groupId = (c: Creep) => Math.floor(siegeSlot(c) / 4);
 const slot = (c: Creep) => siegeSlot(c) % 4;
 const walk = { maxRooms: 1, ignoreCreeps: false, reusePath: 3 } as const;

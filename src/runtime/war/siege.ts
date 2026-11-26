@@ -12,7 +12,7 @@ import {
   upsertWarConfig,
 } from "./production";
 import { ensureConfigStore, getLegacyWarBoostTaskId, getLiveCreepsByConfig, type WarTask } from "./store";
-import { SIEGE_BODIES, SIEGE_BOOSTS, SIEGE_SLOTS, siegeConfigName } from "./siegeRoster";
+import { assembleSiegeWings, SIEGE_BODIES, SIEGE_BOOSTS, SIEGE_SLOTS, siegeConfigName } from "./siegeRoster";
 import { requestCombatObservation } from "../powerBankObserver";
 import { setTaskStatus } from "./fsm";
 
@@ -57,12 +57,12 @@ export function runSiegeCampaign(task: WarTask): void {
     return { job, name, index, unit: getLiveCreepsByConfig(name)[0] };
   });
   const staging = (task.siegeStagingRoom ??= task.routeRooms?.[task.routeRooms.length - 2] ?? task.sourceRoom);
-  const wings = (task.siegeWings ??= {});
-  for (const start of [0, 4]) {
-    const team = members.slice(start, start + 4);
-    if (team.every((s) => s.unit?.memory.ready && s.unit.room.name === staging)) wings[start / 4] = true;
-  }
-  if (Object.values(wings).some(Boolean)) task.siegeLaunched = true;
+  assembleSiegeWings(
+    task,
+    members.flatMap((member) => (member.unit ? [member.unit] : [])),
+    staging,
+  );
+  if (Object.values(task.siegeWings ?? {}).some(Boolean)) task.siegeLaunched = true;
   setTaskStatus(task, task.siegeLaunched ? "clearing" : "staging");
   if (!canStartOutboundMission(task.sourceRoom) && !canContinueWarMission(task)) return;
   const spawns = getSpawnsForRoom(task.sourceRoom);
