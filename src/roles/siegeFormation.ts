@@ -330,7 +330,9 @@ export function runSiegeFormation(creep: Creep, task: WarTask): void {
         !c.memory._warDetached,
     );
   const anchors = (task.siegeAnchors ??= {});
-  const anchor = (anchors[wing] ??= entryAnchor(room, task.siegeStagingRoom ?? task.sourceRoom, wing));
+  const flank = wing === 2 && task.routeOrigin !== "manual" ? task.siegeFlankRoute : undefined;
+  const ingress = flank?.[flank.length - 2] ?? task.siegeStagingRoom ?? task.sourceRoom;
+  const anchor = (anchors[wing] ??= entryAnchor(room, ingress, wing));
   const leader = group.find((c) => slot(c) === 0);
   const spawns = room.find(FIND_HOSTILE_SPAWNS);
   const original = spawns.sort((a, b) => range(anchor, a.pos) - range(anchor, b.pos))[0];

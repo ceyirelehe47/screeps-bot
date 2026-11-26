@@ -20,6 +20,7 @@ import {
   siegeSlots,
   siegeConfigName,
 } from "./siegeRoster";
+import { defaultWarMapRoute } from "./observation";
 import { requestCombatObservation } from "../powerBankObserver";
 import { setTaskStatus } from "./fsm";
 
@@ -124,6 +125,11 @@ export function runSiegeCampaign(task: WarTask): void {
     members.flatMap((member) => member.units),
     staging,
   );
+  if (task.siegeWings?.[2] && task.routeOrigin !== "manual" && !task.siegeFlankRoute) {
+    const bypass = defaultWarMapRoute(staging, task.targetRoom, staging).rooms;
+    // 长途迂回会消耗寿命；没有短支路时保留原进场路线。
+    task.siegeFlankRoute = bypass && bypass.length <= 5 ? bypass : [staging, task.targetRoom];
+  }
   if (Object.values(task.siegeWings ?? {}).some(Boolean)) task.siegeLaunched = true;
   setTaskStatus(task, task.siegeLaunched ? "clearing" : "staging");
   if (!canStartOutboundMission(task.sourceRoom) && !canContinueWarMission(task) && !canReinforceGuardedSiege(task))

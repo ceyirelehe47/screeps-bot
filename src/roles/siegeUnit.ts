@@ -39,7 +39,8 @@ function runSiegeUnit(creep: Creep, target: string, route: string): boolean {
   else {
     const rooms = route.split("|");
     const waypoint = rooms.indexOf(staging);
-    const itinerary = !launched && waypoint >= 0 ? rooms.slice(0, waypoint + 1).join("|") : route;
+    const flank = launched && wing === 2 && task.routeOrigin !== "manual" ? task.siegeFlankRoute : undefined;
+    const itinerary = flank?.length ? flank.join("|") : !launched && waypoint >= 0 ? rooms.slice(0, waypoint + 1).join("|") : route;
     moveToTargetRoom(creep, launched ? target : staging, itinerary, travel);
   }
   return false;
