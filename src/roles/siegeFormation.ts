@@ -1,3 +1,4 @@
+import { towerAttackPowerAt } from "@/runtime/combatTowerThreat";
 import { isWalkableStructure } from "@/movement/common";
 import { damageAfterTough, effectivePower } from "@/runtime/powerBankCapability";
 import type { WarTask } from "@/runtime/war/store";
@@ -82,6 +83,7 @@ function fire(creep: Creep, target: Structure|undefined, nearby: Creep[]): void 
 function healAndShoot(group:Creep[], room:Room, target?:Structure):void {
   const incoming=new Map<string,number>(), assigned=new Map<string,number>();
   for(const e of room.getEventLog()) if(e.event===EVENT_ATTACK) incoming.set(e.data.targetId,(incoming.get(e.data.targetId)??0)+e.data.damage);
+  const towers=room.find(FIND_HOSTILE_STRUCTURES).filter((s):s is StructureTower => s.structureType===STRUCTURE_TOWER && (s as StructureTower).store.getUsedCapacity(RESOURCE_ENERGY)>=TOWER_ENERGY_COST);
   const nearby=room.find(FIND_HOSTILE_CREEPS).filter(h=>h.owner.username!=="Source Keeper" &&
     !room.lookForAt(LOOK_STRUCTURES,h.pos).some(s=>s.structureType===STRUCTURE_RAMPART));
   for(const c of group){
@@ -89,7 +91,9 @@ function healAndShoot(group:Creep[], room:Room, target?:Structure):void {
       const patients=group.filter(a=>c.pos.inRangeTo(a,3));
       let best=c, bestScore=-Infinity;
       for(const p of patients){
-        const risk=damageAfterTough(p.body,incoming.get(p.id)??0);
+        // 首次齐射之前预治疗没有 HEAL 的拆墙兵，之后按上一帧各成员实际承伤分配。
+        const towerVolley=p.getActiveBodyparts(WORK)>0 ? towers.reduce((n,tower)=>n+towerAttackPowerAt(tower,p.pos),0) : 0;
+        const risk=damageAfterTough(p.body,Math.max(towerVolley,incoming.get(p.id)??0));
         const missing=p.hitsMax-p.hits;
         const score=(missing+risk-(assigned.get(p.id)??0))*(c.pos.isNearTo(p)?1:1/3);
         if(score>bestScore || score===bestScore && p===c){best=p;bestScore=score;}

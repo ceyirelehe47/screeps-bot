@@ -15,8 +15,8 @@ export const SIEGE_BOOSTS = {
 
 const parts = (type: BodyPartConstant, count: number) => Array<BodyPartConstant>(count).fill(type);
 export const SIEGE_BODIES = {
-  breacher: [...parts(TOUGH, 12), ...parts(WORK, 24), ...parts(RANGED_ATTACK, 4), ...parts(MOVE, 10)],
-  escort: [...parts(TOUGH, 13), ...parts(RANGED_ATTACK, 12), ...parts(HEAL, 15), ...parts(MOVE, 10)],
+  breacher: [...parts(TOUGH, 22), ...parts(WORK, 17), ...parts(RANGED_ATTACK, 1), ...parts(MOVE, 10)],
+  escort: [...parts(TOUGH, 22), ...parts(RANGED_ATTACK, 3), ...parts(HEAL, 15), ...parts(MOVE, 10)],
 };
 
 export function siegeConfigName(task: Pick<WarTask, "sourceRoom" | "targetRoom">, index: number): string {
