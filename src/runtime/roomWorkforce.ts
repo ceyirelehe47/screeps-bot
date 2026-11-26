@@ -213,7 +213,12 @@ export function buildRoomWorkforceInventory(room: Room): RoomWorkforceInventory 
     });
   }
 
-  const carrierCount = (room.controller?.level ?? 0) <= 4 ? 2 : 1;
+  // 持续攻城要同时装填大身体的 Spawn、矿物与实验室能量。战役退役后走常规岗位回收。
+  const rcl = room.controller?.level ?? 0;
+  const siegeSupply = rcl >= 7 && Object.values(Memory.data?.war ?? {}).some(task =>
+    task.sourceRoom === room.name && task.squad === "siege" && task.oneShot === false &&
+    (task.status === "staging" || task.status === "clearing"));
+  const carrierCount = siegeSupply ? 3 : rcl <= 4 ? 2 : 1;
   for (let i = 0; i < carrierCount; i++) {
     configs.push({
       kind: "carrier",

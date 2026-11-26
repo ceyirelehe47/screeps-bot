@@ -232,6 +232,21 @@ describe("roomWorkforce", () => {
     expect(rcl8Room.memory.workerConstructionTier).toBe(0);
   });
 
+  it("只有持续攻城的来源房增配运输兵，战役结束即恢复平时岗位数", () => {
+    const room=createRoom({name:"W6N1",level:8});
+    const previous=Memory.data?.war;
+    const target="W6N2";
+    Memory.data ??= {} as NonNullable<typeof Memory.data>;
+    const war = {targetRoom:target,sourceRoom:room.name,squad:"siege",reason:"manual",status:"clearing",
+      oneShot:false,createdAt:1,updatedAt:1,attempts:1} as const;
+    try {
+      Memory.data.war = {[target]: war};
+      expect(buildRoomWorkforceInventory(room).configs.filter(c=>c.kind==="carrier")).toHaveLength(3);
+      Memory.data.war[target].status="done";
+      expect(buildRoomWorkforceInventory(room).configs.filter(c=>c.kind==="carrier")).toHaveLength(1);
+    } finally { Memory.data.war=previous; }
+  });
+
   it("builds typed source, mineral, carrier, and worker inventory with capacity cutovers", () => {
     const room = createRoom({
       level: 5,

@@ -1,3 +1,4 @@
+import { siegeUnitRole } from "./siegeUnit";
 import { prepareOptionalCombatBoost } from "@/roles/optionalCombatBoosts";
 import { prepareWarCombatBoost } from "@/runtime/war/boostPreparation";
 jest.mock("@/roles/shared", () => ({
@@ -97,4 +98,21 @@ it("战争缺少强化时超时仍回收，不放行无强化出击", () => {
   Game.time += 100;
   expect(prepareWarCombatBoost(creep, "war-owner", RESOURCE_CATALYZED_UTRIUM_ACID)).toBe(false);
   expect(creep.memory._warDetached).toBe(true); expect(creep.memory.configName).toBeUndefined();
+});
+
+it("持续围城的已出舱增援在供给超时后仍保留战斗身份", () => {
+  const target="W1N2";
+  const previous=Memory.data?.war;
+  Memory.data ??= {} as NonNullable<typeof Memory.data>;
+  Memory.data.war = {[target]:{targetRoom:target, sourceRoom:"W1N1",squad:"siege",reason:"manual",status:"clearing",
+    oneShot:false,siegeLaunched:true,attempts:1,createdAt:0,updatedAt:0}};
+  const name="W1N1:war:W1N2:siegeUnit:0";
+  const c={...createAttacker(), name:"relief-wait", room:{name:"W1N1"},memory:{role:"siegeUnit",configName:name}} as unknown as Creep;
+  Game.creeps={[c.name]:c}; Game.getObjectById=jest.fn(()=>null) as typeof Game.getObjectById;
+  const role=siegeUnitRole(target,"","war-task",RESOURCE_CATALYZED_UTRIUM_ACID);
+  try {
+    Game.time=9000; expect(role.prepare!(c)).toBe(false);
+    Game.time+=100; expect(role.prepare!(c)).toBe(true);
+    expect(c.memory.configName).toBe(name); expect(c.memory._recycleToRoom).toBeUndefined();
+  } finally { Memory.data.war=previous; }
 });

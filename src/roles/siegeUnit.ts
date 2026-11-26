@@ -1,3 +1,4 @@
+import { prepareCombatBoost } from "./combatBoosts";
 import { moveToTarget, moveToTargetRoom } from "./shared";
 import { prepareWarCombatBoost } from "@/runtime/war/boostPreparation";
 import type { RoleFactory } from "@/types/system";
@@ -72,10 +73,16 @@ export const siegeUnitRole: RoleFactory = (target, route, boostTask, compounds) 
   prepare: (creep) => {
     // 强化等待从出舱开始。50 节身体孵化需要 150 tick，不能用这段时间触发回收。
     if (creep.spawning) return false;
-    const exhausted = Memory.data?.war?.[target]?.siegeExhausted;
+    const campaign = Memory.data?.war?.[target];
+    const exhausted = campaign?.siegeExhausted;
     const available = exhausted?.length
       ? compounds?.split("|").filter((r) => !exhausted.includes(r as ResourceConstant)).join("|")
       : compounds;
+    if (campaign?.squad === "siege" && campaign.siegeLaunched && campaign.oneShot === false) {
+      if (creep.memory._warQueued || creep.memory._warDetached) return false;
+      // 持续围城的接班兵先领取可用强化。确实等待超时后保住已经投入的身体，随队增援。
+      return prepareCombatBoost(creep, boostTask, available) !== "waiting";
+    }
     return prepareWarCombatBoost(creep, boostTask, available);
   },
   source: (creep) => runSiegeUnit(creep, target, route),
