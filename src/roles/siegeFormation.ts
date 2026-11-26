@@ -116,11 +116,31 @@ function cover(room: Room, target: Structure): Structure {
       .find((s) => s.structureType === STRUCTURE_RAMPART && !(s as StructureRampart).my) ?? target
   );
 }
-function fire(creep: Creep, target: Structure | undefined, nearby: Creep[]): void {
+function fire(
+  creep: Creep,
+  target: Structure | undefined,
+  nearby: Creep[],
+  openings: Structure[],
+  cleared: Set<string>,
+): void {
   const enemy = nearby.filter((h) => creep.pos.inRangeTo(h, 3)).sort((a, b) => a.hits - b.hits)[0];
   if (enemy) creep.rangedAttack(enemy);
   else if (target && creep.pos.inRangeTo(target, 3)) creep.rangedAttack(target);
-  if (target && creep.getActiveBodyparts(WORK) && creep.pos.isNearTo(target)) creep.dismantle(target);
+  if (!creep.getActiveBodyparts(WORK)) return;
+  const power = creep.body.reduce((sum, part) => {
+    if (part.type !== WORK || part.hits <= 0) return sum;
+    const multiplier = part.boost
+      ? ((BOOSTS[WORK] as Record<string, { dismantle?: number }>)[part.boost]?.dismantle ?? 1)
+      : 1;
+    return sum + DISMANTLE_POWER * multiplier;
+  }, 0);
+  // 刚拆掉 rampart 的地方可能仍有一座低血量 extension。先用一个动作打通落点。
+  const opening =
+    target?.structureType !== STRUCTURE_SPAWN &&
+    openings.find((s) => !cleared.has(s.id) && s.hits <= power && creep.pos.isNearTo(s));
+  if (opening) {
+    if (creep.dismantle(opening) === OK) cleared.add(opening.id);
+  } else if (target && creep.pos.isNearTo(target)) creep.dismantle(target);
 }
 
 function healAndShoot(group: Creep[], room: Room, target?: Structure): void {
@@ -128,6 +148,20 @@ function healAndShoot(group: Creep[], room: Room, target?: Structure): void {
     assigned = new Map<string, number>();
   for (const e of room.getEventLog())
     if (e.event === EVENT_ATTACK) incoming.set(e.data.targetId, (incoming.get(e.data.targetId) ?? 0) + e.data.damage);
+  const spawns = room.find(FIND_HOSTILE_SPAWNS);
+  const openings = room
+    .find(FIND_HOSTILE_STRUCTURES)
+    .filter(
+      (s) =>
+        s.hits > 0 &&
+        s.hits <= 5000 &&
+        s.structureType !== STRUCTURE_RAMPART &&
+        s.structureType !== STRUCTURE_SPAWN &&
+        !isWalkableStructure(s) &&
+        spawns.some((spawn) => spawn.pos.inRangeTo(s, 2)) &&
+        !room.lookForAt(LOOK_STRUCTURES, s.pos).some((tile) => tile.structureType === STRUCTURE_RAMPART),
+    );
+  const cleared = new Set<string>();
   const underFire = group.some((member) => (incoming.get(member.id) ?? 0) > 0);
   const towers = room
     .find(FIND_HOSTILE_STRUCTURES)
@@ -166,7 +200,7 @@ function healAndShoot(group: Creep[], room: Room, target?: Structure): void {
       const power = effectivePower(c.body, HEAL);
       assigned.set(best.id, (assigned.get(best.id) ?? 0) + power * (close ? 1 : 1 / 3));
     }
-    fire(c, target, nearby);
+    fire(c, target, nearby, openings, cleared);
   }
 }
 
