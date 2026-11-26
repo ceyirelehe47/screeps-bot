@@ -55,6 +55,16 @@ function calcDesiredDefenderCount(room: Room, hostiles: Creep[], frontCount: num
   return Math.min(getMaxDefenders(), frontCount);
 }
 
+/** 同一战线内有装甲攻击手和能覆盖它的治疗时，驻军需要第二个近战位。 */
+function hasSupportedArmor(hostiles: Creep[]): boolean {
+  return hostiles.some(attacker =>
+    (attacker.getActiveBodyparts(ATTACK) > 0 || attacker.getActiveBodyparts(WORK) > 0 ||
+     attacker.getActiveBodyparts(RANGED_ATTACK) > 0) &&
+    attacker.body.some(p => p.type === TOUGH && p.hits > 0 && p.boost) &&
+    hostiles.some(medic => medic.owner.username === attacker.owner.username &&
+      medic.getActiveBodyparts(HEAL) > 0 && medic.pos.getRangeTo(attacker.pos) <= 3));
+}
+
 function ensureDefenders(room: Room, desiredCount: number): void {
   const configStore = getCreepConfigService().readStore();
   const spawns = getSpawnsForRoom(room.name);
@@ -147,14 +157,13 @@ export function runHomeDefense(): void {
       Object.values(Memory.data?.war ?? {}).some(w => w.sourceRoom === room.name && w.squad === "siege" &&
         w.oneShot === false && w.status !== "failed" && w.status !== "done");
     if (playerHostiles.length > 0) {
-      const armoredPair = mobilized && playerHostiles.some(h => h.body.some(p => p.type === TOUGH && p.boost && p.hits > 0)) &&
-        playerHostiles.some(h => h.getActiveBodyparts(HEAL) > 0);
+      const armoredPair = hasSupportedArmor(playerHostiles);
       const desiredCount = Math.max(calcDesiredDefenderCount(room, playerHostiles, fronts.length),
-        mobilized ? Math.min(getMaxDefenders(), armoredPair ? 2 : 1) : 0);
+        Math.min(getMaxDefenders(), armoredPair ? 2 : mobilized ? 1 : 0));
       const designatedLab = Memory.cfg?.homeDefense?.rooms?.[room.name]?.boostLabId;
       const hasLocalStock = (room.storage?.store.getUsedCapacity(RESOURCE_CATALYZED_UTRIUM_ACID) ?? 0) +
         (room.terminal?.store.getUsedCapacity(RESOURCE_CATALYZED_UTRIUM_ACID) ?? 0) >= LAB_BOOST_MINERAL;
-      const needsBoost = desiredCount > 0 && (!!designatedLab || hasLocalStock) && (mobilized || shouldBoostDefender(room, playerHostiles));
+      const needsBoost = desiredCount > 0 && (!!designatedLab || hasLocalStock) && (armoredPair || mobilized || shouldBoostDefender(room, playerHostiles));
       prepareLocalDefenseBoost(room, needsBoost && !designatedLab ? desiredCount : 0);
       // 先完成可能失败的只读计划，再提交协调/配置；下一 tick 重算可收敛半写状态。
       writeDefenseFronts(room.name, fronts);

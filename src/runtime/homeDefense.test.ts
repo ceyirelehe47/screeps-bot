@@ -164,6 +164,21 @@ describe("runHomeDefense", () => {
     } finally { log.mockRestore(); }
   });
 
+  it("本房没有远征时，仍为受治疗覆盖的强化装甲攻击手安排两名驻军", () => {
+    const name = "W5N3";
+    const attacker = createHostile(name, 20, 20);
+    attacker.body.push({type: TOUGH, hits: 100, boost: RESOURCE_CATALYZED_GHODIUM_ALKALIDE});
+    const medic = createHostile(name, 21, 21);
+    medic.body = [{type: HEAL, hits: 100}];
+    medic.getActiveBodyparts = (p: BodyPartConstant) => Number(p === HEAL);
+    const room = createRoom(name, {hostiles: [attacker, medic]});
+    const spawn = createSpawn(room);
+    Game.rooms = {[name]: room}; Game.spawns = {[spawn.name]: spawn}; Game.creeps = {};
+    Memory.data = {creepConfigs: {}} as Memory["data"]; Memory.cfg = {};
+    runHomeDefense();
+    expect(spawn.memory.spawnList).toEqual([`${name}:homeDefense:defender:0`, `${name}:homeDefense:defender:1`]);
+  });
+
   it("assigns primary and secondary roles when one front needs multiple defenders", () => {
     const roomName = "W2N2";
     const room = createRoom(roomName, {
