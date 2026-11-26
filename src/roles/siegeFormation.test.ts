@@ -1,5 +1,5 @@
 import { setDefaultMapMocks, setupPathFinderGlobal, setupRoomPositionGlobal } from "@mock/movement";
-import { runSiegeFormation, advanceInBreach, selectSiegeCore } from "./siegeFormation";
+import { runSiegeFormation, advanceInBreach, selectSiegeCore, siegeWeaponRange } from "./siegeFormation";
 import { SIEGE_BODIES, SIEGE_SLOTS } from "@/runtime/war/siegeRoster";
 import type { WarTask } from "@/runtime/war/store";
 import { createMockPowerBankCreep, MockPos } from "@mock/powerBank";
@@ -85,4 +85,14 @@ it("三个紧邻的 Spawn 先选能覆盖两侧的中央目标",()=>{
   const left=spawn(20,20),central=spawn(22,23),right=spawn(25,24);
   expect(selectSiegeCore([left,central,right],{x:5,y:20})).toBe(central);
   expect(selectSiegeCore([left,right],{x:5,y:20})).toBe(left);
+});
+
+
+it("远射手失去唯一的 WORK 后依然保持三格射程，医疗护卫仍负责跟随", () => {
+  const creep = (job: string) => ({
+    memory: {roleArgs: ["", "", "", "", job]},
+    getActiveBodyparts: (p: BodyPartConstant) => p === RANGED_ATTACK ? 15 : 0,
+  }) as Creep;
+  expect(siegeWeaponRange(creep("ranger"))).toBe(3);
+  expect(siegeWeaponRange(creep("escort"))).toBe(1);
 });

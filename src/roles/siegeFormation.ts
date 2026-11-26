@@ -18,7 +18,17 @@ const tileKey = (x: number, y: number) => y * 50 + x;
 const range = (a: Tile, b: Tile) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
 export const siegeSlot = (c: Creep) =>
   c.memory._siegeSlot ?? Number(c.memory.roleArgs?.[5] ?? c.memory.configName?.split(":").pop() ?? 0);
-const weaponRange = (c: Creep) => c.getActiveBodyparts(RANGED_ATTACK) > c.getActiveBodyparts(WORK) && c.getActiveBodyparts(WORK) > 0 ? 3 : 1;
+function isSiegeFighter(c: Creep): boolean {
+  const job = c.memory.roleArgs?.[4];
+  return c.getActiveBodyparts(WORK) > 0 ||
+    ((job === "ranger" || job === "breacher") && c.getActiveBodyparts(RANGED_ATTACK) > 0);
+}
+
+export function siegeWeaponRange(c: Creep): 1 | 3 {
+  const ranged = c.getActiveBodyparts(RANGED_ATTACK);
+  const work = c.getActiveBodyparts(WORK);
+  return isSiegeFighter(c) && ranged > work ? 3 : 1;
+}
 const groupId = (c: Creep) => Math.floor(siegeSlot(c) / 4);
 const slot = (c: Creep) => siegeSlot(c) % 4;
 const walk = { maxRooms: 1, ignoreCreeps: false, reusePath: 3 } as const;
@@ -133,7 +143,9 @@ function fire(
 ): void {
   const enemies = nearby.filter((h) => creep.pos.inRangeTo(h, 3)).sort((a, b) => a.hits - b.hits);
   const enemy = enemies[0];
-  const focus = core ?? (target && creep.pos.inRangeTo(target, 3) ? target : undefined);
+  const unshielded = exposed.filter(s => s.structureType === STRUCTURE_SPAWN && creep.pos.inRangeTo(s, 3))
+    .sort((a,b) => creep.pos.getRangeTo(a) - creep.pos.getRangeTo(b) || a.hits - b.hits)[0];
+  const focus = unshielded ?? core ?? (target && creep.pos.inRangeTo(target, 3) ? target : undefined);
   if (creep.getActiveBodyparts(RANGED_ATTACK)) {
     const structures = exposed.filter(s => creep.pos.inRangeTo(s, 3));
     const spread = [...enemies, ...structures].reduce((sum, obj) => {
@@ -142,7 +154,7 @@ function fire(
     }, 0);
     // 贴身群攻对主目标保持全额伤害，并同时消耗相邻的 rampart、维修工和补塔物流。
     if (focus && creep.pos.isNearTo(focus) && spread > 1) creep.rangedMassAttack();
-    else if (focus && weaponRange(creep) === 3) creep.rangedAttack(focus);
+    else if (focus && (unshielded || siegeWeaponRange(creep) === 3)) creep.rangedAttack(focus);
     else if (spread > 1 && !focus) creep.rangedMassAttack();
     else {
       const shot = enemy ?? focus ?? structures[0];
@@ -150,6 +162,10 @@ function fire(
     }
   }
   if (!creep.getActiveBodyparts(WORK)) return;
+  if (unshielded && creep.pos.isNearTo(unshielded)) {
+    creep.dismantle(unshielded);
+    return;
+  }
   const power = creep.body.reduce((sum, part) => {
     if (part.type !== WORK || part.hits <= 0) return sum;
     const multiplier = part.boost
@@ -196,7 +212,7 @@ function targetsInRoom(room: Room, spawns: StructureSpawn[]): SiegeTargets {
 }
 
 const siegeHealing = new WeakMap<Room, { tick: number; assigned: Map<string, number> }>();
-function healAndShoot(group: Creep[], room: Room, target?: Structure): void {
+function healAndShoot(group: Creep[], room: Room, target?: Structure, gates?: ReadonlyMap<Creep, Structure>): void {
   const incoming = new Map<string, number>();
   let frame = siegeHealing.get(room);
   if (!frame || frame.tick !== Game.time) {
@@ -255,22 +271,22 @@ function healAndShoot(group: Creep[], room: Room, target?: Structure): void {
       const power = effectivePower(c.body, HEAL);
       assigned.set(best.id, (assigned.get(best.id) ?? 0) + power * (close ? 1 : 1 / 3));
     }
-    const core = weaponRange(c) === 3 && spawns
+    const core = siegeWeaponRange(c) === 3 && spawns
       .filter((spawn) => c.pos.inRangeTo(spawn, 3))
       .map((spawn) => cover(room, spawn))
       .sort((a, b) => Number(b.id === target?.id) - Number(a.id === target?.id) || a.hits - b.hits)[0];
-    fire(c, target, nearby, openings, cleared, approach, exposed, core || undefined);
+    fire(c, gates?.get(c) ?? target, nearby, openings, cleared, approach, exposed, core || undefined);
   }
 }
 
 /** 将敌方建筑的拆除时间作为通行代价；实际移动始终止于第一个仍然存在的障碍。 */
-export function advanceInBreach(room: Room, group: Creep[], spawn: StructureSpawn): Structure {
+export function advanceInBreach(room: Room, group: Creep[], spawn: StructureSpawn, orders?: Map<Creep, Structure>): Structure {
   const core = cover(room, spawn);
-  const fighters = group.filter(c => c.getActiveBodyparts(WORK))
+  const fighters = group.filter(isSiegeFighter)
     .sort((a,b) => a.pos.getRangeTo(spawn) - b.pos.getRangeTo(spawn) || slot(a) - slot(b));
   const medics = group.filter(c => c.getActiveBodyparts(HEAL));
   // 已经就位的部队保持火力与队形，避免无意义的寻路和医疗位互换。
-  if (fighters.every(c => c.pos.inRangeTo(spawn, weaponRange(c))) &&
+  if (fighters.every(c => c.pos.inRangeTo(spawn, siegeWeaponRange(c))) &&
       fighters.every(c => medics.some(h => h.pos.isNearTo(c)))) return core;
   const { single, blockers } = geometry(room);
   const lanes = single.clone();
@@ -282,17 +298,20 @@ export function advanceInBreach(room: Room, group: Creep[], spawn: StructureSpaw
   const gates: Structure[] = [];
   for (const c of fighters) {
     let destination = c.pos;
-    if (!c.fatigue && !c.pos.inRangeTo(spawn, weaponRange(c))) {
+    if (!c.fatigue && !c.pos.inRangeTo(spawn, siegeWeaponRange(c))) {
       const matrix = lanes.clone();
       for (const other of fighters) if (other !== c) matrix.set(other.pos.x, other.pos.y, 255);
       for (const k of reserved) matrix.set(k % 50, Math.floor(k / 50), 255);
-      const lane = searchMovementPath(c.pos, {pos: spawn.pos, range: weaponRange(c)},
+      const lane = searchMovementPath(c.pos, {pos: spawn.pos, range: siegeWeaponRange(c)},
         {maxRooms: 1, maxOps: 2400, roomCallback: () => matrix});
       const next = lane.path[0];
       if (!lane.incomplete && next) {
         const id = blockers.get(tileKey(next.x, next.y));
         const gate = id && Game.getObjectById(id);
-        if (gate) gates.push(gate);
+        if (gate) {
+          gates.push(gate);
+          orders?.set(c, gate);
+        }
         else if (medics.some(h => h.pos.inRangeTo(next, 2)) && !medics.some(h => h.fatigue && h.pos.isEqualTo(next))) {
           destination = next;
           c.move(c.pos.getDirectionTo(next));
@@ -381,8 +400,8 @@ export function runSiegeFormation(creep: Creep, task: WarTask): void {
   const formations = (task.siegeFormationOrder ??= {});
   const order = (formations[wing] ??= offsets.map((_, i) => (i === 0 ? previousFront : i === previousFront ? 0 : i)));
   const cell = (member: Creep) => order[slot(member)];
-  const fighters = group.filter((member) => member.getActiveBodyparts(WORK));
-  const reach = fighters.length && fighters.every((member) => weaponRange(member) === 3) ? 3 : 1;
+  const fighters = group.filter(isSiegeFighter);
+  const reach = fighters.length && fighters.every((member) => siegeWeaponRange(member) === 3) ? 3 : 1;
   const face = (obstacle: Structure, distance = 1) => {
     // 已能拆除的队员原地工作，其余拆墙兵与相邻障碍的护卫交换位置。
     const drills = group.filter((member) => member.getActiveBodyparts(WORK) > 0);
@@ -425,8 +444,9 @@ export function runSiegeFormation(creep: Creep, task: WarTask): void {
   else delete breaches[wing];
   // 堡垒内按各攻击手的真实射程寻找单兵通道，医疗兵跟进；增援可从入口直接接回队友。
   if (original && fighters.some(c => c.pos.inRangeTo(original, 8)) && group.some(c => c.getActiveBodyparts(HEAL))) {
-    const target = advanceInBreach(room, group, original);
-    healAndShoot(group, room, target);
+    const orders = new Map<Creep, Structure>();
+    const target = advanceInBreach(room, group, original, orders);
+    healAndShoot(group, room, target, orders);
     return;
   }
   const assembled =
