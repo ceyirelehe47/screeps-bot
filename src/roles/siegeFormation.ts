@@ -272,12 +272,13 @@ export function findSpawnAssaultTiles(room: Room, group: Creep[], spawn: Structu
     return tiles.sort((a, b) => range(a, c.pos) - range(b, c.pos));
   });
   const chosen: Tile[] = [];
-  const originalDistance = drills.reduce((sum, c) => sum + Math.max(0, range(c.pos, spawn.pos) - weaponRange(c)), 0);
+  const ranges = drills.map(weaponRange);
+  const originalDistance = drills.reduce((sum, c, i) => sum + Math.max(0, range(c.pos, spawn.pos) - ranges[i]), 0);
   let best: Tile[] | undefined,
     bestScore = -Infinity;
   function search(i: number, adjacent: number, steps: number): void {
     if (i === actors.length) {
-      const distance = chosen.slice(0, drills.length).reduce((sum, p, j) => sum + Math.max(0, range(p, spawn.pos) - weaponRange(drills[j])), 0);
+      const distance = chosen.slice(0, drills.length).reduce((sum, p, j) => sum + Math.max(0, range(p, spawn.pos) - ranges[j]), 0);
       if (!adjacent && distance >= originalDistance) return;
       const score = adjacent * 100 - distance * 8 - steps;
       if (score > bestScore) {
@@ -292,7 +293,7 @@ export function findSpawnAssaultTiles(room: Room, group: Creep[], spawn: Structu
     for (const at of options[i]) {
       if (chosen.some((p) => p.x === at.x && p.y === at.y)) continue;
       const isDrill = i < drills.length;
-      const nextAdjacent = adjacent + Number(isDrill && range(at, spawn.pos) <= weaponRange(actors[i]));
+      const nextAdjacent = adjacent + Number(isDrill && range(at, spawn.pos) <= ranges[i]);
 
       // 两名护卫均能贴身治疗所有拆墙兵，也互相覆盖。
       if (!isDrill && chosen.some((p) => range(p, at) > 1)) continue;

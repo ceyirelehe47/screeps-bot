@@ -55,7 +55,8 @@ it("四次角色调度只提交一轮攻击；两名拆墙兵先打 Spawn 的掩
 it("前排阵亡时，余下拆墙兵和两名治疗能朝空出的近身位置一起前进一步", () => {
   const target = "E3N2";
   const room = { name: target, lookAt: () => [] } as unknown as Room;
-  const terrain = jest.spyOn(Game.map, "getRoomTerrain").mockReturnValue({ get: () => 0 } as ReturnType<typeof Game.map.getRoomTerrain>);
+  const originalMap = Object.getOwnPropertyDescriptor(Game, "map");
+  Object.defineProperty(Game, "map", { configurable: true, value: { getRoomTerrain: () => ({ get: () => 0 }) } });
   const unit = (job: "breacher" | "escort", i: number, x: number, y: number) => ({
     pos: new MockPos(x, y, target),
     memory: { _siegeSlot: i },
@@ -68,5 +69,8 @@ it("前排阵亡时，余下拆墙兵和两名治疗能朝空出的近身位置�
     const result = findSpawnAssaultTiles(room, group, spawn);
     expect(result?.[0].x).toBe(38);
     for (const i of [1, 3]) expect(Math.max(Math.abs(result![i].x - result![0].x), Math.abs(result![i].y - result![0].y))).toBeLessThanOrEqual(1);
-  } finally { terrain.mockRestore(); }
+  } finally {
+    if (originalMap) Object.defineProperty(Game, "map", originalMap);
+    else Reflect.deleteProperty(Game, "map");
+  }
 });
