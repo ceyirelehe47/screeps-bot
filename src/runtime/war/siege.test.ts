@@ -1,4 +1,4 @@
-import { shouldUseSiege } from "./siege";
+import { shouldUseSiege, limitReinforcementBoosts } from "./siege";
 import type { WarTask } from "./store";
 import { getBoostPartType } from "../boostParts";
 import { assembleSiegeWings, SIEGE_BODIES, SIEGE_BOOSTS, SIEGE_SLOTS } from "./siegeRoster";
@@ -87,4 +87,14 @@ it("出生序号不齐时，按中场实到兵力组队；阵亡的拆墙兵由�
   const replacement = soldier("breacher", 6);
   assembleSiegeWings(task, [...soldiers.slice(1), replacement], staging);
   expect(replacement.memory._siegeSlot).toBe(0);
+});
+
+it("剩矿只能供应一部分补兵时，保留可用装甲与能调入的治疗矿", () => {
+  const armor = RESOURCE_CATALYZED_GHODIUM_ALKALIDE;
+  const heal = RESOURCE_CATALYZED_LEMERGIUM_ALKALIDE;
+  const work = RESOURCE_CATALYZED_ZYNTHIUM_ACID;
+  const amounts = new Map<ResourceConstant, number>([[armor, 3500], [heal, 1800], [work, 510]]);
+  const unavailable = limitReinforcementBoosts(amounts, r => r === armor ? 2461 : 0, r => r === heal);
+  expect(unavailable).toEqual([work]);
+  expect([...amounts]).toEqual([[armor, 2460], [heal, 1800]]);
 });

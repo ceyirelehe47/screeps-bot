@@ -1,5 +1,5 @@
 import { getBoostPartType, countBoostableParts } from "@/runtime/boostParts";
-import { prepareBoosts } from "@/runtime/powerBankBoost";
+import { findBestDonorRoom, prepareBoosts } from "@/runtime/powerBankBoost";
 import { selectLeastLoadedSpawn } from "@/runtime/spawnHelpers";
 import { canStartOutboundMission } from "@/runtime/outboundMissionPolicy";
 import { canContinueWarMission, canReinforceGuardedSiege } from "./outbound";
@@ -48,6 +48,25 @@ export function shouldUseSiege(task: WarTask, room: Room | undefined): boolean {
     .find(FIND_HOSTILE_SPAWNS)
     .some((s) => room.lookForAt(LOOK_STRUCTURES, s.pos).some((tile) => tile.structureType === STRUCTURE_RAMPART));
   return fortified && room.find(FIND_HOSTILE_STRUCTURES).filter((s) => s.structureType === STRUCTURE_TOWER).length >= 3;
+}
+
+/** 续兵只预约本地实际可用的矿物。一种矿耗尽时，其他类型的实验室继续供给。 */
+export function limitReinforcementBoosts(
+  amounts: Map<ResourceConstant, number>,
+  available: (resource: ResourceConstant) => number,
+  canImport: (resource: ResourceConstant, amount: number) => boolean,
+): ResourceConstant[] {
+  const exhausted: ResourceConstant[] = [];
+  for (const [resource, needed] of amounts) {
+    const stock = Math.floor(available(resource) / LAB_BOOST_MINERAL) * LAB_BOOST_MINERAL;
+    if (stock >= needed || canImport(resource, needed - stock)) continue;
+    if (stock) amounts.set(resource, stock);
+    else {
+      amounts.delete(resource);
+      exhausted.push(resource);
+    }
+  }
+  return exhausted;
 }
 
 export function runSiegeCampaign(task: WarTask): void {
@@ -110,6 +129,18 @@ export function runSiegeCampaign(task: WarTask): void {
     }
     return { name, unit, spent, job, body, index };
   });
+  if (task.siegeLaunched && task.oneShot === false) {
+    const home = Game.rooms[task.sourceRoom];
+    if (home) {
+      const labs = home.find(FIND_MY_STRUCTURES).filter((s): s is StructureLab => s.structureType === STRUCTURE_LAB);
+      const carriers = home.find(FIND_MY_CREEPS).filter((c) => c.getActiveBodyparts(CARRY));
+      task.siegeExhausted = limitReinforcementBoosts(amounts, (r) =>
+        (home.storage?.store.getUsedCapacity(r) ?? 0) + (home.terminal?.store.getUsedCapacity(r) ?? 0) +
+        labs.reduce((n, lab) => n + (lab.store.getUsedCapacity(r) ?? 0), 0) +
+        carriers.reduce((n, carrier) => n + (carrier.store.getUsedCapacity(r) ?? 0), 0),
+        (r, shortage) => !!home.terminal && !!findBestDonorRoom(r, shortage, [home.name]));
+    }
+  }
   const prep = prepareBoosts(taskId, task.sourceRoom, 0, amounts, { requireLabEnergy: true });
   task.boostStatus = prep.status;
   task.boostLabs = prep.labs;

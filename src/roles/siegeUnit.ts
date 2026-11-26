@@ -46,7 +46,13 @@ function runSiegeUnit(creep: Creep, target: string, route: string): boolean {
 }
 
 export const siegeUnitRole: RoleFactory = (target, route, boostTask, compounds) => ({
-  prepare: (creep) => prepareWarCombatBoost(creep, boostTask, compounds),
+  prepare: (creep) => {
+    const exhausted = Memory.data?.war?.[target]?.siegeExhausted;
+    const available = exhausted?.length
+      ? compounds?.split("|").filter((r) => !exhausted.includes(r as ResourceConstant)).join("|")
+      : compounds;
+    return prepareWarCombatBoost(creep, boostTask, available);
+  },
   source: (creep) => runSiegeUnit(creep, target, route),
   target: (creep) => runSiegeUnit(creep, target, route),
 });
