@@ -1,7 +1,7 @@
 import { moveToTarget, moveToTargetRoom } from "./shared";
 import { prepareWarCombatBoost } from "@/runtime/war/boostPreparation";
 import type { RoleFactory } from "@/types/system";
-import { runSiegeFormation, runSiegeRelief, siegeRally, siegeSlot } from "./siegeFormation";
+import { runSiegeFormation, runSiegeRelief, siegeMusterPosition, siegeSlot } from "./siegeFormation";
 
 const travel = { profile: "combat", routePurpose: "combat", reusePath: 4, ignoreCreeps: false } as const;
 
@@ -41,14 +41,20 @@ function runSiegeUnit(creep: Creep, target: string, route: string): boolean {
       .findInRange(FIND_MY_CREEPS, 1)
       .filter((c) => c.hits < c.hitsMax)
       .sort((a, b) => b.hitsMax - b.hits - (a.hitsMax - a.hits))[0];
-    creep.heal(injured ?? creep);
+    if (injured) creep.heal(injured);
+    else {
+      const patient = creep.pos.findInRange(FIND_MY_CREEPS,3).filter(c => c.hits < c.hitsMax)
+        .sort((a,b) => (b.hitsMax-b.hits) - (a.hitsMax-a.hits))[0];
+      if (patient) creep.rangedHeal(patient);
+      else creep.heal(creep);
+    }
   }
   const enemy = creep.pos
     .findInRange(FIND_HOSTILE_CREEPS, 3)
     .filter((c) => c.owner.username !== "Source Keeper")
     .sort((a, b) => a.hits - b.hits)[0];
   if (enemy) creep.rangedAttack(enemy);
-  if (!launched && creep.room.name === staging) moveToTarget(creep, siegeRally(creep.room, target, 0), 2, travel);
+  if (!launched && creep.room.name === staging) moveToTarget(creep, siegeMusterPosition(creep.room, target), 1, travel);
   else {
     const rooms = route.split("|");
     const waypoint = rooms.indexOf(staging);

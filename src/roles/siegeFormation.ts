@@ -124,6 +124,20 @@ function entryAnchor(room: Room, from: string, wing: number): Tile {
   return best ?? { x: near.x, y: near.y };
 }
 
+const musterPoints = new Map<string, {time: number; pos: RoomPosition}>();
+
+/** 选择可容纳四人的实际地块。停在同一中心的一格内，任意两名队员之间至多两格。 */
+export function siegeMusterPosition(room: Room, nextRoom: string): RoomPosition {
+  const key = room.name + ":" + nextRoom;
+  const saved = musterPoints.get(key);
+  if (saved && Game.time >= saved.time && Game.time - saved.time < 50) return saved.pos;
+  const at = entryAnchor(room, nextRoom, 0);
+  const pos = new RoomPosition(at.x, at.y, room.name);
+  for (const [name,point] of musterPoints) if (point.time + 50 <= Game.time || point.time > Game.time) musterPoints.delete(name);
+  musterPoints.set(key, {time: Game.time, pos});
+  return pos;
+}
+
 function cover(room: Room, target: Structure): Structure {
   return (
     room
