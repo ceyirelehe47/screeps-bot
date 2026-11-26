@@ -225,16 +225,27 @@ export function runSiegeFormation(creep: Creep, task: WarTask): void {
     healAndShoot(group, room, objective);
     return;
   }
+  const exposedSpawn = spawns.find((spawn) => group.some((member) => member.pos.isNearTo(spawn)));
+  if (exposedSpawn) {
+    const protectedTarget = cover(room, exposedSpawn);
+    const adjacentMember = group.find((member) => member.pos.isNearTo(protectedTarget))!;
+    if (!leader.pos.isNearTo(protectedTarget)) fronts[wing] = cell(adjacentMember);
+    healAndShoot(group, room, protectedTarget);
+    return;
+  }
   if (pinned && group.some((c) => c.pos.isNearTo(pinned))) {
     if (!leader.pos.isNearTo(pinned)) fronts[wing] = cell(group.find((c) => c.pos.isNearTo(pinned))!);
     healAndShoot(group, room, pinned);
     return;
   }
   const { matrix, blockers } = geometry(room);
-  const goals = spawns.map((s) => ({
-    pos: new RoomPosition(s.pos.x - offsets[front].x, s.pos.y - offsets[front].y, room.name),
-    range: 1,
-  }));
+  // 任一队员能贴到 Spawn，就能在方阵内换位；无需拆出额外一列道路。
+  const goals = spawns.flatMap((spawn) =>
+    offsets.map((offset) => ({
+      pos: new RoomPosition(spawn.pos.x - offset.x, spawn.pos.y - offset.y, room.name),
+      range: 1,
+    })),
+  );
   const origin = new RoomPosition(anchor.x, anchor.y, room.name);
   const path = PathFinder.search(origin, goals, { maxRooms: 1, maxOps: 7000, roomCallback: () => matrix });
   const next = path.path[0];
