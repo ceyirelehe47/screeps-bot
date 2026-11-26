@@ -1,4 +1,4 @@
-import { runSiegeCampaign } from "./siege";
+import { runSiegeCampaign, shouldUseSiege } from "./siege";
 import { OBSERVATION_REQUEST_TTL, requestCombatObservation } from "@/runtime/powerBankObserver";
 import { getSquadPolicy } from "./squadPolicy";
 import { assessUnboostedNpc, classifyNpcWarTarget } from "@/runtime/warNpcPolicy";
@@ -77,6 +77,11 @@ function confirmClear(task: WarTask): void {
 
 export function processTask(task: WarTask): void {
   task.statusSince ??= task.createdAt;
+  if (shouldUseSiege(task, Game.rooms[task.targetRoom])) {
+    task.squad = "siege";
+    task.squadDecision = "fortified_player_spawn";
+    delete task.tactic;
+  }
   if (task.squad === "siege") {
     if (!task.siegeStagingRoom) refreshRoute(task);
     runSiegeCampaign(task);

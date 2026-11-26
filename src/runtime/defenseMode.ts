@@ -92,7 +92,7 @@ export function isOffensiveWarCreep(creep: Creep): boolean {
   const config = getCreepConfigService().get(configName);
   if (!config) return false;
 
-  return config.role === "meleeAttacker" || config.role === "healer";
+  return config.role === "meleeAttacker" || config.role === "healer" || config.role === "siegeUnit";
 }
 
 export function clearDefenseModeCacheForTest(): void {

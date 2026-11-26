@@ -99,7 +99,10 @@ export function startWarRoom(targetRoom: string, sourceRoom: string, options: St
   if (options.tactic && (options.tactic !== "t3TowerDrainDuo" || (options.squad !== undefined && options.squad !== "t3Duo"))) return "ERR_INVALID_ARGS:T3 tactic requires t3Duo";
 
   const npcAuto = options.tactic === undefined && options.squad === undefined && options.boostTier === undefined && !!Game.rooms[targetRoom] && isNpcWarTarget(Game.rooms[targetRoom]);
-  const squad = npcAuto ? undefined : options.squad ?? "t3Duo";
+  const previous = Memory.data?.war?.[targetRoom];
+  const keepSiege = previous?.autoTactic && previous.squad === "siege" && previous.sourceRoom === sourceRoom &&
+    previous.status !== "done" && previous.status !== "failed" && options.oneShot === false && !options.tactic && !options.boostTier;
+  const squad = npcAuto ? undefined : options.squad ?? (keepSiege ? "siege" : "t3Duo");
   const boostTier = squad === "towerDrainDuo" ? undefined : options.boostTier ?? (squad === "t3Duo" ? "t3" : undefined);
   const oneShot = options.oneShot ?? true;
 

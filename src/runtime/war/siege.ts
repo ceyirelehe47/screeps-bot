@@ -10,6 +10,19 @@ import { SIEGE_BODIES, SIEGE_BOOSTS, SIEGE_SLOTS, siegeConfigName } from "./sieg
 import { requestCombatObservation } from "../powerBankObserver";
 import { setTaskStatus } from "./fsm";
 
+/** 只有持续的玩家攻城任务才自动扩大编组；显式战术和一次性出击保留原规模。 */
+export function shouldUseSiege(task: WarTask, room: Room | undefined): boolean {
+  if (!task.autoTactic || task.oneShot !== false || task.reason !== "manual" || task.squad !== "t3Duo" || task.activeGeneration
+      || !room?.controller?.owner || room.controller.my || room.controller.level < 7) return false;
+  const home = Game.rooms[task.sourceRoom];
+  if (!home?.storage || home.energyCapacityAvailable < Math.max(...Object.values(SIEGE_BODIES).map(body =>
+    body.reduce((cost, p) => cost + BODYPART_COST[p], 0)))) return false;
+  if (home.find(FIND_MY_STRUCTURES).filter(s => s.structureType === STRUCTURE_LAB).length < 5) return false;
+  const fortified = room.find(FIND_HOSTILE_SPAWNS).some(s => room.lookForAt(LOOK_STRUCTURES, s.pos)
+    .some(tile => tile.structureType === STRUCTURE_RAMPART));
+  return fortified && room.find(FIND_HOSTILE_STRUCTURES).filter(s => s.structureType === STRUCTURE_TOWER).length >= 3;
+}
+
 export function runSiegeCampaign(task: WarTask): void {
   const target = Game.rooms[task.targetRoom];
   if (!target || Game.time % 10 === 0) requestCombatObservation(task.targetRoom);
