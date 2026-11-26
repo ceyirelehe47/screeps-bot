@@ -18,6 +18,7 @@ const EXPECTED_ROLES = [
   "colonizerWorker",
   "colonizerUpgrader",
   "meleeAttacker",
+  "siegeUnit",
   "healer",
   "homeDefender",
   "crossShardClaimer",
@@ -78,7 +79,7 @@ describe("roleCatalog", () => {
     expect(activeRoles).toEqual(
       EXPECTED_ROLES.filter((role) => role !== "hubUpgrader").sort(),
     );
-    expect(activeRoles).toHaveLength(28);
+    expect(activeRoles).toHaveLength(29);
     expect(legacyRoles).toEqual(["hubUpgrader"]);
     expect(Object.isFrozen(ROLE_CATALOG)).toBe(true);
   });
