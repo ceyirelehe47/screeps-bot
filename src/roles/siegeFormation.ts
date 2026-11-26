@@ -314,7 +314,8 @@ export function runSiegeFormation(creep: Creep, task: WarTask): void {
   const existingStrike = strikes[wing];
   let strikeSpawn = existingStrike && spawns.find((s) => s.id === existingStrike.spawn);
   if (existingStrike && !strikeSpawn) delete strikes[wing];
-  if (!strikeSpawn && original && group.length === 4 && Game.time % 4 === wing) {
+  if (!strikeSpawn && original && group.length === 4 && Game.time % 4 === wing
+      && group.some(member => member.getActiveBodyparts(WORK) && !member.pos.isNearTo(original))) {
     const positions = findSpawnAssaultTiles(room, group, original);
     if (positions) {
       strikes[wing] = { spawn: original.id, tiles: positions };
