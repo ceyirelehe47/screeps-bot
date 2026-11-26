@@ -1,15 +1,10 @@
 import type { WarTask } from "./store";
 
-export const SIEGE_SLOTS = [
-  "breacher",
-  "escort",
-  "breacher",
-  "escort",
-  "breacher",
-  "escort",
-  "breacher",
-  "escort",
-] as const;
+const WING = ["breacher", "escort", "breacher", "escort"] as const;
+export const SIEGE_SLOTS = [...WING, ...WING, ...WING] as const;
+export function siegeSlots(task: WarTask) {
+  return SIEGE_SLOTS.slice(0, (task.siegeWingCount ?? 2) * WING.length);
+}
 export type SiegeJob = (typeof SIEGE_SLOTS)[number];
 
 const armor = RESOURCE_CATALYZED_GHODIUM_ALKALIDE;
@@ -25,7 +20,7 @@ export const SIEGE_BOOSTS = {
 const parts = (type: BodyPartConstant, count: number) => Array<BodyPartConstant>(count).fill(type);
 export const SIEGE_BODIES = {
   breacher: [...parts(TOUGH, 22), ...parts(WORK, 17), ...parts(RANGED_ATTACK, 1), ...parts(MOVE, 10)],
-  escort: [...parts(TOUGH, 22), ...parts(RANGED_ATTACK, 3), ...parts(HEAL, 15), ...parts(MOVE, 10)],
+  escort: [...parts(TOUGH, 18), ...parts(RANGED_ATTACK, 1), ...parts(HEAL, 21), ...parts(MOVE, 10)],
 };
 
 export function siegeConfigName(task: Pick<WarTask, "sourceRoom" | "targetRoom">, index: number): string {
@@ -49,7 +44,7 @@ export function assembleSiegeWings(task: WarTask, units: Creep[], staging: strin
     unit.memory._siegeSlot = index;
     waiting.splice(waiting.indexOf(unit), 1);
   };
-  for (const wing of [0, 1]) {
+  for (let wing = 0; wing < (task.siegeWingCount ?? 2); wing++) {
     const start = wing * 4;
     const live = units.filter((c) => c.memory._siegeSlot !== undefined && Math.floor(c.memory._siegeSlot / 4) === wing);
     if (wings[wing] && live.length) {

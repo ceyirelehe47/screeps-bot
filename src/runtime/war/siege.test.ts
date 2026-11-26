@@ -47,7 +47,7 @@ it("只为持续进攻有塔且 Spawn 有掩体的玩家房自动选择攻坚编
 });
 
 it("每个四人单元有两名拆墙兵与两名护卫，所有 50 个部件均有对应 T3", () => {
-  for (const wing of [SIEGE_SLOTS.slice(0, 4), SIEGE_SLOTS.slice(4)]) {
+  for (const wing of [SIEGE_SLOTS.slice(0, 4), SIEGE_SLOTS.slice(4, 8), SIEGE_SLOTS.slice(8)]) {
     expect(wing).toEqual(["breacher", "escort", "breacher", "escort"]);
     for (const job of wing) {
       const body = SIEGE_BODIES[job];
@@ -60,12 +60,14 @@ it("每个四人单元有两名拆墙兵与两名护卫，所有 50 个部件均
 
 it("首次齐射尚未获得治疗时，两轮六塔近距伤害仍能由前排装甲吸收", () => {
   const volley = 6 * TOWER_POWER_ATTACK;
-  for (const body of Object.values(SIEGE_BODIES)) {
-    const armor = body.filter((p) => p === TOUGH).length * 100;
-    expect(armor).toBeGreaterThanOrEqual(2 * volley * BOOSTS.tough.XGHO2.damage);
-  }
+  const armor = SIEGE_BODIES.breacher.filter((p) => p === TOUGH).length * 100;
+  expect(armor).toBeGreaterThanOrEqual(2 * volley * BOOSTS.tough.XGHO2.damage);
+  const medicArmor = SIEGE_BODIES.escort.filter((p) => p === TOUGH).length * 100;
+  const remainingArmor = medicArmor - volley * BOOSTS.tough.XGHO2.damage;
+  const secondHit =
+    volley - Math.min(volley, remainingArmor / BOOSTS.tough.XGHO2.damage) * (1 - BOOSTS.tough.XGHO2.damage);
   const healing = 2 * SIEGE_BODIES.escort.filter((p) => p === HEAL).length * HEAL_POWER * BOOSTS.heal.XLHO2.heal;
-  expect(healing).toBeGreaterThanOrEqual(volley * BOOSTS.tough.XGHO2.damage);
+  expect(healing).toBeGreaterThanOrEqual(secondHit);
 });
 
 it("出生序号不齐时，按中场实到兵力组队；阵亡的拆墙兵由到场同类增援替补", () => {

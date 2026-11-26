@@ -84,7 +84,7 @@ export function siegeRally(room: Room, nextRoom: string, wing: number): RoomPosi
   const dir = Game.map.findExit(room.name, nextRoom);
   if (dir < 0) return new RoomPosition(25, 25, room.name);
   const exits = room.find(dir as ExitConstant);
-  const tile = exits[Math.min(exits.length - 1, Math.max(0, Math.floor(exits.length / 2) + (wing ? 2 : -2)))];
+  const tile = exits[Math.min(exits.length - 1, Math.max(0, Math.floor(exits.length / 2) + ([-3, 1, 4][wing] ?? 0)))];
   return new RoomPosition(
     Math.max(3, Math.min(45, tile?.x ?? 25)),
     Math.max(3, Math.min(45, tile?.y ?? 25)),
@@ -143,9 +143,23 @@ function fire(
   } else if (target && creep.pos.isNearTo(target)) creep.dismantle(target);
 }
 
+const siegeHealing = new WeakMap<Room, { tick: number; assigned: Map<string, number> }>();
 function healAndShoot(group: Creep[], room: Room, target?: Structure): void {
-  const incoming = new Map<string, number>(),
-    assigned = new Map<string, number>();
+  const incoming = new Map<string, number>();
+  let frame = siegeHealing.get(room);
+  if (!frame || frame.tick !== Game.time) {
+    frame = { tick: Game.time, assigned: new Map() };
+    siegeHealing.set(room, frame);
+  }
+  const assigned = frame.assigned;
+  const allies = room
+    .find(FIND_MY_CREEPS)
+    .filter(
+      (c) =>
+        c.memory.role === "siegeUnit" &&
+        c.memory.roleArgs?.[2] === group[0]?.memory.roleArgs?.[2] &&
+        !c.memory._warDetached,
+    );
   for (const e of room.getEventLog())
     if (e.event === EVENT_ATTACK) incoming.set(e.data.targetId, (incoming.get(e.data.targetId) ?? 0) + e.data.damage);
   const spawns = room.find(FIND_HOSTILE_SPAWNS);
@@ -162,7 +176,7 @@ function healAndShoot(group: Creep[], room: Room, target?: Structure): void {
         !room.lookForAt(LOOK_STRUCTURES, s.pos).some((tile) => tile.structureType === STRUCTURE_RAMPART),
     );
   const cleared = new Set<string>();
-  const underFire = group.some((member) => (incoming.get(member.id) ?? 0) > 0);
+  const underFire = allies.some((member) => (incoming.get(member.id) ?? 0) > 0);
   const towers = room
     .find(FIND_HOSTILE_STRUCTURES)
     .filter(
@@ -179,7 +193,7 @@ function healAndShoot(group: Creep[], room: Room, target?: Structure): void {
     );
   for (const c of group) {
     if (c.getActiveBodyparts(HEAL)) {
-      const patients = group.filter((a) => c.pos.inRangeTo(a, 3));
+      const patients = allies.filter((a) => c.pos.inRangeTo(a, 3));
       let best = c,
         bestScore = -Infinity;
       for (const p of patients) {

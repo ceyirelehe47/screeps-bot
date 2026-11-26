@@ -12,7 +12,14 @@ import {
   upsertWarConfig,
 } from "./production";
 import { ensureConfigStore, getLegacyWarBoostTaskId, getLiveCreepsByConfig, type WarTask } from "./store";
-import { assembleSiegeWings, SIEGE_BODIES, SIEGE_BOOSTS, SIEGE_SLOTS, siegeConfigName } from "./siegeRoster";
+import {
+  assembleSiegeWings,
+  SIEGE_BODIES,
+  SIEGE_BOOSTS,
+  SIEGE_SLOTS,
+  siegeSlots,
+  siegeConfigName,
+} from "./siegeRoster";
 import { requestCombatObservation } from "../powerBankObserver";
 import { setTaskStatus } from "./fsm";
 
@@ -52,7 +59,26 @@ export function runSiegeCampaign(task: WarTask): void {
     return;
   }
   delete task.clearSince;
-  const members = SIEGE_SLOTS.map((job, index) => {
+  if (!task.siegeWingCount) {
+    const home = Game.rooms[task.sourceRoom];
+    const stock = (resource: ResourceConstant) =>
+      (home?.storage?.store.getUsedCapacity(resource) ?? 0) + (home?.terminal?.store.getUsedCapacity(resource) ?? 0);
+    const requirements = new Map<ResourceConstant, number>();
+    for (const job of SIEGE_SLOTS)
+      for (const compound of SIEGE_BOOSTS[job]) {
+        const amount =
+          SIEGE_BODIES[job].filter((part) => part === getBoostPartType(compound)).length * LAB_BOOST_MINERAL;
+        requirements.set(compound, (requirements.get(compound) ?? 0) + amount);
+      }
+    task.siegeWingCount =
+      task.oneShot === false &&
+      getSpawnsForRoom(task.sourceRoom).length >= 3 &&
+      stock(RESOURCE_ENERGY) >= 250000 &&
+      [...requirements].every(([compound, amount]) => stock(compound) >= amount)
+        ? 3
+        : 2;
+  }
+  const members = siegeSlots(task).map((job, index) => {
     const name = siegeConfigName(task, index);
     return { job, name, index, unit: getLiveCreepsByConfig(name)[0] };
   });
@@ -64,7 +90,8 @@ export function runSiegeCampaign(task: WarTask): void {
   );
   if (Object.values(task.siegeWings ?? {}).some(Boolean)) task.siegeLaunched = true;
   setTaskStatus(task, task.siegeLaunched ? "clearing" : "staging");
-  if (!canStartOutboundMission(task.sourceRoom) && !canContinueWarMission(task) && !canReinforceGuardedSiege(task)) return;
+  if (!canStartOutboundMission(task.sourceRoom) && !canContinueWarMission(task) && !canReinforceGuardedSiege(task))
+    return;
   const spawns = getSpawnsForRoom(task.sourceRoom);
   if (!spawns.length) return;
   const store = ensureConfigStore();

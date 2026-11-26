@@ -1,4 +1,4 @@
-import { SIEGE_SLOTS, siegeConfigName } from "./siegeRoster";
+import { siegeSlots, siegeConfigName } from "./siegeRoster";
 import { getCreepConfigService, getTickContextService } from "@/runtime/runtimeServices";
 import { isDefenseMode } from "@/runtime/defenseMode";
 import { isRoomInReserveMode } from "@/runtime/roomReserve";
@@ -11,7 +11,7 @@ import { hasAcceptedSpawn } from "@/runtime/spawnRequests";
 function ownsWarConfig(task: WarTask, name: string, config: CreepConfig): boolean {
   if (config.roomName !== task.sourceRoom || config.args[0] !== task.targetRoom) return false;
   const prefix = `${task.sourceRoom}:war:${task.targetRoom}:`;
-  if (config.role === "siegeUnit") return task.squad === "siege" && SIEGE_SLOTS.some((_, index) => siegeConfigName(task, index) === name);
+  if (config.role === "siegeUnit") return task.squad === "siege" && siegeSlots(task).some((_, index) => siegeConfigName(task, index) === name);
   if (config.role === "claimer") return false;
   if (config.role !== "meleeAttacker" && config.role !== "healer") return false;
   if (task.activeGeneration) return name === task.activeGeneration.configNames[config.role];
@@ -64,7 +64,7 @@ export function canReinforceGuardedSiege(task: WarTask): boolean {
   const towers = context.getRoomContext(room)?.getTowers() ?? [];
   if (towers.filter(t=>t.store.getUsedCapacity(RESOURCE_ENERGY)>=400).length < 3) return false;
   if (room.find(FIND_HOSTILE_CREEPS).some(enemy=>spawns.some(s=>s.pos.inRangeTo(enemy,5)))) return false;
-  return task.siegeLaunched === true || SIEGE_SLOTS.some((_,i) => context.getCreepsByConfigName(siegeConfigName(task,i)).some(c=>c.room.name!==room.name));
+  return task.siegeLaunched === true || siegeSlots(task).some((_,i) => context.getCreepsByConfigName(siegeConfigName(task,i)).some(c=>c.room.name!==room.name));
 }
 
 export const warMissionOwner: OutboundMissionOwner = {
